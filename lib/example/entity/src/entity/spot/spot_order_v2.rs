@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use super::spot_order_primitives::{
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
-    option_status_reason_value, option_u64_value, push_change, stable_order_entity_id,
+    option_status_reason_value, push_change, stable_order_entity_id,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -275,23 +275,6 @@ fn fee_amount_round_up(notional: u64, fee_bps: u64) -> Option<u64> {
     Some(numerator / FEE_BPS_DENOMINATOR)
 }
 
-/// `SpotOrderV2` 的稳定身份事实。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotOrderIdentity {
-    /// 本系统生成的稳定订单 ID。
-    pub order_id: String,
-    /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
-    pub asset: u32,
-    /// Hyperliquid 返回的 numeric `oid`；订单尚未被交易所确认时可以为空。
-    pub exchange_oid: Option<u64>,
-    /// 拥有该订单的交易账户 ID。
-    pub account_id: String,
-    /// 交易对展示名，例如 `BTCUSDT`。业务身份以 `asset` 为准。
-    pub symbol: String,
-    /// Hyperliquid `cloid`，客户端自定义订单 ID。
-    pub client_order_id: Option<String>,
-}
-
 /// 现货订单在 `normalTpsl` 中承担的关系角色。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SpotOrderGroupRelation {
@@ -345,15 +328,10 @@ pub struct ActivatePendingSpotOrderV2Input {
 /// - `SpotTrade` 负责成交已经成立后的事实与清结算角色映射
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotOrderV2 {
-    /// 订单身份事实。
-    #[serde(skip, default = "SpotOrderV2::serde_default_identity")]
-    pub identity: SpotOrderIdentity,
     /// 本系统生成的稳定订单 ID。
     pub order_id: String,
     /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
     pub asset: u32,
-    /// Hyperliquid 返回的 numeric `oid`；订单尚未被交易所确认时可以为空。
-    pub exchange_oid: Option<u64>,
     /// 拥有该订单的交易账户 ID。
     pub account_id: String,
     /// 交易对展示名，例如 `BTCUSDT`。业务身份以 `asset` 为准。
@@ -398,17 +376,6 @@ pub struct SpotOrderV2 {
 }
 
 impl SpotOrderV2 {
-    fn serde_default_identity() -> SpotOrderIdentity {
-        SpotOrderIdentity {
-            order_id: String::with_capacity(0),
-            asset: 0,
-            exchange_oid: None,
-            account_id: String::with_capacity(0),
-            symbol: String::with_capacity(0),
-            client_order_id: None,
-        }
-    }
-
     fn serde_default_order_type() -> SpotOrderType {
         SpotOrderType::Limit { tif: SpotOrderTif::Gtc }
     }
@@ -418,7 +385,6 @@ impl SpotOrderV2 {
     pub fn new_pending_trigger(
         order_id: String,
         asset: u32,
-        exchange_oid: Option<u64>,
         account_id: String,
         symbol: String,
         side: SpotOrderSide,
@@ -429,23 +395,13 @@ impl SpotOrderV2 {
         version: u64,
         created_at: u64,
     ) -> Self {
-        let identity = SpotOrderIdentity {
-            order_id: order_id.clone(),
-            asset,
-            exchange_oid,
-            account_id: account_id.clone(),
-            symbol: symbol.clone(),
-            client_order_id: client_order_id.clone(),
-        };
         let reservation =
             Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, false);
         let fee_reservation =
             Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, true);
         Self {
-            identity,
             order_id,
             asset,
-            exchange_oid,
             account_id,
             symbol,
             side,
@@ -473,7 +429,6 @@ impl SpotOrderV2 {
     pub fn new_pending_limit(
         order_id: String,
         asset: u32,
-        exchange_oid: Option<u64>,
         account_id: String,
         symbol: String,
         side: SpotOrderSide,
@@ -484,23 +439,13 @@ impl SpotOrderV2 {
         version: u64,
         created_at: u64,
     ) -> Self {
-        let identity = SpotOrderIdentity {
-            order_id: order_id.clone(),
-            asset,
-            exchange_oid,
-            account_id: account_id.clone(),
-            symbol: symbol.clone(),
-            client_order_id: client_order_id.clone(),
-        };
         let reservation =
             Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, false);
         let fee_reservation =
             Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, true);
         Self {
-            identity,
             order_id,
             asset,
-            exchange_oid,
             account_id,
             symbol,
             side,
@@ -734,11 +679,6 @@ impl SpotOrderV2 {
     /// 返回订单当前已经成交的数量。
     pub fn filled_qty(&self) -> u64 {
         self.filled_qty
-    }
-
-    /// 返回交易所确认后的 numeric `oid`。
-    pub fn exchange_oid(&self) -> Option<u64> {
-        self.exchange_oid
     }
 
     /// 返回订单是否仍是未触发条件单。
@@ -1404,7 +1344,6 @@ impl FieldDiff for SpotOrderV2 {
         vec![
             EntityFieldChange::new("order_id", "", self.order_id.clone()),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
-            EntityFieldChange::new("exchange_oid", "", option_u64_value(self.exchange_oid)),
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
             EntityFieldChange::new("side", "", self.side.as_str()),
@@ -1505,12 +1444,6 @@ impl FieldDiff for SpotOrderV2 {
         let mut changes = Vec::with_capacity(0);
 
         push_change(&mut changes, "asset", self.asset.to_string(), other.asset.to_string());
-        push_change(
-            &mut changes,
-            "exchange_oid",
-            option_u64_value(self.exchange_oid),
-            option_u64_value(other.exchange_oid),
-        );
         push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
         push_change(&mut changes, "symbol", &self.symbol, &other.symbol);
         push_change(&mut changes, "side", self.side.as_str(), other.side.as_str());
@@ -1751,7 +1684,6 @@ impl Entity for SpotOrderV2 {
             | "fee_reservation_kind"
             | "fee_reservation_status" => 0,
             "asset"
-            | "exchange_oid"
             | "qty"
             | "filled_qty"
             | "created_at"
@@ -1804,7 +1736,6 @@ mod tests {
         SpotOrderV2::new_pending_limit(
             "order-1".to_string(),
             10_001,
-            Some(1),
             "trader-1".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
@@ -1847,7 +1778,6 @@ mod tests {
         let mut order = SpotOrderV2::new_pending_trigger(
             "trigger-1".to_string(),
             10_001,
-            Some(2),
             "trader-1".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,
@@ -1887,7 +1817,6 @@ mod tests {
         let mut maker = SpotOrderV2::new_pending_limit(
             "maker-1".to_string(),
             10_001,
-            Some(1),
             "trader-2".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,

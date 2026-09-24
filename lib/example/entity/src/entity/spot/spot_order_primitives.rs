@@ -255,10 +255,6 @@ pub(crate) fn push_change(
     }
 }
 
-pub(crate) fn option_u64_value(value: Option<u64>) -> String {
-    value.map(|value| value.to_string()).unwrap_or_default()
-}
-
 pub(crate) fn option_status_reason_value(value: Option<SpotOrderStatusReason>) -> &'static str {
     value.map(SpotOrderStatusReason::as_str).unwrap_or_default()
 }
