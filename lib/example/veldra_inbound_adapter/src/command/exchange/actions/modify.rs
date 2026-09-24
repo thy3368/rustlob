@@ -19,7 +19,9 @@ use crate::common::parse::parse_json_request;
 pub enum ModifyContractError {
     #[error("Unexpected `action.type` for modify handler: `{0}`.")]
     UnexpectedActionType(String),
-    #[error("Invalid `action.oid`. Expected a local order id or 128-bit hex client order id.")]
+    #[error(
+        "Invalid `action.oid`. Expected a positive numeric oid or 128-bit hex client order id."
+    )]
     InvalidOid,
     #[error("Invalid `action.order.p`. Expected a non-empty decimal string.")]
     InvalidPrice,
@@ -174,8 +176,11 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 }
 
 fn validate_oid(oid: &Value) -> Result<(), ExchangeHttpError> {
-    if let Some(order_id) = oid.as_str() {
-        if !order_id.trim().is_empty() {
+    if oid.as_u64().is_some_and(|order_id| order_id > 0) {
+        return Ok(());
+    }
+    if let Some(cloid) = oid.as_str() {
+        if validate_cloid(cloid).is_ok() {
             return Ok(());
         }
     }
@@ -183,14 +188,15 @@ fn validate_oid(oid: &Value) -> Result<(), ExchangeHttpError> {
 }
 
 pub(crate) fn order_id_from_wire_oid(oid: &Value) -> Result<OrderId, ModifyContractError> {
-    if let Some(order_id) = oid.as_str() {
-        if order_id.trim().is_empty() {
-            return Err(ModifyContractError::InvalidOid);
+    if let Some(order_id) = oid.as_u64() {
+        return (order_id > 0)
+            .then_some(OrderId::Oid(order_id))
+            .ok_or(ModifyContractError::InvalidOid);
+    }
+    if let Some(cloid) = oid.as_str() {
+        if validate_cloid(cloid).is_ok() {
+            return Ok(OrderId::Cloid(cloid.to_string()));
         }
-        if validate_cloid(order_id).is_ok() {
-            return Ok(OrderId::Cloid(order_id.to_string()));
-        }
-        return Ok(OrderId::OrderId(order_id.to_string()));
     }
     Err(ModifyContractError::InvalidOid)
 }
@@ -271,7 +277,9 @@ async fn execute(request: RequestWire) -> Result<reply::ModifyResponseWire, Exch
         .map_err(ExchangeHttpError::contract)?;
     let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
     let status = match execute_modify_spot_order_v2(&command) {
-        Ok(_) => OrderStatusWire::Resting { resting: RestingOrderStatusWire::default() },
+        Ok(result) => OrderStatusWire::Resting {
+            resting: RestingOrderStatusWire { oid: result.changes.updated_order.after.order_id() },
+        },
         Err(error) => OrderStatusWire::Error { error: modify_execution_error_message(error) },
     };
 
@@ -348,7 +356,7 @@ mod tests {
 
         assert_eq!(command.party_id, "buyer");
         assert_eq!(command.asset, 10_000);
-        assert_eq!(command.order_id, OrderId::OrderId("order-1".to_string()));
+        assert_eq!(command.order_id, OrderId::Oid(77738308));
         assert!(command.is_buy);
         assert_eq!(command.price, "18914");
         assert_eq!(command.size, "002");

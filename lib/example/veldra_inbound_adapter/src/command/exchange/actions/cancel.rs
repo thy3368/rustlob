@@ -17,7 +17,7 @@ pub enum CancelContractError {
     UnexpectedActionType(String),
     #[error("`action.cancels` must contain at least one cancel request.")]
     EmptyCancels,
-    #[error("Invalid `action.cancels[].o`. Expected a non-empty local order id.")]
+    #[error("Invalid `action.cancels[].o`. Expected a positive numeric oid.")]
     InvalidOrderId,
     #[error("Invalid `action.f`. Omit `f` unless fast cancel is enabled.")]
     InvalidFastFlag,
@@ -57,7 +57,7 @@ pub(crate) struct ActionWire {
 #[serde(deny_unknown_fields)]
 struct CancelItemWire {
     a: u32,
-    o: String,
+    o: u64,
 }
 
 pub(crate) const DEFAULT_EXCHANGE_PARTY_ID: &str = "default-exchange-party";
@@ -71,11 +71,7 @@ pub struct CancelSpotOrderV2Request {
 
 impl CancelSpotOrderV2Request {
     fn from_wire_cancel(party_id: String, cancel: &CancelItemWire) -> Self {
-        Self {
-            party_id,
-            asset: cancel.a,
-            lookup: CancelSpotOrderV2Lookup::OrderId(cancel.o.clone()),
-        }
+        Self { party_id, asset: cancel.a, lookup: CancelSpotOrderV2Lookup::Oid(cancel.o) }
     }
 
     #[allow(dead_code)]
@@ -133,7 +129,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         return Err(ExchangeHttpError::contract(CancelContractError::InvalidFastFlag));
     }
     for cancel in &request.action.cancels {
-        if cancel.o.trim().is_empty() {
+        if cancel.o == 0 {
             return Err(ExchangeHttpError::contract(CancelContractError::InvalidOrderId));
         }
     }
@@ -190,7 +186,7 @@ mod tests {
         let request = CancelSpotOrderV2Request {
             party_id: "buyer".to_string(),
             asset: 10_000,
-            lookup: CancelSpotOrderV2Lookup::OrderId("order-1".to_string()),
+            lookup: CancelSpotOrderV2Lookup::Oid(77738308),
         };
 
         let command = SpotOrderV2CancelExecutionSpec::command(&request);
@@ -200,7 +196,7 @@ mod tests {
             CancelSpotOrderV2Cmd {
                 party_id: "buyer".to_string(),
                 asset: 10_000,
-                lookup: CancelSpotOrderV2Lookup::OrderId("order-1".to_string()),
+                lookup: CancelSpotOrderV2Lookup::Oid(77738308),
             }
         );
     }

@@ -1,6 +1,6 @@
 use cmd_handler::command_use_case_def2::ExecutionError;
 use example_core_use_case::{
-    MatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
+    MatchSpotOrderV3Changes, PlaceMatchSpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
 };
 use example_outbound_adapter::{base_asset_id_for, quote_asset_id_for, symbol_for_asset};
@@ -351,7 +351,7 @@ fn order_cmd_from_wire(
     Ok(PlaceOnlySpotOrderV2OrderCmd {
         party_id,
         asset: order.a,
-        order_id: order_id_for_wire_order(index, order.c.as_deref()),
+        order_id: order_id_for_wire_order(index),
         symbol: symbol.clone(),
         is_buy: order.b,
         price: decimal_wire_to_core_units(&order.p),
@@ -380,11 +380,8 @@ fn order_type_from_wire(
     }
 }
 
-fn order_id_for_wire_order(index: usize, cloid: Option<&str>) -> String {
-    match cloid {
-        Some(cloid) => format!("wire-order-{index}-{cloid}"),
-        None => format!("wire-order-{index}"),
-    }
+fn order_id_for_wire_order(index: usize) -> u64 {
+    (index as u64).saturating_add(1)
 }
 
 async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
@@ -442,7 +439,7 @@ fn order_statuses_from_place_match_changes(
 ) -> Vec<reply::OrderStatusWire> {
     match changes {
         PlaceMatchSpotOrderV2Changes::SinglePlacedOnly { created_order } => {
-            vec![resting_status(created_order.exchange_oid().unwrap_or(0))]
+            vec![resting_status(created_order.order_id())]
         }
         PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
             created_taker_order,
@@ -457,11 +454,8 @@ fn order_statuses_from_place_match_changes(
         } => {
             let mut statuses = Vec::with_capacity(1 + created_child_orders.len());
             statuses.push(order_status_from_match_changes(created_parent_order, match_changes));
-            statuses.extend(
-                created_child_orders
-                    .iter()
-                    .map(|order| resting_status(order.exchange_oid().unwrap_or(0))),
-            );
+            statuses
+                .extend(created_child_orders.iter().map(|order| resting_status(order.order_id())));
             statuses
         }
     }
@@ -469,17 +463,17 @@ fn order_statuses_from_place_match_changes(
 
 fn order_status_from_match_changes(
     order: &example_core_use_case::SpotOrderV2,
-    match_changes: &MatchSpotOrderV2Changes,
+    match_changes: &MatchSpotOrderV3Changes,
 ) -> reply::OrderStatusWire {
     let taker_trades = match_changes
-        .created_trades
+        .created_trades()
         .iter()
         .filter(|trade| trade.taker_order_id == order.order_id())
         .collect::<Vec<_>>();
     let filled_qty = taker_trades.iter().map(|trade| trade.qty).sum::<u64>();
 
     if filled_qty == 0 {
-        return resting_status(order.exchange_oid().unwrap_or(0));
+        return resting_status(order.order_id());
     }
 
     let notional =
@@ -489,7 +483,7 @@ fn order_status_from_match_changes(
         filled: reply::FilledOrderStatusWire {
             total_sz: filled_qty.to_string(),
             avg_px: avg_px.to_string(),
-            oid: order.exchange_oid().unwrap_or(0),
+            oid: order.order_id(),
         },
     }
 }
@@ -616,12 +610,19 @@ mod tests {
         }
     }
 
-    fn empty_match_changes() -> MatchSpotOrderV2Changes {
-        MatchSpotOrderV2Changes {
-            updated_taker_order: None,
+    fn empty_match_changes() -> MatchSpotOrderV3Changes {
+        MatchSpotOrderV3Changes::Resting
+    }
+
+    fn match_changes_with_trades(
+        order: &SpotOrderV2,
+        created_trades: Vec<SpotTrade>,
+    ) -> MatchSpotOrderV3Changes {
+        MatchSpotOrderV3Changes::PartiallyFilled {
+            updated_taker_order: UpdatedEntityPair { before: order.clone(), after: order.clone() },
             updated_maker_orders: vec![],
             updated_balances: vec![],
-            created_trades: vec![],
+            created_trades,
             created_vouchers: vec![],
             created_balance_ledger_entries: vec![],
         }
@@ -736,23 +737,25 @@ mod tests {
     #[test]
     fn placed_and_matched_with_taker_trade_maps_to_filled() {
         let order = spot_order("taker-1", 43);
-        let mut match_changes = empty_match_changes();
-        match_changes.created_trades.push(SpotTrade::new(
-            "trade-1".to_string(),
-            "match-1".to_string(),
-            10_001,
-            "BTCUSDT".to_string(),
-            "taker-1".to_string(),
-            "maker-1".to_string(),
-            "buyer".to_string(),
-            "seller".to_string(),
-            SpotOrderSide::Buy,
-            100,
-            2,
-            1,
-            1,
-            2,
-        ));
+        let match_changes = match_changes_with_trades(
+            &order,
+            vec![SpotTrade::new(
+                "trade-1".to_string(),
+                "match-1".to_string(),
+                10_001,
+                "BTCUSDT".to_string(),
+                "taker-1".to_string(),
+                "maker-1".to_string(),
+                "buyer".to_string(),
+                "seller".to_string(),
+                SpotOrderSide::Buy,
+                100,
+                2,
+                1,
+                1,
+                2,
+            )],
+        );
         let changes = PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
             activation_changes: empty_activation_changes(&order),
             created_taker_order: order,
