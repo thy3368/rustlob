@@ -8,8 +8,8 @@ use crate::entity::{Balance, SpotOrderV2};
 use crate::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
-    MatchSpotOrderV2AfterChanges, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd,
-    MatchSpotOrderV2Error, MatchSpotOrderV2State, MatchSpotOrderV2UseCase,
+    MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd,
+    MatchSpotOrderV3Error, MatchSpotOrderV3State, MatchSpotOrderV3UseCase,
     PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, PlaceOnlySpotOrderV2UseCase,
 };
@@ -29,13 +29,13 @@ pub enum PlaceMatchSpotOrderV2AfterChanges {
     SinglePlacedAndMatched {
         created_taker_order: SpotOrderV2,
         activation_after: ActivateSpotOrderV2AfterChanges,
-        match_after: MatchSpotOrderV2AfterChanges,
+        match_after: MatchSpotOrderV3AfterChanges,
     },
     NormalTpslPlacedAndMatched {
         created_parent_order: SpotOrderV2,
         created_child_orders: Vec<SpotOrderV2>,
         activation_after: ActivateSpotOrderV2AfterChanges,
-        match_after: MatchSpotOrderV2AfterChanges,
+        match_after: MatchSpotOrderV3AfterChanges,
     },
 }
 
@@ -47,13 +47,13 @@ pub enum PlaceMatchSpotOrderV2Changes {
     SinglePlacedAndMatched {
         created_taker_order: SpotOrderV2,
         activation_changes: ActivateSpotOrderV2Changes,
-        match_changes: MatchSpotOrderV2Changes,
+        match_changes: MatchSpotOrderV3Changes,
     },
     NormalTpslPlacedAndMatched {
         created_parent_order: SpotOrderV2,
         created_child_orders: Vec<SpotOrderV2>,
         activation_changes: ActivateSpotOrderV2Changes,
-        match_changes: MatchSpotOrderV2Changes,
+        match_changes: MatchSpotOrderV3Changes,
     },
 }
 
@@ -64,7 +64,7 @@ pub enum PlaceMatchSpotOrderV2Error {
     #[error(transparent)]
     Activation(#[from] ActivateSpotOrderV2Error),
     #[error(transparent)]
-    Match(#[from] MatchSpotOrderV2Error),
+    Match(#[from] MatchSpotOrderV3Error),
     #[error("place-match only supports a single active limit order")]
     InvalidPlaceBranch,
     #[error("fee account id must not be empty")]
@@ -247,7 +247,7 @@ fn compute_activate_and_match_after_for_created_taker(
     state: &PlaceMatchSpotOrderV2State,
     context: &ExecutionContext,
 ) -> Result<
-    (ActivateSpotOrderV2AfterChanges, MatchSpotOrderV2AfterChanges),
+    (ActivateSpotOrderV2AfterChanges, MatchSpotOrderV3AfterChanges),
     PlaceMatchSpotOrderV2Error,
 > {
     let activation_cmd = ActivateSpotOrderV2Cmd {
@@ -268,12 +268,12 @@ fn compute_activate_and_match_after_for_created_taker(
         &activation_state,
         context,
     )?;
-    let match_cmd = MatchSpotOrderV2Cmd {
+    let match_cmd = MatchSpotOrderV3Cmd {
         party_id: order_cmd.party_id.clone(),
         asset: order_cmd.asset,
         order_id: order_cmd.order_id.clone(),
     };
-    let match_state = MatchSpotOrderV2State {
+    let match_state = MatchSpotOrderV3State {
         taker_order: activation_after.activated_order_after.clone(),
         maker_orders: state.maker_orders.clone(),
         settlement_balances: activation_after.balances_after.clone(),
@@ -283,7 +283,7 @@ fn compute_activate_and_match_after_for_created_taker(
         maker_fee_bps: order_cmd.maker_fee_bps,
         taker_fee_bps: order_cmd.taker_fee_bps,
     };
-    let match_after = MatchSpotOrderV2UseCase.compute_state_changed_with_context(
+    let match_after = MatchSpotOrderV3UseCase.compute_state_changed_with_context(
         &match_cmd,
         &match_state,
         context,
@@ -310,10 +310,10 @@ fn compute_activation_changes(
 fn compute_match_changes(
     state: PlaceMatchSpotOrderV2State,
     activation_after: ActivateSpotOrderV2AfterChanges,
-    match_after: MatchSpotOrderV2AfterChanges,
-) -> Result<MatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error> {
+    match_after: MatchSpotOrderV3AfterChanges,
+) -> Result<MatchSpotOrderV3Changes, PlaceMatchSpotOrderV2Error> {
     let activated_taker_order = activation_after.activated_order_after;
-    let match_state = MatchSpotOrderV2State {
+    let match_state = MatchSpotOrderV3State {
         taker_order: activated_taker_order.clone(),
         maker_orders: state.maker_orders,
         settlement_balances: activation_after.balances_after,
@@ -323,5 +323,5 @@ fn compute_match_changes(
         maker_fee_bps: 0,
         taker_fee_bps: 0,
     };
-    Ok(MatchSpotOrderV2UseCase::do_compute_state_diff(match_state, match_after)?)
+    Ok(MatchSpotOrderV3UseCase::do_compute_state_diff(match_state, match_after)?)
 }

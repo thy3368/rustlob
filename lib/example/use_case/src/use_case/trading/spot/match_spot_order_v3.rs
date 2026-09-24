@@ -25,7 +25,7 @@ use crate::{MatchSpotOrderV2Input, SpotTrade};
 pub struct MatchSpotOrderV3Cmd {
     pub party_id: String,
     pub asset: u32,
-    pub order_id: String,
+    pub order_id: u64,
 }
 
 /// 撮合后对 taker 的五种业务结论。
@@ -111,7 +111,7 @@ pub enum MatchSpotOrderV3Changes {
 pub enum MatchSpotOrderV3Error {
     #[error("party id must not be empty")]
     InvalidPartyId,
-    #[error("order id must not be empty")]
+    #[error("order oid must be greater than zero")]
     InvalidOrderId,
     #[error("taker order id does not match command")]
     TakerOrderIdMismatch,
@@ -350,7 +350,7 @@ fn compute_match_after(
             let match_outcome = taker_after.match_with_makers(
                 &mut maker_orders_after,
                 MatchSpotOrderV2Input {
-                    match_id: concat2("spot-match:", taker_after.order_id()),
+                    match_id: concat2("spot-match:", taker_after.order_id().to_string().as_str()),
                     maker_fee_bps: state.maker_fee_bps,
                     taker_fee_bps: state.taker_fee_bps,
                     executed_at_ms,
@@ -671,12 +671,12 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
 ) -> Result<(), MatchSpotOrderV3Error> {
     let reason = match order.side() {
-        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
-            order_id: order.order_id().to_string(),
-        },
-        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
-            order_id: order.order_id().to_string(),
-        },
+        SpotOrderSide::Buy => {
+            BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order.order_id() }
+        }
+        SpotOrderSide::Sell => {
+            BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order.order_id() }
+        }
     };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
     let next_release_index =
@@ -685,7 +685,7 @@ fn release_to_balance(
         BalanceLedgerOperation::Unfreeze,
         concat4(
             "balance-ledger:",
-            order.order_id(),
+            order.order_id().to_string().as_str(),
             ":release:",
             next_release_index.to_string().as_str(),
         ),
@@ -1068,7 +1068,7 @@ impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
         if cmd.party_id.is_empty() {
             return Err(MatchSpotOrderV3Error::InvalidPartyId);
         }
-        if cmd.order_id.is_empty() {
+        if cmd.order_id == 0 {
             return Err(MatchSpotOrderV3Error::InvalidOrderId);
         }
         Ok(())
@@ -1262,7 +1262,7 @@ fn build_matched_pairs(
 }
 
 impl MatchSpotOrderV3Changes {
-    pub fn taker_order_after(&self) -> Option<&SpotOrderV2> {
+    pub fn taker_order_pair(&self) -> Option<&UpdatedEntityPair<SpotOrderV2>> {
         match self {
             Self::Resting => None,
             Self::PartiallyFilled { updated_taker_order, .. }
@@ -1271,7 +1271,60 @@ impl MatchSpotOrderV3Changes {
                 canceled_taker_order: updated_taker_order, ..
             }
             | Self::Rejected { rejected_taker_order: updated_taker_order, .. } => {
-                Some(&updated_taker_order.after)
+                Some(updated_taker_order)
+            }
+        }
+    }
+
+    pub fn taker_order_after(&self) -> Option<&SpotOrderV2> {
+        self.taker_order_pair().map(|pair| &pair.after)
+    }
+
+    pub fn updated_maker_orders(&self) -> &[UpdatedEntityPair<SpotOrderV2>] {
+        match self {
+            Self::Resting | Self::Rejected { .. } => &[],
+            Self::PartiallyFilled { updated_maker_orders, .. }
+            | Self::Filled { updated_maker_orders, .. }
+            | Self::CanceledAfterPartialFill { updated_maker_orders, .. } => updated_maker_orders,
+        }
+    }
+
+    pub fn updated_balances(&self) -> &[UpdatedEntityPair<Balance>] {
+        match self {
+            Self::Resting => &[],
+            Self::PartiallyFilled { updated_balances, .. }
+            | Self::Filled { updated_balances, .. }
+            | Self::CanceledAfterPartialFill { updated_balances, .. }
+            | Self::Rejected { updated_balances, .. } => updated_balances,
+        }
+    }
+
+    pub fn created_trades(&self) -> &[SpotTrade] {
+        match self {
+            Self::Resting | Self::Rejected { .. } => &[],
+            Self::PartiallyFilled { created_trades, .. }
+            | Self::Filled { created_trades, .. }
+            | Self::CanceledAfterPartialFill { created_trades, .. } => created_trades,
+        }
+    }
+
+    pub fn created_vouchers(&self) -> &[SettlementTransferVoucher] {
+        match self {
+            Self::Resting | Self::Rejected { .. } => &[],
+            Self::PartiallyFilled { created_vouchers, .. }
+            | Self::Filled { created_vouchers, .. }
+            | Self::CanceledAfterPartialFill { created_vouchers, .. } => created_vouchers,
+        }
+    }
+
+    pub fn created_balance_ledger_entries(&self) -> &[BalanceLedgerEntryV2] {
+        match self {
+            Self::Resting => &[],
+            Self::PartiallyFilled { created_balance_ledger_entries, .. }
+            | Self::Filled { created_balance_ledger_entries, .. }
+            | Self::CanceledAfterPartialFill { created_balance_ledger_entries, .. }
+            | Self::Rejected { created_balance_ledger_entries, .. } => {
+                created_balance_ledger_entries
             }
         }
     }

@@ -21,7 +21,7 @@ use crate::support::{concat2, concat3};
 pub struct ActivateSpotOrderV2Cmd {
     pub party_id: String,
     pub asset: u32,
-    pub order_id: String,
+    pub order_id: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +52,7 @@ pub struct ActivateSpotOrderV2Changes {
 pub enum ActivateSpotOrderV2Error {
     #[error("party id must not be empty")]
     InvalidPartyId,
-    #[error("order id must not be empty")]
+    #[error("order oid must be greater than zero")]
     InvalidOrderId,
     #[error("pending order id does not match command")]
     OrderIdMismatch,
@@ -125,7 +125,7 @@ impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
         if cmd.party_id.is_empty() {
             return Err(ActivateSpotOrderV2Error::InvalidPartyId);
         }
-        if cmd.order_id.is_empty() {
+        if cmd.order_id == 0 {
             return Err(ActivateSpotOrderV2Error::InvalidOrderId);
         }
         Ok(())
@@ -159,7 +159,10 @@ impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
         let principal_entry = apply_freeze_for_reservation(
             &activated_order_after,
             &activated_order_after.reservation,
-            concat2("balance-ledger:freeze:", activated_order_after.order_id()),
+            concat2(
+                "balance-ledger:freeze:",
+                activated_order_after.order_id().to_string().as_str(),
+            ),
             &mut balance_book,
         )?;
         created_balance_ledger_entries.push(principal_entry);
@@ -168,7 +171,11 @@ impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
             let fee_entry = apply_freeze_for_reservation(
                 &activated_order_after,
                 &activated_order_after.fee_reservation,
-                concat3("balance-ledger:freeze:", activated_order_after.order_id(), ":fee"),
+                concat3(
+                    "balance-ledger:freeze:",
+                    activated_order_after.order_id().to_string().as_str(),
+                    ":fee",
+                ),
                 &mut balance_book,
             )?;
             created_balance_ledger_entries.push(fee_entry);
@@ -325,7 +332,7 @@ fn apply_freeze_for_reservation(
         reservation.asset_id.clone(),
         balance_book.entity_id_for_account_asset(order.account_id(), &reservation.asset_id)?,
         reservation.original_amount,
-        BalanceLedgerReason::FreezeForOrder { order_id: order.order_id().to_string() },
+        BalanceLedgerReason::FreezeForOrder { order_id: order.order_id() },
     )
     .map_err(ActivateSpotOrderV2Error::from)?;
     let balance = balance_book.get_mut(order.account_id(), &reservation.asset_id)?;

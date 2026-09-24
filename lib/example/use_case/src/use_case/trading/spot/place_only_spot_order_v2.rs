@@ -22,7 +22,7 @@ pub enum PlaceOnlySpotOrderV2OrderType {
 pub struct PlaceOnlySpotOrderV2OrderCmd {
     pub party_id: String,
     pub asset: u32,
-    pub order_id: String,
+    pub order_id: u64,
     pub symbol: String,
     pub is_buy: bool,
     pub price: String,
@@ -69,8 +69,8 @@ pub enum PlaceOnlySpotOrderV2Changes {
 pub enum PlaceOnlySpotOrderV2Error {
     #[error("party id must not be empty")]
     EmptyPartyId,
-    #[error("order id must not be empty")]
-    EmptyOrderId,
+    #[error("order oid must be greater than zero")]
+    InvalidOrderId,
     #[error("symbol must not be empty")]
     EmptySymbol,
     #[error("asset id must not be empty")]
@@ -232,8 +232,8 @@ fn check_order_command(
     if order.party_id.is_empty() {
         return Err(PlaceOnlySpotOrderV2Error::EmptyPartyId);
     }
-    if order.order_id.is_empty() {
-        return Err(PlaceOnlySpotOrderV2Error::EmptyOrderId);
+    if order.order_id == 0 {
+        return Err(PlaceOnlySpotOrderV2Error::InvalidOrderId);
     }
     if order.symbol.is_empty() {
         return Err(PlaceOnlySpotOrderV2Error::EmptySymbol);
@@ -271,7 +271,7 @@ fn validate_normal_tpsl(
 
     let parent_qty = parse_positive_u64(&parent.size, PlaceOnlySpotOrderV2Error::InvalidSize)?;
     let mut order_ids = HashSet::with_capacity(children.len().saturating_add(1));
-    order_ids.insert(parent.order_id.as_str());
+    order_ids.insert(parent.order_id);
 
     for child in children {
         if !matches!(child.order_type, PlaceOnlySpotOrderV2OrderType::Trigger { .. }) {
@@ -295,7 +295,7 @@ fn validate_normal_tpsl(
         if parse_positive_u64(&child.size, PlaceOnlySpotOrderV2Error::InvalidSize)? > parent_qty {
             return Err(PlaceOnlySpotOrderV2Error::ChildQuantityExceedsParent);
         }
-        if !order_ids.insert(child.order_id.as_str()) {
+        if !order_ids.insert(child.order_id) {
             return Err(PlaceOnlySpotOrderV2Error::DuplicateOrderId);
         }
     }
@@ -313,7 +313,7 @@ fn build_order(
         PlaceOnlySpotOrderV2OrderType::Limit { tif } => {
             let tif = parse_tif(tif)?;
             let mut created = SpotOrderV2::new_pending_limit(
-                order.order_id.clone(),
+                order.order_id,
                 order.asset,
                 order.party_id.clone(),
                 order.symbol.clone(),
@@ -330,7 +330,7 @@ fn build_order(
         }
         PlaceOnlySpotOrderV2OrderType::Trigger { is_market, trigger_price, trigger_role } => {
             let mut created = SpotOrderV2::new_pending_trigger(
-                order.order_id.clone(),
+                order.order_id,
                 order.asset,
                 order.party_id.clone(),
                 order.symbol.clone(),

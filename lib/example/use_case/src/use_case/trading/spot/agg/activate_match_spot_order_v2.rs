@@ -17,7 +17,7 @@ use crate::{
 pub struct ActivateMatchSpotOrderV2Cmd {
     pub party_id: String,
     pub asset: u32,
-    pub order_id: String,
+    pub order_id: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,16 +156,12 @@ fn activation_cmd(cmd: &ActivateMatchSpotOrderV2Cmd) -> ActivateSpotOrderV2Cmd {
     ActivateSpotOrderV2Cmd {
         party_id: cmd.party_id.clone(),
         asset: cmd.asset,
-        order_id: cmd.order_id.clone(),
+        order_id: cmd.order_id,
     }
 }
 
 fn match_cmd(cmd: &ActivateMatchSpotOrderV2Cmd) -> MatchSpotOrderV3Cmd {
-    MatchSpotOrderV3Cmd {
-        party_id: cmd.party_id.clone(),
-        asset: cmd.asset,
-        order_id: cmd.order_id.clone(),
-    }
+    MatchSpotOrderV3Cmd { party_id: cmd.party_id.clone(), asset: cmd.asset, order_id: cmd.order_id }
 }
 
 fn activation_state_from_given(state: &ActivateMatchSpotOrderV2State) -> ActivateSpotOrderV2State {

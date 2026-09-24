@@ -32,7 +32,7 @@ pub struct CancelSpotOrderV2Cmd {
 pub enum CancelSpotOrderV2Lookup {
     #[default]
     Missing,
-    OrderId(String),
+    Oid(u64),
     Cloid(String),
 }
 
@@ -374,12 +374,12 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
 ) -> Result<(), CancelSpotOrderV2Error> {
     let reason = match order.side() {
-        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
-            order_id: order.order_id().to_string(),
-        },
-        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
-            order_id: order.order_id().to_string(),
-        },
+        SpotOrderSide::Buy => {
+            BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order.order_id() }
+        }
+        SpotOrderSide::Sell => {
+            BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order.order_id() }
+        }
     };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
     let next_release_index =
@@ -388,7 +388,7 @@ fn release_to_balance(
         BalanceLedgerOperation::Unfreeze,
         concat4(
             "balance-ledger:",
-            order.order_id(),
+            order.order_id().to_string().as_str(),
             ":release:",
             next_release_index.to_string().as_str(),
         ),

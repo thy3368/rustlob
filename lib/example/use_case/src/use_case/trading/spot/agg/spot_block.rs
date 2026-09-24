@@ -12,8 +12,8 @@ use crate::{
     ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd, ActivateSpotOrderV2Error,
     ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase, CancelSpotOrderV2Changes,
     CancelSpotOrderV2Cmd, CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
-    CancelSpotOrderV2UseCase, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error,
-    MatchSpotOrderV2State, MatchSpotOrderV2UseCase, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
+    CancelSpotOrderV2UseCase, MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd, MatchSpotOrderV3Error,
+    MatchSpotOrderV3State, MatchSpotOrderV3UseCase, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
     ModifySpotOrderV2Error, ModifySpotOrderV2State, ModifySpotOrderV2UseCase, OrderId,
     PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2State,
     PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
@@ -30,7 +30,7 @@ pub enum SpotBlockCommand {
     Cancel(CancelSpotOrderV2Cmd),
     Modify(ModifySpotOrderV2Cmd),
     PlaceMatch(PlaceOnlySpotOrderV2Cmd),
-    Match(MatchSpotOrderV2Cmd),
+    Match(MatchSpotOrderV3Cmd),
 }
 
 impl IssuedByParty for SpotBlockCmd {
@@ -67,7 +67,7 @@ pub enum SpotBlockAppliedChanges {
     Cancel(CancelSpotOrderV2Changes),
     Modify(ModifySpotOrderV2Changes),
     PlaceMatch(PlaceMatchSpotOrderV2Changes),
-    Match(MatchSpotOrderV2Changes),
+    Match(MatchSpotOrderV3Changes),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -101,7 +101,7 @@ pub enum SpotBlockItemError {
     #[error(transparent)]
     PlaceMatch(#[from] PlaceMatchSpotOrderV2Error),
     #[error(transparent)]
-    Match(#[from] MatchSpotOrderV2Error),
+    Match(#[from] MatchSpotOrderV3Error),
     #[error("order not found")]
     OrderNotFound,
     #[error("order lookup is ambiguous")]
@@ -265,7 +265,7 @@ impl StateMachineOwnedV2Diff for SpotBlockUseCase {
 struct WorkingSpotBlockState {
     orders: Vec<SpotOrderV2>,
     balances: Vec<Balance>,
-    order_by_entity_id: HashMap<String, usize>,
+    order_by_entity_id: HashMap<u64, usize>,
     order_by_cloid: HashMap<String, usize>,
     balance_by_entity_id: HashMap<String, usize>,
 }
@@ -319,7 +319,7 @@ impl WorkingSpotBlockState {
         lookup: &CancelSpotOrderV2Lookup,
     ) -> Result<SpotOrderV2, SpotBlockItemError> {
         let index = match lookup {
-            CancelSpotOrderV2Lookup::OrderId(order_id) => self.order_by_entity_id.get(order_id),
+            CancelSpotOrderV2Lookup::Oid(order_id) => self.order_by_entity_id.get(order_id),
             CancelSpotOrderV2Lookup::Cloid(cloid) => self.order_by_cloid.get(cloid),
             CancelSpotOrderV2Lookup::Missing => None,
         };
@@ -331,7 +331,7 @@ impl WorkingSpotBlockState {
 
     fn order_for_modify(&self, lookup: &OrderId) -> Result<SpotOrderV2, SpotBlockItemError> {
         let index = match lookup {
-            OrderId::OrderId(order_id) => self.order_by_entity_id.get(order_id),
+            OrderId::Oid(order_id) => self.order_by_entity_id.get(order_id),
             OrderId::Cloid(cloid) => self.order_by_cloid.get(cloid),
         };
         index
@@ -340,7 +340,7 @@ impl WorkingSpotBlockState {
             .ok_or(SpotBlockItemError::OrderNotFound)
     }
 
-    fn order_by_order_id(&self, order_id: &str) -> Result<SpotOrderV2, SpotBlockItemError> {
+    fn order_by_order_id(&self, order_id: u64) -> Result<SpotOrderV2, SpotBlockItemError> {
         let mut matches = self.orders.iter().filter(|order| order.order_id() == order_id);
         let order = matches.next().ok_or(SpotBlockItemError::OrderNotFound)?;
         if matches.next().is_some() {
@@ -417,7 +417,7 @@ fn apply_activate(
     working: &mut WorkingSpotBlockState,
 ) -> Result<ActivateSpotOrderV2Changes, SpotBlockItemError> {
     ActivateSpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::Activate)?;
-    let pending_order = working.order_by_order_id(&cmd.order_id)?;
+    let pending_order = working.order_by_order_id(cmd.order_id)?;
     let state = ActivateSpotOrderV2State {
         pending_order,
         balances: working.balances.clone(),
@@ -498,13 +498,13 @@ fn apply_place_match(
 }
 
 fn apply_match(
-    cmd: &MatchSpotOrderV2Cmd,
+    cmd: &MatchSpotOrderV3Cmd,
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
-) -> Result<MatchSpotOrderV2Changes, SpotBlockItemError> {
-    MatchSpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::Match)?;
-    let taker_order = working.order_by_order_id(&cmd.order_id)?;
-    let state = MatchSpotOrderV2State {
+) -> Result<MatchSpotOrderV3Changes, SpotBlockItemError> {
+    MatchSpotOrderV3UseCase.check_command(cmd).map_err(SpotBlockItemError::Match)?;
+    let taker_order = working.order_by_order_id(cmd.order_id)?;
+    let state = MatchSpotOrderV3State {
         maker_orders: maker_candidates_for_open_match(&taker_order, &working.orders),
         taker_order,
         settlement_balances: working.balances.clone(),
@@ -514,8 +514,8 @@ fn apply_match(
         maker_fee_bps: block_state.maker_fee_bps,
         taker_fee_bps: block_state.taker_fee_bps,
     };
-    MatchSpotOrderV2UseCase.validate_state_given(cmd, &state).map_err(SpotBlockItemError::Match)?;
-    let changes = MatchSpotOrderV2UseCase
+    MatchSpotOrderV3UseCase.validate_state_given(cmd, &state).map_err(SpotBlockItemError::Match)?;
+    let changes = MatchSpotOrderV3UseCase
         .compute_state_diff(cmd, state)
         .map_err(SpotBlockItemError::Match)?;
     apply_match_changes(&changes, working)?;
@@ -523,7 +523,7 @@ fn apply_match(
 }
 
 fn apply_match_changes(
-    changes: &MatchSpotOrderV2Changes,
+    changes: &MatchSpotOrderV3Changes,
     working: &mut WorkingSpotBlockState,
 ) -> Result<(), SpotBlockItemError> {
     if let Some(taker) = changes.taker_order_after() {
@@ -531,13 +531,13 @@ fn apply_match_changes(
             .replace_order(taker.clone())
             .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
     }
-    for maker in &changes.updated_maker_orders {
+    for maker in changes.updated_maker_orders() {
         working
             .replace_order(maker.after.clone())
             .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
     }
     let balances_after =
-        changes.updated_balances.iter().map(|pair| pair.after.clone()).collect::<Vec<_>>();
+        changes.updated_balances().iter().map(|pair| pair.after.clone()).collect::<Vec<_>>();
     working.replace_balances(&balances_after).map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)
 }
 
@@ -561,13 +561,13 @@ fn apply_place_match_changes(
             working
                 .upsert_order(taker_after)
                 .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
-            for maker in &match_changes.updated_maker_orders {
+            for maker in match_changes.updated_maker_orders() {
                 working
                     .replace_order(maker.after.clone())
                     .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
             }
             let balances_after = match_changes
-                .updated_balances
+                .updated_balances()
                 .iter()
                 .map(|pair| pair.after.clone())
                 .collect::<Vec<_>>();
@@ -600,13 +600,13 @@ fn apply_place_match_changes(
                     .upsert_order(child.clone())
                     .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
             }
-            for maker in &match_changes.updated_maker_orders {
+            for maker in match_changes.updated_maker_orders() {
                 working
                     .replace_order(maker.after.clone())
                     .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
             }
             let balances_after = match_changes
-                .updated_balances
+                .updated_balances()
                 .iter()
                 .map(|pair| pair.after.clone())
                 .collect::<Vec<_>>();

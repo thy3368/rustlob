@@ -20,11 +20,10 @@ use crate::support::concat3;
 
 /// 定位一个已经存在的订单。
 ///
-/// 现货改单支持用本地 `order_id` 或 Hyperliquid `cloid` 查找原订单。
-/// wire 层的 `oid` 在现货语义下映射到本地 `order_id`，不再表示 numeric exchange oid。
+/// 现货改单支持用 Hyperliquid numeric `oid` 或 `cloid` 查找原订单。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderId {
-    OrderId(String),
+    Oid(u64),
     Cloid(String),
 }
 
@@ -172,7 +171,7 @@ impl StateMachineV2Unchecked for ModifySpotOrderV2UseCase {
             return Err(ModifySpotOrderV2Error::EmptyPartyId);
         }
         match &cmd.order_id {
-            OrderId::OrderId(order_id) if !order_id.is_empty() => {}
+            OrderId::Oid(order_id) if *order_id > 0 => {}
             OrderId::Cloid(cloid) if !cloid.is_empty() => {}
             _ => return Err(ModifySpotOrderV2Error::InvalidLookup),
         }
@@ -300,7 +299,7 @@ impl StateMachineOwnedV2Diff for ModifySpotOrderV2UseCase {
 
 fn lookup_matches_order(lookup: &OrderId, order: &SpotOrderV2) -> bool {
     match lookup {
-        OrderId::OrderId(order_id) => order.order_id() == order_id,
+        OrderId::Oid(order_id) => order.order_id() == *order_id,
         OrderId::Cloid(cloid) => order.client_order_id.as_deref() == Some(cloid.as_str()),
     }
 }
@@ -405,9 +404,7 @@ fn adjust_reservation_balance(
                 .checked_sub(old_remaining)
                 .ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?,
             "freeze",
-            BalanceLedgerReason::ModifySpotOrderFreeze {
-                order_id: order_before.order_id().to_owned(),
-            },
+            BalanceLedgerReason::ModifySpotOrderFreeze { order_id: order_before.order_id() },
         )
     } else {
         (
@@ -416,9 +413,7 @@ fn adjust_reservation_balance(
                 .checked_sub(new_remaining)
                 .ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?,
             "unfreeze",
-            BalanceLedgerReason::ModifySpotOrderUnfreeze {
-                order_id: order_before.order_id().to_owned(),
-            },
+            BalanceLedgerReason::ModifySpotOrderUnfreeze { order_id: order_before.order_id() },
         )
     };
     let entry_id = format!("balance-ledger:{}:modify:{label}:{action}", order_before.order_id());

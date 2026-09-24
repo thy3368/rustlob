@@ -1,7 +1,7 @@
 pub mod activate_spot_order_v2;
 pub mod cancel_spot_order_v2;
-pub mod match_spot_order_v2;
 pub mod match_spot_order_v3;
+pub mod match_spot_order_v4;
 pub mod place_only_spot_order_v2;
 
 pub mod modify_spot_order_v2;
@@ -36,13 +36,16 @@ pub use generate_spot_klines_from_historical_trades::{
     GenerateSpotKlinesFromHistoricalTradesError, GenerateSpotKlinesFromHistoricalTradesState,
     GenerateSpotKlinesFromHistoricalTradesUseCase,
 };
-pub use match_spot_order_v2::{
-    MatchSpotOrderV2AfterChanges, MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd,
-    MatchSpotOrderV2Error, MatchSpotOrderV2State, MatchSpotOrderV2UseCase,
-};
 pub use match_spot_order_v3::{
     MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd,
     MatchSpotOrderV3Error, MatchSpotOrderV3State, MatchSpotOrderV3UseCase,
+};
+pub use match_spot_order_v4::{
+    MatchSpotOrderV4AfterChanges, MatchSpotOrderV4Changes, MatchSpotOrderV4Cmd,
+    MatchSpotOrderV4Error, MatchSpotOrderV4State, MatchSpotOrderV4UseCase,
+    SettleMatchedSpotTradesV4AfterChanges, SettleMatchedSpotTradesV4Changes,
+    SettleMatchedSpotTradesV4Cmd, SettleMatchedSpotTradesV4Error, SettleMatchedSpotTradesV4State,
+    SettleMatchedSpotTradesV4UseCase,
 };
 pub use modify_spot_order_v2::{
     ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
