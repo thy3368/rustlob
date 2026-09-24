@@ -201,7 +201,7 @@ mod tests {
             activation_changes.created_balance_ledger_entries.first().map(|entry| entry.operation),
             Some(BalanceLedgerOperation::Freeze)
         );
-        assert_eq!(match_changes.created_trades.len(), 1);
+        assert_eq!(match_changes.created_trades().len(), 1);
 
         assert!(!result.events.is_empty());
         assert!(result.events[0].is_created());

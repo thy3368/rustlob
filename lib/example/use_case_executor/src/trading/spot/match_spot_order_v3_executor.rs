@@ -2,36 +2,36 @@ use cmd_handler::command_use_case_def2::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
-    MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error, MatchSpotOrderV2UseCase,
+    MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd, MatchSpotOrderV3Error, MatchSpotOrderV3UseCase,
 };
 use example_outbound_adapter::{
     DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError,
 };
 
-pub fn execute_place_spot_order_v2(
-    command: &MatchSpotOrderV2Cmd,
+pub fn execute_match_spot_order_v3(
+    command: &MatchSpotOrderV3Cmd,
 ) -> Result<
-    ExecutionResult<MatchSpotOrderV2Changes>,
-    ExecutionError<MatchSpotOrderV2Error, DefaultSpotOrderV2PlaceOutboundError>,
+    ExecutionResult<MatchSpotOrderV3Changes>,
+    ExecutionError<MatchSpotOrderV3Error, DefaultSpotOrderV2PlaceOutboundError>,
 > {
-    execute_place_spot_order_v2_with_outbound(command, &DefaultSpotOrderV2PlaceOutbound)
+    execute_match_spot_order_v3_with_outbound(command, &DefaultSpotOrderV2PlaceOutbound)
 }
 
-pub fn execute_place_spot_order_v2_with_outbound<OB>(
-    command: &MatchSpotOrderV2Cmd,
+pub fn execute_match_spot_order_v3_with_outbound<OB>(
+    command: &MatchSpotOrderV3Cmd,
     outbound: &OB,
 ) -> Result<
-    ExecutionResult<MatchSpotOrderV2Changes>,
-    ExecutionError<MatchSpotOrderV2Error, <OB as StateSink<MatchSpotOrderV2UseCase>>::Error>,
+    ExecutionResult<MatchSpotOrderV3Changes>,
+    ExecutionError<MatchSpotOrderV3Error, <OB as StateSink<MatchSpotOrderV3UseCase>>::Error>,
 >
 where
     OB: StateSource<
-            MatchSpotOrderV2UseCase,
-            Error = <OB as StateSink<MatchSpotOrderV2UseCase>>::Error,
-        > + StateSink<MatchSpotOrderV2UseCase>,
+            MatchSpotOrderV3UseCase,
+            Error = <OB as StateSink<MatchSpotOrderV3UseCase>>::Error,
+        > + StateSink<MatchSpotOrderV3UseCase>,
 {
-    StateMachineExecutor.execute::<MatchSpotOrderV2UseCase, OB, OB>(
-        &MatchSpotOrderV2UseCase,
+    StateMachineExecutor.execute::<MatchSpotOrderV3UseCase, OB, OB>(
+        &MatchSpotOrderV3UseCase,
         command,
         outbound,
         outbound,
@@ -43,8 +43,8 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV2Cmd, MatchSpotOrderV2State,
-        MatchSpotOrderV2UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
+        ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
+        MatchSpotOrderV3UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
         SpotOrderV2,
     };
 
@@ -64,14 +64,14 @@ mod tests {
     #[derive(Debug, Default)]
     struct FakePlaceSpotOrderV2Outbound;
 
-    impl StateSource<MatchSpotOrderV2UseCase> for FakePlaceSpotOrderV2Outbound {
+    impl StateSource<MatchSpotOrderV3UseCase> for FakePlaceSpotOrderV2Outbound {
         type Error = FakePlaceSpotOrderV2OutboundError;
 
         fn load_given_state(
             &self,
-            _request: &MatchSpotOrderV2Cmd,
-        ) -> Result<MatchSpotOrderV2State, Self::Error> {
-            Ok(MatchSpotOrderV2State {
+            _request: &MatchSpotOrderV3Cmd,
+        ) -> Result<MatchSpotOrderV3State, Self::Error> {
+            Ok(MatchSpotOrderV3State {
                 taker_order: buy_order("taker-buy", "buyer", 100, 2, SpotOrderTif::Ioc)?,
                 maker_orders: vec![sell_order("maker-1", "seller", 100, 1)?],
                 settlement_balances: vec![
@@ -90,7 +90,7 @@ mod tests {
         }
     }
 
-    impl StateSink<MatchSpotOrderV2UseCase> for FakePlaceSpotOrderV2Outbound {
+    impl StateSink<MatchSpotOrderV3UseCase> for FakePlaceSpotOrderV2Outbound {
         type Error = FakePlaceSpotOrderV2OutboundError;
 
         fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
@@ -106,8 +106,8 @@ mod tests {
         }
     }
 
-    fn place_cmd() -> MatchSpotOrderV2Cmd {
-        MatchSpotOrderV2Cmd {
+    fn place_cmd() -> MatchSpotOrderV3Cmd {
+        MatchSpotOrderV3Cmd {
             party_id: "buyer".to_string(),
             asset: 10_001,
             order_id: "taker-buy".to_string(),
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn execute_place_with_default_outbound_stops_at_load_state() {
-        let result = execute_place_spot_order_v2(&place_cmd());
+        let result = execute_match_spot_order_v3(&place_cmd());
 
         assert_eq!(
             result,
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn execute_place_ioc_crosses_book_and_projects_events() {
         let result =
-            execute_place_spot_order_v2_with_outbound(&place_cmd(), &FakePlaceSpotOrderV2Outbound)
+            execute_match_spot_order_v3_with_outbound(&place_cmd(), &FakePlaceSpotOrderV2Outbound)
                 .expect("place spot order v2 should execute");
 
         let changes = result.changes;
@@ -193,12 +193,12 @@ mod tests {
             changes.taker_order_after().expect("taker should be updated").status(),
             SpotOrderStatus::Canceled,
         );
-        assert_eq!(changes.updated_maker_orders.len(), 1);
-        assert_eq!(changes.created_trades.len(), 1);
-        assert!(changes.created_trades[0].executed_at_ms > 0);
-        assert!(!changes.updated_balances.is_empty());
-        assert!(!changes.created_balance_ledger_entries.is_empty());
-        assert!(changes.updated_balances.iter().any(|pair| pair.before != pair.after));
+        assert_eq!(changes.updated_maker_orders().len(), 1);
+        assert_eq!(changes.created_trades().len(), 1);
+        assert!(changes.created_trades()[0].executed_at_ms > 0);
+        assert!(!changes.updated_balances().is_empty());
+        assert!(!changes.created_balance_ledger_entries().is_empty());
+        assert!(changes.updated_balances().iter().any(|pair| pair.before != pair.after));
 
         assert!(!result.events.is_empty());
     }
