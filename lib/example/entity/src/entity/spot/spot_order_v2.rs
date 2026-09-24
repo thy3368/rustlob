@@ -283,8 +283,8 @@ pub enum SpotOrderGroupRelation {
     Standalone,
     /// `normalTpsl` entry 父单。
     NormalTpslParent,
-    /// `normalTpsl` TP/SL 子单及其父单 ID。
-    NormalTpslChild { parent_order_id: String },
+    /// `normalTpsl` TP/SL 子单及其父单 Hyperliquid spot `oid`。
+    NormalTpslChild { parent_order_id: u64 },
 }
 
 impl SpotOrderGroupRelation {
@@ -293,7 +293,7 @@ impl SpotOrderGroupRelation {
             Self::Standalone => "standalone".to_owned(),
             Self::NormalTpslParent => "normal_tpsl_parent".to_owned(),
             Self::NormalTpslChild { parent_order_id } => {
-                concat2("normal_tpsl_child:", parent_order_id)
+                concat2("normal_tpsl_child:", parent_order_id.to_string().as_str())
             }
         }
     }
@@ -328,8 +328,11 @@ pub struct ActivatePendingSpotOrderV2Input {
 /// - `SpotTrade` 负责成交已经成立后的事实与清结算角色映射
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotOrderV2 {
-    /// 本系统生成的稳定订单 ID。
-    pub order_id: String,
+    /// Hyperliquid 原生现货订单 `oid`。
+    ///
+    /// 字段名保留 `order_id` 以兼容本仓库内实体接口语义，但业务含义等同
+    /// Hyperliquid numeric spot `oid`。
+    pub order_id: u64,
     /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
     pub asset: u32,
     /// 拥有该订单的交易账户 ID。
@@ -383,7 +386,7 @@ impl SpotOrderV2 {
     /// 创建未触发条件单；该状态不生成 principal / fee reservation。
     #[allow(clippy::too_many_arguments)]
     pub fn new_pending_trigger(
-        order_id: String,
+        order_id: u64,
         asset: u32,
         account_id: String,
         symbol: String,
@@ -396,9 +399,9 @@ impl SpotOrderV2 {
         created_at: u64,
     ) -> Self {
         let reservation =
-            Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, false);
+            Self::empty_pending_reservation(order_id, account_id.as_str(), side, false);
         let fee_reservation =
-            Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, true);
+            Self::empty_pending_reservation(order_id, account_id.as_str(), side, true);
         Self {
             order_id,
             asset,
@@ -427,7 +430,7 @@ impl SpotOrderV2 {
     /// 订单创建只记录用户意图；principal / fee reservation 在撮合入口激活时生成。
     #[allow(clippy::too_many_arguments)]
     pub fn new_pending_limit(
-        order_id: String,
+        order_id: u64,
         asset: u32,
         account_id: String,
         symbol: String,
@@ -440,9 +443,9 @@ impl SpotOrderV2 {
         created_at: u64,
     ) -> Self {
         let reservation =
-            Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, false);
+            Self::empty_pending_reservation(order_id, account_id.as_str(), side, false);
         let fee_reservation =
-            Self::empty_pending_reservation(order_id.as_str(), account_id.as_str(), side, true);
+            Self::empty_pending_reservation(order_id, account_id.as_str(), side, true);
         Self {
             order_id,
             asset,
@@ -479,7 +482,7 @@ impl SpotOrderV2 {
         }
 
         let reservation = Self::principal_reservation(
-            self.order_id.as_str(),
+            self.order_id,
             self.account_id.as_str(),
             self.side,
             self.qty,
@@ -488,7 +491,7 @@ impl SpotOrderV2 {
             input.quote_asset_id.as_str(),
         )?;
         let fee_reservation = Self::fee_reservation(
-            self.order_id.as_str(),
+            self.order_id,
             self.account_id.as_str(),
             self.side,
             self.qty,
@@ -512,7 +515,7 @@ impl SpotOrderV2 {
     /// 为 spot 订单构造 principal reservation。
     #[allow(clippy::too_many_arguments)]
     pub fn principal_reservation(
-        order_id: &str,
+        order_id: u64,
         account_id: &str,
         side: SpotOrderSide,
         qty: u64,
@@ -529,9 +532,9 @@ impl SpotOrderV2 {
             SpotOrderSide::Sell => (ReservationKind::SpotSellBase, base_asset_id.to_string(), qty),
         };
         Reservation::new(
-            concat2("reservation:", order_id),
+            concat2("reservation:", order_id.to_string().as_str()),
             account_id.to_string(),
-            order_id.to_string(),
+            order_id,
             ReservationMarketKind::Spot,
             kind,
             asset_id,
@@ -542,7 +545,7 @@ impl SpotOrderV2 {
     /// 为 spot 订单构造 fee reservation。
     #[allow(clippy::too_many_arguments)]
     pub fn fee_reservation(
-        order_id: &str,
+        order_id: u64,
         account_id: &str,
         side: SpotOrderSide,
         qty: u64,
@@ -569,9 +572,9 @@ impl SpotOrderV2 {
             SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
         };
         Reservation::new(
-            concat3("reservation:", order_id, ":fee"),
+            concat3("reservation:", order_id.to_string().as_str(), ":fee"),
             account_id.to_string(),
-            order_id.to_string(),
+            order_id,
             ReservationMarketKind::Spot,
             kind,
             quote_asset_id.to_string(),
@@ -580,7 +583,7 @@ impl SpotOrderV2 {
     }
 
     fn empty_zero_fee_reservation(
-        order_id: &str,
+        order_id: u64,
         account_id: &str,
         side: SpotOrderSide,
         quote_asset_id: &str,
@@ -590,9 +593,9 @@ impl SpotOrderV2 {
             SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
         };
         Reservation {
-            reservation_id: concat3("reservation:", order_id, ":fee"),
+            reservation_id: concat3("reservation:", order_id.to_string().as_str(), ":fee"),
             owner_account_id: account_id.to_string(),
-            caused_by_order_id: order_id.to_string(),
+            caused_by_order_id: order_id,
             market_kind: ReservationMarketKind::Spot,
             reservation_kind,
             asset_id: quote_asset_id.to_string(),
@@ -607,7 +610,7 @@ impl SpotOrderV2 {
     }
 
     fn empty_pending_reservation(
-        order_id: &str,
+        order_id: u64,
         account_id: &str,
         side: SpotOrderSide,
         fee: bool,
@@ -620,9 +623,9 @@ impl SpotOrderV2 {
         };
         let suffix = if fee { ":fee:pending" } else { ":pending" };
         Reservation {
-            reservation_id: concat3("reservation:", order_id, suffix),
+            reservation_id: concat3("reservation:", order_id.to_string().as_str(), suffix),
             owner_account_id: account_id.to_string(),
-            caused_by_order_id: order_id.to_string(),
+            caused_by_order_id: order_id,
             market_kind: ReservationMarketKind::Spot,
             reservation_kind,
             asset_id: "UNRESERVED".to_string(),
@@ -636,9 +639,9 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 返回本系统生成的稳定订单 ID。
-    pub fn order_id(&self) -> &str {
-        &self.order_id
+    /// 返回 Hyperliquid 原生现货订单 `oid`。
+    pub fn order_id(&self) -> u64 {
+        self.order_id
     }
 
     /// 返回拥有该订单的交易账户 ID。
@@ -1108,8 +1111,8 @@ impl SpotOrderV2 {
                 input.match_id.clone(),
                 self.asset,
                 self.symbol.clone(),
-                self.order_id.clone(),
-                maker.order_id.clone(),
+                self.order_id,
+                maker.order_id,
                 self.account_id.clone(),
                 maker.account_id.clone(),
                 self.side,
@@ -1165,12 +1168,12 @@ impl SpotOrderV2 {
         let mut released_reservation = self.reservation.clone();
         released_reservation.release(release_amount, Some(ReservationCloseReason::Canceled))?;
         let unfreeze_ledger_entry = BalanceLedgerEntryV2::unfreeze(
-            concat2("balance-ledger:unfreeze:", self.order_id.as_str()),
+            concat2("balance-ledger:unfreeze:", self.order_id.to_string().as_str()),
             self.account_id.clone(),
             self.reservation.asset_id.clone(),
             input.balance_entity_id,
             release_amount,
-            BalanceLedgerReason::UnfreezeForCancel { order_id: self.order_id.clone() },
+            BalanceLedgerReason::UnfreezeForCancel { order_id: self.order_id },
         )?;
         let next_version = self.next_version()?;
 
@@ -1342,7 +1345,7 @@ pub fn spot_order_v2_next_trade_terms(
 impl FieldDiff for SpotOrderV2 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            EntityFieldChange::new("order_id", "", self.order_id.clone()),
+            EntityFieldChange::new("order_id", "", self.order_id.to_string()),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
@@ -1619,10 +1622,10 @@ impl FieldDiff for SpotOrderV2 {
 }
 
 impl Entity for SpotOrderV2 {
-    type Id = String;
+    type Id = u64;
 
     fn entity_id(&self) -> Self::Id {
-        self.order_id.clone()
+        self.order_id
     }
 
     fn entity_type() -> u8 {
@@ -1703,7 +1706,7 @@ impl Entity for SpotOrderV2 {
     }
 
     fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_order_entity_id(&self.order_id))
+        Ok(stable_order_entity_id(self.order_id))
     }
 }
 

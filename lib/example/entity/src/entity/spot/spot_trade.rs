@@ -27,10 +27,10 @@ pub struct SpotTrade {
     pub asset: u32,
     /// 交易对，例如 `BTCUSDT`。
     pub symbol: String,
-    /// 主动吃单订单 ID。
-    pub taker_order_id: String,
-    /// 被动挂单订单 ID。
-    pub maker_order_id: String,
+    /// 主动吃单订单 Hyperliquid spot `oid`。
+    pub taker_order_id: u64,
+    /// 被动挂单订单 Hyperliquid spot `oid`。
+    pub maker_order_id: u64,
     /// taker 所属账户 ID。
     pub taker_account_id: String,
     /// maker 所属账户 ID。
@@ -57,8 +57,8 @@ impl SpotTrade {
         match_id: String,
         asset: u32,
         symbol: String,
-        taker_order_id: String,
-        maker_order_id: String,
+        taker_order_id: u64,
+        maker_order_id: u64,
         taker_account_id: String,
         maker_account_id: String,
         taker_side: SpotOrderSide,
@@ -108,18 +108,18 @@ impl SpotTrade {
     }
 
     /// 返回买方订单 ID。
-    pub fn buyer_order_id(&self) -> &str {
+    pub fn buyer_order_id(&self) -> u64 {
         match self.taker_side {
-            SpotOrderSide::Buy => self.taker_order_id.as_str(),
-            SpotOrderSide::Sell => self.maker_order_id.as_str(),
+            SpotOrderSide::Buy => self.taker_order_id,
+            SpotOrderSide::Sell => self.maker_order_id,
         }
     }
 
     /// 返回卖方订单 ID。
-    pub fn seller_order_id(&self) -> &str {
+    pub fn seller_order_id(&self) -> u64 {
         match self.taker_side {
-            SpotOrderSide::Buy => self.maker_order_id.as_str(),
-            SpotOrderSide::Sell => self.taker_order_id.as_str(),
+            SpotOrderSide::Buy => self.maker_order_id,
+            SpotOrderSide::Sell => self.taker_order_id,
         }
     }
 
@@ -390,8 +390,8 @@ impl FieldDiff for SpotTrade {
             EntityFieldChange::new("match_id", "", self.match_id.clone()),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
-            EntityFieldChange::new("taker_order_id", "", self.taker_order_id.clone()),
-            EntityFieldChange::new("maker_order_id", "", self.maker_order_id.clone()),
+            EntityFieldChange::new("taker_order_id", "", self.taker_order_id.to_string()),
+            EntityFieldChange::new("maker_order_id", "", self.maker_order_id.to_string()),
             EntityFieldChange::new("taker_account_id", "", self.taker_account_id.clone()),
             EntityFieldChange::new("maker_account_id", "", self.maker_account_id.clone()),
             EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),

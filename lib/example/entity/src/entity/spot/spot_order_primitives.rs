@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use common_entity::EntityFieldChange;
 use serde::{Deserialize, Serialize};
 
@@ -236,10 +234,8 @@ impl SpotOrderStatusReason {
     }
 }
 
-pub(crate) fn stable_order_entity_id(value: &str) -> i64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
+pub(crate) fn stable_order_entity_id(value: u64) -> i64 {
+    (value & i64::MAX as u64) as i64
 }
 
 pub(crate) fn push_change(
