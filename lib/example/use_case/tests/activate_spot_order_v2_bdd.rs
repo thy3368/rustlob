@@ -26,7 +26,6 @@ fn pending_limit(order_id: &str, side: SpotOrderSide) -> SpotOrderV2 {
     SpotOrderV2::new_pending_limit(
         order_id.to_string(),
         10_001,
-        Some(1),
         "trader-1".to_string(),
         "BTCUSDT".to_string(),
         side,
@@ -43,7 +42,6 @@ fn pending_trigger(order_id: &str) -> SpotOrderV2 {
     SpotOrderV2::new_pending_trigger(
         order_id.to_string(),
         10_001,
-        Some(1),
         "trader-1".to_string(),
         "BTCUSDT".to_string(),
         SpotOrderSide::Sell,

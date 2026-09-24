@@ -44,7 +44,6 @@ fn activated_order(
     let mut order = SpotOrderV2::new_pending_limit(
         order_id.to_owned(),
         ASSET,
-        Some(price),
         account_id.to_owned(),
         "BTCUSDT".to_owned(),
         side,
