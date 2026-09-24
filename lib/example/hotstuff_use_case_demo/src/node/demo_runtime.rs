@@ -333,7 +333,6 @@ fn demo_sell_order(
     let mut order = SpotOrderV2::new_pending_limit(
         order_id.to_string(),
         10_001,
-        Some(price),
         account_id.to_string(),
         "BTCUSDT".to_string(),
         SpotOrderSide::Sell,
@@ -345,7 +344,7 @@ fn demo_sell_order(
         1,
     );
     order
-        .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+        .activate_pending(ActivatePendingSpotOrderV2Input {
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
             maker_fee_bps: 1,
@@ -361,7 +360,6 @@ fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
     let mut order = SpotOrderV2::new_pending_limit(
         "cancel-buy".to_string(),
         10_001,
-        Some(77738308),
         "buyer".to_string(),
         "BTCUSDT".to_string(),
         SpotOrderSide::Buy,
@@ -373,7 +371,7 @@ fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
         1,
     );
     order
-        .activate_pending_limit(ActivatePendingSpotOrderV2Input {
+        .activate_pending(ActivatePendingSpotOrderV2Input {
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
             maker_fee_bps: 5,
@@ -444,9 +442,6 @@ fn data_hash(data: &Data) -> CryptoHash {
 
 fn cancel_result_key(command: &CancelSpotOrderV2Cmd) -> Vec<u8> {
     match &command.lookup {
-        CancelSpotOrderV2Lookup::Oid(oid) => {
-            format!("cancel:{}:{oid}", command.party_id).into_bytes()
-        }
         CancelSpotOrderV2Lookup::Cloid(cloid) => {
             format!("cancel:{}:{cloid}", command.party_id).into_bytes()
         }

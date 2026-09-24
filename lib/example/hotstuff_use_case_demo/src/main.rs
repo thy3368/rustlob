@@ -100,7 +100,7 @@ fn main() -> DemoResult<()> {
     let cancel_command = CancelSpotOrderV2Cmd {
         party_id: "buyer".to_string(),
         asset: 10_001,
-        lookup: CancelSpotOrderV2Lookup::Oid(77738308),
+        lookup: CancelSpotOrderV2Lookup::Cloid("demo-cancel-1".to_string()),
     };
     request_queues
         .first()
