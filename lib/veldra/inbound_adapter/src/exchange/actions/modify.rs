@@ -12,13 +12,13 @@ use crate::exchange::common::validate::{validate_cloid, validate_envelope_common
 use crate::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::exchange::error::ExchangeHttpError;
 
-const STUB_MODIFIED_OID: u64 = 77738309;
-
 #[derive(Debug, thiserror::Error)]
 pub enum ModifyContractError {
     #[error("Unexpected `action.type` for modify handler: `{0}`.")]
     UnexpectedActionType(String),
-    #[error("Invalid `action.oid`. Expected a positive order id or 128-bit hex client order id.")]
+    #[error(
+        "Invalid `action.oid`. Expected a positive numeric oid or 128-bit hex client order id."
+    )]
     InvalidOid,
     #[error("Invalid `action.order.p`. Expected a non-empty decimal string.")]
     InvalidPrice,
@@ -124,13 +124,13 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 }
 
 fn validate_oid(oid: &Value) -> Result<(), ExchangeHttpError> {
-    if oid.as_u64().is_some_and(|value| value > 0) {
+    if oid.as_u64().is_some_and(|order_id| order_id > 0) {
         return Ok(());
     }
     if let Some(cloid) = oid.as_str() {
-        validate_cloid(cloid)
-            .map_err(|_| ExchangeHttpError::contract(ModifyContractError::InvalidOid))?;
-        return Ok(());
+        if validate_cloid(cloid).is_ok() {
+            return Ok(());
+        }
     }
     Err(ExchangeHttpError::contract(ModifyContractError::InvalidOid))
 }
@@ -178,7 +178,7 @@ async fn execute(_request: RequestWire) -> Result<reply::ModifyResponseWire, Exc
             type_: "order",
             data: OrderResponseDataWire {
                 statuses: vec![OrderStatusWire::Resting {
-                    resting: RestingOrderStatusWire { oid: STUB_MODIFIED_OID },
+                    resting: RestingOrderStatusWire::default(),
                 }],
             },
         },
@@ -226,6 +226,101 @@ mod tests {
         assert_eq!(error.to_string(), "Invalid `action.a`. `a` must be omitted when false.");
     }
 
+    #[test]
+    fn accepts_cloid_lookup() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
+            br#"{
+                "action": {
+                    "type": "modify",
+                    "oid": "0x1234567890abcdef1234567890abcdef",
+                    "order": {
+                        "a": 10000,
+                        "b": true,
+                        "p": "1891.4",
+                        "s": "0.02",
+                        "r": false,
+                        "t": { "limit": { "tif": "Gtc" } }
+                    }
+                },
+                "nonce": 1710000000000,
+                "signature": {
+                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                    "v": 27
+                }
+            }"#,
+        )
+        .expect("request parses");
+
+        validate(&request).expect("cloid modify lookup is valid");
+    }
+
+    #[test]
+    fn rejects_string_local_order_id() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
+            br#"{
+                "action": {
+                    "type": "modify",
+                    "oid": "order-1",
+                    "order": {
+                        "a": 10000,
+                        "b": true,
+                        "p": "1891.4",
+                        "s": "0.02",
+                        "r": false,
+                        "t": { "limit": { "tif": "Gtc" } }
+                    }
+                },
+                "nonce": 1710000000000,
+                "signature": {
+                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                    "v": 27
+                }
+            }"#,
+        )
+        .expect("request parses");
+
+        let error = validate(&request).expect_err("validation should fail");
+        assert_eq!(
+            error.to_string(),
+            "Invalid `action.oid`. Expected a positive numeric oid or 128-bit hex client order id."
+        );
+    }
+
+    #[test]
+    fn rejects_zero_oid() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
+            br#"{
+                "action": {
+                    "type": "modify",
+                    "oid": 0,
+                    "order": {
+                        "a": 10000,
+                        "b": true,
+                        "p": "1891.4",
+                        "s": "0.02",
+                        "r": false,
+                        "t": { "limit": { "tif": "Gtc" } }
+                    }
+                },
+                "nonce": 1710000000000,
+                "signature": {
+                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                    "v": 27
+                }
+            }"#,
+        )
+        .expect("request parses");
+
+        let error = validate(&request).expect_err("validation should fail");
+        assert_eq!(
+            error.to_string(),
+            "Invalid `action.oid`. Expected a positive numeric oid or 128-bit hex client order id."
+        );
+    }
+
     #[actix_web::test]
     async fn reply_snapshot_is_stable() {
         let response = execute(
@@ -237,7 +332,7 @@ mod tests {
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,
-            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"resting\": {\n            \"oid\": 77738309\n          }\n        }\n      ]\n    }\n  }\n}"
+            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"resting\": {}\n        }\n      ]\n    }\n  }\n}"
         );
     }
 

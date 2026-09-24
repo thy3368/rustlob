@@ -49,7 +49,7 @@ mod tests {
 
     // Matrix: 本地 order_id / CLOID lookup + default state not wired -> load-state failure.
     #[rstest]
-    #[case::order_id(CancelSpotOrderV2Lookup::OrderId("order-1".to_string()))]
+    #[case::order_id(CancelSpotOrderV2Lookup::Oid(1))]
     #[case::cloid(CancelSpotOrderV2Lookup::Cloid("client-order-1".to_string()))]
     fn execute_cancel_with_default_outbound_stops_at_load_state(
         #[case] lookup: CancelSpotOrderV2Lookup,
@@ -76,7 +76,7 @@ mod tests {
         let command = CancelSpotOrderV2Cmd {
             party_id: "buyer".to_string(),
             asset: 10000,
-            lookup: CancelSpotOrderV2Lookup::OrderId("order-1".to_string()),
+            lookup: CancelSpotOrderV2Lookup::Oid(1),
         };
         let outbound = FakeSpotOrderV2CancelOutbound::default();
 

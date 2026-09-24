@@ -2,21 +2,21 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-use example_core_use_case::MatchSpotOrderV2Cmd;
+use example_core_use_case::MatchSpotOrderV3Cmd;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use use_case_executor::trading::spot::open_match_spot_order_v2_executor::execute_place_spot_order_v2;
+use use_case_executor::trading::spot::match_spot_order_v3_executor::execute_match_spot_order_v3;
 
 pub type TimerResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-fn scheduled_place_commands(round: u64) -> [MatchSpotOrderV2Cmd; 2] {
+fn scheduled_place_commands(round: u64) -> [MatchSpotOrderV3Cmd; 2] {
     [scheduled_place_command(round, 1), scheduled_place_command(round, 2)]
 }
 
-fn scheduled_place_command(round: u64, sequence: u8) -> MatchSpotOrderV2Cmd {
-    MatchSpotOrderV2Cmd {
+fn scheduled_place_command(round: u64, sequence: u8) -> MatchSpotOrderV3Cmd {
+    MatchSpotOrderV3Cmd {
         party_id: "buyer".to_string(),
         asset: 10001,
-        order_id: format!("timer-{round}-{sequence}"),
+        order_id: round.saturating_mul(10).saturating_add(u64::from(sequence)),
     }
 }
 
@@ -40,8 +40,8 @@ pub async fn run_timer() -> TimerResult<()> {
 
             for (sequence, command) in scheduled_place_commands(round).into_iter().enumerate() {
                 let sequence = sequence + 1;
-                let order_id = command.order_id.as_str();
-                match execute_place_spot_order_v2(&command) {
+                let order_id = command.order_id;
+                match execute_match_spot_order_v3(&command) {
                     Ok(result) => println!(
                         "timer spot order succeeded round={round} sequence={sequence} \
                          order_id={order_id} events={}",
@@ -79,7 +79,7 @@ mod tests {
             assert_eq!(command.party_id, "buyer");
             assert_eq!(command.asset, 10001);
         }
-        assert_eq!(commands[0].order_id, "timer-7-1");
-        assert_eq!(commands[1].order_id, "timer-7-2");
+        assert_eq!(commands[0].order_id, 71);
+        assert_eq!(commands[1].order_id, 72);
     }
 }

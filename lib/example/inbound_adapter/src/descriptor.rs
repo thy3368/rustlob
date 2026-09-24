@@ -298,7 +298,7 @@ fn http_schema_components() -> Map<String, Value> {
         object_schema(
             &["order_id", "principal_reservation_amount", "remaining_quote", "domain_event_count"],
             vec![
-                ("order_id", string_schema()),
+                ("order_id", u64_schema()),
                 ("principal_reservation_amount", u64_schema()),
                 ("remaining_quote", u64_schema()),
                 ("domain_event_count", u64_schema()),
@@ -394,7 +394,7 @@ fn cli_schema_components() -> Map<String, Value> {
         "PlaceOrderCliResponse",
         object_schema(
             &["summary", "order_id"],
-            vec![("summary", string_schema()), ("order_id", string_schema())],
+            vec![("summary", string_schema()), ("order_id", u64_schema())],
         ),
     );
     insert_schema(
@@ -556,7 +556,7 @@ mod tests {
         );
         assert_eq!(
             serialized_object_keys(&PlaceOrderHttpResponse {
-                order_id: "order-1".to_string(),
+                order_id: 11,
                 principal_reservation_amount: 200,
                 remaining_quote: 800,
                 domain_event_count: 2,
@@ -679,7 +679,7 @@ mod tests {
         assert_eq!(
             serialized_object_keys(&PlaceOrderCliResponse {
                 summary: "accepted".to_string(),
-                order_id: "order-1".to_string(),
+                order_id: 11,
             }),
             schema_property_names_in_components(&cli_schema, "PlaceOrderCliResponse")
         );

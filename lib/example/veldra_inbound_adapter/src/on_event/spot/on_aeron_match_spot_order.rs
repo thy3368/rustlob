@@ -10,10 +10,10 @@ use aeron_rs::context::Context;
 use aeron_rs::utils::errors::AeronError;
 use aeron_rs::utils::types::Index;
 use common_entity::{EntityReplayableEvent, ExecutionError};
-use example_core_use_case::{MatchSpotOrderV2Cmd, MatchSpotOrderV2Error, ORDER_ENTITY_TYPE};
+use example_core_use_case::{MatchSpotOrderV3Cmd, MatchSpotOrderV3Error, ORDER_ENTITY_TYPE};
 use example_outbound_adapter::DefaultSpotOrderV2PlaceOutboundError;
 use thiserror::Error;
-use use_case_executor::trading::spot::open_match_spot_order_v2_executor::execute_place_spot_order_v2;
+use use_case_executor::trading::spot::match_spot_order_v3_executor::execute_match_spot_order_v3;
 
 const DEFAULT_AERON_CHANNEL: &str = "aeron:ipc";
 const DEFAULT_AERON_STREAM_ID: i32 = 1001;
@@ -23,7 +23,7 @@ const AERON_STREAM_ID_ENV: &str = "AERON_STREAM_ID";
 const AERON_FRAGMENT_LIMIT_ENV: &str = "AERON_FRAGMENT_LIMIT";
 
 pub type MatchSpotOrderExecutorError =
-    ExecutionError<MatchSpotOrderV2Error, DefaultSpotOrderV2PlaceOutboundError>;
+    ExecutionError<MatchSpotOrderV3Error, DefaultSpotOrderV2PlaceOutboundError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AeronMatchSpotOrderConfig {
@@ -129,7 +129,7 @@ pub fn decode_match_spot_order_event(
 
 pub fn match_spot_order_command_from_event(
     event: &EntityReplayableEvent,
-) -> Option<MatchSpotOrderV2Cmd> {
+) -> Option<MatchSpotOrderV3Cmd> {
     if event.entity_type != ORDER_ENTITY_TYPE || !event.is_created() {
         return None;
     }
@@ -142,9 +142,9 @@ pub fn match_spot_order_command_from_event(
         .and_then(|value| value.parse::<u32>().ok())?;
     let order_id = event_field_value(event, "order_id")
         .and_then(|value| std::str::from_utf8(value).ok())
-        .map(str::to_owned)?;
+        .and_then(|value| value.parse::<u64>().ok())?;
 
-    Some(MatchSpotOrderV2Cmd { party_id, asset, order_id })
+    Some(MatchSpotOrderV3Cmd { party_id, asset, order_id })
 }
 
 pub fn handle_match_spot_order_fragment(payload: &[u8]) -> Result<(), AeronMatchSpotOrderError> {
@@ -153,7 +153,7 @@ pub fn handle_match_spot_order_fragment(payload: &[u8]) -> Result<(), AeronMatch
         return Ok(());
     };
 
-    execute_place_spot_order_v2(&command).map(|_| ()).map_err(AeronMatchSpotOrderError::Executor)
+    execute_match_spot_order_v3(&command).map(|_| ()).map_err(AeronMatchSpotOrderError::Executor)
 }
 
 pub fn run_match_spot_order_aeron() -> Result<(), AeronMatchSpotOrderError> {
@@ -301,7 +301,7 @@ mod tests {
     #[test]
     fn decodes_valid_entity_replayable_event() {
         let event = decode_match_spot_order_event(&order_event_payload(
-            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"order-1")],
+            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"1")],
             ORDER_ENTITY_TYPE,
         ));
 
@@ -312,25 +312,21 @@ mod tests {
     #[test]
     fn maps_order_created_event_to_match_command() {
         let event = decode_match_spot_order_event(&order_event_payload(
-            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"order-1")],
+            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"1")],
             ORDER_ENTITY_TYPE,
         ))
         .expect("valid replay event");
 
         assert_eq!(
             match_spot_order_command_from_event(&event),
-            Some(MatchSpotOrderV2Cmd {
-                party_id: "buyer".to_string(),
-                asset: 10001,
-                order_id: "order-1".to_string(),
-            })
+            Some(MatchSpotOrderV3Cmd { party_id: "buyer".to_string(), asset: 10001, order_id: 1 })
         );
     }
 
     #[test]
     fn ignores_non_order_entity_events() {
         let event = decode_match_spot_order_event(&order_event_payload(
-            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"order-1")],
+            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"1")],
             5,
         ))
         .expect("valid replay event");
@@ -355,7 +351,7 @@ mod tests {
             let fields = [
                 ("account_id", b"buyer".as_slice()),
                 ("asset", b"10001".as_slice()),
-                ("order_id", b"order-1".as_slice()),
+                ("order_id", b"1".as_slice()),
             ]
             .into_iter()
             .filter(|(field_name, _)| *field_name != missing_field)
@@ -377,13 +373,13 @@ mod tests {
     #[test]
     fn ignores_order_events_with_invalid_asset_or_utf8_fields() {
         let invalid_asset = event_with_fields(
-            &[("account_id", b"buyer"), ("asset", b"not-a-number"), ("order_id", b"order-1")],
+            &[("account_id", b"buyer"), ("asset", b"not-a-number"), ("order_id", b"1")],
             ORDER_ENTITY_TYPE,
         );
         assert_eq!(match_spot_order_command_from_event(&invalid_asset), None);
 
         let invalid_utf8 = event_with_fields(
-            &[("account_id", &[0xff]), ("asset", b"10001"), ("order_id", b"order-1")],
+            &[("account_id", &[0xff]), ("asset", b"10001"), ("order_id", b"1")],
             ORDER_ENTITY_TYPE,
         );
         assert_eq!(match_spot_order_command_from_event(&invalid_utf8), None);
@@ -399,7 +395,7 @@ mod tests {
     #[test]
     fn non_matching_events_are_ignored_by_fragment_handler() {
         let result = handle_match_spot_order_fragment(&order_event_payload(
-            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"order-1")],
+            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"1")],
             5,
         ));
 
@@ -409,7 +405,7 @@ mod tests {
     #[test]
     fn fragment_handler_reaches_existing_spot_order_executor() {
         let result = handle_match_spot_order_fragment(&order_event_payload(
-            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"order-1")],
+            &[("account_id", b"buyer"), ("asset", b"10001"), ("order_id", b"1")],
             ORDER_ENTITY_TYPE,
         ));
 
@@ -481,7 +477,7 @@ mod tests {
         for (field_name, value) in [
             ("account_id", b"buyer".as_slice()),
             ("asset", b"10001".as_slice()),
-            ("order_id", b"order-1".as_slice()),
+            ("order_id", b"1".as_slice()),
         ] {
             event.add_field_change(ReplayFieldChange::new(
                 ReplayFieldChange::field_name_from_str(field_name),

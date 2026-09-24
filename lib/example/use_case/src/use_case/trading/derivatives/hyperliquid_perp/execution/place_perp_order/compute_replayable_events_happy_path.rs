@@ -65,7 +65,7 @@ fn assert_freeze_ledger_entry_matches_balance_pair(changes: &PlaceHyperliquidPer
     assert_eq!(
         ledger_entry.reason,
         crate::entity::BalanceLedgerReason::FreezeForOrder {
-            order_id: changes.created_order.order_id.clone()
+            order_id: changes.created_order.order_id
         }
     );
     assert!(ledger_entry.matches_balance_update(&changes.updated_margin_balances[0]));
@@ -170,7 +170,7 @@ fn assert_order_snapshot(
     expected_qty: u64,
     expected_reduce_only: bool,
 ) {
-    assert_eq!(order.order_id, "acct-1-BTC-PERP-42");
+    assert_eq!(order.order_id, 42);
     assert_eq!(order.account_id, "acct-1");
     assert_eq!(order.asset, 0);
     assert_eq!(order.symbol, "BTC-PERP");
@@ -207,7 +207,7 @@ fn assert_order_created_event(
 ) {
     assert_eq!(event.change_type, 0);
     assert_eq!(event.entity_type, <HyperliquidPerpOrder as Entity>::entity_type());
-    assert_eq!(event_field(event, "order_id"), Some("acct-1-BTC-PERP-42"));
+    assert_eq!(event_field(event, "order_id"), Some("42"));
     assert_eq!(event_field(event, "side"), Some(expected_side));
     assert_eq!(event_field(event, "execution"), Some(expected_execution));
     assert_eq!(event_field(event, "time_in_force"), Some(expected_time_in_force));

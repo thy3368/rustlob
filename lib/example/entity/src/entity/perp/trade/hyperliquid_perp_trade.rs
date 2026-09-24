@@ -24,10 +24,10 @@ pub struct HyperliquidPerpTrade {
     pub asset: u32,
     /// 合约展示名，例如 `BTC-PERP`。
     pub symbol: String,
-    /// 主动吃单订单 ID。
-    pub taker_order_id: String,
-    /// 被动挂单订单 ID。
-    pub maker_order_id: String,
+    /// 主动吃单订单 Hyperliquid perp `oid`。
+    pub taker_order_id: u64,
+    /// 被动挂单订单 Hyperliquid perp `oid`。
+    pub maker_order_id: u64,
     /// taker 所属账户 ID。
     pub taker_account_id: String,
     /// maker 所属账户 ID。
@@ -63,8 +63,8 @@ impl HyperliquidPerpTrade {
         match_id: String,
         asset: u32,
         symbol: String,
-        taker_order_id: String,
-        maker_order_id: String,
+        taker_order_id: u64,
+        maker_order_id: u64,
         taker_account_id: String,
         maker_account_id: String,
         taker_side: HyperliquidPerpOrderSide,
@@ -414,8 +414,8 @@ impl FieldDiff for HyperliquidPerpTrade {
             EntityFieldChange::new("match_id", "", self.match_id.clone()),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
             EntityFieldChange::new("symbol", "", self.symbol.clone()),
-            EntityFieldChange::new("taker_order_id", "", self.taker_order_id.clone()),
-            EntityFieldChange::new("maker_order_id", "", self.maker_order_id.clone()),
+            EntityFieldChange::new("taker_order_id", "", self.taker_order_id.to_string()),
+            EntityFieldChange::new("maker_order_id", "", self.maker_order_id.to_string()),
             EntityFieldChange::new("taker_account_id", "", self.taker_account_id.clone()),
             EntityFieldChange::new("maker_account_id", "", self.maker_account_id.clone()),
             EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
@@ -491,8 +491,8 @@ mod tests {
             "match-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            "taker-1".to_string(),
-            "maker-1".to_string(),
+            1,
+            2,
             "winner".to_string(),
             "loser".to_string(),
             HyperliquidPerpOrderSide::Buy,

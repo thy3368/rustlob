@@ -7,7 +7,7 @@ const HYPERLIQUID_PERP_LIQUIDATION_FILL_ENTITY_TYPE: u8 = 15;
 pub struct HyperliquidPerpLiquidationFill {
     pub liquidation_fill_id: String,
     pub liquidation_id: String,
-    pub order_id: String,
+    pub order_id: u64,
     pub trade_id: String,
     pub account_id: String,
     pub position_id: String,
@@ -25,7 +25,7 @@ impl HyperliquidPerpLiquidationFill {
     pub fn new(
         liquidation_fill_id: String,
         liquidation_id: String,
-        order_id: String,
+        order_id: u64,
         trade_id: String,
         account_id: String,
         position_id: String,
@@ -60,7 +60,7 @@ impl FieldDiff for HyperliquidPerpLiquidationFill {
         vec![
             EntityFieldChange::new("liquidation_fill_id", "", self.liquidation_fill_id.clone()),
             EntityFieldChange::new("liquidation_id", "", self.liquidation_id.clone()),
-            EntityFieldChange::new("order_id", "", self.order_id.clone()),
+            EntityFieldChange::new("order_id", "", self.order_id.to_string()),
             EntityFieldChange::new("trade_id", "", self.trade_id.clone()),
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
             EntityFieldChange::new("position_id", "", self.position_id.clone()),
@@ -132,7 +132,7 @@ mod tests {
         let fill = HyperliquidPerpLiquidationFill::new(
             "liq-fill-1".to_string(),
             "liq-1".to_string(),
-            "order-1".to_string(),
+            1,
             "trade-1".to_string(),
             "trader-1".to_string(),
             "position-1".to_string(),

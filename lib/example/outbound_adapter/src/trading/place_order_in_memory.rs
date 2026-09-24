@@ -157,7 +157,7 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
 
             if event.is_created() && event_string_field(event, "order_id").is_some() {
                 let order = decode_order_from_event(event)?;
-                state.orders.insert(order.order_id.clone(), order);
+                state.orders.insert(order.order_id, order);
                 state.next_order_sequence = state
                     .next_order_sequence
                     .checked_add(1)
@@ -323,13 +323,15 @@ fn decode_group_relation(
     match value {
         None | Some("") | Some("standalone") => Ok(SpotOrderGroupRelation::Standalone),
         Some("normal_tpsl_parent") => Ok(SpotOrderGroupRelation::NormalTpslParent),
-        Some(value) => value
-            .strip_prefix("normal_tpsl_child:")
-            .filter(|parent_order_id| !parent_order_id.is_empty())
-            .map(|parent_order_id| SpotOrderGroupRelation::NormalTpslChild {
-                parent_order_id: parent_order_id.to_string(),
-            })
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed),
+        Some(value) => {
+            let parent_order_id = value
+                .strip_prefix("normal_tpsl_child:")
+                .filter(|parent_order_id| !parent_order_id.is_empty())
+                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
+                .parse()
+                .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
+            Ok(SpotOrderGroupRelation::NormalTpslChild { parent_order_id })
+        }
     }
 }
 
@@ -404,7 +406,9 @@ fn decode_embedded_reservation(
     Ok(Reservation {
         reservation_id,
         owner_account_id: account_id,
-        caused_by_order_id: order_id,
+        caused_by_order_id: order_id
+            .parse()
+            .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?,
         market_kind: ReservationMarketKind::Spot,
         reservation_kind: decode_reservation_kind(
             reservation_string_field(event, fee, "kind")
@@ -455,7 +459,7 @@ fn decode_created_reservation(
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         owner_account_id: event_string_field(event, "owner_account_id")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        caused_by_order_id: event_string_field(event, "caused_by_order_id")
+        caused_by_order_id: event_u64_field(event, "caused_by_order_id")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         market_kind: decode_market_kind(
             event_string_field(event, "market_kind")
@@ -562,9 +566,9 @@ fn decode_created_trade(
         event_string_field(event, "match_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_u64_field(event, "asset").ok_or(PlaceOrderOutboundError::EventDecodeFailed)? as u32,
         event_string_field(event, "symbol").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "taker_order_id")
+        event_u64_field(event, "taker_order_id")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        event_string_field(event, "maker_order_id")
+        event_u64_field(event, "maker_order_id")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
         event_string_field(event, "taker_account_id")
             .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
@@ -591,13 +595,13 @@ fn decode_trade_side(
 }
 
 fn apply_order_update_event(
-    orders: &mut std::collections::HashMap<String, SpotOrderV2>,
+    orders: &mut std::collections::HashMap<u64, SpotOrderV2>,
     event: &EntityReplayableEvent,
 ) -> Result<(), PlaceOrderOutboundError> {
     let order_id =
-        event_string_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+        event_u64_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     if !orders.contains_key(&order_id) {
-        orders.insert(order_id.clone(), decode_order_snapshot_from_event(event)?);
+        orders.insert(order_id, decode_order_snapshot_from_event(event)?);
     }
     let order = orders.get_mut(&order_id).ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     if let Some(status) = event_string_field(event, "status") {
@@ -637,7 +641,7 @@ fn decode_order_from_event(
     event: &EntityReplayableEvent,
 ) -> Result<SpotOrderV2, PlaceOrderOutboundError> {
     let order_id =
-        event_string_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+        event_u64_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     let asset =
         event_u64_field(event, "asset").ok_or(PlaceOrderOutboundError::EventDecodeFailed)? as u32;
     let account_id = event_string_field(event, "account_id")

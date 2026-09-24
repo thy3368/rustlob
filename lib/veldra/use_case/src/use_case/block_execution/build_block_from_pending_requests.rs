@@ -172,36 +172,48 @@ fn extract_place_spot_order_v2_changes(
         }
         PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
             created_taker_order,
+            activation_changes,
             match_changes,
-        } => (vec![created_taker_order], match_changes),
+        } => {
+            changes.push(BlockEntityChange::SpotOrderCreated((*created_taker_order).clone()));
+            changes.push(BlockEntityChange::SpotOrderUpdated(
+                activation_changes.updated_order.clone(),
+            ));
+            (Vec::new(), match_changes)
+        }
         PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
             created_parent_order,
             created_child_orders,
+            activation_changes,
             match_changes,
         } => {
             changes.push(BlockEntityChange::SpotOrderCreated(created_parent_order.clone()));
             changes.extend(
                 created_child_orders.iter().cloned().map(BlockEntityChange::SpotOrderCreated),
             );
+            changes.push(BlockEntityChange::SpotOrderUpdated(
+                activation_changes.updated_order.clone(),
+            ));
             (Vec::new(), match_changes)
         }
     };
     changes.extend(created_orders.into_iter().cloned().map(BlockEntityChange::SpotOrderCreated));
-    if let Some(pair) = &match_changes.activated_taker_order {
-        changes.push(BlockEntityChange::SpotOrderUpdated(pair.clone()));
-    }
-    if let Some(pair) = &match_changes.updated_taker_order {
+    if let Some(pair) = match_changes.taker_order_pair() {
         changes.push(BlockEntityChange::SpotOrderUpdated(pair.clone()));
     }
     changes.extend(
-        match_changes.created_trades.iter().cloned().map(BlockEntityChange::SpotTradeCreated),
-    );
-    changes.extend(
-        match_changes.updated_maker_orders.iter().cloned().map(BlockEntityChange::SpotOrderUpdated),
+        match_changes.created_trades().iter().cloned().map(BlockEntityChange::SpotTradeCreated),
     );
     changes.extend(
         match_changes
-            .created_vouchers
+            .updated_maker_orders()
+            .iter()
+            .cloned()
+            .map(BlockEntityChange::SpotOrderUpdated),
+    );
+    changes.extend(
+        match_changes
+            .created_vouchers()
             .iter()
             .cloned()
             .map(BlockEntityChange::SettlementTransferVoucherCreated),
@@ -211,7 +223,7 @@ fn extract_place_spot_order_v2_changes(
     );
     changes.extend(
         match_changes
-            .created_balance_ledger_entries
+            .created_balance_ledger_entries()
             .iter()
             .cloned()
             .map(BlockEntityChange::BalanceLedgerEntryCreated),
@@ -220,18 +232,18 @@ fn extract_place_spot_order_v2_changes(
 }
 
 fn balance_update_pairs(
-    changes: &example_core_use_case::MatchSpotOrderV2Changes,
+    changes: &example_core_use_case::MatchSpotOrderV3Changes,
 ) -> Vec<UpdatedEntityPair<example_core_use_case::Balance>> {
     use std::collections::HashMap;
 
     let mut current = changes
-        .updated_balances
+        .updated_balances()
         .iter()
         .map(|pair| (pair.before.entity_id(), pair.before.clone()))
         .collect::<HashMap<_, _>>();
-    let mut pairs = Vec::with_capacity(changes.created_balance_ledger_entries.len());
+    let mut pairs = Vec::with_capacity(changes.created_balance_ledger_entries().len());
 
-    for entry in &changes.created_balance_ledger_entries {
+    for entry in changes.created_balance_ledger_entries() {
         let Some(before) = current.get(&entry.balance_entity_id).cloned() else {
             continue;
         };

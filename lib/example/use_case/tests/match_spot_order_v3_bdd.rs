@@ -14,6 +14,8 @@ use example_core_use_case::{
 
 const ASSET: u32 = 10_001;
 const EXECUTION_TIME_NS: u64 = 1_000_000_000;
+const TAKER_BUY_ORDER_ID: u64 = 1;
+const MAKER_SELL_ORDER_ID: u64 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExpectedOutcome {
@@ -34,7 +36,7 @@ fn context() -> ExecutionContext {
 }
 
 fn activated_order(
-    order_id: &str,
+    order_id: u64,
     account_id: &str,
     side: SpotOrderSide,
     qty: u64,
@@ -42,7 +44,7 @@ fn activated_order(
     tif: SpotOrderTif,
 ) -> SpotOrderV2 {
     let mut order = SpotOrderV2::new_pending_limit(
-        order_id.to_owned(),
+        order_id,
         ASSET,
         account_id.to_owned(),
         "BTCUSDT".to_owned(),
@@ -68,9 +70,16 @@ fn activated_order(
 
 fn scenario(taker_qty: u64, taker_tif: SpotOrderTif, maker_qty: Option<u64>) -> Scenario {
     let taker =
-        activated_order("taker-buy", "buyer", SpotOrderSide::Buy, taker_qty, 100, taker_tif);
+        activated_order(TAKER_BUY_ORDER_ID, "buyer", SpotOrderSide::Buy, taker_qty, 100, taker_tif);
     let maker = maker_qty.map(|qty| {
-        activated_order("maker-sell", "seller", SpotOrderSide::Sell, qty, 100, SpotOrderTif::Gtc)
+        activated_order(
+            MAKER_SELL_ORDER_ID,
+            "seller",
+            SpotOrderSide::Sell,
+            qty,
+            100,
+            SpotOrderTif::Gtc,
+        )
     });
 
     let taker_principal = taker.reservation.original_amount;
@@ -84,7 +93,7 @@ fn scenario(taker_qty: u64, taker_tif: SpotOrderTif, maker_qty: Option<u64>) -> 
         command: MatchSpotOrderV3Cmd {
             party_id: "buyer".to_owned(),
             asset: ASSET,
-            order_id: "taker-buy".to_owned(),
+            order_id: TAKER_BUY_ORDER_ID,
         },
         state: MatchSpotOrderV3State {
             taker_order: taker,

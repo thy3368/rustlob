@@ -72,8 +72,8 @@ mod tests {
             _request: &MatchSpotOrderV3Cmd,
         ) -> Result<MatchSpotOrderV3State, Self::Error> {
             Ok(MatchSpotOrderV3State {
-                taker_order: buy_order("taker-buy", "buyer", 100, 2, SpotOrderTif::Ioc)?,
-                maker_orders: vec![sell_order("maker-1", "seller", 100, 1)?],
+                taker_order: buy_order(1, "buyer", 100, 2, SpotOrderTif::Ioc)?,
+                maker_orders: vec![sell_order(2, "seller", 100, 1)?],
                 settlement_balances: vec![
                     Balance::new("buyer".to_string(), "USDT".to_string(), 1000, 201, 1),
                     Balance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
@@ -107,15 +107,11 @@ mod tests {
     }
 
     fn place_cmd() -> MatchSpotOrderV3Cmd {
-        MatchSpotOrderV3Cmd {
-            party_id: "buyer".to_string(),
-            asset: 10_001,
-            order_id: "taker-buy".to_string(),
-        }
+        MatchSpotOrderV3Cmd { party_id: "buyer".to_string(), asset: 10_001, order_id: 1 }
     }
 
     fn buy_order(
-        order_id: &str,
+        order_id: u64,
         account_id: &str,
         price: u64,
         qty: u64,
@@ -125,7 +121,7 @@ mod tests {
     }
 
     fn sell_order(
-        order_id: &str,
+        order_id: u64,
         account_id: &str,
         price: u64,
         qty: u64,
@@ -134,7 +130,7 @@ mod tests {
     }
 
     fn order(
-        order_id: &str,
+        order_id: u64,
         account_id: &str,
         side: SpotOrderSide,
         price: u64,
@@ -147,7 +143,7 @@ mod tests {
         .map_err(|_| FakePlaceSpotOrderV2OutboundError)?;
 
         let mut order = SpotOrderV2::new_pending_limit(
-            order_id.to_string(),
+            order_id,
             10_001,
             account_id.to_string(),
             "BTCUSDT".to_string(),

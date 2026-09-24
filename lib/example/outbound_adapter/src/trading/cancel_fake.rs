@@ -33,7 +33,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
             Some(request.lookup.clone());
 
         let principal_reservation = SpotOrderV2::principal_reservation(
-            "order-1",
+            1,
             request.party_id.as_str(),
             SpotOrderSide::Buy,
             2,
@@ -43,7 +43,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         )
         .map_err(|_| FakeSpotOrderV2CancelOutboundError)?;
         let fee_reservation = SpotOrderV2::fee_reservation(
-            "order-1",
+            1,
             request.party_id.as_str(),
             SpotOrderSide::Buy,
             2,
@@ -54,7 +54,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         )
         .map_err(|_| FakeSpotOrderV2CancelOutboundError)?;
         let mut order = SpotOrderV2::new_pending_limit(
-            "order-1".to_string(),
+            1,
             request.asset,
             request.party_id.clone(),
             "BTCUSDT".to_string(),

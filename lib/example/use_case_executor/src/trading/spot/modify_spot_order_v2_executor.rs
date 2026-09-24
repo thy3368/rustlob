@@ -95,7 +95,7 @@ mod tests {
             _cmd: &ModifySpotOrderV2Cmd,
         ) -> Result<ModifySpotOrderV2State, Self::Error> {
             let mut order = SpotOrderV2::new_pending_limit(
-                "order-1".to_owned(),
+                1,
                 10_001,
                 "buyer".to_owned(),
                 "BTCUSDT".to_owned(),
@@ -173,7 +173,7 @@ mod tests {
         ModifySpotOrderV2Cmd {
             party_id: "buyer".to_owned(),
             asset: 10_001,
-            order_id: OrderId::OrderId("order-1".to_owned()),
+            order_id: OrderId::Oid(1),
             is_buy: true,
             price: "12000".to_owned(),
             size: "3".to_owned(),
@@ -201,8 +201,8 @@ mod tests {
             .expect("open buy limit order modification should execute");
 
         let changes = &result.changes;
-        assert_eq!(changes.updated_order.before.order_id(), "order-1");
-        assert_eq!(changes.updated_order.after.order_id(), "order-1");
+        assert_eq!(changes.updated_order.before.order_id(), 1);
+        assert_eq!(changes.updated_order.after.order_id(), 1);
         assert_eq!(changes.updated_order.after.version, changes.updated_order.before.version + 1);
         assert_eq!(changes.updated_order.after.order_price(), 12_000);
         assert_eq!(changes.updated_order.after.qty(), 3);

@@ -576,11 +576,10 @@ mod tests {
         }
     }
 
-    fn spot_order(order_id: &str, exchange_oid: u64) -> SpotOrderV2 {
+    fn spot_order(order_id: u64) -> SpotOrderV2 {
         let mut order = SpotOrderV2::new_pending_limit(
-            order_id.to_string(),
+            order_id,
             10_001,
-            Some(exchange_oid),
             "buyer".to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
@@ -658,7 +657,7 @@ mod tests {
         assert_eq!(command.quote_asset_id, "USDT");
         assert_eq!(command.maker_fee_bps, DEFAULT_MAKER_FEE_BPS);
         assert_eq!(command.taker_fee_bps, DEFAULT_TAKER_FEE_BPS);
-        assert_eq!(command.order_id, "wire-order-0-0xabc");
+        assert_eq!(command.order_id, 1);
         assert_eq!(
             command.order_type,
             PlaceOnlySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() }
@@ -695,9 +694,9 @@ mod tests {
         let PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } = &units[0].command else {
             panic!("normalTpsl should build grouped command");
         };
-        assert_eq!(parent.order_id, "wire-order-0");
+        assert_eq!(parent.order_id, 1);
         assert_eq!(children.len(), 1);
-        assert_eq!(children[0].order_id, "wire-order-1");
+        assert_eq!(children[0].order_id, 2);
     }
 
     #[test]
@@ -721,7 +720,7 @@ mod tests {
 
     #[test]
     fn placed_only_maps_to_resting() {
-        let order = spot_order("taker-1", 42);
+        let order = spot_order(42);
         let changes = PlaceMatchSpotOrderV2Changes::SinglePlacedOnly { created_order: order };
 
         let statuses = order_statuses_from_place_match_changes(&changes);
@@ -736,7 +735,7 @@ mod tests {
 
     #[test]
     fn placed_and_matched_with_taker_trade_maps_to_filled() {
-        let order = spot_order("taker-1", 43);
+        let order = spot_order(43);
         let match_changes = match_changes_with_trades(
             &order,
             vec![SpotTrade::new(
@@ -744,8 +743,8 @@ mod tests {
                 "match-1".to_string(),
                 10_001,
                 "BTCUSDT".to_string(),
-                "taker-1".to_string(),
-                "maker-1".to_string(),
+                43,
+                44,
                 "buyer".to_string(),
                 "seller".to_string(),
                 SpotOrderSide::Buy,
@@ -778,8 +777,8 @@ mod tests {
 
     #[test]
     fn normal_tpsl_maps_parent_then_children_statuses() {
-        let parent = spot_order("parent", 44);
-        let child = spot_order("child", 45);
+        let parent = spot_order(44);
+        let child = spot_order(45);
         let changes = PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
             activation_changes: empty_activation_changes(&parent),
             created_parent_order: parent,

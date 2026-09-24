@@ -12,8 +12,8 @@ use crate::{
 pub struct QueryHyperliquidPerpOrderDetail {
     /// 发起查询的业务账户 ID。
     pub party_id: String,
-    /// 本系统内部稳定订单 ID。
-    pub order_id: String,
+    /// Hyperliquid perp `oid`。
+    pub order_id: u64,
 }
 
 impl IssuedByParty for QueryHyperliquidPerpOrderDetail {
@@ -36,7 +36,7 @@ pub struct QueryHyperliquidPerpOrderDetailReadModel {
 /// Hyperliquid perp 委托单详情查询的业务返回视图。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpOrderDetailView {
-    pub order_id: String,
+    pub order_id: u64,
     pub exchange_oid: Option<u64>,
     pub asset: u32,
     pub account_id: String,
@@ -90,7 +90,7 @@ impl QueryUseCase for QueryHyperliquidPerpOrderDetailUseCase {
         if query.party_id.is_empty() {
             return Err(QueryHyperliquidPerpOrderDetailError::InvalidPartyId);
         }
-        if query.order_id.is_empty() {
+        if query.order_id == 0 {
             return Err(QueryHyperliquidPerpOrderDetailError::InvalidOrderId);
         }
         Ok(())
@@ -157,7 +157,7 @@ mod tests {
 
     fn sample_order() -> HyperliquidPerpOrder {
         let mut order = HyperliquidPerpOrder::new(
-            "order-1".to_string(),
+            1,
             Some(42),
             7,
             "trader-1".to_string(),
@@ -172,7 +172,7 @@ mod tests {
                 Reservation::new(
                     "reservation:order-1".to_string(),
                     "trader-1".to_string(),
-                    "order-1".to_string(),
+                    1,
                     ReservationMarketKind::Perp,
                     ReservationKind::PerpOpenMargin,
                     "USDC".to_string(),
@@ -194,10 +194,7 @@ mod tests {
     #[test]
     fn pre_check_rejects_blank_party_id() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.pre_check_query(
-            &QueryHyperliquidPerpOrderDetail {
-                party_id: String::with_capacity(0),
-                order_id: "order-1".to_string(),
-            },
+            &QueryHyperliquidPerpOrderDetail { party_id: String::with_capacity(0), order_id: 1 },
         );
 
         assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InvalidPartyId));
@@ -206,10 +203,7 @@ mod tests {
     #[test]
     fn pre_check_rejects_blank_order_id() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.pre_check_query(
-            &QueryHyperliquidPerpOrderDetail {
-                party_id: "trader-1".to_string(),
-                order_id: String::with_capacity(0),
-            },
+            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 0 },
         );
 
         assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InvalidOrderId));
@@ -218,10 +212,7 @@ mod tests {
     #[test]
     fn validate_rejects_order_not_found() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail {
-                party_id: "trader-1".to_string(),
-                order_id: "order-1".to_string(),
-            },
+            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
             &QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: false,
                 owned_by_party: false,
@@ -235,10 +226,7 @@ mod tests {
     #[test]
     fn validate_rejects_non_owner() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail {
-                party_id: "trader-1".to_string(),
-                order_id: "order-1".to_string(),
-            },
+            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
             &QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: true,
                 owned_by_party: false,
@@ -252,10 +240,7 @@ mod tests {
     #[test]
     fn validate_rejects_missing_order_when_order_exists() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail {
-                party_id: "trader-1".to_string(),
-                order_id: "order-1".to_string(),
-            },
+            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
             &QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: true,
                 owned_by_party: true,
@@ -273,10 +258,7 @@ mod tests {
         order.filled_qty = 1;
 
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail {
-                party_id: "trader-1".to_string(),
-                order_id: "order-1".to_string(),
-            },
+            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
             &QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: true,
                 owned_by_party: true,
@@ -290,10 +272,7 @@ mod tests {
     #[test]
     fn compute_view_returns_order_body_fields() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.compute_view(
-            &QueryHyperliquidPerpOrderDetail {
-                party_id: "trader-1".to_string(),
-                order_id: "order-1".to_string(),
-            },
+            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
             QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: true,
                 owned_by_party: true,
@@ -304,7 +283,7 @@ mod tests {
         assert_eq!(
             result,
             Ok(HyperliquidPerpOrderDetailView {
-                order_id: "order-1".to_string(),
+                order_id: 1,
                 exchange_oid: Some(42),
                 asset: 7,
                 account_id: "trader-1".to_string(),

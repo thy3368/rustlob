@@ -6,7 +6,7 @@ use example_core_entity::{
 };
 
 fn order_reason() -> BalanceLedgerReason {
-    BalanceLedgerReason::FreezeForOrder { order_id: "order-1".to_string() }
+    BalanceLedgerReason::FreezeForOrder { order_id: 1 }
 }
 
 fn balance() -> Balance {
@@ -87,7 +87,7 @@ fn freeze_constructs_identity_operation_amount_then_applies_to_balance() {
     assert_eq!(entry.asset_id, "USDT");
     assert_eq!(entry.operation, BalanceLedgerOperation::Freeze);
     assert_eq!(entry.amount, 200);
-    assert_eq!(entry.reason.order_id(), Some("order-1"));
+    assert_eq!(entry.reason.order_id(), Some("1".to_string()));
     assert!(!entry.is_applied());
     assert_eq!(entry.before_available, None);
     assert_eq!(entry.before_frozen, None);
@@ -375,7 +375,7 @@ fn pending_create_event_projects_operation_amount_and_compatibility_fields() {
         asset_id,
         balance_entity_id,
         200,
-        BalanceLedgerReason::ReserveForImmediateOrder { order_id: "order-10".to_string() },
+        BalanceLedgerReason::ReserveForImmediateOrder { order_id: 10 },
     )
     .unwrap();
 

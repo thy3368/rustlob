@@ -242,6 +242,21 @@ pub(crate) fn find_u64_field(events: &[EntityReplayableEvent], field_name: &str)
     })
 }
 
+pub(crate) fn find_last_u64_field(
+    events: &[EntityReplayableEvent],
+    field_name: &str,
+) -> Option<u64> {
+    events.iter().rev().find_map(|event| {
+        event.field_changes.iter().rev().find_map(|change| {
+            if change.field_name_as_str().ok() != Some(field_name) {
+                return None;
+            }
+
+            std::str::from_utf8(change.new_value_bytes()).ok()?.parse::<u64>().ok()
+        })
+    })
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};

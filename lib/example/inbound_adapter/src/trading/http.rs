@@ -14,7 +14,7 @@ use example_core_use_case::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::common::{HttpInboundError, find_string_field, find_u64_field};
+use crate::common::{HttpInboundError, find_last_u64_field, find_u64_field};
 
 pub trait PlaceOrderOutboundAccess {
     type OutboundError: std::error::Error + Send + Sync + 'static;
@@ -39,7 +39,7 @@ impl PlaceOrderHttpRequest {
         let _trace_id = self.trace_id;
         let _command_id = self.command_id;
         PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
-            order_id: format!("{}-{}-11", self.trader_id, self.symbol),
+            order_id: 11,
             party_id: self.trader_id,
             asset: 10_001,
             symbol: self.symbol,
@@ -69,7 +69,7 @@ impl crate::common::ExampleBusinessErrorMapping for PlaceMatchSpotOrderV2Error {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceOrderHttpResponse {
-    pub order_id: String,
+    pub order_id: u64,
     pub principal_reservation_amount: u64,
     pub remaining_quote: u64,
     pub domain_event_count: usize,
@@ -83,10 +83,12 @@ impl UseCaseReplyMapper for PlaceOrderHttpReplyMapper {
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
         PlaceOrderHttpResponse {
-            order_id: find_string_field(&events, "order_id")
-                .unwrap_or_else(|| "missing-order-id".to_string()),
-            principal_reservation_amount: find_u64_field(&events, "reservation_original_amount")
-                .unwrap_or(0),
+            order_id: find_u64_field(&events, "order_id").unwrap_or(0),
+            principal_reservation_amount: find_last_u64_field(
+                &events,
+                "reservation_original_amount",
+            )
+            .unwrap_or(0),
             remaining_quote: find_u64_field(&events, "available").unwrap_or(0),
             domain_event_count: events.len(),
         }
@@ -238,11 +240,11 @@ mod tests {
             handle_place_order_http(request, &outbound).expect("place-match order should execute");
         let counts = outbound.snapshot_event_counts()?;
 
-        assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
+        assert_eq!(response.order_id, 11);
         assert_eq!(response.principal_reservation_amount, 300);
         assert_eq!(response.remaining_quote, 700);
-        assert_eq!(response.domain_event_count, 5);
-        assert_eq!(counts, (5, 5));
+        assert_eq!(response.domain_event_count, 6);
+        assert_eq!(counts, (6, 6));
 
         Ok(())
     }
@@ -272,9 +274,9 @@ mod tests {
         let response = actix_test::call_service(&app, request).await;
         let body: Value = actix_test::read_body_json(response).await;
 
-        assert_eq!(body["order_id"], "trader-1-BTCUSDT-11");
+        assert_eq!(body["order_id"], 11);
         assert_eq!(body["principal_reservation_amount"], 300);
         assert_eq!(body["remaining_quote"], 700);
-        assert_eq!(body["domain_event_count"], 5);
+        assert_eq!(body["domain_event_count"], 6);
     }
 }

@@ -320,7 +320,7 @@ mod tests {
             br#"{
                 "action": {
                     "type": "modify",
-                    "oid": "order-1",
+                    "oid": 77738308,
                     "a": false,
                     "order": {
                         "a": 10000,
@@ -438,7 +438,7 @@ mod tests {
         br#"{
             "action": {
                 "type": "modify",
-                "oid": "order-1",
+                "oid": 77738308,
                 "order": {
                     "a": 10000,
                     "b": true,

@@ -114,7 +114,7 @@ mod tests {
         let (status, body) = post_exchange_status_and_json(json!({
             "action": {
                 "type": "cancel",
-                "cancels": [{ "a": 10000, "o": "order-1" }]
+                "cancels": [{ "a": 10000, "o": 77738308 }]
             },
             "nonce": 1710000000000u64,
             "signature": {
@@ -221,7 +221,7 @@ mod tests {
         let (status, body) = post_exchange_status_and_json(json!({
             "action": {
                 "type": "modify",
-                "oid": "order-1",
+                "oid": 77738308,
                 "order": {
                     "a": 10000,
                     "b": true,
@@ -254,7 +254,7 @@ mod tests {
                 "type": "batchModify",
                 "modifies": [
                     {
-                        "oid": "order-1",
+                        "oid": 77738308,
                         "order": {
                             "a": 10000,
                             "b": true,

@@ -14,17 +14,13 @@ fn context() -> ExecutionContext {
     ExecutionContext { execution_time_ns: 100 }
 }
 
-fn cmd(order_id: &str) -> ActivateSpotOrderV2Cmd {
-    ActivateSpotOrderV2Cmd {
-        party_id: "trader-1".to_string(),
-        asset: 10_001,
-        order_id: order_id.to_string(),
-    }
+fn cmd(order_id: u64) -> ActivateSpotOrderV2Cmd {
+    ActivateSpotOrderV2Cmd { party_id: "trader-1".to_string(), asset: 10_001, order_id }
 }
 
-fn pending_limit(order_id: &str, side: SpotOrderSide) -> SpotOrderV2 {
+fn pending_limit(order_id: u64, side: SpotOrderSide) -> SpotOrderV2 {
     SpotOrderV2::new_pending_limit(
-        order_id.to_string(),
+        order_id,
         10_001,
         "trader-1".to_string(),
         "BTCUSDT".to_string(),
@@ -38,9 +34,9 @@ fn pending_limit(order_id: &str, side: SpotOrderSide) -> SpotOrderV2 {
     )
 }
 
-fn pending_trigger(order_id: &str) -> SpotOrderV2 {
+fn pending_trigger(order_id: u64) -> SpotOrderV2 {
     SpotOrderV2::new_pending_trigger(
-        order_id.to_string(),
+        order_id,
         10_001,
         "trader-1".to_string(),
         "BTCUSDT".to_string(),
@@ -77,10 +73,10 @@ fn state(order: SpotOrderV2, maker_fee_bps: u64, taker_fee_bps: u64) -> Activate
 // Then：订单变为 Open，USDT 可用余额与冻结余额正确变化，并生成 principal、fee ledger 及 replay events。
 #[test]
 fn buy_activation_freezes_quote_principal_and_quote_fee() {
-    let order = pending_limit("buy-1", SpotOrderSide::Buy);
+    let order = pending_limit(1, SpotOrderSide::Buy);
 
     let changes = ActivateSpotOrderV2UseCase
-        .compute_state_diff_with_context(&cmd("buy-1"), state(order, 5, 10), &context())
+        .compute_state_diff_with_context(&cmd(1), state(order, 5, 10), &context())
         .expect("buy activation should compute changes");
 
     assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Open);
@@ -105,10 +101,10 @@ fn buy_activation_freezes_quote_principal_and_quote_fee() {
 // Then：订单冻结 BTC principal，BTC 可用余额按冻结数量减少。
 #[test]
 fn sell_activation_freezes_base_principal() {
-    let order = pending_limit("sell-1", SpotOrderSide::Sell);
+    let order = pending_limit(2, SpotOrderSide::Sell);
 
     let changes = ActivateSpotOrderV2UseCase
-        .compute_state_diff_with_context(&cmd("sell-1"), state(order, 5, 10), &context())
+        .compute_state_diff_with_context(&cmd(2), state(order, 5, 10), &context())
         .expect("sell activation should compute changes");
 
     assert_eq!(changes.updated_order.after.reservation.asset_id, "BTC");
@@ -122,10 +118,10 @@ fn sell_activation_freezes_base_principal() {
 // Then：不创建 fee ledger，只创建 principal ledger，并投影出对应的 replay events。
 #[test]
 fn zero_fee_activation_skips_fee_ledger() {
-    let order = pending_limit("zero-fee", SpotOrderSide::Buy);
+    let order = pending_limit(3, SpotOrderSide::Buy);
 
     let changes = ActivateSpotOrderV2UseCase
-        .compute_state_diff_with_context(&cmd("zero-fee"), state(order, 0, 0), &context())
+        .compute_state_diff_with_context(&cmd(3), state(order, 0, 0), &context())
         .expect("zero fee activation should compute changes");
 
     assert_eq!(changes.updated_order.after.fee_reservation.original_amount, 0);
@@ -138,10 +134,10 @@ fn zero_fee_activation_skips_fee_ledger() {
 // Then：订单直接变为 Open，并保留 Trigger 订单类型。
 #[test]
 fn pending_trigger_activation_does_not_need_market_price() {
-    let order = pending_trigger("trigger-1");
+    let order = pending_trigger(4);
 
     let changes = ActivateSpotOrderV2UseCase
-        .compute_state_diff_with_context(&cmd("trigger-1"), state(order, 5, 10), &context())
+        .compute_state_diff_with_context(&cmd(4), state(order, 5, 10), &context())
         .expect("trigger activation should compute without market price");
 
     assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Open);
@@ -153,7 +149,7 @@ fn pending_trigger_activation_does_not_need_market_price() {
 // Then：校验返回 OrderNotPending 业务错误。
 #[test]
 fn open_order_is_rejected_by_activation_state_validation() {
-    let mut order = pending_limit("open-1", SpotOrderSide::Buy);
+    let mut order = pending_limit(5, SpotOrderSide::Buy);
     order
         .activate_pending(ActivatePendingSpotOrderV2Input {
             base_asset_id: "BTC".to_string(),
@@ -164,8 +160,7 @@ fn open_order_is_rejected_by_activation_state_validation() {
         })
         .expect("fixture activation should work");
 
-    let result =
-        ActivateSpotOrderV2UseCase.validate_state_given(&cmd("open-1"), &state(order, 5, 10));
+    let result = ActivateSpotOrderV2UseCase.validate_state_given(&cmd(5), &state(order, 5, 10));
 
     assert_eq!(result, Err(ActivateSpotOrderV2Error::OrderNotPending));
 }

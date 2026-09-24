@@ -82,12 +82,12 @@ mod tests {
 
     use super::*;
 
-    fn place_match_command(order_id: &str, cloid: &str) -> SpotBlockCommand {
+    fn place_match_command(order_id: u64, cloid: &str) -> SpotBlockCommand {
         SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(
             PlaceOnlySpotOrderV2OrderCmd {
                 party_id: "buyer".to_string(),
                 asset: 10_001,
-                order_id: order_id.to_string(),
+                order_id,
                 symbol: "BTCUSDT".to_string(),
                 is_buy: true,
                 price: "100".to_string(),
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn enqueue_spot_block_command_pushes_place_match_to_leader_queue() {
         let queue = Arc::new(Mutex::new(Vec::new()));
-        let command = place_match_command("http-order-1", "http-cloid-1");
+        let command = place_match_command(1, "http-cloid-1");
 
         assert!(enqueue_spot_block_command(&queue, command.clone()).is_ok());
 

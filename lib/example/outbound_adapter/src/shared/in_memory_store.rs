@@ -11,7 +11,7 @@ use crate::shared::StoreError;
 pub(crate) struct StoreState {
     pub(crate) balances: HashMap<String, Balance>,
     pub(crate) market_rules_by_symbol: HashMap<String, MarketRules>,
-    pub(crate) orders: HashMap<String, SpotOrderV2>,
+    pub(crate) orders: HashMap<u64, SpotOrderV2>,
     pub(crate) trades: HashMap<String, SpotTrade>,
     pub(crate) reservations: HashMap<String, Reservation>,
     pub(crate) persisted_events: Vec<EntityReplayableEvent>,
@@ -70,7 +70,7 @@ impl InMemoryStore {
 
     pub fn seed_order(&self, order: SpotOrderV2) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state.orders.insert(order.order_id.clone(), order);
+        state.orders.insert(order.order_id, order);
         Ok(())
     }
 

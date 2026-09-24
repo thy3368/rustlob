@@ -45,11 +45,11 @@ fn clearinghouse_state_from_facts(
     }
 }
 
-fn reservation(order_id: &str) -> Reservation {
+fn reservation(order_id: u64) -> Reservation {
     Reservation::new(
         format!("reservation:{order_id}"),
         "trader-1".to_string(),
-        order_id.to_string(),
+        order_id,
         ReservationMarketKind::Perp,
         ReservationKind::PerpOpenMargin,
         "USDC".to_string(),
@@ -60,7 +60,7 @@ fn reservation(order_id: &str) -> Reservation {
 
 fn order() -> HyperliquidPerpOrder {
     HyperliquidPerpOrder::new(
-        "order-1".to_string(),
+        1,
         Some(42),
         0,
         "trader-1".to_string(),
@@ -71,13 +71,13 @@ fn order() -> HyperliquidPerpOrder {
         3,
         false,
         Some("client-1".to_string()),
-        Some(reservation("order-1")),
+        Some(reservation(1)),
     )
 }
 
 fn place_input() -> PlaceHyperliquidPerpOrderInput {
     PlaceHyperliquidPerpOrderInput {
-        order_id: "place-1".to_string(),
+        order_id: 100,
         asset: 0,
         account_id: "trader-1".to_string(),
         symbol: "BTC-PERP".to_string(),
@@ -102,15 +102,15 @@ fn place_input() -> PlaceHyperliquidPerpOrderInput {
 fn place_open_position_creates_order_with_internal_reservation() {
     let outcome = HyperliquidPerpOrder::place(place_input()).unwrap();
 
-    assert_eq!(outcome.order.order_id, "place-1");
+    assert_eq!(outcome.order.order_id, 100);
     assert_eq!(outcome.order.exchange_oid, None);
     assert_eq!(outcome.order.filled_qty, 0);
     assert_eq!(outcome.order.status, HyperliquidPerpOrderStatus::Open);
     assert_eq!(outcome.order.version, 1);
     let reservation = outcome.order.reservation.as_ref().unwrap();
-    assert_eq!(reservation.reservation_id, "reservation:place-1");
+    assert_eq!(reservation.reservation_id, "reservation:100");
     assert_eq!(reservation.owner_account_id, "trader-1");
-    assert_eq!(reservation.caused_by_order_id, "place-1");
+    assert_eq!(reservation.caused_by_order_id, 100);
     assert_eq!(reservation.market_kind, ReservationMarketKind::Perp);
     assert_eq!(reservation.asset_id, "USDC");
     assert_eq!(reservation.reservation_kind, ReservationKind::PerpOpenMargin);
@@ -145,15 +145,12 @@ fn place_derives_freeze_ledger_from_reservation() {
     let reservation = outcome.order.reservation.as_ref().unwrap();
     let freeze_ledger_entry = outcome.freeze_ledger_entry.as_ref().unwrap();
 
-    assert_eq!(freeze_ledger_entry.entry_id, "balance-ledger:freeze:place-1");
+    assert_eq!(freeze_ledger_entry.entry_id, "balance-ledger:freeze:100");
     assert_eq!(freeze_ledger_entry.account_id, outcome.order.account_id);
     assert_eq!(freeze_ledger_entry.asset_id, reservation.asset_id);
     assert_eq!(freeze_ledger_entry.balance_entity_id, "balance-1");
     assert_eq!(freeze_ledger_entry.amount, reservation.original_amount);
-    assert_eq!(
-        freeze_ledger_entry.reason,
-        BalanceLedgerReason::FreezeForOrder { order_id: "place-1".to_string() }
-    );
+    assert_eq!(freeze_ledger_entry.reason, BalanceLedgerReason::FreezeForOrder { order_id: 100 });
 }
 
 // 未撮合永续订单只冻结保证金，使 clearinghouse withdrawable 下降，不产生仓位。
@@ -261,7 +258,7 @@ fn place_close_position_creates_reduce_only_order_without_reservation_or_freeze_
 
     let outcome = HyperliquidPerpOrder::place(input).unwrap();
 
-    assert_eq!(outcome.order.order_id, "place-1");
+    assert_eq!(outcome.order.order_id, 100);
     assert_eq!(outcome.order.status, HyperliquidPerpOrderStatus::Open);
     assert!(outcome.order.reduce_only);
     assert_eq!(outcome.order.reservation, None);

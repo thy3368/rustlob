@@ -121,8 +121,8 @@ impl HyperliquidPerpOrderStatus {
 /// 创建 Hyperliquid perp 订单所需的已校验业务输入。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceHyperliquidPerpOrderInput {
-    /// 本系统生成的稳定订单 ID。
-    pub order_id: String,
+    /// Hyperliquid 原生 perp `oid`。
+    pub order_id: u64,
     /// Hyperliquid perp asset 编号。
     pub asset: u32,
     /// 订单所属账户 ID。
@@ -209,7 +209,7 @@ pub enum HyperliquidPerpOrderBehaviorError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpOrder {
     /// 本系统生成的稳定订单 ID。
-    pub order_id: String,
+    pub order_id: u64,
     /// Hyperliquid 返回的 numeric `oid`；尚未确认时可以为空。
     pub exchange_oid: Option<u64>,
     /// Hyperliquid perp asset 编号。
@@ -248,7 +248,7 @@ impl HyperliquidPerpOrder {
     /// 从已经校验过的业务事实或回放事件构造 Hyperliquid perp 订单。
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        order_id: String,
+        order_id: u64,
         exchange_oid: Option<u64>,
         asset: u32,
         account_id: String,
@@ -313,9 +313,9 @@ impl HyperliquidPerpOrder {
                 }
 
                 let reservation = Reservation::new(
-                    concat2("reservation:", input.order_id.as_str()),
+                    concat2("reservation:", input.order_id.to_string().as_str()),
                     input.account_id.clone(),
-                    input.order_id.clone(),
+                    input.order_id,
                     ReservationMarketKind::Perp,
                     ReservationKind::PerpOpenMargin,
                     margin_asset_id,
@@ -323,12 +323,12 @@ impl HyperliquidPerpOrder {
                 )?;
 
                 let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
-                    concat2("balance-ledger:freeze:", input.order_id.as_str()),
+                    concat2("balance-ledger:freeze:", input.order_id.to_string().as_str()),
                     input.account_id.clone(),
                     reservation.asset_id.clone(),
                     margin_balance_entity_id,
                     reservation.original_amount,
-                    BalanceLedgerReason::FreezeForOrder { order_id: input.order_id.clone() },
+                    BalanceLedgerReason::FreezeForOrder { order_id: input.order_id },
                 )?;
                 (false, Some(reservation), Some(freeze_ledger_entry))
             }
@@ -430,7 +430,7 @@ impl HyperliquidPerpOrder {
 impl FieldDiff for HyperliquidPerpOrder {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         let mut changes = vec![
-            EntityFieldChange::new("order_id", "", self.order_id.clone()),
+            EntityFieldChange::new("order_id", "", self.order_id.to_string()),
             EntityFieldChange::new("exchange_oid", "", option_u64_value(self.exchange_oid)),
             EntityFieldChange::new("asset", "", self.asset.to_string()),
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
@@ -466,7 +466,7 @@ impl FieldDiff for HyperliquidPerpOrder {
                 EntityFieldChange::new(
                     "reservation_caused_by_order_id",
                     "",
-                    reservation.caused_by_order_id.clone(),
+                    reservation.caused_by_order_id.to_string(),
                 ),
                 EntityFieldChange::new(
                     "reservation_market_kind",
@@ -537,8 +537,10 @@ impl FieldDiff for HyperliquidPerpOrder {
         push_change(
             &mut changes,
             "reservation_caused_by_order_id",
-            reservation_string(&self.reservation, |reservation| &reservation.caused_by_order_id),
-            reservation_string(&other.reservation, |reservation| &reservation.caused_by_order_id),
+            reservation_u64_string(&self.reservation, |reservation| reservation.caused_by_order_id),
+            reservation_u64_string(&other.reservation, |reservation| {
+                reservation.caused_by_order_id
+            }),
         );
         push_change(
             &mut changes,
@@ -634,10 +636,10 @@ impl FieldDiff for HyperliquidPerpOrder {
 }
 
 impl Entity for HyperliquidPerpOrder {
-    type Id = String;
+    type Id = u64;
 
     fn entity_id(&self) -> Self::Id {
-        self.order_id.clone()
+        self.order_id
     }
 
     fn entity_type() -> u8 {
@@ -700,7 +702,7 @@ impl Entity for HyperliquidPerpOrder {
     }
 
     fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_entity_id(&self.order_id))
+        Ok(stable_entity_id(self.order_id))
     }
 }
 
@@ -715,6 +717,13 @@ fn reservation_string(
     reservation.as_ref().map(field).cloned().unwrap_or_default()
 }
 
+fn reservation_u64_string(
+    reservation: &Option<Reservation>,
+    field: impl FnOnce(&Reservation) -> u64,
+) -> String {
+    reservation.as_ref().map(field).map(|value| value.to_string()).unwrap_or_default()
+}
+
 fn reservation_amount(
     reservation: &Option<Reservation>,
     field: impl FnOnce(&Reservation) -> u64,
@@ -722,12 +731,8 @@ fn reservation_amount(
     reservation.as_ref().map(field).map(|value| value.to_string()).unwrap_or_default()
 }
 
-fn stable_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
+fn stable_entity_id(value: u64) -> i64 {
+    (value & i64::MAX as u64) as i64
 }
 
 fn push_change(

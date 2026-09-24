@@ -332,7 +332,7 @@ mod tests {
         );
 
         let modify = serde_json::to_value(ExchangeActionWire::Modify {
-            oid: json!(77738308u64),
+            oid: json!(77738308),
             order: ExchangeOrderWire {
                 a: 10000,
                 b: true,
@@ -352,7 +352,7 @@ mod tests {
             modify,
             json!({
                 "type": "modify",
-                "oid": 77738308u64,
+                "oid": 77738308,
                 "order": {
                     "a": 10000,
                     "b": true,

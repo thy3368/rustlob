@@ -6,7 +6,7 @@ fn active_reservation() -> Reservation {
     Reservation::new(
         "reservation:1".to_string(),
         "trader-1".to_string(),
-        "order-1".to_string(),
+        1,
         ReservationMarketKind::Spot,
         ReservationKind::SpotBuyQuote,
         "USDT".to_string(),

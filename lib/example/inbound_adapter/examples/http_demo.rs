@@ -155,7 +155,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> Value {
         .into_iter()
         .map(|(order_id, order)| {
             (
-                order_id,
+                order_id.to_string(),
                 json!({
                     "order_id": order.order_id,
                     "account_id": order.account_id,

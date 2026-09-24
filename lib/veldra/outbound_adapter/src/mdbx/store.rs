@@ -140,9 +140,10 @@ impl VeldraMdbxBlockStore {
             match change {
                 BlockEntityChange::SpotOrderCreated(order) => {
                     let snapshot = StoredSpotOrderSnapshot::from_order(header.block_height, order)?;
+                    let order_id = order.order_id.to_string();
                     txn.put(
                         &spot_orders,
-                        order.order_id.as_bytes(),
+                        order_id.as_bytes(),
                         &encode_record(&snapshot)?,
                         WriteFlags::empty(),
                     )
@@ -155,9 +156,10 @@ impl VeldraMdbxBlockStore {
                     }
                     let snapshot =
                         StoredSpotOrderSnapshot::from_order(header.block_height, &order.after)?;
+                    let order_id = order.after.order_id.to_string();
                     txn.put(
                         &spot_orders,
-                        order.after.order_id.as_bytes(),
+                        order_id.as_bytes(),
                         &encode_record(&snapshot)?,
                         WriteFlags::empty(),
                     )

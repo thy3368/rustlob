@@ -78,7 +78,7 @@ mod tests {
             _request: &PlaceOnlySpotOrderV2Cmd,
         ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
             Ok(PlaceMatchSpotOrderV2State {
-                maker_orders: vec![sell_order("maker-1", "seller", 100, 1)?],
+                maker_orders: vec![sell_order(2, "seller", 100, 1)?],
                 settlement_balances: vec![
                     Balance::new("buyer".to_string(), "USDT".to_string(), 101, 0, 1),
                     Balance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
@@ -111,7 +111,7 @@ mod tests {
         PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
             party_id: "buyer".to_string(),
             asset: 10_001,
-            order_id: "taker-buy".to_string(),
+            order_id: 1,
             symbol: "BTCUSDT".to_string(),
             is_buy: true,
             price: "100".to_string(),
@@ -127,7 +127,7 @@ mod tests {
     }
 
     fn sell_order(
-        order_id: &str,
+        order_id: u64,
         account_id: &str,
         price: u64,
         qty: u64,
@@ -144,7 +144,7 @@ mod tests {
         .map_err(|_| FakePlaceMatchSpotOrderV2OutboundError)?;
 
         let mut order = SpotOrderV2::new_pending_limit(
-            order_id.to_string(),
+            order_id,
             10_001,
             account_id.to_string(),
             "BTCUSDT".to_string(),
@@ -196,7 +196,7 @@ mod tests {
         else {
             panic!("limit order should continue to matching");
         };
-        assert_eq!(created_taker_order.order_id(), "taker-buy");
+        assert_eq!(created_taker_order.order_id(), 1);
         assert_eq!(
             activation_changes.created_balance_ledger_entries.first().map(|entry| entry.operation),
             Some(BalanceLedgerOperation::Freeze)

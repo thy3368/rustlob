@@ -216,7 +216,7 @@ mod tests {
         HyperliquidPerpLiquidationFill::new(
             "liq-1-trade-1".to_string(),
             "liq-1".to_string(),
-            "order-1".to_string(),
+            1,
             "trade-1".to_string(),
             "trader-1".to_string(),
             "position-1".to_string(),

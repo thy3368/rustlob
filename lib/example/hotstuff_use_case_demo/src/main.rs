@@ -84,7 +84,7 @@ fn main() -> DemoResult<()> {
     let place_command = PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
         party_id: "buyer".to_string(),
         asset: 10_001,
-        order_id: "taker-buy".to_string(),
+        order_id: 1,
         symbol: "BTCUSDT".to_string(),
         is_buy: true,
         price: "100".to_string(),

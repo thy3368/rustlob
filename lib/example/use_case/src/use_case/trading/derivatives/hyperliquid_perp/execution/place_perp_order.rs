@@ -11,7 +11,6 @@ use crate::entity::{
     HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
     PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent, required_position_margin,
 };
-use crate::support::concat5;
 
 /// Hyperliquid perp 下单可能返回的业务错误。
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -294,9 +293,7 @@ impl StateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
-        let order_sequence = state.next_order_sequence.to_string();
-        let order_id =
-            concat5(cmd.party_id.as_str(), "-", cmd.symbol.as_str(), "-", order_sequence.as_str());
+        let order_id = state.next_order_sequence;
         let intent = if cmd.reduce_only {
             match derive_place_intent(cmd.side(), size, &state.position)? {
                 DerivedPerpOrderIntent::Close => PlaceHyperliquidPerpOrderIntent::ClosePosition,

@@ -211,17 +211,9 @@ impl MySqlStore {
                     let side = decode_side_mysql(side.as_str())?;
                     let order_type =
                         decode_order_type_mysql(execution.as_str(), time_in_force.as_str())?;
+                    let order_id = order_id.parse().ok()?;
                     let mut order = SpotOrderV2::new_pending_limit(
-                        order_id.clone(),
-                        asset,
-                        account_id,
-                        symbol,
-                        side,
-                        qty,
-                        price,
-                        order_type,
-                        None,
-                        0,
+                        order_id, asset, account_id, symbol, side, qty, price, order_type, None, 0,
                         1,
                     );
                     order

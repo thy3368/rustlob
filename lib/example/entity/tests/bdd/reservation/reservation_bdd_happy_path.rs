@@ -6,7 +6,7 @@ fn reservation() -> Reservation {
     Reservation::new(
         "reservation:happy-path".to_string(),
         "trader-1".to_string(),
-        "order-1".to_string(),
+        1,
         ReservationMarketKind::Spot,
         ReservationKind::SpotBuyQuote,
         "USDT".to_string(),
@@ -21,7 +21,7 @@ fn reservation_new_initializes_active_snapshot() {
 
     assert_eq!(reservation.reservation_id, "reservation:happy-path");
     assert_eq!(reservation.owner_account_id, "trader-1");
-    assert_eq!(reservation.caused_by_order_id, "order-1");
+    assert_eq!(reservation.caused_by_order_id, 1);
     assert_eq!(reservation.market_kind, ReservationMarketKind::Spot);
     assert_eq!(reservation.reservation_kind, ReservationKind::SpotBuyQuote);
     assert_eq!(reservation.asset_id, "USDT");

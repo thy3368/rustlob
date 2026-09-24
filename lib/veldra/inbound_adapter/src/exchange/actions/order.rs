@@ -65,10 +65,11 @@ pub mod reply {
         Error { error: String },
     }
 
-    /// 挂单成功时仅返回订单 id。
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+    /// 挂单成功；现货订单不再暴露 numeric `oid`。
+    #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
     pub struct RestingOrderStatusWire {
-        pub oid: u64,
+        #[serde(skip)]
+        _private: (),
     }
 
     /// 成交回执，字段命名保持外部 API 兼容。
@@ -78,7 +79,6 @@ pub mod reply {
         pub total_sz: String,
         #[serde(rename = "avgPx")]
         pub avg_px: String,
-        pub oid: u64,
     }
 }
 
@@ -229,7 +229,6 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 const STUB_FILLED_PREFIX: &str = "stub-filled";
 const STUB_ERROR_PREFIX: &str = "stub-error";
 const STUB_ERROR_MESSAGE: &str = "Order must have minimum value of $10.";
-const STUB_OID_BASE: u64 = 77738308;
 
 async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, ExchangeHttpError> {
     // 当前 inbound adapter 先返回稳定的 stub 形状，便于前后端与协议快照测试对齐。
@@ -238,26 +237,21 @@ async fn execute(request: RequestWire) -> Result<reply::OrderResponseWire, Excha
         .action
         .orders
         .iter()
-        .enumerate()
-        .map(|(index, order)| {
-            let oid = STUB_OID_BASE + index as u64;
-            match order.c.as_deref() {
-                Some(cloid) if cloid.starts_with(STUB_FILLED_PREFIX) => {
-                    reply::OrderStatusWire::Filled {
-                        filled: reply::FilledOrderStatusWire {
-                            total_sz: order.s.clone(),
-                            avg_px: order.p.clone(),
-                            oid,
-                        },
-                    }
+        .map(|order| match order.c.as_deref() {
+            Some(cloid) if cloid.starts_with(STUB_FILLED_PREFIX) => {
+                reply::OrderStatusWire::Filled {
+                    filled: reply::FilledOrderStatusWire {
+                        total_sz: order.s.clone(),
+                        avg_px: order.p.clone(),
+                    },
                 }
-                Some(cloid) if cloid.starts_with(STUB_ERROR_PREFIX) => {
-                    reply::OrderStatusWire::Error { error: STUB_ERROR_MESSAGE.to_string() }
-                }
-                _ => reply::OrderStatusWire::Resting {
-                    resting: reply::RestingOrderStatusWire { oid },
-                },
             }
+            Some(cloid) if cloid.starts_with(STUB_ERROR_PREFIX) => {
+                reply::OrderStatusWire::Error { error: STUB_ERROR_MESSAGE.to_string() }
+            }
+            _ => reply::OrderStatusWire::Resting {
+                resting: reply::RestingOrderStatusWire::default(),
+            },
         })
         .collect();
 
@@ -457,9 +451,7 @@ mod tests {
     "data": {
       "statuses": [
         {
-          "resting": {
-            "oid": 77738308
-          }
+          "resting": {}
         }
       ]
     }
@@ -478,13 +470,12 @@ mod tests {
                 data: reply::OrderResponseDataWire {
                     statuses: vec![
                         reply::OrderStatusWire::Resting {
-                            resting: reply::RestingOrderStatusWire { oid: 1 },
+                            resting: reply::RestingOrderStatusWire::default(),
                         },
                         reply::OrderStatusWire::Filled {
                             filled: reply::FilledOrderStatusWire {
                                 total_sz: "0.02".to_string(),
                                 avg_px: "1891.4".to_string(),
-                                oid: 2,
                             },
                         },
                         reply::OrderStatusWire::Error { error: STUB_ERROR_MESSAGE.to_string() },
@@ -501,15 +492,12 @@ mod tests {
     "data": {
       "statuses": [
         {
-          "resting": {
-            "oid": 1
-          }
+          "resting": {}
         },
         {
           "filled": {
             "totalSz": "0.02",
-            "avgPx": "1891.4",
-            "oid": 2
+            "avgPx": "1891.4"
           }
         },
         {

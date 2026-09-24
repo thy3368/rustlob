@@ -141,7 +141,7 @@ mod tests {
 
     fn buy_order() -> Result<SpotOrderV2, FakeSpotBlockOutboundError> {
         let mut order = SpotOrderV2::new_pending_limit(
-            "order-1".to_owned(),
+            1,
             10_001,
             "buyer".to_owned(),
             "BTCUSDT".to_owned(),
@@ -169,7 +169,7 @@ mod tests {
         SpotBlockCommand::Cancel(CancelSpotOrderV2Cmd {
             party_id: "buyer".to_owned(),
             asset: 10_001,
-            lookup: CancelSpotOrderV2Lookup::OrderId("order-1".to_owned()),
+            lookup: CancelSpotOrderV2Lookup::Oid(1),
         })
     }
 
@@ -177,7 +177,7 @@ mod tests {
         SpotBlockCommand::Modify(ModifySpotOrderV2Cmd {
             party_id: "buyer".to_owned(),
             asset: 10_001,
-            order_id: OrderId::OrderId("order-1".to_owned()),
+            order_id: OrderId::Oid(1),
             is_buy: true,
             price: "12000".to_owned(),
             size: "3".to_owned(),

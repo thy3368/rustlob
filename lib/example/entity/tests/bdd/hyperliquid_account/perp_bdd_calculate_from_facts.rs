@@ -70,7 +70,7 @@ fn active_perp_reservation(amount: u64) -> MarginReservation {
     match Reservation::new(
         "reservation:open-1".to_owned(),
         "sub-1".to_owned(),
-        "order-1".to_owned(),
+        1,
         ReservationMarketKind::Perp,
         ReservationKind::PerpOpenMargin,
         "USDC".to_owned(),

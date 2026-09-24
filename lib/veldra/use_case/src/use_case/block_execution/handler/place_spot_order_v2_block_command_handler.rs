@@ -201,6 +201,7 @@ fn apply_place_changes(spot_state: &mut SpotState, changes: &PlaceMatchSpotOrder
         PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
             created_taker_order,
             match_changes,
+            ..
         } => {
             apply_order(spot_state, created_taker_order);
             apply_match_changes(spot_state, match_changes);
@@ -209,6 +210,7 @@ fn apply_place_changes(spot_state: &mut SpotState, changes: &PlaceMatchSpotOrder
             created_parent_order,
             created_child_orders,
             match_changes,
+            ..
         } => {
             apply_order(spot_state, created_parent_order);
             for child in created_child_orders {
@@ -221,15 +223,15 @@ fn apply_place_changes(spot_state: &mut SpotState, changes: &PlaceMatchSpotOrder
 
 fn apply_match_changes(
     spot_state: &mut SpotState,
-    changes: &example_core_use_case::MatchSpotOrderV2Changes,
+    changes: &example_core_use_case::MatchSpotOrderV3Changes,
 ) {
     if let Some(order) = changes.taker_order_after() {
         apply_order(spot_state, order);
     }
-    for pair in &changes.updated_maker_orders {
+    for pair in changes.updated_maker_orders() {
         apply_order(spot_state, &pair.after);
     }
-    for pair in &changes.updated_balances {
+    for pair in changes.updated_balances() {
         spot_state.balances.insert(
             AccountAssetKey::new(pair.after.account_id.as_str(), pair.after.asset_id.as_str()),
             pair.after.clone(),
@@ -238,7 +240,7 @@ fn apply_match_changes(
 }
 
 fn apply_order(spot_state: &mut SpotState, order: &SpotOrderV2) {
-    spot_state.orders.insert(order.order_id.clone(), order.clone());
+    spot_state.orders.insert(order.order_id.to_string(), order.clone());
     spot_state
         .reservations
         .insert(order.reservation.reservation_id.clone(), order.reservation.clone());

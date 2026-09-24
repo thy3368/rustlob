@@ -13,8 +13,8 @@ pub enum CancelContractError {
     UnexpectedActionType(String),
     #[error("`action.cancels` must contain at least one cancel request.")]
     EmptyCancels,
-    #[error("Invalid `action.cancels[].o`. Expected a positive order id.")]
-    InvalidOid,
+    #[error("Invalid `action.cancels[].o`. Expected a positive numeric oid.")]
+    InvalidOrderId,
     #[error("Invalid `action.f`. Omit `f` unless fast cancel is enabled.")]
     InvalidFastFlag,
 }
@@ -84,8 +84,10 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if matches!(request.action.f, Some(false)) {
         return Err(ExchangeHttpError::contract(CancelContractError::InvalidFastFlag));
     }
-    if request.action.cancels.iter().any(|cancel| cancel.o == 0) {
-        return Err(ExchangeHttpError::contract(CancelContractError::InvalidOid));
+    for cancel in &request.action.cancels {
+        if cancel.o == 0 {
+            return Err(ExchangeHttpError::contract(CancelContractError::InvalidOrderId));
+        }
     }
     Ok(())
 }
@@ -139,6 +141,52 @@ mod tests {
             error.to_string(),
             "Invalid `action.f`. Omit `f` unless fast cancel is enabled."
         );
+    }
+
+    #[test]
+    fn rejects_zero_oid() {
+        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
+            br#"{
+                "action": {
+                    "type": "cancel",
+                    "cancels": [{ "a": 10000, "o": 0 }]
+                },
+                "nonce": 1710000000000,
+                "signature": {
+                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                    "v": 27
+                }
+            }"#,
+        )
+        .expect("cancel request parses");
+
+        let error = validate(&request).expect_err("validation should fail");
+        assert_eq!(
+            error.to_string(),
+            "Invalid `action.cancels[].o`. Expected a positive numeric oid."
+        );
+    }
+
+    #[test]
+    fn rejects_string_oid() {
+        let error = parse_json_request::<RequestWire, ExchangeHttpError>(
+            br#"{
+                "action": {
+                    "type": "cancel",
+                    "cancels": [{ "a": 10000, "o": "77738308" }]
+                },
+                "nonce": 1710000000000,
+                "signature": {
+                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                    "v": 27
+                }
+            }"#,
+        )
+        .expect_err("string oid should not parse as numeric cancel oid");
+
+        assert!(error.to_string().contains("invalid type"));
     }
 
     #[actix_web::test]

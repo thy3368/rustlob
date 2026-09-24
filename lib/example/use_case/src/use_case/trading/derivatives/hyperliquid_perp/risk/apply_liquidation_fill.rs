@@ -14,7 +14,7 @@ use crate::support::concat3;
 pub struct ApplyHyperliquidPerpLiquidationFillCmd {
     pub party_id: String,
     pub liquidation_id: String,
-    pub order_id: String,
+    pub order_id: u64,
     pub trade_id: String,
 }
 
@@ -97,7 +97,7 @@ impl CommandUseCase4 for ApplyHyperliquidPerpLiquidationFillUseCase {
         if cmd.liquidation_id.is_empty() {
             return Err(ApplyHyperliquidPerpLiquidationFillError::InvalidLiquidationId);
         }
-        if cmd.order_id.is_empty() {
+        if cmd.order_id == 0 {
             return Err(ApplyHyperliquidPerpLiquidationFillError::InvalidOrderId);
         }
         if cmd.trade_id.is_empty() {
@@ -221,8 +221,8 @@ mod tests {
             "match-1".to_string(),
             7,
             "BTC-PERP".to_string(),
-            "order-1".to_string(),
-            "maker-1".to_string(),
+            1,
+            2,
             "trader-1".to_string(),
             "maker-account".to_string(),
             HyperliquidPerpOrderSide::Sell,
@@ -239,7 +239,7 @@ mod tests {
                 &ApplyHyperliquidPerpLiquidationFillCmd {
                     party_id: "risk-engine".to_string(),
                     liquidation_id: "liq-1".to_string(),
-                    order_id: "order-1".to_string(),
+                    order_id: 1,
                     trade_id: "trade-1".to_string(),
                 },
                 ApplyHyperliquidPerpLiquidationFillState {

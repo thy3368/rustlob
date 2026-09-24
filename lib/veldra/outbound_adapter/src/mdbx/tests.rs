@@ -35,7 +35,7 @@ fn append_and_read_back_block_data_and_snapshots() {
     let stored_events =
         store.scan_block_events(header.block_height).expect("event scan should succeed");
     let stored_order = store
-        .load_current_spot_order("trader-1-BTCUSDT-7")
+        .load_current_spot_order("7")
         .expect("order load should succeed")
         .expect("order should exist");
     let stored_balance = store
@@ -50,7 +50,7 @@ fn append_and_read_back_block_data_and_snapshots() {
         vec!["cmd-1", "cmd-2"]
     );
     assert_eq!(stored_events, body.replayable_events);
-    assert_eq!(stored_order.order_id, "trader-1-BTCUSDT-7");
+    assert_eq!(stored_order.order_id, 7);
     assert_eq!(
         (stored_order.reservation.remaining_amount, stored_order.status.as_str()),
         (200, "open")

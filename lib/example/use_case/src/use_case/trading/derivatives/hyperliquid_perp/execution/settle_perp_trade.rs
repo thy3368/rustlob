@@ -507,6 +507,9 @@ mod tests {
     use crate::entity::HyperliquidPerpOrderSide;
     use crate::use_case::support::field_as_u64;
 
+    const TAKER_ORDER_ID: u64 = 1;
+    const MAKER_ORDER_ID: u64 = 2;
+
     fn cmd(trade_ids: Vec<&str>) -> SettleHyperliquidPerpTradeCmd {
         SettleHyperliquidPerpTradeCmd {
             party_id: "clearing-house".to_string(),
@@ -528,8 +531,8 @@ mod tests {
             "match-1".to_string(),
             0,
             "BTC-PERP".to_string(),
-            format!("{trade_id}-taker"),
-            format!("{trade_id}-maker"),
+            TAKER_ORDER_ID,
+            MAKER_ORDER_ID,
             taker_account_id.to_string(),
             maker_account_id.to_string(),
             taker_side,

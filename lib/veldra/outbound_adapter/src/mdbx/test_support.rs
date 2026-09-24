@@ -106,7 +106,7 @@ pub fn sample_state() -> BuildBlockFromCommandsState {
                     PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
                         party_id: "trader-1".to_string(),
                         asset: 10_001,
-                        order_id: "trader-1-BTCUSDT-7".to_string(),
+                        order_id: 7,
                         symbol: "BTCUSDT".to_string(),
                         is_buy: true,
                         price: "100".to_string(),

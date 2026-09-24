@@ -165,7 +165,9 @@ impl SpotOrderApp {
                 SpotBlockCommand::Cancel(command) => {
                     updates.insert(cancel_result_key(command), value.clone());
                 }
-                SpotBlockCommand::Modify(_) | SpotBlockCommand::Match(_) => {}
+                SpotBlockCommand::Activate(_)
+                | SpotBlockCommand::Modify(_)
+                | SpotBlockCommand::Match(_) => {}
             }
         }
 
@@ -225,12 +227,14 @@ impl SpotBlockExecutionSummary {
         let first_place = requests.iter().find_map(|request| match request {
             SpotBlockCommand::PlaceMatch(command) => place_order_cmd(command),
             SpotBlockCommand::Cancel(_)
+            | SpotBlockCommand::Activate(_)
             | SpotBlockCommand::Modify(_)
             | SpotBlockCommand::Match(_) => None,
         });
         let first_cancel = requests.iter().find_map(|request| match request {
             SpotBlockCommand::Cancel(command) => Some(command),
-            SpotBlockCommand::PlaceMatch(_)
+            SpotBlockCommand::Activate(_)
+            | SpotBlockCommand::PlaceMatch(_)
             | SpotBlockCommand::Modify(_)
             | SpotBlockCommand::Match(_) => None,
         });
@@ -245,7 +249,7 @@ impl SpotBlockExecutionSummary {
             cancel_command_count,
             place_party_id: first_place.map(|command| command.party_id.clone()),
             place_asset: first_place.map(|command| command.asset),
-            place_order_id: first_place.map(|command| command.order_id.clone()),
+            place_order_id: first_place.map(|command| command.order_id.to_string()),
             place_cloid: first_place.and_then(|command| command.cloid.clone()),
             cancel_party_id: first_cancel.map(|command| command.party_id.clone()),
             cancel_asset: first_cancel.map(|command| command.asset),
@@ -280,7 +284,7 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
             .ok_or(DemoSpotBlockOutboundError)?;
 
         Ok(SpotBlockState {
-            orders: vec![demo_sell_order("maker-1", "seller", 100, 1)?, cancel_order],
+            orders: vec![demo_sell_order(2, "seller", 100, 1)?, cancel_order],
             balances: vec![
                 Balance::new("buyer".to_string(), "USDT".to_string(), 100_000, buyer_frozen, 1),
                 Balance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
@@ -314,7 +318,7 @@ impl StateSink<SpotBlockUseCase> for DemoSpotBlockOutbound {
 }
 
 fn demo_sell_order(
-    order_id: &str,
+    order_id: u64,
     account_id: &str,
     price: u64,
     qty: u64,
@@ -331,7 +335,7 @@ fn demo_sell_order(
     .map_err(|_| DemoSpotBlockOutboundError)?;
 
     let mut order = SpotOrderV2::new_pending_limit(
-        order_id.to_string(),
+        order_id,
         10_001,
         account_id.to_string(),
         "BTCUSDT".to_string(),
@@ -358,7 +362,7 @@ fn demo_sell_order(
 
 fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
     let mut order = SpotOrderV2::new_pending_limit(
-        "cancel-buy".to_string(),
+        3,
         10_001,
         "buyer".to_string(),
         "BTCUSDT".to_string(),
@@ -442,6 +446,9 @@ fn data_hash(data: &Data) -> CryptoHash {
 
 fn cancel_result_key(command: &CancelSpotOrderV2Cmd) -> Vec<u8> {
     match &command.lookup {
+        CancelSpotOrderV2Lookup::Oid(order_id) => {
+            format!("cancel:{}:{order_id}", command.party_id).into_bytes()
+        }
         CancelSpotOrderV2Lookup::Cloid(cloid) => {
             format!("cancel:{}:{cloid}", command.party_id).into_bytes()
         }
@@ -458,7 +465,7 @@ fn place_result_key(command: &PlaceOnlySpotOrderV2Cmd) -> Vec<u8> {
     format!(
         "place:{}:{}",
         order.party_id,
-        order.cloid.as_deref().unwrap_or(order.order_id.as_str())
+        order.cloid.clone().unwrap_or_else(|| order.order_id.to_string())
     )
     .into_bytes()
 }

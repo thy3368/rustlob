@@ -8,7 +8,7 @@ use example_core_use_case::{
 };
 use serde::Serialize;
 
-use crate::common::{ExampleCliParseErrorMapping, find_string_field, find_u64_field};
+use crate::common::{ExampleCliParseErrorMapping, find_last_u64_field, find_u64_field};
 
 pub const PLACE_ORDER_CLI_BIN: &str = "cli_demo";
 pub const PLACE_ORDER_CLI_DEFAULT_TRADER_ID: &str = "trader-1";
@@ -57,7 +57,7 @@ impl ExampleCliParseErrorMapping for ParsePlaceOrderCliArgsError {
 impl PlaceOrderCliCommand {
     fn into_command(self) -> PlaceOnlySpotOrderV2Cmd {
         PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
-            order_id: format!("{}-{}-11", self.trader_id, self.symbol),
+            order_id: 11,
             party_id: self.trader_id,
             asset: 10_001,
             symbol: self.symbol,
@@ -122,7 +122,7 @@ fn parse_or_default(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlaceOrderCliResponse {
     pub summary: String,
-    pub order_id: String,
+    pub order_id: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -132,10 +132,9 @@ impl UseCaseReplyMapper for PlaceOrderCliReplyMapper {
     type Reply = PlaceOrderCliResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
-        let order_id = find_string_field(&events, "order_id")
-            .unwrap_or_else(|| "missing-order-id".to_string());
+        let order_id = find_u64_field(&events, "order_id").unwrap_or(0);
         let principal_reservation_amount =
-            find_u64_field(&events, "reservation_original_amount").unwrap_or(0);
+            find_last_u64_field(&events, "reservation_original_amount").unwrap_or(0);
         let remaining_quote = find_u64_field(&events, "available").unwrap_or(0);
 
         PlaceOrderCliResponse {
@@ -193,12 +192,12 @@ mod tests {
             run_place_order_cli(command, &outbound).expect("place-match order should execute");
         let counts = outbound.snapshot_event_counts()?;
 
-        assert_eq!(response.order_id, "trader-1-BTCUSDT-11");
+        assert_eq!(response.order_id, 11);
         assert_eq!(
             response.summary,
-            "accepted order_id=trader-1-BTCUSDT-11 principal_reservation_amount=200 remaining_quote=800"
+            "accepted order_id=11 principal_reservation_amount=200 remaining_quote=800"
         );
-        assert_eq!(counts, (5, 5));
+        assert_eq!(counts, (6, 6));
 
         Ok(())
     }

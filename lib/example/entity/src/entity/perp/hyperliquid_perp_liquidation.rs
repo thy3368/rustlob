@@ -95,7 +95,7 @@ pub struct HyperliquidPerpLiquidation {
     /// 当前尚未发单的剩余待处置数量。
     pub remaining_qty: u64,
     /// 最近一次发出的强平单 ID。
-    pub last_order_id: Option<String>,
+    pub last_order_id: Option<u64>,
     /// 当前强平会话实体版本。
     pub version: u64,
 }
@@ -173,7 +173,7 @@ impl HyperliquidPerpLiquidation {
     /// 应用一次强平成交事实后的会话推进。
     pub fn mark_executing(
         &mut self,
-        last_order_id: String,
+        last_order_id: u64,
         fill_qty: u64,
         version: u64,
     ) -> Option<()> {
@@ -185,7 +185,7 @@ impl HyperliquidPerpLiquidation {
             return None;
         }
 
-        let next_count = if self.last_order_id.as_deref() == Some(last_order_id.as_str()) {
+        let next_count = if self.last_order_id == Some(last_order_id) {
             self.placed_order_count
         } else {
             self.placed_order_count.checked_add(1)?
@@ -309,7 +309,7 @@ impl FieldDiff for HyperliquidPerpLiquidation {
             EntityFieldChange::new(
                 "last_order_id",
                 "",
-                self.last_order_id.clone().unwrap_or_default(),
+                self.last_order_id.map(|order_id| order_id.to_string()).unwrap_or_default(),
             ),
         ]
     }
@@ -338,8 +338,8 @@ impl FieldDiff for HyperliquidPerpLiquidation {
         push_change(
             &mut changes,
             "last_order_id",
-            self.last_order_id.clone().unwrap_or_default(),
-            other.last_order_id.clone().unwrap_or_default(),
+            self.last_order_id.map(|order_id| order_id.to_string()).unwrap_or_default(),
+            other.last_order_id.map(|order_id| order_id.to_string()).unwrap_or_default(),
         );
         changes
     }
@@ -487,13 +487,13 @@ mod tests {
             HyperliquidPerpLiquidationStatus::Started,
         );
 
-        liquidation.mark_executing("order-1".to_string(), 2, 2).unwrap();
+        liquidation.mark_executing(1, 2, 2).unwrap();
 
         assert_eq!(liquidation.status, HyperliquidPerpLiquidationStatus::Executing);
         assert_eq!(liquidation.placed_order_count, 1);
         assert_eq!(liquidation.placed_qty_total, 2);
         assert_eq!(liquidation.remaining_qty, 8);
-        assert_eq!(liquidation.last_order_id.as_deref(), Some("order-1"));
+        assert_eq!(liquidation.last_order_id, Some(1));
         assert_eq!(liquidation.version, 2);
     }
 

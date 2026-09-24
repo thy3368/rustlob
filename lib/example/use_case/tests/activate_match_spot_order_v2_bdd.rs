@@ -14,6 +14,8 @@ use example_core_use_case::{
 
 const ASSET: u32 = 10_001;
 const EXECUTION_TIME_NS: u64 = 1_000_000_000;
+const TAKER_BUY_ORDER_ID: u64 = 1;
+const MAKER_SELL_ORDER_ID: u64 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExpectedOutcome {
@@ -28,16 +30,12 @@ fn context() -> ExecutionContext {
     ExecutionContext { execution_time_ns: EXECUTION_TIME_NS }
 }
 
-fn cmd(order_id: &str) -> ActivateMatchSpotOrderV2Cmd {
-    ActivateMatchSpotOrderV2Cmd {
-        party_id: "buyer".to_owned(),
-        asset: ASSET,
-        order_id: order_id.to_owned(),
-    }
+fn cmd(order_id: u64) -> ActivateMatchSpotOrderV2Cmd {
+    ActivateMatchSpotOrderV2Cmd { party_id: "buyer".to_owned(), asset: ASSET, order_id }
 }
 
 fn pending_order(
-    order_id: &str,
+    order_id: u64,
     account_id: &str,
     side: SpotOrderSide,
     qty: u64,
@@ -45,7 +43,7 @@ fn pending_order(
     tif: SpotOrderTif,
 ) -> SpotOrderV2 {
     SpotOrderV2::new_pending_limit(
-        order_id.to_owned(),
+        order_id,
         ASSET,
         account_id.to_owned(),
         "BTCUSDT".to_owned(),
@@ -60,7 +58,7 @@ fn pending_order(
 }
 
 fn activated_order(
-    order_id: &str,
+    order_id: u64,
     account_id: &str,
     side: SpotOrderSide,
     qty: u64,
@@ -86,9 +84,16 @@ fn scenario(
     maker_qty: Option<u64>,
 ) -> ActivateMatchSpotOrderV2State {
     let pending_taker =
-        pending_order("taker-buy", "buyer", SpotOrderSide::Buy, taker_qty, 100, taker_tif);
+        pending_order(TAKER_BUY_ORDER_ID, "buyer", SpotOrderSide::Buy, taker_qty, 100, taker_tif);
     let maker = maker_qty.map(|qty| {
-        activated_order("maker-sell", "seller", SpotOrderSide::Sell, qty, 100, SpotOrderTif::Gtc)
+        activated_order(
+            MAKER_SELL_ORDER_ID,
+            "seller",
+            SpotOrderSide::Sell,
+            qty,
+            100,
+            SpotOrderTif::Gtc,
+        )
     });
     let (maker_base, maker_fee) = maker
         .as_ref()
@@ -118,7 +123,7 @@ fn compute(
     expected: ExpectedOutcome,
 ) -> (ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2Changes) {
     let after = ActivateMatchSpotOrderV2UseCase
-        .compute_state_changed_with_context(&cmd("taker-buy"), &state, &context())
+        .compute_state_changed_with_context(&cmd(TAKER_BUY_ORDER_ID), &state, &context())
         .expect("activate-match should compute after truth");
     assert_after_variant(&after.match_after, expected);
     let changes = ActivateMatchSpotOrderV2UseCase::do_compute_state_diff(state.clone(), after)
@@ -180,15 +185,14 @@ fn event_signatures(events: &[EntityReplayableEvent]) -> Vec<(u8, u8, u64, u64)>
 
 #[test]
 fn command_rejects_empty_party_id_and_order_id() {
-    let mut invalid = cmd("taker-buy");
+    let mut invalid = cmd(TAKER_BUY_ORDER_ID);
     invalid.party_id.clear();
     assert!(matches!(
         ActivateMatchSpotOrderV2UseCase.check_command(&invalid),
         Err(ActivateMatchSpotOrderV2Error::Activation(ActivateSpotOrderV2Error::InvalidPartyId))
     ));
 
-    let mut invalid = cmd("");
-    invalid.order_id.clear();
+    let invalid = cmd(0);
     assert!(matches!(
         ActivateMatchSpotOrderV2UseCase.check_command(&invalid),
         Err(ActivateMatchSpotOrderV2Error::Activation(ActivateSpotOrderV2Error::InvalidOrderId))
@@ -201,14 +205,14 @@ fn state_validation_reuses_activation_rules_and_rejects_empty_fee_account() {
     state.fee_account_id.clear();
 
     assert_eq!(
-        ActivateMatchSpotOrderV2UseCase.validate_state_given(&cmd("taker-buy"), &state),
+        ActivateMatchSpotOrderV2UseCase.validate_state_given(&cmd(TAKER_BUY_ORDER_ID), &state),
         Err(ActivateMatchSpotOrderV2Error::Match(MatchSpotOrderV3Error::InvalidFeeAccountId))
     );
 
     state.fee_account_id = "fee".to_owned();
-    state.pending_order.order_id = "other".to_owned();
+    state.pending_order.order_id = 99;
     assert!(matches!(
-        ActivateMatchSpotOrderV2UseCase.validate_state_given(&cmd("taker-buy"), &state),
+        ActivateMatchSpotOrderV2UseCase.validate_state_given(&cmd(TAKER_BUY_ORDER_ID), &state),
         Err(ActivateMatchSpotOrderV2Error::Activation(ActivateSpotOrderV2Error::OrderIdMismatch))
     ));
 }
@@ -225,7 +229,7 @@ fn insufficient_available_balance_is_reported_by_activation_stage() {
 
     assert!(matches!(
         ActivateMatchSpotOrderV2UseCase.compute_state_changed_with_context(
-            &cmd("taker-buy"),
+            &cmd(TAKER_BUY_ORDER_ID),
             &state,
             &context()
         ),

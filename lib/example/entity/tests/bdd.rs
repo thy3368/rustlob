@@ -3,7 +3,7 @@ use example_core_entity::{
 };
 
 fn test_principal_reservation(
-    order_id: &str,
+    order_id: u64,
     account_id: &str,
     side: SpotOrderSide,
     qty: u64,
@@ -20,7 +20,7 @@ fn test_principal_reservation(
     Reservation::new(
         format!("reservation:{order_id}:principal"),
         account_id.to_string(),
-        order_id.to_string(),
+        order_id,
         ReservationMarketKind::Spot,
         reservation_kind,
         asset_id.to_string(),

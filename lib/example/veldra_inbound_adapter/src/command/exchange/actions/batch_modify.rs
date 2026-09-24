@@ -460,7 +460,7 @@ mod tests {
                 "type": "batchModify",
                 "modifies": [
                     {
-                        "oid": "order-1",
+                        "oid": 77738308,
                         "order": {
                             "a": 10000,
                             "b": true,

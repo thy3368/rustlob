@@ -118,7 +118,7 @@ mod tests {
         PlaceOnlySpotOrderV2OrderCmd {
             party_id: "trader-1".to_string(),
             asset: 10_001,
-            order_id: "order-1".to_string(),
+            order_id: 1,
             symbol: "BTCUSDT".to_string(),
             is_buy: true,
             price: "100".to_string(),
@@ -133,9 +133,9 @@ mod tests {
         }
     }
 
-    fn trigger_cmd(order_id: &str, is_market: bool) -> PlaceOnlySpotOrderV2OrderCmd {
+    fn trigger_cmd(order_id: u64, is_market: bool) -> PlaceOnlySpotOrderV2OrderCmd {
         PlaceOnlySpotOrderV2OrderCmd {
-            order_id: order_id.to_string(),
+            order_id,
             is_buy: false,
             price: "95".to_string(),
             size: "1".to_string(),
@@ -191,7 +191,7 @@ mod tests {
     fn execute_place_only_normal_tpsl_creates_parent_and_children() {
         let result = execute_place_only_spot_order_v2(&PlaceOnlySpotOrderV2Cmd::NormalTpsl {
             parent: limit_cmd("gtc"),
-            children: vec![trigger_cmd("child-tp", false), trigger_cmd("child-sl", true)],
+            children: vec![trigger_cmd(2, false), trigger_cmd(3, true)],
         })
         .expect("place-only normal tpsl should execute with default outbound");
 

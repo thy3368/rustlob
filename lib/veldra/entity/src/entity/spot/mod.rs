@@ -98,10 +98,10 @@ fn balance_commitment(balance: &Balance) -> String {
 fn spot_order_commitment(order: &SpotOrderV2) -> String {
     let status_reason = order.status_reason.map(|value| value.as_str()).unwrap_or_default();
     let order_price = order.order_price().to_string();
+    let order_id = order.order_id.to_string();
     stable_hash_hex(&[
-        order.order_id.as_str(),
+        order_id.as_str(),
         order.asset.to_string().as_str(),
-        order.exchange_oid.map(|value| value.to_string()).unwrap_or_default().as_str(),
         order.account_id.as_str(),
         order.symbol.as_str(),
         order.side.as_str(),
@@ -139,10 +139,11 @@ fn spot_reservation_commitment(reservation: &AssetReservation) -> String {
         Some(value) => value.as_str(),
         None => "",
     };
+    let caused_by_order_id = reservation.caused_by_order_id.to_string();
     stable_hash_hex(&[
         reservation.reservation_id.as_str(),
         reservation.owner_account_id.as_str(),
-        reservation.caused_by_order_id.as_str(),
+        caused_by_order_id.as_str(),
         reservation.market_kind.as_str(),
         reservation.reservation_kind.as_str(),
         reservation.asset_id.as_str(),

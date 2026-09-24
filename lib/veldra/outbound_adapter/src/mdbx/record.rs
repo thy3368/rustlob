@@ -141,7 +141,7 @@ impl StoredSpotOrderSnapshot {
         Ok(Self {
             schema_version: SCHEMA_VERSION_V1,
             block_height,
-            order_id: order.order_id.clone(),
+            order_id: order.order_id.to_string(),
             account_id: order.account_id.clone(),
             symbol: order.symbol.clone(),
             encoded_payload: encode_record(order)?,

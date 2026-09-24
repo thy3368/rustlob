@@ -12,13 +12,16 @@ use example_core_use_case::{
 };
 
 const CREATED_AT: u64 = 1_717_171_717_000_000_000;
+const NORMAL_TPSL_PARENT_ID: u64 = 100;
+const NORMAL_TPSL_TP_ID: u64 = 101;
+const NORMAL_TPSL_SL_ID: u64 = 102;
 
 /// 构造普通限价订单 fixture；它可分别代表 GTC、IOC 和 ALO 三种现货订单形态。
-fn limit_order(order_id: &str, tif: &str) -> PlaceOnlySpotOrderV2OrderCmd {
+fn limit_order(order_id: u64, tif: &str) -> PlaceOnlySpotOrderV2OrderCmd {
     PlaceOnlySpotOrderV2OrderCmd {
         party_id: "trader-1".to_owned(),
         asset: 10_001,
-        order_id: order_id.to_owned(),
+        order_id,
         symbol: "BTCUSDT".to_owned(),
         is_buy: true,
         price: "100".to_owned(),
@@ -35,14 +38,14 @@ fn limit_order(order_id: &str, tif: &str) -> PlaceOnlySpotOrderV2OrderCmd {
 
 /// 构造触发订单 fixture；`is_market = false` 表示触发后 GTC，`true` 表示触发后 IOC。
 fn trigger_order(
-    order_id: &str,
+    order_id: u64,
     is_market: bool,
     trigger_role: &str,
 ) -> PlaceOnlySpotOrderV2OrderCmd {
     PlaceOnlySpotOrderV2OrderCmd {
         party_id: "trader-1".to_owned(),
         asset: 10_001,
-        order_id: order_id.to_owned(),
+        order_id,
         symbol: "BTCUSDT".to_owned(),
         is_buy: false,
         price: "95".to_owned(),
@@ -130,9 +133,9 @@ fn assert_created_event_for_order(
 #[test]
 fn given_hyperliquid_spot_order_shapes_when_placed_then_lifecycle_and_holds_match() {
     for (order_id, tif, expected_tif) in [
-        ("gtc", "gtc", SpotOrderTif::Gtc),
-        ("ioc", "ioc", SpotOrderTif::Ioc),
-        ("alo", "alo", SpotOrderTif::Alo),
+        (1, "gtc", SpotOrderTif::Gtc),
+        (2, "ioc", SpotOrderTif::Ioc),
+        (3, "alo", SpotOrderTif::Alo),
     ] {
         let command = PlaceOnlySpotOrderV2Cmd::Single(limit_order(order_id, tif));
         let order = created_single_order(compute_changes(&command).expect("限价订单应创建成功"))
@@ -151,8 +154,8 @@ fn given_hyperliquid_spot_order_shapes_when_placed_then_lifecycle_and_holds_matc
     }
 
     for (order_id, is_market, trigger_role, expected_tif, expected_role) in [
-        ("trigger-tp-limit", false, "tp", SpotOrderTif::Gtc, SpotOrderTriggerRole::TakeProfit),
-        ("trigger-sl-market", true, "sl", SpotOrderTif::Ioc, SpotOrderTriggerRole::StopLoss),
+        (4, false, "tp", SpotOrderTif::Gtc, SpotOrderTriggerRole::TakeProfit),
+        (5, true, "sl", SpotOrderTif::Ioc, SpotOrderTriggerRole::StopLoss),
     ] {
         let command =
             PlaceOnlySpotOrderV2Cmd::Single(trigger_order(order_id, is_market, trigger_role));
@@ -180,10 +183,10 @@ fn given_hyperliquid_spot_order_shapes_when_placed_then_lifecycle_and_holds_matc
 #[test]
 fn given_valid_normal_tpsl_when_placed_then_changes_keep_parent_child_truth() {
     let command = PlaceOnlySpotOrderV2Cmd::NormalTpsl {
-        parent: limit_order("normal-tpsl-parent", "gtc"),
+        parent: limit_order(NORMAL_TPSL_PARENT_ID, "gtc"),
         children: vec![
-            trigger_order("normal-tpsl-tp", false, "tp"),
-            trigger_order("normal-tpsl-sl", true, "sl"),
+            trigger_order(NORMAL_TPSL_TP_ID, false, "tp"),
+            trigger_order(NORMAL_TPSL_SL_ID, true, "sl"),
         ],
     };
     let changes = compute_changes(&command).expect("合法 normalTpsl 应创建成功");
@@ -195,7 +198,7 @@ fn given_valid_normal_tpsl_when_placed_then_changes_keep_parent_child_truth() {
     };
 
     // 父单是非 reduce-only 的普通限价单，但创建阶段仍保持 Pending 且不冻结。
-    assert_eq!(created_parent_order.order_id, "normal-tpsl-parent");
+    assert_eq!(created_parent_order.order_id, NORMAL_TPSL_PARENT_ID);
     assert_eq!(created_parent_order.group_relation, SpotOrderGroupRelation::NormalTpslParent);
     assert_eq!(created_parent_order.side, SpotOrderSide::Buy);
     assert!(!created_parent_order.reduce_only);
@@ -208,9 +211,7 @@ fn given_valid_normal_tpsl_when_placed_then_changes_keep_parent_child_truth() {
     for child in created_child_orders {
         assert_eq!(
             child.group_relation,
-            SpotOrderGroupRelation::NormalTpslChild {
-                parent_order_id: "normal-tpsl-parent".to_owned(),
-            }
+            SpotOrderGroupRelation::NormalTpslChild { parent_order_id: NORMAL_TPSL_PARENT_ID }
         );
         assert_eq!(child.side, SpotOrderSide::Sell);
         assert!(child.reduce_only);
@@ -242,7 +243,7 @@ fn given_valid_normal_tpsl_when_placed_then_changes_keep_parent_child_truth() {
 fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
     let use_case = PlaceOnlySpotOrderV2UseCase;
 
-    let mut invalid_price = limit_order("invalid-price", "gtc");
+    let mut invalid_price = limit_order(200, "gtc");
     invalid_price.price = "0".to_owned();
     // 价格必须是正整数字符串。
     assert_eq!(
@@ -250,7 +251,7 @@ fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
         Err(PlaceOnlySpotOrderV2Error::InvalidPrice)
     );
 
-    let mut invalid_size = limit_order("invalid-size", "gtc");
+    let mut invalid_size = limit_order(201, "gtc");
     invalid_size.size = "not-a-number".to_owned();
     // 数量必须是正整数字符串。
     assert_eq!(
@@ -258,14 +259,14 @@ fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
         Err(PlaceOnlySpotOrderV2Error::InvalidSize)
     );
 
-    let invalid_tif = limit_order("invalid-tif", "day");
+    let invalid_tif = limit_order(202, "day");
     // 现货限价单只允许 gtc、ioc、alo。
     assert_eq!(
         use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_tif)),
         Err(PlaceOnlySpotOrderV2Error::InvalidTimeInForce)
     );
 
-    let mut invalid_trigger_price = trigger_order("invalid-trigger-price", false, "sl");
+    let mut invalid_trigger_price = trigger_order(203, false, "sl");
     invalid_trigger_price.order_type = PlaceOnlySpotOrderV2OrderType::Trigger {
         is_market: false,
         trigger_price: "0".to_owned(),
@@ -277,14 +278,14 @@ fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
         Err(PlaceOnlySpotOrderV2Error::InvalidTriggerPrice)
     );
 
-    let invalid_trigger_role = trigger_order("invalid-trigger-role", false, "break_even");
+    let invalid_trigger_role = trigger_order(204, false, "break_even");
     // 触发角色只允许 TP 或 SL 的公开语义别名。
     assert_eq!(
         use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_trigger_role)),
         Err(PlaceOnlySpotOrderV2Error::InvalidTriggerRole)
     );
 
-    let mut empty_party = limit_order("empty-party", "gtc");
+    let mut empty_party = limit_order(205, "gtc");
     empty_party.party_id.clear();
     // 命令主体不能为空。
     assert_eq!(
@@ -302,17 +303,17 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
     // 空子单列表无法形成 normalTpsl 父子事实，属于 command pre-check 错误。
     assert_eq!(
         use_case.check_command(&PlaceOnlySpotOrderV2Cmd::NormalTpsl {
-            parent: limit_order("empty-children-parent", "gtc"),
+            parent: limit_order(300, "gtc"),
             children: vec![],
         }),
         Err(PlaceOnlySpotOrderV2Error::ChildrenRequired)
     );
 
-    let parent = limit_order("parent", "gtc");
-    let valid_child = trigger_order("child", false, "tp");
+    let parent = limit_order(301, "gtc");
+    let valid_child = trigger_order(302, false, "tp");
 
     // 父单必须是非 reduce-only 的普通限价单。
-    let trigger_parent = trigger_order("trigger-parent", false, "sl");
+    let trigger_parent = trigger_order(303, false, "sl");
     let command = PlaceOnlySpotOrderV2Cmd::NormalTpsl {
         parent: trigger_parent,
         children: vec![valid_child.clone()],
@@ -333,10 +334,10 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
 
     // 子单必须是 Trigger，且必须声明 reduce-only。
     let non_trigger_child = PlaceOnlySpotOrderV2OrderCmd {
-        order_id: "non-trigger-child".to_owned(),
+        order_id: 304,
         is_buy: false,
         reduce_only: true,
-        ..limit_order("non-trigger-child", "gtc")
+        ..limit_order(304, "gtc")
     };
     let command = PlaceOnlySpotOrderV2Cmd::NormalTpsl {
         parent: parent.clone(),
@@ -413,10 +414,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
     // 父单和子单必须拥有全局唯一的订单 ID。
     let duplicate_parent_id = PlaceOnlySpotOrderV2Cmd::NormalTpsl {
         parent: parent.clone(),
-        children: vec![PlaceOnlySpotOrderV2OrderCmd {
-            order_id: "parent".to_owned(),
-            ..valid_child.clone()
-        }],
+        children: vec![PlaceOnlySpotOrderV2OrderCmd { order_id: 301, ..valid_child.clone() }],
     };
     assert_eq!(
         use_case.validate_state_given(&duplicate_parent_id, &()),

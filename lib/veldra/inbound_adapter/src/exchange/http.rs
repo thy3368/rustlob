@@ -79,7 +79,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], "ok");
         assert_eq!(body["response"]["type"], "order");
-        assert_eq!(body["response"]["data"]["statuses"][0]["resting"]["oid"], 77738308u64);
+        assert_eq!(body["response"]["data"]["statuses"][0]["resting"], json!({}));
     }
 
     #[actix_web::test]
@@ -212,7 +212,7 @@ mod tests {
         let (status, body) = post_exchange_status_and_json(json!({
             "action": {
                 "type": "modify",
-                "oid": 77738308u64,
+                "oid": 77738308,
                 "order": {
                     "a": 10000,
                     "b": true,
@@ -232,7 +232,7 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["response"]["type"], "order");
-        assert_eq!(body["response"]["data"]["statuses"][0]["resting"]["oid"], 77738309u64);
+        assert_eq!(body["response"]["data"]["statuses"][0]["resting"], json!({}));
     }
 
     #[actix_web::test]
@@ -242,7 +242,7 @@ mod tests {
                 "type": "batchModify",
                 "modifies": [
                     {
-                        "oid": 77738308u64,
+                        "oid": 77738308,
                         "order": {
                             "a": 10000,
                             "b": true,
@@ -275,8 +275,8 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["response"]["type"], "order");
-        assert_eq!(body["response"]["data"]["statuses"][0]["resting"]["oid"], 77738400u64);
-        assert_eq!(body["response"]["data"]["statuses"][1]["resting"]["oid"], 77738401u64);
+        assert_eq!(body["response"]["data"]["statuses"][0]["resting"], json!({}));
+        assert_eq!(body["response"]["data"]["statuses"][1]["resting"], json!({}));
     }
 
     #[actix_web::test]

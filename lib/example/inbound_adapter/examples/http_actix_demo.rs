@@ -127,7 +127,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> serde_json::Value {
             })
         )).collect::<serde_json::Map<String, serde_json::Value>>(),
         "orders": snapshot.orders.into_iter().map(|(order_id, order)| (
-            order_id,
+            order_id.to_string(),
             serde_json::json!({
                 "order_id": order.order_id,
                 "account_id": order.account_id,
