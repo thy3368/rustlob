@@ -13,6 +13,11 @@ pub use activate_spot_order_v2::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
 };
+pub use agg::activate_match_spot_order_v2::{
+    ActivateMatchSpotOrderV2AfterChanges, ActivateMatchSpotOrderV2Changes,
+    ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error, ActivateMatchSpotOrderV2State,
+    ActivateMatchSpotOrderV2UseCase,
+};
 pub use agg::place_match_spot_order_v2::{
     PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
     PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,

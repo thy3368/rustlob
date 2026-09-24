@@ -315,7 +315,6 @@ fn build_order(
             let mut created = SpotOrderV2::new_pending_limit(
                 order.order_id.clone(),
                 order.asset,
-                None,
                 order.party_id.clone(),
                 order.symbol.clone(),
                 side,
@@ -333,7 +332,6 @@ fn build_order(
             let mut created = SpotOrderV2::new_pending_trigger(
                 order.order_id.clone(),
                 order.asset,
-                None,
                 order.party_id.clone(),
                 order.symbol.clone(),
                 side,

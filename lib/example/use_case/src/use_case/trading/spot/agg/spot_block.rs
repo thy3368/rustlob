@@ -82,8 +82,6 @@ pub enum SpotBlockError {
     InvalidStateIndexing,
     #[error("spot block state contains duplicate order entity identity")]
     DuplicateOrderIdentity,
-    #[error("spot block state contains duplicate exchange oid")]
-    DuplicateExchangeOid,
     #[error("spot block state contains duplicate client order id")]
     DuplicateClientOrderId,
     #[error("spot block state contains duplicate balance entity id")]
@@ -268,7 +266,6 @@ struct WorkingSpotBlockState {
     orders: Vec<SpotOrderV2>,
     balances: Vec<Balance>,
     order_by_entity_id: HashMap<String, usize>,
-    order_by_oid: HashMap<u64, usize>,
     order_by_cloid: HashMap<String, usize>,
     balance_by_entity_id: HashMap<String, usize>,
 }
@@ -286,7 +283,6 @@ impl WorkingSpotBlockState {
             orders,
             balances,
             order_by_entity_id: HashMap::new(),
-            order_by_oid: HashMap::new(),
             order_by_cloid: HashMap::new(),
             balance_by_entity_id: HashMap::new(),
         };
@@ -296,18 +292,12 @@ impl WorkingSpotBlockState {
 
     fn rebuild_indexes(&mut self) -> Result<(), SpotBlockError> {
         self.order_by_entity_id.clear();
-        self.order_by_oid.clear();
         self.order_by_cloid.clear();
         self.balance_by_entity_id.clear();
 
         for (index, order) in self.orders.iter().enumerate() {
             if self.order_by_entity_id.insert(order.entity_id(), index).is_some() {
                 return Err(SpotBlockError::DuplicateOrderIdentity);
-            }
-            if let Some(exchange_oid) = order.exchange_oid {
-                if self.order_by_oid.insert(exchange_oid, index).is_some() {
-                    return Err(SpotBlockError::DuplicateExchangeOid);
-                }
             }
             if let Some(cloid) = &order.client_order_id {
                 if self.order_by_cloid.insert(cloid.clone(), index).is_some() {
@@ -329,7 +319,6 @@ impl WorkingSpotBlockState {
         lookup: &CancelSpotOrderV2Lookup,
     ) -> Result<SpotOrderV2, SpotBlockItemError> {
         let index = match lookup {
-            CancelSpotOrderV2Lookup::Oid(oid) => self.order_by_oid.get(oid),
             CancelSpotOrderV2Lookup::Cloid(cloid) => self.order_by_cloid.get(cloid),
             CancelSpotOrderV2Lookup::Missing => None,
         };
@@ -341,7 +330,6 @@ impl WorkingSpotBlockState {
 
     fn order_for_modify(&self, lookup: &OrderId) -> Result<SpotOrderV2, SpotBlockItemError> {
         let index = match lookup {
-            OrderId::Oid(oid) => self.order_by_oid.get(oid),
             OrderId::Cloid(cloid) => self.order_by_cloid.get(cloid),
         };
         index

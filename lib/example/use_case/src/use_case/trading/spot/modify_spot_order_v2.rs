@@ -20,11 +20,10 @@ use crate::support::concat3;
 
 /// 定位一个已经存在的订单。
 ///
-/// `Oid` 和 `Cloid` 对应 Hyperliquid 顶层 `oid` 的两种形式。该值只用于
-/// 查找原订单，不表示改单后订单的 `cloid`。
+/// 现货改单只支持用 Hyperliquid `cloid` 查找原订单；不再维护 numeric `oid`
+/// 到本地订单的映射。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderId {
-    Oid(u64),
     Cloid(String),
 }
 
@@ -172,7 +171,6 @@ impl StateMachineV2Unchecked for ModifySpotOrderV2UseCase {
             return Err(ModifySpotOrderV2Error::EmptyPartyId);
         }
         match &cmd.order_id {
-            OrderId::Oid(oid) if *oid > 0 => {}
             OrderId::Cloid(cloid) if !cloid.is_empty() => {}
             _ => return Err(ModifySpotOrderV2Error::InvalidLookup),
         }
@@ -254,7 +252,6 @@ impl StateMachineV2Unchecked for ModifySpotOrderV2UseCase {
         order_after.fee_reservation = fee_after;
         order_after.version =
             order.version.checked_add(1).ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?;
-        sync_order_identity(&mut order_after);
 
         let mut balance_book = BalanceMap::new(&given_state.balances);
         let mut created_balance_ledger_entries = Vec::with_capacity(2);
@@ -301,7 +298,6 @@ impl StateMachineOwnedV2Diff for ModifySpotOrderV2UseCase {
 
 fn lookup_matches_order(lookup: &OrderId, order: &SpotOrderV2) -> bool {
     match lookup {
-        OrderId::Oid(oid) => order.exchange_oid == Some(*oid),
         OrderId::Cloid(cloid) => order.client_order_id.as_deref() == Some(cloid.as_str()),
     }
 }
@@ -338,15 +334,6 @@ fn parse_tif(raw: &str) -> Result<SpotOrderTif, ModifySpotOrderV2Error> {
         "alo" | "Alo" => Ok(SpotOrderTif::Alo),
         _ => Err(ModifySpotOrderV2Error::InvalidTimeInForce),
     }
-}
-
-fn sync_order_identity(order: &mut SpotOrderV2) {
-    order.identity.order_id = order.order_id.clone();
-    order.identity.asset = order.asset;
-    order.identity.exchange_oid = order.exchange_oid;
-    order.identity.account_id = order.account_id.clone();
-    order.identity.symbol = order.symbol.clone();
-    order.identity.client_order_id = order.client_order_id.clone();
 }
 
 struct BalanceMap {

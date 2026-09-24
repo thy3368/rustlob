@@ -32,7 +32,6 @@ pub struct CancelSpotOrderV2Cmd {
 pub enum CancelSpotOrderV2Lookup {
     #[default]
     Missing,
-    Oid(u64),
     Cloid(String),
 }
 
