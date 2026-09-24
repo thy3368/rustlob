@@ -103,8 +103,8 @@ pub struct Reservation {
     pub reservation_id: String,
     /// 冻结所属账户 ID。
     pub owner_account_id: String,
-    /// 触发本次冻结的订单 ID，是 MI 因果链的前驱事实。
-    pub caused_by_order_id: String,
+    /// 触发本次冻结的交易所原生 numeric `oid`，是 MI 因果链的前驱事实。
+    pub caused_by_order_id: u64,
     /// 冻结归属市场，用于区分 spot / perp。
     pub market_kind: ReservationMarketKind,
     /// 冻结业务角色，例如买单 quote、卖单 base 或 perp 开仓保证金。
@@ -155,7 +155,7 @@ impl Reservation {
     pub fn new(
         reservation_id: String,
         owner_account_id: String,
-        caused_by_order_id: String,
+        caused_by_order_id: u64,
         market_kind: ReservationMarketKind,
         reservation_kind: ReservationKind,
         asset_id: String,
@@ -189,7 +189,7 @@ impl Reservation {
         self.asset_id == asset_id
     }
 
-    pub fn is_for_order(&self, order_id: &str) -> bool {
+    pub fn is_for_order(&self, order_id: u64) -> bool {
         self.caused_by_order_id == order_id
     }
 
@@ -308,7 +308,7 @@ impl FieldDiff for Reservation {
         vec![
             EntityFieldChange::new("reservation_id", "", self.reservation_id.clone()),
             EntityFieldChange::new("owner_account_id", "", self.owner_account_id.clone()),
-            EntityFieldChange::new("caused_by_order_id", "", self.caused_by_order_id.clone()),
+            EntityFieldChange::new("caused_by_order_id", "", self.caused_by_order_id.to_string()),
             EntityFieldChange::new("market_kind", "", self.market_kind.as_str()),
             EntityFieldChange::new("reservation_kind", "", self.reservation_kind.as_str()),
             EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
@@ -339,8 +339,8 @@ impl FieldDiff for Reservation {
             ),
             EntityFieldChange::new(
                 "caused_by_order_id",
-                self.caused_by_order_id.clone(),
-                other.caused_by_order_id.clone(),
+                self.caused_by_order_id.to_string(),
+                other.caused_by_order_id.to_string(),
             ),
             EntityFieldChange::new(
                 "market_kind",
