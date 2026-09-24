@@ -262,6 +262,17 @@ pub trait EntityLifecycle {
     }
 }
 
+/// 运行时生成实体 ID 的独立能力。
+///
+/// 该 trait 不要求实现者同时实现 [`Entity`]，用于让实体创建流程依赖
+/// ID 生成能力，而不把 ID 生成职责绑定到实体生命周期契约。
+pub trait EntityIdGenerator {
+    type Id: Clone + PartialEq + ToString;
+
+    /// 生成下一个实体 ID。
+    fn next_id(&self) -> Self::Id;
+}
+
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     type Id: Debug + Clone + PartialEq + ToString;
@@ -530,6 +541,16 @@ where
 mod tests {
     use super::*;
     use crate::entity_v2::entity_field_change::ReplayFieldChange;
+
+    struct TestEntityIdGenerator;
+
+    impl EntityIdGenerator for TestEntityIdGenerator {
+        type Id = i64;
+
+        fn next_id(&self) -> Self::Id {
+            42
+        }
+    }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct TestEntity {
@@ -861,6 +882,17 @@ mod tests {
     #[test]
     fn entity_lifecycle_rejects_updated_timestamp_before_creation() {
         assert!(!LifecycleValue { created_at: 11, updated_at: 10 }.has_valid_lifecycle());
+    }
+
+    #[test]
+    fn entity_id_generator_contract_supports_custom_generators() {
+        fn generate_id<G: EntityIdGenerator>(generator: &G) -> G::Id {
+            generator.next_id()
+        }
+
+        let id = generate_id(&TestEntityIdGenerator);
+        assert_eq!(id, 42);
+        assert_eq!(id.to_string(), "42");
     }
 
     #[test]
