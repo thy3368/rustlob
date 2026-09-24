@@ -31,12 +31,12 @@ use serde_json::{Value, json};
         "error": "`action.cancels` must contain at least one cancel request."
     })
 )]
-#[case::invalid_oid(
-    invalid_oid_cancel_request_value(),
+#[case::invalid_order_id(
+    invalid_order_id_cancel_request_value(),
     StatusCode::BAD_REQUEST,
     json!({
         "status": "err",
-        "error": "Invalid `action.cancels[].o`. Expected a positive order id."
+        "error": "Invalid `action.cancels[].o`. Expected a non-empty local order id."
     })
 )]
 #[case::false_fast_flag(
@@ -109,7 +109,7 @@ fn valid_cancel_request_value() -> Value {
     json!({
         "action": {
             "type": "cancel",
-            "cancels": [{ "a": 10000, "o": 77738308 }]
+            "cancels": [{ "a": 10000, "o": "order-1" }]
         },
         "nonce": 1710000000000u64,
         "signature": {
@@ -135,11 +135,11 @@ fn empty_cancels_request_value() -> Value {
     })
 }
 
-fn invalid_oid_cancel_request_value() -> Value {
+fn invalid_order_id_cancel_request_value() -> Value {
     json!({
         "action": {
             "type": "cancel",
-            "cancels": [{ "a": 10000, "o": 0 }]
+            "cancels": [{ "a": 10000, "o": "" }]
         },
         "nonce": 1710000000000u64,
         "signature": {
@@ -154,7 +154,7 @@ fn false_fast_flag_cancel_request_value() -> Value {
     json!({
         "action": {
             "type": "cancel",
-            "cancels": [{ "a": 10000, "o": 77738308 }],
+            "cancels": [{ "a": 10000, "o": "order-1" }],
             "f": false
         },
         "nonce": 1710000000000u64,
@@ -171,8 +171,8 @@ fn multiple_cancels_request_value() -> Value {
         "action": {
             "type": "cancel",
             "cancels": [
-                { "a": 10000, "o": 77738308 },
-                { "a": 10001, "o": 77738309 }
+                { "a": 10000, "o": "order-1" },
+                { "a": 10001, "o": "order-2" }
             ]
         },
         "nonce": 1710000000000u64,

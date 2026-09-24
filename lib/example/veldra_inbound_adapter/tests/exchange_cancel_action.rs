@@ -24,9 +24,9 @@ async fn cancel_action_run_json_returns_default_outbound_error_status() {
     empty_cancels_request_json(),
     "`action.cancels` must contain at least one cancel request."
 )]
-#[case::invalid_oid(
-    invalid_oid_cancel_request_json(),
-    "Invalid `action.cancels[].o`. Expected a positive order id."
+#[case::invalid_order_id(
+    invalid_order_id_cancel_request_json(),
+    "Invalid `action.cancels[].o`. Expected a non-empty local order id."
 )]
 #[case::false_fast_flag(
     false_fast_flag_cancel_request_json(),
@@ -47,7 +47,7 @@ fn valid_cancel_request_json() -> &'static [u8] {
     br#"{
         "action": {
             "type": "cancel",
-            "cancels": [{ "a": 10000, "o": 77738308 }]
+            "cancels": [{ "a": 10000, "o": "order-1" }]
         },
         "nonce": 1710000000000,
         "signature": {
@@ -73,11 +73,11 @@ fn empty_cancels_request_json() -> &'static [u8] {
     }"#
 }
 
-fn invalid_oid_cancel_request_json() -> &'static [u8] {
+fn invalid_order_id_cancel_request_json() -> &'static [u8] {
     br#"{
         "action": {
             "type": "cancel",
-            "cancels": [{ "a": 10000, "o": 0 }]
+            "cancels": [{ "a": 10000, "o": "" }]
         },
         "nonce": 1710000000000,
         "signature": {
@@ -92,7 +92,7 @@ fn false_fast_flag_cancel_request_json() -> &'static [u8] {
     br#"{
         "action": {
             "type": "cancel",
-            "cancels": [{ "a": 10000, "o": 77738308 }],
+            "cancels": [{ "a": 10000, "o": "order-1" }],
             "f": false
         },
         "nonce": 1710000000000,

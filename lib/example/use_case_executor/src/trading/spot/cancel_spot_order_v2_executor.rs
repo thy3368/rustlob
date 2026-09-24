@@ -47,9 +47,9 @@ mod tests {
 
     use super::*;
 
-    // Matrix: OID/CLOID lookup + default state not wired -> load-state failure.
+    // Matrix: 本地 order_id / CLOID lookup + default state not wired -> load-state failure.
     #[rstest]
-    #[case::oid(CancelSpotOrderV2Lookup::Oid(77738308))]
+    #[case::order_id(CancelSpotOrderV2Lookup::OrderId("order-1".to_string()))]
     #[case::cloid(CancelSpotOrderV2Lookup::Cloid("client-order-1".to_string()))]
     fn execute_cancel_with_default_outbound_stops_at_load_state(
         #[case] lookup: CancelSpotOrderV2Lookup,
@@ -66,7 +66,7 @@ mod tests {
         );
     }
 
-    // Matrix: OID lookup + open order + releasable reservation -> canceled order and update events.
+    // Matrix: 本地 order_id lookup + open order + releasable reservation -> canceled order and update events.
     #[rstest]
     fn execute_cancel_open_order_releases_reservation_and_projects_events() {
         // Rule: an accepted cancel command must cancel the order and release its remaining funds.
@@ -76,7 +76,7 @@ mod tests {
         let command = CancelSpotOrderV2Cmd {
             party_id: "buyer".to_string(),
             asset: 10000,
-            lookup: CancelSpotOrderV2Lookup::Oid(77738308),
+            lookup: CancelSpotOrderV2Lookup::OrderId("order-1".to_string()),
         };
         let outbound = FakeSpotOrderV2CancelOutbound::default();
 

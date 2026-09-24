@@ -83,7 +83,7 @@ pub struct ExchangeBuilderWire {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeCancelWire {
     pub a: u32,
-    pub o: u64,
+    pub o: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -332,7 +332,7 @@ mod tests {
         );
 
         let modify = serde_json::to_value(ExchangeActionWire::Modify {
-            oid: json!(77738308u64),
+            oid: json!("order-1"),
             order: ExchangeOrderWire {
                 a: 10000,
                 b: true,
@@ -352,7 +352,7 @@ mod tests {
             modify,
             json!({
                 "type": "modify",
-                "oid": 77738308u64,
+                "oid": "order-1",
                 "order": {
                     "a": 10000,
                     "b": true,

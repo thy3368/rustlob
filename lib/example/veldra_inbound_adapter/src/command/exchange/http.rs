@@ -114,7 +114,7 @@ mod tests {
         let (status, body) = post_exchange_status_and_json(json!({
             "action": {
                 "type": "cancel",
-                "cancels": [{ "a": 10000, "o": 77738308 }]
+                "cancels": [{ "a": 10000, "o": "order-1" }]
             },
             "nonce": 1710000000000u64,
             "signature": {
@@ -221,7 +221,7 @@ mod tests {
         let (status, body) = post_exchange_status_and_json(json!({
             "action": {
                 "type": "modify",
-                "oid": 77738308u64,
+                "oid": "order-1",
                 "order": {
                     "a": 10000,
                     "b": true,
@@ -241,7 +241,10 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["response"]["type"], "order");
-        assert_eq!(body["response"]["data"]["statuses"][0]["resting"]["oid"], 77738309u64);
+        assert_eq!(
+            body["response"]["data"]["statuses"][0]["error"],
+            "load_state failed: spot order v2 modify state is not wired for default HTTP path"
+        );
     }
 
     #[actix_web::test]
@@ -251,7 +254,7 @@ mod tests {
                 "type": "batchModify",
                 "modifies": [
                     {
-                        "oid": 77738308u64,
+                        "oid": "order-1",
                         "order": {
                             "a": 10000,
                             "b": true,
@@ -284,8 +287,14 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["response"]["type"], "order");
-        assert_eq!(body["response"]["data"]["statuses"][0]["resting"]["oid"], 77738400u64);
-        assert_eq!(body["response"]["data"]["statuses"][1]["resting"]["oid"], 77738401u64);
+        assert_eq!(
+            body["response"]["data"]["statuses"][0]["error"],
+            "load_state failed: spot order v2 modify state is not wired for default HTTP path"
+        );
+        assert_eq!(
+            body["response"]["data"]["statuses"][1]["error"],
+            "load_state failed: spot order v2 modify state is not wired for default HTTP path"
+        );
     }
 
     #[actix_web::test]

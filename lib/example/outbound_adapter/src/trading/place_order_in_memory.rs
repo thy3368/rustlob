@@ -624,13 +624,8 @@ fn apply_order_update_event(
     if let Some(limit_price) = event_u64_field(event, "limit_price") {
         order.limit_price = limit_price;
     }
-    if let Some(exchange_oid) = event_u64_field(event, "exchange_oid") {
-        order.exchange_oid = Some(exchange_oid);
-        order.identity.exchange_oid = Some(exchange_oid);
-    }
     if let Some(client_order_id) = event_string_field(event, "client_order_id") {
         order.client_order_id = (!client_order_id.is_empty()).then_some(client_order_id.clone());
-        order.identity.client_order_id = order.client_order_id.clone();
     }
     apply_reservation_update(&mut order.reservation, event, false)?;
     apply_reservation_update(&mut order.fee_reservation, event, true)?;
@@ -645,7 +640,6 @@ fn decode_order_from_event(
         event_string_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     let asset =
         event_u64_field(event, "asset").ok_or(PlaceOrderOutboundError::EventDecodeFailed)? as u32;
-    let exchange_oid = event_u64_field(event, "exchange_oid");
     let account_id = event_string_field(event, "account_id")
         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     let symbol =
@@ -665,7 +659,6 @@ fn decode_order_from_event(
         SpotOrderV2::new_pending_trigger(
             order_id,
             asset,
-            exchange_oid,
             account_id,
             symbol,
             side,
@@ -680,7 +673,6 @@ fn decode_order_from_event(
         SpotOrderV2::new_pending_limit(
             order_id,
             asset,
-            exchange_oid,
             account_id,
             symbol,
             side,

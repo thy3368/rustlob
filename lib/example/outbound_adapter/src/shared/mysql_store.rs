@@ -214,7 +214,6 @@ impl MySqlStore {
                     let mut order = SpotOrderV2::new_pending_limit(
                         order_id.clone(),
                         asset,
-                        None,
                         account_id,
                         symbol,
                         side,
@@ -226,15 +225,13 @@ impl MySqlStore {
                         1,
                     );
                     order
-                        .activate_pending(
-                            example_core_use_case::ActivatePendingSpotOrderV2Input {
-                                base_asset_id: "BTC".to_string(),
-                                quote_asset_id: "USDT".to_string(),
-                                maker_fee_bps: 1,
-                                taker_fee_bps: 1,
-                                timestamp: 1,
-                            },
-                        )
+                        .activate_pending(example_core_use_case::ActivatePendingSpotOrderV2Input {
+                            base_asset_id: "BTC".to_string(),
+                            quote_asset_id: "USDT".to_string(),
+                            maker_fee_bps: 1,
+                            taker_fee_bps: 1,
+                            timestamp: 1,
+                        })
                         .ok()?;
                     Some((order_id, order))
                 },

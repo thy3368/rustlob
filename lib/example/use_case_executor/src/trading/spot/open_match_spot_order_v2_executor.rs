@@ -2,8 +2,7 @@ use cmd_handler::command_use_case_def2::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
-    MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error,
-    MatchSpotOrderV2UseCase,
+    MatchSpotOrderV2Changes, MatchSpotOrderV2Cmd, MatchSpotOrderV2Error, MatchSpotOrderV2UseCase,
 };
 use example_outbound_adapter::{
     DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError,
@@ -27,7 +26,7 @@ pub fn execute_place_spot_order_v2_with_outbound<OB>(
 >
 where
     OB: StateSource<
-        MatchSpotOrderV2UseCase,
+            MatchSpotOrderV2UseCase,
             Error = <OB as StateSink<MatchSpotOrderV2UseCase>>::Error,
         > + StateSink<MatchSpotOrderV2UseCase>,
 {
@@ -150,7 +149,6 @@ mod tests {
         let mut order = SpotOrderV2::new_pending_limit(
             order_id.to_string(),
             10_001,
-            Some(price),
             account_id.to_string(),
             "BTCUSDT".to_string(),
             side,

@@ -20,10 +20,11 @@ use crate::support::concat3;
 
 /// 定位一个已经存在的订单。
 ///
-/// 现货改单只支持用 Hyperliquid `cloid` 查找原订单；不再维护 numeric `oid`
-/// 到本地订单的映射。
+/// 现货改单支持用本地 `order_id` 或 Hyperliquid `cloid` 查找原订单。
+/// wire 层的 `oid` 在现货语义下映射到本地 `order_id`，不再表示 numeric exchange oid。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderId {
+    OrderId(String),
     Cloid(String),
 }
 
@@ -171,6 +172,7 @@ impl StateMachineV2Unchecked for ModifySpotOrderV2UseCase {
             return Err(ModifySpotOrderV2Error::EmptyPartyId);
         }
         match &cmd.order_id {
+            OrderId::OrderId(order_id) if !order_id.is_empty() => {}
             OrderId::Cloid(cloid) if !cloid.is_empty() => {}
             _ => return Err(ModifySpotOrderV2Error::InvalidLookup),
         }
@@ -298,6 +300,7 @@ impl StateMachineOwnedV2Diff for ModifySpotOrderV2UseCase {
 
 fn lookup_matches_order(lookup: &OrderId, order: &SpotOrderV2) -> bool {
     match lookup {
+        OrderId::OrderId(order_id) => order.order_id() == order_id,
         OrderId::Cloid(cloid) => order.client_order_id.as_deref() == Some(cloid.as_str()),
     }
 }

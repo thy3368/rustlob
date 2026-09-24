@@ -97,7 +97,6 @@ mod tests {
             let mut order = SpotOrderV2::new_pending_limit(
                 "order-1".to_owned(),
                 10_001,
-                Some(777),
                 "buyer".to_owned(),
                 "BTCUSDT".to_owned(),
                 SpotOrderSide::Buy,
@@ -174,7 +173,7 @@ mod tests {
         ModifySpotOrderV2Cmd {
             party_id: "buyer".to_owned(),
             asset: 10_001,
-            order_id: OrderId::Oid(777),
+            order_id: OrderId::OrderId("order-1".to_owned()),
             is_buy: true,
             price: "12000".to_owned(),
             size: "3".to_owned(),
@@ -204,7 +203,6 @@ mod tests {
         let changes = &result.changes;
         assert_eq!(changes.updated_order.before.order_id(), "order-1");
         assert_eq!(changes.updated_order.after.order_id(), "order-1");
-        assert_eq!(changes.updated_order.after.exchange_oid, Some(777));
         assert_eq!(changes.updated_order.after.version, changes.updated_order.before.version + 1);
         assert_eq!(changes.updated_order.after.order_price(), 12_000);
         assert_eq!(changes.updated_order.after.qty(), 3);

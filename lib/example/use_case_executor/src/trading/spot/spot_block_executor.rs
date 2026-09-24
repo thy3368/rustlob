@@ -143,7 +143,6 @@ mod tests {
         let mut order = SpotOrderV2::new_pending_limit(
             "order-1".to_owned(),
             10_001,
-            Some(777),
             "buyer".to_owned(),
             "BTCUSDT".to_owned(),
             SpotOrderSide::Buy,
@@ -170,7 +169,7 @@ mod tests {
         SpotBlockCommand::Cancel(CancelSpotOrderV2Cmd {
             party_id: "buyer".to_owned(),
             asset: 10_001,
-            lookup: CancelSpotOrderV2Lookup::Oid(777),
+            lookup: CancelSpotOrderV2Lookup::OrderId("order-1".to_owned()),
         })
     }
 
@@ -178,7 +177,7 @@ mod tests {
         SpotBlockCommand::Modify(ModifySpotOrderV2Cmd {
             party_id: "buyer".to_owned(),
             asset: 10_001,
-            order_id: OrderId::Oid(777),
+            order_id: OrderId::OrderId("order-1".to_owned()),
             is_buy: true,
             price: "12000".to_owned(),
             size: "3".to_owned(),

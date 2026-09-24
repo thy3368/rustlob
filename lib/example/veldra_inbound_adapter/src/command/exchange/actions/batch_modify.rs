@@ -25,7 +25,7 @@ pub enum BatchModifyContractError {
     #[error("Invalid `action.modifies`. Expected at least one modify entry.")]
     EmptyModifies,
     #[error(
-        "Invalid `action.modifies[].oid`. Expected a positive order id or 128-bit hex client order id."
+        "Invalid `action.modifies[].oid`. Expected a local order id or 128-bit hex client order id."
     )]
     InvalidOid,
     #[error("Invalid `action.modifies[].order.p`. Expected a non-empty decimal string.")]
@@ -142,15 +142,25 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 }
 
 fn validate_oid(oid: &Value) -> Result<(), ExchangeHttpError> {
-    if oid.as_u64().is_some_and(|value| value > 0) {
-        return Ok(());
-    }
-    if let Some(cloid) = oid.as_str() {
-        validate_cloid(cloid)
-            .map_err(|_| ExchangeHttpError::contract(BatchModifyContractError::InvalidOid))?;
-        return Ok(());
+    if let Some(order_id) = oid.as_str() {
+        if !order_id.trim().is_empty() {
+            return Ok(());
+        }
     }
     Err(ExchangeHttpError::contract(BatchModifyContractError::InvalidOid))
+}
+
+fn order_id_from_wire_oid(oid: &Value) -> Result<OrderId, BatchModifyContractError> {
+    if let Some(order_id) = oid.as_str() {
+        if order_id.trim().is_empty() {
+            return Err(BatchModifyContractError::InvalidOid);
+        }
+        if validate_cloid(order_id).is_ok() {
+            return Ok(OrderId::Cloid(order_id.to_string()));
+        }
+        return Ok(OrderId::OrderId(order_id.to_string()));
+    }
+    Err(BatchModifyContractError::InvalidOid)
 }
 
 fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
@@ -219,11 +229,7 @@ fn execute_single_modify(party_id: &str, modify: &ModifyWire) -> OrderStatusWire
     let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
 
     match execute_modify_spot_order_v2(&command) {
-        Ok(result) => OrderStatusWire::Resting {
-            resting: RestingOrderStatusWire {
-                oid: result.changes.updated_order.after.exchange_oid().unwrap_or(0),
-            },
-        },
+        Ok(_) => OrderStatusWire::Resting { resting: RestingOrderStatusWire::default() },
         Err(error) => OrderStatusWire::Error { error: modify_execution_error_message(error) },
     }
 }
@@ -242,20 +248,6 @@ fn from_wire_batch_modify(
         order_type: modify_order_type_from_wire(&modify.order.t)?,
         cloid: modify.order.c.clone(),
     })
-}
-
-fn order_id_from_wire_oid(oid: &Value) -> Result<OrderId, BatchModifyContractError> {
-    if let Some(oid) = oid.as_u64() {
-        if oid > 0 {
-            return Ok(OrderId::Oid(oid));
-        }
-    }
-    if let Some(cloid) = oid.as_str() {
-        if validate_cloid(cloid).is_ok() {
-            return Ok(OrderId::Cloid(cloid.to_string()));
-        }
-    }
-    Err(BatchModifyContractError::InvalidOid)
 }
 
 fn modify_order_type_from_wire(
@@ -353,7 +345,7 @@ mod tests {
         let first_command = SpotOrderV2ModifyExecutionSpec::command(&first);
         assert_eq!(first_command.party_id, "trader");
         assert_eq!(first_command.asset, 10_000);
-        assert_eq!(first_command.order_id, OrderId::Oid(77738308));
+        assert_eq!(first_command.order_id, OrderId::OrderId("order-1".to_string()));
         assert!(first_command.is_buy);
         assert_eq!(first_command.price, "18914");
         assert_eq!(first_command.size, "002");
@@ -462,7 +454,7 @@ mod tests {
                 "type": "batchModify",
                 "modifies": [
                     {
-                        "oid": 77738308,
+                        "oid": "order-1",
                         "order": {
                             "a": 10000,
                             "b": true,

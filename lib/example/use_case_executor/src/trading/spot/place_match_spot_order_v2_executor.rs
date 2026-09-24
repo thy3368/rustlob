@@ -146,7 +146,6 @@ mod tests {
         let mut order = SpotOrderV2::new_pending_limit(
             order_id.to_string(),
             10_001,
-            Some(price),
             account_id.to_string(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Sell,

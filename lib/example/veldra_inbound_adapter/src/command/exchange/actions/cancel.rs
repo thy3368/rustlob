@@ -17,8 +17,8 @@ pub enum CancelContractError {
     UnexpectedActionType(String),
     #[error("`action.cancels` must contain at least one cancel request.")]
     EmptyCancels,
-    #[error("Invalid `action.cancels[].o`. Expected a positive order id.")]
-    InvalidOid,
+    #[error("Invalid `action.cancels[].o`. Expected a non-empty local order id.")]
+    InvalidOrderId,
     #[error("Invalid `action.f`. Omit `f` unless fast cancel is enabled.")]
     InvalidFastFlag,
 }
@@ -57,7 +57,7 @@ pub(crate) struct ActionWire {
 #[serde(deny_unknown_fields)]
 struct CancelItemWire {
     a: u32,
-    o: u64,
+    o: String,
 }
 
 pub(crate) const DEFAULT_EXCHANGE_PARTY_ID: &str = "default-exchange-party";
@@ -71,7 +71,11 @@ pub struct CancelSpotOrderV2Request {
 
 impl CancelSpotOrderV2Request {
     fn from_wire_cancel(party_id: String, cancel: &CancelItemWire) -> Self {
-        Self { party_id, asset: cancel.a, lookup: CancelSpotOrderV2Lookup::Oid(cancel.o) }
+        Self {
+            party_id,
+            asset: cancel.a,
+            lookup: CancelSpotOrderV2Lookup::OrderId(cancel.o.clone()),
+        }
     }
 
     #[allow(dead_code)]
@@ -128,8 +132,10 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if matches!(request.action.f, Some(false)) {
         return Err(ExchangeHttpError::contract(CancelContractError::InvalidFastFlag));
     }
-    if request.action.cancels.iter().any(|cancel| cancel.o == 0) {
-        return Err(ExchangeHttpError::contract(CancelContractError::InvalidOid));
+    for cancel in &request.action.cancels {
+        if cancel.o.trim().is_empty() {
+            return Err(ExchangeHttpError::contract(CancelContractError::InvalidOrderId));
+        }
     }
     Ok(())
 }
@@ -180,11 +186,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn maps_cancel_by_oid_request_to_cancel_command() {
+    fn maps_cancel_by_order_id_request_to_cancel_command() {
         let request = CancelSpotOrderV2Request {
             party_id: "buyer".to_string(),
             asset: 10_000,
-            lookup: CancelSpotOrderV2Lookup::Oid(42),
+            lookup: CancelSpotOrderV2Lookup::OrderId("order-1".to_string()),
         };
 
         let command = SpotOrderV2CancelExecutionSpec::command(&request);
@@ -194,7 +200,7 @@ mod tests {
             CancelSpotOrderV2Cmd {
                 party_id: "buyer".to_string(),
                 asset: 10_000,
-                lookup: CancelSpotOrderV2Lookup::Oid(42),
+                lookup: CancelSpotOrderV2Lookup::OrderId("order-1".to_string()),
             }
         );
     }

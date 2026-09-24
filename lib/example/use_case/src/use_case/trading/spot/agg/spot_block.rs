@@ -319,6 +319,7 @@ impl WorkingSpotBlockState {
         lookup: &CancelSpotOrderV2Lookup,
     ) -> Result<SpotOrderV2, SpotBlockItemError> {
         let index = match lookup {
+            CancelSpotOrderV2Lookup::OrderId(order_id) => self.order_by_entity_id.get(order_id),
             CancelSpotOrderV2Lookup::Cloid(cloid) => self.order_by_cloid.get(cloid),
             CancelSpotOrderV2Lookup::Missing => None,
         };
@@ -330,6 +331,7 @@ impl WorkingSpotBlockState {
 
     fn order_for_modify(&self, lookup: &OrderId) -> Result<SpotOrderV2, SpotBlockItemError> {
         let index = match lookup {
+            OrderId::OrderId(order_id) => self.order_by_entity_id.get(order_id),
             OrderId::Cloid(cloid) => self.order_by_cloid.get(cloid),
         };
         index

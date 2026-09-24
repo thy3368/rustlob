@@ -56,14 +56,13 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         let mut order = SpotOrderV2::new_pending_limit(
             "order-1".to_string(),
             request.asset,
-            Some(77738308),
             request.party_id.clone(),
             "BTCUSDT".to_string(),
             SpotOrderSide::Buy,
             2,
             100,
             SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
-            None,
+            Some("client-order-1".to_string()),
             0,
             1,
         );

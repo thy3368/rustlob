@@ -19,7 +19,7 @@ use crate::common::parse::parse_json_request;
 pub enum ModifyContractError {
     #[error("Unexpected `action.type` for modify handler: `{0}`.")]
     UnexpectedActionType(String),
-    #[error("Invalid `action.oid`. Expected a positive order id or 128-bit hex client order id.")]
+    #[error("Invalid `action.oid`. Expected a local order id or 128-bit hex client order id.")]
     InvalidOid,
     #[error("Invalid `action.order.p`. Expected a non-empty decimal string.")]
     InvalidPrice,
@@ -174,15 +174,25 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 }
 
 fn validate_oid(oid: &Value) -> Result<(), ExchangeHttpError> {
-    if oid.as_u64().is_some_and(|value| value > 0) {
-        return Ok(());
-    }
-    if let Some(cloid) = oid.as_str() {
-        validate_cloid(cloid)
-            .map_err(|_| ExchangeHttpError::contract(ModifyContractError::InvalidOid))?;
-        return Ok(());
+    if let Some(order_id) = oid.as_str() {
+        if !order_id.trim().is_empty() {
+            return Ok(());
+        }
     }
     Err(ExchangeHttpError::contract(ModifyContractError::InvalidOid))
+}
+
+pub(crate) fn order_id_from_wire_oid(oid: &Value) -> Result<OrderId, ModifyContractError> {
+    if let Some(order_id) = oid.as_str() {
+        if order_id.trim().is_empty() {
+            return Err(ModifyContractError::InvalidOid);
+        }
+        if validate_cloid(order_id).is_ok() {
+            return Ok(OrderId::Cloid(order_id.to_string()));
+        }
+        return Ok(OrderId::OrderId(order_id.to_string()));
+    }
+    Err(ModifyContractError::InvalidOid)
 }
 
 fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
@@ -216,20 +226,6 @@ fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
         _ => return Err(ExchangeHttpError::contract(ModifyContractError::InvalidOrderType)),
     }
     Ok(())
-}
-
-fn order_id_from_wire_oid(oid: &Value) -> Result<OrderId, ModifyContractError> {
-    if let Some(oid) = oid.as_u64() {
-        if oid > 0 {
-            return Ok(OrderId::Oid(oid));
-        }
-    }
-    if let Some(cloid) = oid.as_str() {
-        if validate_cloid(cloid).is_ok() {
-            return Ok(OrderId::Cloid(cloid.to_string()));
-        }
-    }
-    Err(ModifyContractError::InvalidOid)
 }
 
 fn modify_order_type_from_wire(
@@ -275,11 +271,7 @@ async fn execute(request: RequestWire) -> Result<reply::ModifyResponseWire, Exch
         .map_err(ExchangeHttpError::contract)?;
     let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
     let status = match execute_modify_spot_order_v2(&command) {
-        Ok(result) => OrderStatusWire::Resting {
-            resting: RestingOrderStatusWire {
-                oid: result.changes.updated_order.after.exchange_oid().unwrap_or(0),
-            },
-        },
+        Ok(_) => OrderStatusWire::Resting { resting: RestingOrderStatusWire::default() },
         Err(error) => OrderStatusWire::Error { error: modify_execution_error_message(error) },
     };
 
@@ -320,7 +312,7 @@ mod tests {
             br#"{
                 "action": {
                     "type": "modify",
-                    "oid": 77738308,
+                    "oid": "order-1",
                     "a": false,
                     "order": {
                         "a": 10000,
@@ -345,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_oid_request_to_modify_command() {
+    fn maps_local_order_id_request_to_modify_command() {
         let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
             .expect("request parses");
         let modify_request =
@@ -356,7 +348,7 @@ mod tests {
 
         assert_eq!(command.party_id, "buyer");
         assert_eq!(command.asset, 10_000);
-        assert_eq!(command.order_id, OrderId::Oid(77738308));
+        assert_eq!(command.order_id, OrderId::OrderId("order-1".to_string()));
         assert!(command.is_buy);
         assert_eq!(command.price, "18914");
         assert_eq!(command.size, "002");
@@ -438,7 +430,7 @@ mod tests {
         br#"{
             "action": {
                 "type": "modify",
-                "oid": 77738308,
+                "oid": "order-1",
                 "order": {
                     "a": 10000,
                     "b": true,
