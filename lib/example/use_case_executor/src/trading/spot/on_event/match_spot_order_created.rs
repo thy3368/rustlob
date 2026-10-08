@@ -1,11 +1,12 @@
-use common_entity::{EntityReplayableEvent, ExecutionError, ExecutionResult};
+use common_entity::{
+    EntityReplayableEvent, EntityReplayableEventHandler, ExecutionError, ExecutionResult,
+};
 use example_core_use_case::{
     MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd, MatchSpotOrderV3Error, ORDER_ENTITY_TYPE,
 };
 use example_outbound_adapter::DefaultSpotOrderV2PlaceOutboundError;
 use thiserror::Error;
 
-use super::EntityReplayableEventHandler;
 use crate::trading::spot::match_spot_order_v3_executor::execute_match_spot_order_v3;
 
 pub type MatchSpotOrderExecutorError =

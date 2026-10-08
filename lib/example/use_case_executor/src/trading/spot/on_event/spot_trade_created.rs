@@ -1,10 +1,8 @@
-use common_entity::{Entity, EntityReplayableEvent};
+use common_entity::{Entity, EntityReplayableEvent, EntityReplayableEventHandler};
 use example_core_use_case::{
     KlineAggregationError, KlineUpdate, SpotKlineAggregator, SpotKlineTradeInput, SpotTrade,
 };
 use thiserror::Error;
-
-use super::EntityReplayableEventHandler;
 
 /// 成交 created event 到 K 线聚合的业务 handler。
 #[derive(Debug, Default)]

@@ -9,12 +9,12 @@ use aeron_rs::concurrent::logbuffer::header::Header;
 use aeron_rs::context::Context;
 use aeron_rs::utils::errors::AeronError;
 use aeron_rs::utils::types::Index;
-use common_entity::EntityReplayableEvent;
+use common_entity::{EntityReplayableEvent, EntityReplayableEventHandler};
 use thiserror::Error;
 use use_case_executor::trading::spot::on_event::{
-    DefaultMatchSpotOrderCreatedEventError, EntityReplayableEventHandler,
-    MatchSpotOrderCreatedEventHandler, MatchSpotOrderCreatedEventParseError,
-    MatchSpotOrderExecutorError, match_spot_order_command_from_event as command_from_event,
+    DefaultMatchSpotOrderCreatedEventError, MatchSpotOrderCreatedEventHandler,
+    MatchSpotOrderCreatedEventParseError, MatchSpotOrderExecutorError,
+    match_spot_order_command_from_event as command_from_event,
 };
 
 const DEFAULT_AERON_CHANNEL: &str = "aeron:ipc";
