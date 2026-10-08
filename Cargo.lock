@@ -10398,6 +10398,7 @@ dependencies = [
  "example_core_use_case",
  "example_outbound_adapter",
  "rstest",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -14,18 +14,6 @@ impl SpotTradeCreatedEventHandler {
     pub fn new(aggregator: SpotKlineAggregator) -> Self {
         Self { aggregator }
     }
-
-    pub fn aggregator(&self) -> &SpotKlineAggregator {
-        &self.aggregator
-    }
-
-    pub fn aggregator_mut(&mut self) -> &mut SpotKlineAggregator {
-        &mut self.aggregator
-    }
-
-    pub fn into_aggregator(self) -> SpotKlineAggregator {
-        self.aggregator
-    }
 }
 
 impl EntityReplayableEventHandler for SpotTradeCreatedEventHandler {
@@ -36,14 +24,7 @@ impl EntityReplayableEventHandler for SpotTradeCreatedEventHandler {
         &mut self,
         event: &EntityReplayableEvent,
     ) -> Result<Option<Self::Output>, Self::Error> {
-        let Some(trade) = spot_kline_trade_input_from_event(event)? else {
-            return Ok(None);
-        };
-
-        self.aggregator
-            .update_trade(&trade)
-            .map(Some)
-            .map_err(SpotTradeCreatedEventError::Aggregation)
+        process_trade_created_event_inner(event, &mut self.aggregator)
     }
 }
 
@@ -70,10 +51,7 @@ pub fn handle_trade_created_event(
     event: &EntityReplayableEvent,
     aggregator: &mut SpotKlineAggregator,
 ) -> Result<Vec<KlineUpdate>, SpotTradeCreatedEventError> {
-    let mut handler = SpotTradeCreatedEventHandler::new(std::mem::take(aggregator));
-    let result = handler.handle(event).map(|updates| updates.unwrap_or_default());
-    *aggregator = handler.into_aggregator();
-    result
+    process_trade_created_event_inner(event, aggregator).map(|updates| updates.unwrap_or_default())
 }
 
 /// `handle_trade_created_event` 的语义别名，便于事件消费代码表达投影动作。
@@ -82,6 +60,17 @@ pub fn process_trade_created_event(
     aggregator: &mut SpotKlineAggregator,
 ) -> Result<Vec<KlineUpdate>, SpotTradeCreatedEventError> {
     handle_trade_created_event(event, aggregator)
+}
+
+fn process_trade_created_event_inner(
+    event: &EntityReplayableEvent,
+    aggregator: &mut SpotKlineAggregator,
+) -> Result<Option<Vec<KlineUpdate>>, SpotTradeCreatedEventError> {
+    let Some(trade) = spot_kline_trade_input_from_event(event)? else {
+        return Ok(None);
+    };
+
+    aggregator.update_trade(&trade).map(Some).map_err(SpotTradeCreatedEventError::Aggregation)
 }
 
 /// 成交 created event 到 K 线输入的解析或聚合错误。
@@ -165,7 +154,6 @@ mod tests {
         event.entity_type = SpotTrade::entity_type();
         event.change_type = EntityChangeType::Updated.as_tag();
         assert_eq!(handler.handle(&event).unwrap(), None);
-        assert!(handler.aggregator().is_empty());
     }
 
     #[test]
