@@ -148,8 +148,10 @@ mod tests {
         let mut event = created_trade_event(&trade_fields());
         event.entity_type = 3;
         let mut handler = SpotTradeCreatedEventHandler::default();
+        let mut aggregator = SpotKlineAggregator::default();
 
         assert_eq!(handler.handle(&event).unwrap(), None);
+        assert!(handle_trade_created_event(&event, &mut aggregator).unwrap().is_empty());
 
         event.entity_type = SpotTrade::entity_type();
         event.change_type = EntityChangeType::Updated.as_tag();
