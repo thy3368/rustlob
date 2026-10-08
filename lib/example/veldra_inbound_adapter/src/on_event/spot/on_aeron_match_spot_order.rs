@@ -9,11 +9,13 @@ use aeron_rs::concurrent::logbuffer::header::Header;
 use aeron_rs::context::Context;
 use aeron_rs::utils::errors::AeronError;
 use aeron_rs::utils::types::Index;
-use common_entity::{EntityReplayableEvent, ExecutionError};
-use example_core_use_case::{MatchSpotOrderV3Cmd, MatchSpotOrderV3Error, ORDER_ENTITY_TYPE};
-use example_outbound_adapter::DefaultSpotOrderV2PlaceOutboundError;
+use common_entity::EntityReplayableEvent;
 use thiserror::Error;
-use use_case_executor::trading::spot::match_spot_order_v3_executor::execute_match_spot_order_v3;
+use use_case_executor::trading::spot::on_event::{
+    DefaultMatchSpotOrderCreatedEventError, EntityReplayableEventHandler,
+    MatchSpotOrderCreatedEventHandler, MatchSpotOrderCreatedEventParseError,
+    MatchSpotOrderExecutorError, match_spot_order_command_from_event as command_from_event,
+};
 
 const DEFAULT_AERON_CHANNEL: &str = "aeron:ipc";
 const DEFAULT_AERON_STREAM_ID: i32 = 1001;
@@ -21,9 +23,6 @@ const DEFAULT_AERON_FRAGMENT_LIMIT: i32 = 10;
 const AERON_CHANNEL_ENV: &str = "AERON_CHANNEL";
 const AERON_STREAM_ID_ENV: &str = "AERON_STREAM_ID";
 const AERON_FRAGMENT_LIMIT_ENV: &str = "AERON_FRAGMENT_LIMIT";
-
-pub type MatchSpotOrderExecutorError =
-    ExecutionError<MatchSpotOrderV3Error, DefaultSpotOrderV2PlaceOutboundError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AeronMatchSpotOrderConfig {
@@ -115,6 +114,8 @@ pub enum AeronMatchSpotOrderError {
     InvalidFragmentBounds { offset: Index, length: Index, capacity: Index },
     #[error("failed to decode Aeron fragment as EntityReplayableEvent: {0}")]
     Decode(#[source] serde_json::Error),
+    #[error("failed to handle spot order event: {0:?}")]
+    EventHandler(DefaultMatchSpotOrderCreatedEventError),
     #[error("spot order executor failed: {0:?}")]
     Executor(MatchSpotOrderExecutorError),
 }
@@ -129,31 +130,27 @@ pub fn decode_match_spot_order_event(
 
 pub fn match_spot_order_command_from_event(
     event: &EntityReplayableEvent,
-) -> Option<MatchSpotOrderV3Cmd> {
-    if event.entity_type != ORDER_ENTITY_TYPE || !event.is_created() {
-        return None;
-    }
-
-    let party_id = event_field_value(event, "account_id")
-        .and_then(|value| std::str::from_utf8(value).ok())
-        .map(str::to_owned)?;
-    let asset = event_field_value(event, "asset")
-        .and_then(|value| std::str::from_utf8(value).ok())
-        .and_then(|value| value.parse::<u32>().ok())?;
-    let order_id = event_field_value(event, "order_id")
-        .and_then(|value| std::str::from_utf8(value).ok())
-        .and_then(|value| value.parse::<u64>().ok())?;
-
-    Some(MatchSpotOrderV3Cmd { party_id, asset, order_id })
+) -> Result<Option<example_core_use_case::MatchSpotOrderV3Cmd>, MatchSpotOrderCreatedEventParseError>
+{
+    command_from_event(event)
 }
 
 pub fn handle_match_spot_order_fragment(payload: &[u8]) -> Result<(), AeronMatchSpotOrderError> {
     let event = decode_match_spot_order_event(payload).map_err(AeronMatchSpotOrderError::Decode)?;
-    let Some(command) = match_spot_order_command_from_event(&event) else {
-        return Ok(());
-    };
+    let mut handler = MatchSpotOrderCreatedEventHandler::new();
 
-    execute_match_spot_order_v3(&command).map(|_| ()).map_err(AeronMatchSpotOrderError::Executor)
+    handler.handle(&event).map(|_| ()).map_err(AeronMatchSpotOrderError::from)
+}
+
+impl From<DefaultMatchSpotOrderCreatedEventError> for AeronMatchSpotOrderError {
+    fn from(error: DefaultMatchSpotOrderCreatedEventError) -> Self {
+        match error {
+            use_case_executor::trading::spot::on_event::MatchSpotOrderCreatedEventError::Executor(
+                error,
+            ) => Self::Executor(error),
+            error => Self::EventHandler(error),
+        }
+    }
 }
 
 pub fn run_match_spot_order_aeron() -> Result<(), AeronMatchSpotOrderError> {
@@ -248,12 +245,6 @@ fn fragment_payload(
     })
 }
 
-fn event_field_value<'a>(event: &'a EntityReplayableEvent, field_name: &str) -> Option<&'a [u8]> {
-    event.field_changes.iter().find_map(|change| {
-        (change.field_name_as_str().ok() == Some(field_name)).then(|| change.new_value_bytes())
-    })
-}
-
 fn read_env(name: &'static str) -> Result<Option<String>, AeronMatchSpotOrderConfigError> {
     match std::env::var(name) {
         Ok(value) => Ok(Some(value)),
@@ -292,7 +283,9 @@ fn parse_positive_i32(
 mod tests {
     use std::sync::Mutex;
 
-    use common_entity::ReplayFieldChange;
+    use common_entity::{ExecutionError, ReplayFieldChange};
+    use example_core_use_case::{MatchSpotOrderV3Cmd, ORDER_ENTITY_TYPE};
+    use example_outbound_adapter::DefaultSpotOrderV2PlaceOutboundError;
 
     use super::*;
 
@@ -319,7 +312,11 @@ mod tests {
 
         assert_eq!(
             match_spot_order_command_from_event(&event),
-            Some(MatchSpotOrderV3Cmd { party_id: "buyer".to_string(), asset: 10001, order_id: 1 })
+            Ok(Some(MatchSpotOrderV3Cmd {
+                party_id: "buyer".to_string(),
+                asset: 10001,
+                order_id: 1
+            }))
         );
     }
 
@@ -331,7 +328,7 @@ mod tests {
         ))
         .expect("valid replay event");
 
-        assert_eq!(match_spot_order_command_from_event(&event), None);
+        assert_eq!(match_spot_order_command_from_event(&event), Ok(None));
     }
 
     #[test]
@@ -341,12 +338,12 @@ mod tests {
                 EntityReplayableEvent::new(1, 1, 1, 2, 1, ORDER_ENTITY_TYPE, change_type);
             add_order_fields(&mut event);
 
-            assert_eq!(match_spot_order_command_from_event(&event), None);
+            assert_eq!(match_spot_order_command_from_event(&event), Ok(None));
         }
     }
 
     #[test]
-    fn ignores_order_events_with_missing_fields() {
+    fn target_order_events_with_missing_fields_return_parse_errors() {
         for missing_field in ["account_id", "asset", "order_id"] {
             let fields = [
                 ("account_id", b"buyer".as_slice()),
@@ -366,23 +363,33 @@ mod tests {
                 ));
             }
 
-            assert_eq!(match_spot_order_command_from_event(&event), None);
+            assert!(matches!(
+                match_spot_order_command_from_event(&event),
+                Err(MatchSpotOrderCreatedEventParseError::MissingField(field))
+                    if field == missing_field
+            ));
         }
     }
 
     #[test]
-    fn ignores_order_events_with_invalid_asset_or_utf8_fields() {
+    fn target_order_events_with_invalid_asset_or_utf8_fields_return_parse_errors() {
         let invalid_asset = event_with_fields(
             &[("account_id", b"buyer"), ("asset", b"not-a-number"), ("order_id", b"1")],
             ORDER_ENTITY_TYPE,
         );
-        assert_eq!(match_spot_order_command_from_event(&invalid_asset), None);
+        assert!(matches!(
+            match_spot_order_command_from_event(&invalid_asset),
+            Err(MatchSpotOrderCreatedEventParseError::InvalidNumber { field: "asset", .. })
+        ));
 
         let invalid_utf8 = event_with_fields(
             &[("account_id", &[0xff]), ("asset", b"10001"), ("order_id", b"1")],
             ORDER_ENTITY_TYPE,
         );
-        assert_eq!(match_spot_order_command_from_event(&invalid_utf8), None);
+        assert!(matches!(
+            match_spot_order_command_from_event(&invalid_utf8),
+            Err(MatchSpotOrderCreatedEventParseError::InvalidUtf8 { field: "account_id" })
+        ));
     }
 
     #[test]
@@ -400,6 +407,23 @@ mod tests {
         ));
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn invalid_target_order_event_is_returned_as_handler_error() {
+        let result = handle_match_spot_order_fragment(&order_event_payload(
+            &[("account_id", b"buyer"), ("asset", b"not-a-number"), ("order_id", b"1")],
+            ORDER_ENTITY_TYPE,
+        ));
+
+        assert!(matches!(
+            result,
+            Err(AeronMatchSpotOrderError::EventHandler(
+                use_case_executor::trading::spot::on_event::MatchSpotOrderCreatedEventError::Parse(
+                    MatchSpotOrderCreatedEventParseError::InvalidNumber { field: "asset", .. }
+                )
+            ))
+        ));
     }
 
     #[test]

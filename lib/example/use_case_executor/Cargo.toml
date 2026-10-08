@@ -10,6 +10,7 @@ cmd_handler = { path = "../../common/cmd_handler" }
 common_entity = { package = "entity", path = "../../common/entity" }
 example_core_use_case = { path = "../use_case" }
 example_outbound_adapter = { path = "../outbound_adapter" }
+thiserror = "2"
 
 [dev-dependencies]
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }
