@@ -37,11 +37,10 @@
 //! `PlaceLimitOrder` 只是该 family 的一个动作分支；同一 family 还可以继续承载其它共享同一
 //! 业务主题、`GivenState` 语义与 truth 模型的动作。
 //!
-//! ```rust
-//! use Entity::{
+//! ```rust,ignore
+//! use entity::{
 //!     Entity, EntityError, EntityFieldChange, EntityReplayableEvent, FieldDiff,
-//!     MiStateMachineV2, MiStateMachineOwnedV2BeforeAfter,
-//!     MiStateMachineV2Unchecked, ReplayableChanges, UpdatedEntityPair,
+//!     ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked, UpdatedEntityPair,
 //! };
 //!
 //! #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,7 +296,7 @@
 //! #[derive(Debug, Clone)]
 //! struct SpotTradingOrchestrator;
 //!
-//! impl MiStateMachineV2Unchecked for SpotTradingOrchestrator {
+//! impl StateMachineV2Unchecked for SpotTradingOrchestrator {
 //!     type Command = PlaceLimitOrder;
 //!     type GivenState = SpotTradingGivenState;
 //!     type Error = TradingError;
@@ -345,7 +344,7 @@
 //!     }
 //! }
 //!
-//! impl MiStateMachineOwnedV2BeforeAfter for SpotTradingOrchestrator {
+//! impl StateMachineOwnedV2Diff for SpotTradingOrchestrator {
 //!     type BeforeAfterChanges = SpotTradingChanges;
 //!
 //!     fn merge_before_and_after(

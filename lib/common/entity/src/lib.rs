@@ -12,7 +12,8 @@ pub use entity_v2::entity::{
     FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
 };
 pub use entity_v2::entity_field_change::{
-    EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
+    EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayEventFieldParseError,
+    ReplayFieldChange,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use use_case::event_handler::EntityReplayableEventHandler;

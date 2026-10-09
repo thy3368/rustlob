@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
+use thiserror::Error;
 
 use crate::{EVENT_SEQUENCE, EntityError};
 
@@ -124,6 +125,20 @@ pub struct EntityReplayableEvent {
     pub field_changes: Vec<ReplayFieldChange>,
 }
 
+/// Error raised when a replay event field cannot be read as the requested type.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ReplayEventFieldParseError {
+    /// The replay event did not contain the required field.
+    #[error("replay event is missing field `{0}`")]
+    MissingField(&'static str),
+    /// The replay event field bytes are not valid UTF-8.
+    #[error("replay event field `{field}` is not valid UTF-8")]
+    InvalidUtf8 { field: &'static str },
+    /// The replay event field text cannot be parsed as the expected number type.
+    #[error("replay event field `{field}` is not a valid {expected}: {value}")]
+    InvalidNumber { field: &'static str, expected: &'static str, value: String },
+}
+
 impl EntityReplayableEvent {
     #[inline]
     pub fn new(
@@ -206,6 +221,51 @@ impl EntityReplayableEvent {
     }
 
     #[inline]
+    pub fn field_value(&self, field: &str) -> Option<&[u8]> {
+        self.field_changes.iter().find_map(|change| {
+            (change.field_name_as_str().ok() == Some(field)).then(|| change.new_value_bytes())
+        })
+    }
+
+    #[inline]
+    pub fn required_string_field(
+        &self,
+        field: &'static str,
+    ) -> Result<String, ReplayEventFieldParseError> {
+        let value =
+            self.field_value(field).ok_or(ReplayEventFieldParseError::MissingField(field))?;
+        let value = std::str::from_utf8(value)
+            .map_err(|_| ReplayEventFieldParseError::InvalidUtf8 { field })?;
+        Ok(value.to_owned())
+    }
+
+    #[inline]
+    pub fn required_u32_field(
+        &self,
+        field: &'static str,
+    ) -> Result<u32, ReplayEventFieldParseError> {
+        let value = self.required_string_field(field)?;
+        value.parse::<u32>().map_err(|_| ReplayEventFieldParseError::InvalidNumber {
+            field,
+            expected: "u32",
+            value,
+        })
+    }
+
+    #[inline]
+    pub fn required_u64_field(
+        &self,
+        field: &'static str,
+    ) -> Result<u64, ReplayEventFieldParseError> {
+        let value = self.required_string_field(field)?;
+        value.parse::<u64>().map_err(|_| ReplayEventFieldParseError::InvalidNumber {
+            field,
+            expected: "u64",
+            value,
+        })
+    }
+
+    #[inline]
     pub fn is_created(&self) -> bool {
         self.change_type == EntityChangeType::Created.as_tag()
     }
@@ -264,5 +324,75 @@ impl EntityFieldChange {
             old_value: old_value.into(),
             new_value: new_value.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_required_string_and_number_fields() {
+        let event = event_with_fields(&[("account_id", b"buyer"), ("asset", b"10001")]);
+
+        assert_eq!(event.field_value("account_id"), Some(b"buyer".as_slice()));
+        assert_eq!(event.required_string_field("account_id"), Ok("buyer".to_owned()));
+        assert_eq!(event.required_u32_field("asset"), Ok(10001));
+        assert_eq!(event.required_u64_field("asset"), Ok(10001));
+    }
+
+    #[test]
+    fn missing_field_returns_explicit_error() {
+        let event = event_with_fields(&[("account_id", b"buyer")]);
+
+        assert_eq!(
+            event.required_u64_field("order_id"),
+            Err(ReplayEventFieldParseError::MissingField("order_id"))
+        );
+    }
+
+    #[test]
+    fn invalid_utf8_returns_explicit_error() {
+        let event = event_with_fields(&[("account_id", &[0xff])]);
+
+        assert_eq!(
+            event.required_string_field("account_id"),
+            Err(ReplayEventFieldParseError::InvalidUtf8 { field: "account_id" })
+        );
+    }
+
+    #[test]
+    fn invalid_numbers_keep_expected_type_and_value() {
+        let event = event_with_fields(&[("asset", b"not-a-number")]);
+
+        assert_eq!(
+            event.required_u32_field("asset"),
+            Err(ReplayEventFieldParseError::InvalidNumber {
+                field: "asset",
+                expected: "u32",
+                value: "not-a-number".to_owned(),
+            })
+        );
+        assert_eq!(
+            event.required_u64_field("asset"),
+            Err(ReplayEventFieldParseError::InvalidNumber {
+                field: "asset",
+                expected: "u64",
+                value: "not-a-number".to_owned(),
+            })
+        );
+    }
+
+    fn event_with_fields(fields: &[(&str, &[u8])]) -> EntityReplayableEvent {
+        let mut event = EntityReplayableEvent::new_created(1, 1, 1, 1);
+        for (field_name, value) in fields {
+            event.add_field_change(ReplayFieldChange::new(
+                ReplayFieldChange::field_name_from_str(field_name),
+                &[],
+                value,
+                0,
+            ));
+        }
+        event
     }
 }

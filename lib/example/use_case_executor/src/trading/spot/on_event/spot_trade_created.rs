@@ -1,4 +1,6 @@
-use common_entity::{Entity, EntityReplayableEvent, EntityReplayableEventHandler};
+use common_entity::{
+    Entity, EntityReplayableEvent, EntityReplayableEventHandler, ReplayEventFieldParseError,
+};
 use example_core_use_case::{
     KlineAggregationError, KlineUpdate, SpotKlineAggregator, SpotKlineTradeInput, SpotTrade,
 };
@@ -37,10 +39,10 @@ pub fn spot_kline_trade_input_from_event(
     }
 
     Ok(Some(SpotKlineTradeInput {
-        symbol: required_string_field(event, "symbol")?,
-        price: required_u64_field(event, "price")?,
-        qty: required_u64_field(event, "qty")?,
-        executed_at_ms: required_u64_field(event, "executed_at_ms")?,
+        symbol: event.required_string_field("symbol")?,
+        price: event.required_u64_field("price")?,
+        qty: event.required_u64_field("qty")?,
+        executed_at_ms: event.required_u64_field("executed_at_ms")?,
     }))
 }
 
@@ -90,32 +92,16 @@ pub enum SpotTradeCreatedEventError {
     Aggregation(#[from] KlineAggregationError),
 }
 
-fn required_string_field(
-    event: &EntityReplayableEvent,
-    field: &'static str,
-) -> Result<String, SpotTradeCreatedEventError> {
-    let value = field_value(event, field).ok_or(SpotTradeCreatedEventError::MissingField(field))?;
-    let value = std::str::from_utf8(value)
-        .map_err(|_| SpotTradeCreatedEventError::InvalidUtf8 { field })?;
-    Ok(value.to_owned())
-}
-
-fn required_u64_field(
-    event: &EntityReplayableEvent,
-    field: &'static str,
-) -> Result<u64, SpotTradeCreatedEventError> {
-    let value = field_value(event, field).ok_or(SpotTradeCreatedEventError::MissingField(field))?;
-    let value = std::str::from_utf8(value)
-        .map_err(|_| SpotTradeCreatedEventError::InvalidUtf8 { field })?;
-    value
-        .parse::<u64>()
-        .map_err(|_| SpotTradeCreatedEventError::InvalidNumber { field, value: value.to_owned() })
-}
-
-fn field_value<'a>(event: &'a EntityReplayableEvent, field: &str) -> Option<&'a [u8]> {
-    event.field_changes.iter().find_map(|change| {
-        (change.field_name_as_str().ok() == Some(field)).then(|| change.new_value_bytes())
-    })
+impl From<ReplayEventFieldParseError> for SpotTradeCreatedEventError {
+    fn from(error: ReplayEventFieldParseError) -> Self {
+        match error {
+            ReplayEventFieldParseError::MissingField(field) => Self::MissingField(field),
+            ReplayEventFieldParseError::InvalidUtf8 { field } => Self::InvalidUtf8 { field },
+            ReplayEventFieldParseError::InvalidNumber { field, value, .. } => {
+                Self::InvalidNumber { field, value }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -125,22 +111,27 @@ mod tests {
 
     use super::*;
 
-    fn created_trade_event(fields: &[(&str, &str)]) -> EntityReplayableEvent {
+    fn created_trade_event(fields: &[(&str, &[u8])]) -> EntityReplayableEvent {
         let mut event =
             EntityReplayableEvent::new_created(999_999, 1, 42, SpotTrade::entity_type());
         for (name, value) in fields {
             event.add_field_change(ReplayFieldChange::new(
                 ReplayFieldChange::field_name_from_str(name),
                 &[],
-                value.as_bytes(),
+                value,
                 1,
             ));
         }
         event
     }
 
-    fn trade_fields() -> [(&'static str, &'static str); 4] {
-        [("symbol", "BTCUSDT"), ("price", "100"), ("qty", "2"), ("executed_at_ms", "1717171717000")]
+    fn trade_fields() -> [(&'static str, &'static [u8]); 4] {
+        [
+            ("symbol", b"BTCUSDT"),
+            ("price", b"100"),
+            ("qty", b"2"),
+            ("executed_at_ms", b"1717171717000"),
+        ]
     }
 
     #[test]
@@ -188,16 +179,16 @@ mod tests {
         let mut aggregator = SpotKlineAggregator::with_intervals([KlineInterval::OneMinute]);
         let first = created_trade_event(&trade_fields());
         let second = created_trade_event(&[
-            ("symbol", "BTCUSDT"),
-            ("price", "110"),
-            ("qty", "3"),
-            ("executed_at_ms", "1717171717050"),
+            ("symbol", b"BTCUSDT"),
+            ("price", b"110"),
+            ("qty", b"3"),
+            ("executed_at_ms", b"1717171717050"),
         ]);
         let third = created_trade_event(&[
-            ("symbol", "BTCUSDT"),
-            ("price", "120"),
-            ("qty", "1"),
-            ("executed_at_ms", "1717171777000"),
+            ("symbol", b"BTCUSDT"),
+            ("price", b"120"),
+            ("qty", b"1"),
+            ("executed_at_ms", b"1717171777000"),
         ]);
 
         assert_eq!(handle_trade_created_event(&first, &mut aggregator).unwrap().len(), 1);
@@ -212,31 +203,43 @@ mod tests {
     #[test]
     fn missing_and_invalid_fields_return_explicit_errors() {
         let mut aggregator = SpotKlineAggregator::new();
-        let missing = created_trade_event(&[("symbol", "BTCUSDT"), ("price", "100"), ("qty", "2")]);
+        let missing =
+            created_trade_event(&[("symbol", b"BTCUSDT"), ("price", b"100"), ("qty", b"2")]);
         assert_eq!(
             handle_trade_created_event(&missing, &mut aggregator),
             Err(SpotTradeCreatedEventError::MissingField("executed_at_ms"))
         );
 
-        let invalid = created_trade_event(&[
-            ("symbol", "BTCUSDT"),
-            ("price", "not-a-number"),
-            ("qty", "2"),
-            ("executed_at_ms", "1717171717000"),
+        let invalid_number = created_trade_event(&[
+            ("symbol", b"BTCUSDT"),
+            ("price", b"not-a-number"),
+            ("qty", b"2"),
+            ("executed_at_ms", b"1717171717000"),
         ]);
         assert!(matches!(
-            handle_trade_created_event(&invalid, &mut aggregator),
+            handle_trade_created_event(&invalid_number, &mut aggregator),
             Err(SpotTradeCreatedEventError::InvalidNumber { field: "price", .. })
         ));
+
+        let invalid_utf8 = created_trade_event(&[
+            ("symbol", &[0xff]),
+            ("price", b"100"),
+            ("qty", b"2"),
+            ("executed_at_ms", b"1717171717000"),
+        ]);
+        assert_eq!(
+            handle_trade_created_event(&invalid_utf8, &mut aggregator),
+            Err(SpotTradeCreatedEventError::InvalidUtf8 { field: "symbol" })
+        );
     }
 
     #[test]
     fn zero_execution_time_is_rejected() {
         let event = created_trade_event(&[
-            ("symbol", "BTCUSDT"),
-            ("price", "100"),
-            ("qty", "2"),
-            ("executed_at_ms", "0"),
+            ("symbol", b"BTCUSDT"),
+            ("price", b"100"),
+            ("qty", b"2"),
+            ("executed_at_ms", b"0"),
         ]);
         let mut aggregator = SpotKlineAggregator::new();
 
