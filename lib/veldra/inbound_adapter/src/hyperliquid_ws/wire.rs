@@ -9,7 +9,7 @@ use crate::hyperliquid_ws::error::HyperliquidWsError;
 type ExtraFields = BTreeMap<String, JsonValue>;
 
 /// 客户端主动发给 Hyperliquid WebSocket 的四类方法。
-/// 这里直接对齐官方 wire 形状，不引入额外 command 抽象层。
+/// 这里直接对齐官方 wire 形状，不引入额外 on_command 抽象层。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "method")]
 pub enum WsClientMessageWire {

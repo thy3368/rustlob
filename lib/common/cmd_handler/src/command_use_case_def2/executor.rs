@@ -89,7 +89,7 @@ impl CommandUseCaseExecutor2 {
     }
 
     /// 执行命令型 use case 的标准编排：
-    /// 1. 先做 command 级别的快速预检查
+    /// 1. 先做 on_command 级别的快速预检查
     /// 2. 通过外部 load port 加载当前 given state
     /// 3. 基于 state 做业务校验
     /// 4. 生成领域事件
@@ -129,12 +129,12 @@ impl CommandUseCaseExecutor2 {
         let execution =
             (|| -> CommandExecution<Vec<EntityReplayableEvent>, U::Error, OB::Error> {
                 let ((), pre_check_ns) =
-                    trace_phase("pre_check", "workflow.pre_check_command(&command)", || {
+                    trace_phase("pre_check", "workflow.pre_check_command(&on_command)", || {
                         use_case.pre_check_command(&command)
                     })
                     .map_err(CommandUseCaseExecutionError::Business)?;
                 let (state, load_state_ns) =
-                    trace_phase("load_state", "outbound.load_state(&command)", || {
+                    trace_phase("load_state", "outbound.load_state(&on_command)", || {
                         outbound.load_state(&command)
                     })
                     .map_err(|error| {
@@ -145,13 +145,13 @@ impl CommandUseCaseExecutor2 {
                     })?;
                 let ((), validate_in_lock_ns) = trace_phase(
                     "validate_against_state",
-                    "workflow.validate_against_state(&command, &state)",
+                    "workflow.validate_against_state(&on_command, &state)",
                     || use_case.validate_against_state(&command, &state),
                 )
                 .map_err(CommandUseCaseExecutionError::Business)?;
                 let (events, apply_changes_ns) = trace_phase(
                     "compute_replayable_events",
-                    "workflow.compute_replayable_events(&command, state)",
+                    "workflow.compute_replayable_events(&on_command, state)",
                     || use_case.compute_replayable_events(&command, state),
                 )
                 .map_err(CommandUseCaseExecutionError::Business)?;
@@ -329,12 +329,12 @@ impl CommandUseCaseExecutor3 {
 
         let execution = (|| -> CommandExecution<UseCaseOutput<U::Output>, U::Error, OB::Error> {
             let ((), pre_check_ns) =
-                trace_phase("pre_check", "workflow.pre_check_command(&command)", || {
+                trace_phase("pre_check", "workflow.pre_check_command(&on_command)", || {
                     use_case.pre_check_command(&command)
                 })
                 .map_err(CommandUseCaseExecutionError::Business)?;
             let (state, load_state_ns) =
-                trace_phase("load_state", "outbound.load_state(&command)", || {
+                trace_phase("load_state", "outbound.load_state(&on_command)", || {
                     outbound.load_state(&command)
                 })
                 .map_err(|error| {
@@ -345,13 +345,13 @@ impl CommandUseCaseExecutor3 {
                 })?;
             let ((), validate_in_lock_ns) = trace_phase(
                 "validate_against_state",
-                "workflow.validate_against_state(&command, &state)",
+                "workflow.validate_against_state(&on_command, &state)",
                 || use_case.validate_against_state(&command, &state),
             )
             .map_err(CommandUseCaseExecutionError::Business)?;
             let (result, apply_changes_ns) = trace_phase(
                 "compute_output_and_events",
-                "workflow.compute_output_and_events(&command, state)",
+                "workflow.compute_output_and_events(&on_command, state)",
                 || use_case.compute_output_and_events(&command, state),
             )
             .map_err(CommandUseCaseExecutionError::Business)?;
@@ -531,12 +531,12 @@ impl CommandUseCaseExecutor4 {
         let execution =
             (|| -> CommandExecution<UseCaseChanges<U::Changes>, U::Error, OB::Error> {
                 let ((), pre_check_ns) =
-                    trace_phase("pre_check", "workflow.pre_check_command(&command)", || {
+                    trace_phase("pre_check", "workflow.pre_check_command(&on_command)", || {
                         use_case.pre_check_command(&command)
                     })
                     .map_err(CommandUseCaseExecutionError::Business)?;
                 let (state, load_state_ns) =
-                    trace_phase("load_state", "outbound.load_state(&command)", || {
+                    trace_phase("load_state", "outbound.load_state(&on_command)", || {
                         outbound.load_state(&command)
                     })
                     .map_err(|error| {
@@ -547,13 +547,13 @@ impl CommandUseCaseExecutor4 {
                     })?;
                 let ((), validate_in_lock_ns) = trace_phase(
                     "validate_against_state",
-                    "workflow.validate_against_state(&command, &state)",
+                    "workflow.validate_against_state(&on_command, &state)",
                     || use_case.validate_against_state(&command, &state),
                 )
                 .map_err(CommandUseCaseExecutionError::Business)?;
                 let (changes, apply_changes_ns) = trace_phase(
                     "compute_changes",
-                    "workflow.compute_changes(&command, state)",
+                    "workflow.compute_changes(&on_command, state)",
                     || use_case.compute_changes(&command, state),
                 )
                 .map_err(CommandUseCaseExecutionError::Business)?;

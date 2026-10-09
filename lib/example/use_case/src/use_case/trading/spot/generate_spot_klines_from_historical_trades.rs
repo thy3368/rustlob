@@ -54,10 +54,10 @@ pub enum GenerateSpotKlinesFromHistoricalTradesError {
     #[error("range_start_ms must be less than range_end_ms")]
     InvalidRange,
     /// 成交所属 asset 与命令不一致。
-    #[error("trade {trade_id} asset does not match command")]
+    #[error("trade {trade_id} asset does not match on_command")]
     TradeAssetMismatch { trade_id: String },
     /// 成交所属交易对与命令不一致。
-    #[error("trade {trade_id} symbol does not match command")]
+    #[error("trade {trade_id} symbol does not match on_command")]
     TradeSymbolMismatch { trade_id: String },
     /// 成交时间不在命令的半开时间范围内。
     #[error("trade {trade_id} executed_at_ms is outside the requested range")]

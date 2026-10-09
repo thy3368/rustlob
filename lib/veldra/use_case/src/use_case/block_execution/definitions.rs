@@ -85,23 +85,23 @@ impl ReplayableChanges for BuildBlockFromCommandsChanges {
 pub enum BuildBlockError {
     #[error("block height must be greater than zero")]
     BlockHeightMustBePositive,
-    #[error("command batch is empty")]
+    #[error("on_command batch is empty")]
     EmptyCommands,
-    #[error("duplicate command id '{command_id}' in batch")]
+    #[error("duplicate on_command id '{command_id}' in batch")]
     DuplicateCommandId { command_id: String },
     #[error("duplicate nonce {nonce} for account '{account_id}' in batch")]
     DuplicateAccountNonce { account_id: String, nonce: u64 },
-    #[error("command '{command_id}' has zero timestamp")]
+    #[error("on_command '{command_id}' has zero timestamp")]
     ZeroCommandTimestamp { command_id: String },
     #[error(
-        "command '{command_id}' envelope account '{envelope_account_id}' does not match command party '{command_party_id}'"
+        "on_command '{command_id}' envelope account '{envelope_account_id}' does not match on_command party '{command_party_id}'"
     )]
     EnvelopeAccountMismatch {
         command_id: String,
         envelope_account_id: String,
         command_party_id: String,
     },
-    #[error("command batch is not in canonical order")]
+    #[error("on_command batch is not in canonical order")]
     NonCanonicalCommandOrder,
     #[error("block height {actual} is not continuous after parent height {parent_height}")]
     NonContinuousBlockHeight { parent_height: u64, actual: u64 },
@@ -117,11 +117,11 @@ pub enum BuildBlockError {
     MissingSpotBalance { account_id: String, asset_id: String },
     #[error("missing spot next order sequence for account '{account_id}'")]
     MissingSpotOrderSequence { account_id: String },
-    #[error("spot command execution failed: {0}")]
+    #[error("spot on_command execution failed: {0}")]
     SpotExecution(String),
     #[error("missing treasury quote balance for account '{account_id}' asset '{asset_id}'")]
     MissingTreasuryBalance { account_id: String, asset_id: String },
-    #[error("treasury command execution failed: {0}")]
+    #[error("treasury on_command execution failed: {0}")]
     TreasuryExecution(String),
     #[error("perp commands are not implemented yet")]
     UnsupportedPerpCommand,

@@ -85,7 +85,7 @@ pub enum PlaceOnlySpotOrderV2Error {
     InvalidTriggerPrice,
     #[error("trigger role must be tp/take_profit or sl/stop_loss")]
     InvalidTriggerRole,
-    #[error("command branch does not match given state branch")]
+    #[error("on_command branch does not match given state branch")]
     BranchMismatch,
     #[error("normalTpsl must contain at least one child order")]
     ChildrenRequired,

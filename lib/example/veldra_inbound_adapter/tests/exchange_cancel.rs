@@ -1,7 +1,7 @@
 use actix_web::http::StatusCode;
 use actix_web::{App, test as actix_test};
-use example_veldra_inbound_adapter::bootstrap::command::exchange::CancelStatusWire;
-use example_veldra_inbound_adapter::bootstrap::command::exchange::http::build_exchange_scope;
+use example_veldra_inbound_adapter::bootstrap::on_command::exchange::CancelStatusWire;
+use example_veldra_inbound_adapter::bootstrap::on_command::exchange::http::build_exchange_scope;
 use rstest::rstest;
 use serde_json::{Value, json};
 

@@ -54,11 +54,11 @@ pub enum ActivateSpotOrderV2Error {
     InvalidPartyId,
     #[error("order oid must be greater than zero")]
     InvalidOrderId,
-    #[error("pending order id does not match command")]
+    #[error("pending order id does not match on_command")]
     OrderIdMismatch,
-    #[error("pending order account id does not match command")]
+    #[error("pending order account id does not match on_command")]
     AccountIdMismatch,
-    #[error("pending order asset does not match command")]
+    #[error("pending order asset does not match on_command")]
     AssetMismatch,
     #[error("order is not pending")]
     OrderNotPending,

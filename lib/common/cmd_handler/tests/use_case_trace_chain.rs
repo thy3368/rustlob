@@ -377,8 +377,8 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs()
     for expected in [
         "command_use_case_execute",
         "TracingStubOutbound",
-        "command use case phase started",
-        "command use case phase completed",
+        "on_command use case phase started",
+        "on_command use case phase completed",
         "span_id=",
         "parent_span_id=",
         "trace_id=\"trace-chain-001\"",

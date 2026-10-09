@@ -40,7 +40,7 @@ where
 
     let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
     if trace_enabled {
-        tracing::trace!(phase, operation, status = "start", "command use case phase started");
+        tracing::trace!(phase, operation, status = "start", "on_command use case phase started");
     }
     let start = Instant::now();
     let result = f();
@@ -54,7 +54,7 @@ where
                     operation,
                     status = "ok",
                     elapsed_ns = saturating_u64(elapsed_ns),
-                    "command use case phase completed"
+                    "on_command use case phase completed"
                 );
             }
             Ok((value, elapsed_ns))
@@ -67,7 +67,7 @@ where
                     status = "err",
                     elapsed_ns = saturating_u64(elapsed_ns),
                     error_message = %error,
-                    "command use case phase failed"
+                    "on_command use case phase failed"
                 );
             }
             Err(error)
@@ -81,7 +81,7 @@ macro_rules! trace_command_use_case_started {
             phase = "total",
             operation = "executor.execute",
             status = "start",
-            "command use case execution started"
+            "on_command use case execution started"
         );
     };
 }
@@ -104,7 +104,7 @@ macro_rules! trace_command_use_case_completed {
             latency_ns = $crate::command_use_case_def2::trace::saturating_u64($metrics.total_ns),
             total_ns = $crate::command_use_case_def2::trace::saturating_u64($metrics.total_ns),
             domain_event_count = $metrics.domain_event_count as u64,
-            "command use case execution completed"
+            "on_command use case execution completed"
         );
     };
 }
@@ -133,7 +133,7 @@ macro_rules! trace_command_use_case_failed {
             latency_ns = $crate::command_use_case_def2::trace::saturating_u64($total_elapsed_ns),
             total_ns = $crate::command_use_case_def2::trace::saturating_u64($total_elapsed_ns),
             error_message = %$error,
-            "command use case execution failed"
+            "on_command use case execution failed"
         );
     };
 }

@@ -25,7 +25,7 @@ fn event_accepted(events: &[EntityReplayableEvent]) -> Option<bool> {
 
 // Bad kani example:
 // - role is technical, not a business-game role
-// - command carries trace_id instead of business identity
+// - on_command carries trace_id instead of business identity
 // - output is copied from state, so the proof is close to tautological
 // - the proof only shows a prepared answer stays the same after copying
 

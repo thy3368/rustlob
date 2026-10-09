@@ -62,7 +62,7 @@ pub enum StartHyperliquidPerpLiquidationError {
     InvalidMarkPrice,
     #[error("bankruptcy_price must be greater than zero")]
     InvalidBankruptcyPrice,
-    #[error("position does not match command position id")]
+    #[error("position does not match on_command position id")]
     PositionMismatch,
     #[error("position is not liquidatable")]
     PositionNotLiquidatable,

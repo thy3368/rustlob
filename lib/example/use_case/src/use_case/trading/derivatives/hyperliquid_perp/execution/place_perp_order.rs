@@ -30,8 +30,8 @@ pub enum PlaceHyperliquidPerpOrderError {
     /// 市场当前不接受下单。
     #[error("trading is disabled")]
     TradingDisabled,
-    /// command 账户和已加载账户状态不一致。
-    #[error("account snapshot does not belong to command party")]
+    /// on_command 账户和已加载账户状态不一致。
+    #[error("account snapshot does not belong to on_command party")]
     AccountMismatch,
     /// 当前市场规则不支持该合约。
     #[error("symbol is not tradable in current market rules")]
@@ -43,7 +43,7 @@ pub enum PlaceHyperliquidPerpOrderError {
     #[error("margin balance must be current account cross margin balance")]
     InvalidMarginBalance,
     /// 仓位账户、asset 或 symbol 与命令不一致。
-    #[error("position does not match command account or market")]
+    #[error("position does not match on_command account or market")]
     PositionMismatch,
     /// 仓位状态、数量、均价或保证金不一致。
     #[error("position state is inconsistent")]

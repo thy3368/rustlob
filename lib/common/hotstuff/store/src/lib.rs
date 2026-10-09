@@ -63,18 +63,18 @@ impl Store {
 
     pub async fn write(&mut self, key: Key, value: Value) {
         if let Err(e) = self.channel.send(StoreCommand::Write(key, value)).await {
-            panic!("Failed to send Write command to store: {}", e);
+            panic!("Failed to send Write on_command to store: {}", e);
         }
     }
 
     pub async fn read(&mut self, key: Key) -> StoreResult<Option<Value>> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self.channel.send(StoreCommand::Read(key, sender)).await {
-            panic!("Failed to send Read command to store: {}", e);
+            panic!("Failed to send Read on_command to store: {}", e);
         }
         receiver
             .await
-            .expect("Failed to receive reply to Read command from store")
+            .expect("Failed to receive reply to Read on_command from store")
     }
 
     pub async fn notify_read(&mut self, key: Key) -> StoreResult<Value> {
@@ -84,10 +84,10 @@ impl Store {
             .send(StoreCommand::NotifyRead(key, sender))
             .await
         {
-            panic!("Failed to send NotifyRead command to store: {}", e);
+            panic!("Failed to send NotifyRead on_command to store: {}", e);
         }
         receiver
             .await
-            .expect("Failed to receive reply to NotifyRead command from store")
+            .expect("Failed to receive reply to NotifyRead on_command from store")
     }
 }

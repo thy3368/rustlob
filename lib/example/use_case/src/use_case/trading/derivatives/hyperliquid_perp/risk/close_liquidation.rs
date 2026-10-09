@@ -46,7 +46,7 @@ pub enum CloseHyperliquidPerpLiquidationError {
     InvalidPartyId,
     #[error("liquidation_id must not be empty")]
     InvalidLiquidationId,
-    #[error("liquidation does not match command liquidation id")]
+    #[error("liquidation does not match on_command liquidation id")]
     LiquidationMismatch,
     #[error("liquidation status does not allow close")]
     LiquidationNotClosable,

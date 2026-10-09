@@ -113,11 +113,11 @@ pub enum MatchSpotOrderV3Error {
     InvalidPartyId,
     #[error("order oid must be greater than zero")]
     InvalidOrderId,
-    #[error("taker order id does not match command")]
+    #[error("taker order id does not match on_command")]
     TakerOrderIdMismatch,
-    #[error("taker account id does not match command")]
+    #[error("taker account id does not match on_command")]
     TakerAccountIdMismatch,
-    #[error("taker asset does not match command")]
+    #[error("taker asset does not match on_command")]
     TakerAssetMismatch,
     #[error("fee account id must not be empty")]
     InvalidFeeAccountId,

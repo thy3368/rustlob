@@ -157,7 +157,7 @@ mod tests {
                 .expect("place-only single limit should execute with default outbound");
 
         let PlaceOnlySpotOrderV2Changes::Single { created_order } = &result.changes else {
-            panic!("single limit command should produce single-order changes");
+            panic!("single limit on_command should produce single-order changes");
         };
         assert_eq!(created_order.status, SpotOrderStatus::Pending);
         assert_eq!(result.events.len(), 1);
@@ -198,7 +198,7 @@ mod tests {
         let PlaceOnlySpotOrderV2Changes::NormalTpsl { created_parent_order, created_child_orders } =
             &result.changes
         else {
-            panic!("normal tpsl command should produce parent and child changes");
+            panic!("normal tpsl on_command should produce parent and child changes");
         };
 
         assert_eq!(created_parent_order.group_relation, SpotOrderGroupRelation::NormalTpslParent);

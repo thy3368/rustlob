@@ -11,7 +11,7 @@ pub struct NewBlock {
     pub block_height: u64,
     /// 父区块哈希。
     pub parent_block_hash: String,
-    /// command envelope 列表的稳定承诺。
+    /// on_command envelope 列表的稳定承诺。
     pub commands_root: String,
     /// replayable events 列表的稳定承诺。
     pub events_root: String,

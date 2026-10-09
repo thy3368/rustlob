@@ -260,7 +260,7 @@ fn large_amount_is_accepted_and_projected_at_construction() {
     assert_eq!(entry.amount, amount);
     assert_eq!(created_field_value(&entry, "operation").as_deref(), Some("credit_available"));
     assert_eq!(created_field_value(&entry, "amount").as_deref(), Some(amount_string.as_str()));
-    assert_eq!(created_field_value(&entry, "command").as_deref(), Some("credit_available"));
+    assert_eq!(created_field_value(&entry, "on_command").as_deref(), Some("credit_available"));
     assert_eq!(
         created_field_value(&entry, "command_amount").as_deref(),
         Some(amount_string.as_str())
@@ -384,7 +384,7 @@ fn pending_create_event_projects_operation_amount_and_compatibility_fields() {
     assert!(event.is_created());
     assert_eq!(created_field_value(&entry, "operation").as_deref(), Some("freeze"));
     assert_eq!(created_field_value(&entry, "amount").as_deref(), Some("200"));
-    assert_eq!(created_field_value(&entry, "command").as_deref(), Some("freeze"));
+    assert_eq!(created_field_value(&entry, "on_command").as_deref(), Some("freeze"));
     assert_eq!(created_field_value(&entry, "command_amount").as_deref(), Some("200"));
     assert_eq!(created_field_value(&entry, "available_delta").as_deref(), Some("-200"));
     assert_eq!(created_field_value(&entry, "frozen_delta").as_deref(), Some("200"));

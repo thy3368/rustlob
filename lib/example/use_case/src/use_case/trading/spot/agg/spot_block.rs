@@ -72,9 +72,9 @@ pub enum SpotBlockAppliedChanges {
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SpotBlockError {
-    #[error("spot block must contain at least one command")]
+    #[error("spot block must contain at least one on_command")]
     EmptyCommands,
-    #[error("spot block command party id must not be empty")]
+    #[error("spot block on_command party id must not be empty")]
     EmptyPartyId,
     #[error("spot block commands must share one party id")]
     MixedPartyIds,

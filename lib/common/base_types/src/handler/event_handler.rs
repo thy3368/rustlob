@@ -3,7 +3,7 @@
 //! EventHandler 不直接承担状态更新职责。
 //! 它的职责是：
 //! 1. 接收上游事件
-//! 2. 将事件映射成下游 command
+//! 2. 将事件映射成下游 on_command
 //! 3. 调用对应的 CommandHandler
 //! 4. 返回下游处理结果
 //!
@@ -19,7 +19,7 @@
 //!
 //! EventHandler 的位置通常是在这些通道的消费侧：
 //! - 消费 changelog / event
-//! - 映射下游 command
+//! - 映射下游 on_command
 //! - 驱动下一个 CommandHandler
 
 pub trait EventHandler<C, R, E>: Send + Sync {

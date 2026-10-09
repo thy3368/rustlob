@@ -24,7 +24,7 @@
 //!
 //! ## Use Case
 //! - `SettleHyperliquidPerpFunding`
-//!   - `command`: 对一个 funding batch 发起资金费结算，请求中指定
+//!   - `on_command`: 对一个 funding batch 发起资金费结算，请求中指定
 //!     `funding_batch_id / funding_time / asset / symbol / oracle_price /
 //!     funding_rate_e8 / position_ids`
 //!   - `given_state`: 本批次涉及的 `positions`、对应保证金币种 `margin_balances`、

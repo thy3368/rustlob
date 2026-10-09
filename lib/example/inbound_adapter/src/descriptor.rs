@@ -42,7 +42,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
             name: "place_order_cli",
             bin: PLACE_ORDER_CLI_BIN,
             usage: place_order_cli_usage(),
-            summary: "Run the spot order demo command from the CLI.",
+            summary: "Run the spot order demo on_command from the CLI.",
             args: vec![
                 cli_arg(
                     "trader_id",
@@ -106,7 +106,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
             name: "deposit_quote_cli",
             bin: DEPOSIT_QUOTE_CLI_BIN,
             usage: deposit_quote_cli_usage(),
-            summary: "Run the deposit quote demo command from the CLI.",
+            summary: "Run the deposit quote demo on_command from the CLI.",
             args: vec![
                 cli_arg(
                     "trader_id",
@@ -146,7 +146,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
             name: "withdraw_quote_cli",
             bin: WITHDRAW_QUOTE_CLI_BIN,
             usage: withdraw_quote_cli_usage(),
-            summary: "Run the withdraw quote demo command from the CLI.",
+            summary: "Run the withdraw quote demo on_command from the CLI.",
             args: vec![
                 cli_arg(
                     "trader_id",

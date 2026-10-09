@@ -35,7 +35,7 @@ fn event_accepted(events: &[EntityReplayableEvent]) -> Option<bool> {
 
 // Bad proptest example:
 // - properties restate precomputed answers instead of testing business invariants
-// - command identity is confused with trace identity
+// - on_command identity is confused with trace identity
 // - the use case copies output from state, so the property test proves almost nothing
 // - assertions are tautological and do not guard behavior regressions
 

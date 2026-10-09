@@ -237,7 +237,7 @@ fn given_valid_normal_tpsl_when_placed_then_changes_keep_parent_child_truth() {
     assert_created_event_for_order(&events[2], &created_child_orders[1]);
 }
 
-/// 场景：Given 单订单命令包含非法输入事实；When 执行 command pre-check；
+/// 场景：Given 单订单命令包含非法输入事实；When 执行 on_command pre-check；
 /// Then 返回精确业务错误，且不会进入状态校验或实体创建。
 #[test]
 fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
@@ -300,7 +300,7 @@ fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
 fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_business_conflicts() {
     let use_case = PlaceOnlySpotOrderV2UseCase;
 
-    // 空子单列表无法形成 normalTpsl 父子事实，属于 command pre-check 错误。
+    // 空子单列表无法形成 normalTpsl 父子事实，属于 on_command pre-check 错误。
     assert_eq!(
         use_case.check_command(&PlaceOnlySpotOrderV2Cmd::NormalTpsl {
             parent: limit_order(300, "gtc"),

@@ -69,9 +69,9 @@ mod tests {
     // Matrix: 本地 order_id lookup + open order + releasable reservation -> canceled order and update events.
     #[rstest]
     fn execute_cancel_open_order_releases_reservation_and_projects_events() {
-        // Rule: an accepted cancel command must cancel the order and release its remaining funds.
+        // Rule: an accepted cancel on_command must cancel the order and release its remaining funds.
         // Given: the fake outbound loads an open buy order with a frozen USDT balance.
-        // When: the shared cancel executor runs the command.
+        // When: the shared cancel executor runs the on_command.
         // Then: Changes contain the before/after business truth and replay events contain updates.
         let command = CancelSpotOrderV2Cmd {
             party_id: "buyer".to_string(),

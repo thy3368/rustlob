@@ -18,7 +18,7 @@ pub enum PlaceOrderOutboundError {
     SequenceOverflow,
     #[error("broker publish failed")]
     BrokerPublishFailed,
-    #[error("unsupported spot order command branch")]
+    #[error("unsupported spot order on_command branch")]
     UnsupportedCommandBranch,
     #[error("failed to build spot order v2 given state: {0}")]
     BuildSpotOrderV2State(String),

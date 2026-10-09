@@ -27,11 +27,11 @@ pub enum MatchSpotOrderV4Error {
     InvalidOrderId,
     #[error("settlement id prefix must not be empty")]
     InvalidSettlementIdPrefix,
-    #[error("taker order id does not match command")]
+    #[error("taker order id does not match on_command")]
     TakerOrderIdMismatch,
-    #[error("taker account id does not match command")]
+    #[error("taker account id does not match on_command")]
     TakerAccountIdMismatch,
-    #[error("taker asset does not match command")]
+    #[error("taker asset does not match on_command")]
     TakerAssetMismatch,
     #[error("fee account id must not be empty")]
     InvalidFeeAccountId,

@@ -107,9 +107,9 @@ pub enum ModifySpotOrderV2Error {
     InvalidLookup,
     #[error("order lookup does not match the loaded order")]
     OrderLookupMismatch,
-    #[error("command party does not match the loaded order party")]
+    #[error("on_command party does not match the loaded order party")]
     PartyMismatch,
-    #[error("command asset does not match the loaded order asset")]
+    #[error("on_command asset does not match the loaded order asset")]
     AssetMismatch,
     #[error("only limit orders can be modified")]
     OnlyLimitOrderCanBeModified,

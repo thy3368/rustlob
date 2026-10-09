@@ -1,7 +1,7 @@
 //! CmdHandler 职责规范模板。
 //!
 //! 这个文件不是具体业务实现，而是 CmdHandler 的职责约束与实现模板。
-//! 适用于 CQRS 写侧，用来统一 command -> state set -> changeset -> changelog persistence -> replay -> publish 的处理链路。
+//! 适用于 CQRS 写侧，用来统一 on_command -> state set -> changeset -> changelog persistence -> replay -> publish 的处理链路。
 //!
 //! ## 1. 定位
 //! - CmdHandler 属于写侧（write model）入口。
@@ -22,7 +22,7 @@
 //!
 //! ## 3. 输入约束
 //! CmdHandler 的输入建议至少包含以下语义：
-//! - command payload: 表达业务意图
+//! - on_command payload: 表达业务意图
 //! - user_id / actor: 标识命令发起方
 //! - nonce / command_id: 用于幂等判断
 //! - timestamp_ms / recv_window: 用于时效性控制
@@ -128,7 +128,7 @@
 //! - Kafka / NATS / Redis Stream 等消息系统
 //!
 //! 在这种模式下，EventHandler 通常位于这些通道的消费侧，
-//! 负责消费 changelog / event，再映射成下游 command 并驱动下一个 CommandHandler。
+//! 负责消费 changelog / event，再映射成下游 on_command 并驱动下一个 CommandHandler。
 //!
 //! 默认建议先明确 changelog 持久化与回放边界，再定义 publish 行为，避免副作用顺序不清。
 //!

@@ -40,9 +40,9 @@ pub enum ApplyHyperliquidPerpLiquidationFillError {
     InvalidOrderId,
     #[error("trade_id must not be empty")]
     InvalidTradeId,
-    #[error("liquidation does not match command liquidation id")]
+    #[error("liquidation does not match on_command liquidation id")]
     LiquidationMismatch,
-    #[error("trade does not match command trade id")]
+    #[error("trade does not match on_command trade id")]
     TradeMismatch,
     #[error("trade is not for the liquidation order")]
     OrderMismatch,

@@ -55,10 +55,10 @@ pub enum MatchHyperliquidPerpOrderError {
     #[error("match_id must not be empty")]
     InvalidMatchId,
     /// 命令 taker id 和已加载 taker 订单不一致。
-    #[error("taker order does not match command")]
+    #[error("taker order does not match on_command")]
     TakerOrderMismatch,
     /// taker 订单不属于命令账户。
-    #[error("taker order does not belong to command party")]
+    #[error("taker order does not belong to on_command party")]
     TakerOwnerMismatch,
     /// 订单生命周期状态不允许继续撮合。
     #[error("order is not matchable")]

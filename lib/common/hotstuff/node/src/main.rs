@@ -19,7 +19,7 @@ struct Cli {
     /// Turn debugging information on.
     #[clap(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
-    /// The command to execute.
+    /// The on_command to execute.
     #[clap(subcommand)]
     command: Command,
 }

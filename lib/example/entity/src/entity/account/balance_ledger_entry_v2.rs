@@ -335,7 +335,7 @@ impl FieldDiff for BalanceLedgerEntryV2 {
                 self.derived_available_delta().to_string(),
             ),
             EntityFieldChange::new("frozen_delta", "", self.derived_frozen_delta().to_string()),
-            EntityFieldChange::new("command", "", self.operation.as_str()),
+            EntityFieldChange::new("on_command", "", self.operation.as_str()),
             EntityFieldChange::new("command_amount", "", self.amount.to_string()),
             EntityFieldChange::new("before_available", "", option_u64_value(self.before_available)),
             EntityFieldChange::new("before_frozen", "", option_u64_value(self.before_frozen)),
@@ -416,7 +416,7 @@ impl Entity for BalanceLedgerEntryV2 {
             | "asset_id"
             | "balance_entity_id"
             | "operation"
-            | "command"
+            | "on_command"
             | "reason"
             | "reason_order_id"
             | "reason_trade_ids"

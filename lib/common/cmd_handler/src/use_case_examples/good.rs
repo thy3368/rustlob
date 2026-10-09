@@ -45,7 +45,7 @@ fn event_has_symbol(events: &[EntityReplayableEvent], symbol: &str) -> bool {
 }
 
 // Shared good example for both writing and reviewing use cases:
-// - `party_id` is carried by the business command.
+// - `party_id` is carried by the business on_command.
 // - `role()` names the business-game role, not a technical component.
 // - `pre_check_command`, `validate_against_state`, and `compute_output_and_events`
 //   each do one job.

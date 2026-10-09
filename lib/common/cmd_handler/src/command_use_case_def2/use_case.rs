@@ -39,9 +39,9 @@ pub struct CommandMeta {
     /// Tracing correlation id for spans/logs across retries and service hops.
     /// This is only for observability and troubleshooting, not for business idempotency.
     pub trace_id: Option<String>,
-    /// Stable business command identity.
-    /// Use this as the primary idempotency and deduplication key for the same business command.
-    /// Retries of the same command should keep the same command_id.
+    /// Stable business on_command identity.
+    /// Use this as the primary idempotency and deduplication key for the same business on_command.
+    /// Retries of the same on_command should keep the same command_id.
     pub command_id: Option<String>,
 }
 
@@ -54,7 +54,7 @@ pub struct CommandEnvelope<C> {
 /// 更贴近 Use Cases（用例）的命令型抽象：
 /// 只定义业务输入、业务校验与可重放事件产出。
 pub trait CommandUseCase2: Send + Sync {
-    /// 对应cqrs的 command
+    /// 对应cqrs的 on_command
     type Command: IssuedByParty;
 
     /// 对应clean 架构的 entity , 从数据库/内存/文件等
@@ -64,7 +64,7 @@ pub trait CommandUseCase2: Send + Sync {
     type Error: std::error::Error;
 
     /// 对应四色建模的 role。
-    /// 语义上：`party_id()` 标识哪个业务主体，以这个 role 下达当前 command。
+    /// 语义上：`party_id()` 标识哪个业务主体，以这个 role 下达当前 on_command。
     fn role(&self) -> &'static str {
         "UnknownActor用来做权限控制和追溯"
     }
@@ -100,7 +100,7 @@ pub trait CommandUseCase2: Send + Sync {
 /// - executor / persistence / replay / publish 只看 `events`
 /// - 不提供通用 `events -> typed_output` 的框架恢复能力
 pub trait CommandUseCase3: Send + Sync {
-    /// 对应 cqrs 的 command。
+    /// 对应 cqrs 的 on_command。
     type Command: IssuedByParty;
 
     /// 对应 clean 架构中当前 use case 已加载的 GivenState。
@@ -117,7 +117,7 @@ pub trait CommandUseCase3: Send + Sync {
         "UnknownActor用来做权限控制和追溯"
     }
 
-    /// 对 command 的快速检查。
+    /// 对 on_command 的快速检查。
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -148,7 +148,7 @@ pub trait CommandUseCase3: Send + Sync {
 /// use case 只返回强类型业务 changes，
 /// executor 统一把 changes 投影为 replayable events。
 pub trait CommandUseCase4: Send + Sync {
-    /// 对应 cqrs 的 command。
+    /// 对应 cqrs 的 on_command。
     type Command: IssuedByParty;
 
     /// 对应 clean 架构中当前 use case 已加载的 GivenState。
@@ -165,7 +165,7 @@ pub trait CommandUseCase4: Send + Sync {
         "UnknownActor用来做权限控制和追溯"
     }
 
-    /// 对 command 的快速检查。
+    /// 对 on_command 的快速检查。
     fn pre_check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }

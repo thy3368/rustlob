@@ -80,7 +80,7 @@ pub enum SettleHyperliquidPerpFundingError {
     #[error("position ids do not match loaded positions")]
     PositionIdsMismatch,
     /// 仓位 market 与命令不一致。
-    #[error("position does not match command market")]
+    #[error("position does not match on_command market")]
     PositionMarketMismatch,
     /// 仓位状态不允许参与资金费结算。
     #[error("position is not eligible for funding settlement")]

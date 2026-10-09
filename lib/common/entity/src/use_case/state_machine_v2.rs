@@ -364,7 +364,7 @@
 //! }
 //!
 //! let orchestrator = SpotTradingOrchestrator;
-//! let command = PlaceLimitOrder { quote_amount: 30 };
+//! let on_command = PlaceLimitOrder { quote_amount: 30 };
 //! let placeable_state = SpotTradingGivenState::Placeable {
 //!     order: Order {
 //!         id: 7001,
@@ -387,14 +387,14 @@
 //! };
 //!
 //! let after = orchestrator
-//!     .compute_state_changed(&command, &placeable_state)
+//!     .compute_state_changed(&on_command, &placeable_state)
 //!     .unwrap();
 //! assert_eq!(after.order_after.status, OrderStatus::Open);
 //! assert_eq!(after.cash_after.available, 70);
 //! assert_eq!(after.hold_after.reserved, 30);
 //!
 //! let replayable = orchestrator
-//!     .compute_before_after_changes(&command, placeable_state.clone())
+//!     .compute_before_after_changes(&on_command, placeable_state.clone())
 //!     .unwrap();
 //! let events = replayable.to_replayable_events().unwrap();
 //! assert_eq!(events.len(), 3);
@@ -415,7 +415,7 @@
 //!     SpotTradingGivenState::Cancelable { .. } => unreachable!(),
 //! };
 //! assert_eq!(
-//!     orchestrator.compute_state_changed(&command, &disabled_state),
+//!     orchestrator.compute_state_changed(&on_command, &disabled_state),
 //!     Err(TradingError::TradingDisabled)
 //! );
 //!
@@ -428,7 +428,7 @@
 //!     },
 //! };
 //! assert_eq!(
-//!     orchestrator.compute_state_changed(&command, &cancelable_state),
+//!     orchestrator.compute_state_changed(&on_command, &cancelable_state),
 //!     Err(TradingError::BranchMismatch)
 //! );
 //! ```

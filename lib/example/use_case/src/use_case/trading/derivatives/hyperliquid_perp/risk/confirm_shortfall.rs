@@ -41,11 +41,11 @@ pub enum ConfirmHyperliquidPerpShortfallError {
     InvalidShortfallId,
     #[error("required_quote must be greater than zero")]
     InvalidRequiredQuote,
-    #[error("liquidation does not match command liquidation id")]
+    #[error("liquidation does not match on_command liquidation id")]
     LiquidationMismatch,
     #[error("liquidation is not ready for shortfall confirmation")]
     LiquidationNotReady,
-    #[error("fill recovered quote does not match command")]
+    #[error("fill recovered quote does not match on_command")]
     RecoveredQuoteMismatch,
     #[error("fill does not belong to liquidation")]
     FillMismatch,

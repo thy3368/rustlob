@@ -25,9 +25,9 @@ pub enum ExecutionError<BE, OE> {
     Publish(OE),
 }
 
-/// adapter-side request 到 family command 的映射约定。
+/// adapter-side request 到 family on_command 的映射约定。
 ///
-/// executor 不直接依赖该 trait；adapter 可用它把 request 转成 command 后再执行。
+/// executor 不直接依赖该 trait；adapter 可用它把 request 转成 on_command 后再执行。
 pub trait MiFamilyExecutionSpec<F>
 where
     F: StateMachineOwnedV2Diff,
@@ -62,8 +62,8 @@ where
 impl StateMachineExecutor {
     /// 执行一个 MI family use case 的运行时编排。
     ///
-    /// adapter 应在调用前完成 request 到 command 的转换。state source 基于 command 加载
-    /// authoritative given state，后续业务校验与计算都只读取 command 和 owned given state。
+    /// adapter 应在调用前完成 request 到 on_command 的转换。state source 基于 on_command 加载
+    /// authoritative given state，后续业务校验与计算都只读取 on_command 和 owned given state。
     ///
     /// 固定执行顺序为：pre-check -> load state -> validate -> compute ->
     /// merge -> project events -> persist -> replay -> publish。该函数只负

@@ -52,7 +52,7 @@ pub enum UpdateHyperliquidPerpLeverageError {
     #[error("leverage must be greater than or equal to 1")]
     InvalidLeverage,
     /// 命令账户和已加载账户不一致。
-    #[error("state account does not match command party")]
+    #[error("state account does not match on_command party")]
     AccountMismatch,
     /// 已加载配置不属于当前账户，或 asset 不匹配。
     #[error("loaded leverage setting does not match requested account or asset")]

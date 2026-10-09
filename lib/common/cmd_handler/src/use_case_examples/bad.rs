@@ -25,8 +25,8 @@ fn string_field(name: &str, value: &str) -> ReplayFieldChange {
 
 // Shared bad example for both writing and reviewing use cases:
 // - `role()` uses a technical component name, so four-color Role clarity is weak.
-// - `party_id` is missing even though a business party is clearly issuing the command.
-// - `trace_id` is placed on the business command, which encourages identity confusion.
+// - `party_id` is missing even though a business party is clearly issuing the on_command.
+// - `trace_id` is placed on the business on_command, which encourages identity confusion.
 // - `GivenState` already contains the decision result and final event, so the use case
 //   mostly copies a precomputed answer into output and events.
 

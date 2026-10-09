@@ -61,7 +61,7 @@ mod tests {
 
     fn order_fields(command: &SpotBlockCommand) -> (u64, &str) {
         let SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(order)) = command else {
-            panic!("expected a single PlaceMatch command");
+            panic!("expected a single PlaceMatch on_command");
         };
         (order.order_id, order.cloid.as_deref().unwrap_or_default())
     }

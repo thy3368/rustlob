@@ -126,7 +126,7 @@ pub fn ObjectType(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// 标识 use case hook 的业务动作阶段，不改变方法签名或运行时行为。
 ///
 /// 允许的 kind:
-/// - `pre_check_command`: 只检查 command-local 事实
+/// - `pre_check_command`: 只检查 on_command-local 事实
 /// - `validate_against_given_state`: 校验已加载状态上的业务不变量
 /// - `compute_after_changes_unchecked`: 计算 use case 的 after truth
 #[proc_macro_attribute]

@@ -13,7 +13,7 @@ fn crate_root_re_exports_are_accessible() {
 }
 
 #[test]
-// 验证完整写入一个 block 后，header / command / event / snapshot 都能按原语义读回。
+// 验证完整写入一个 block 后，header / on_command / event / snapshot 都能按原语义读回。
 fn append_and_read_back_block_data_and_snapshots() {
     let temp_dir = TestDir::new();
     let store = VeldraMdbxBlockStore::open(&temp_dir.path).expect("store should open");
@@ -31,7 +31,7 @@ fn append_and_read_back_block_data_and_snapshots() {
         .expect("hash lookup should succeed")
         .expect("header should exist by hash");
     let stored_commands =
-        store.scan_block_commands(header.block_height).expect("command scan should succeed");
+        store.scan_block_commands(header.block_height).expect("on_command scan should succeed");
     let stored_events =
         store.scan_block_events(header.block_height).expect("event scan should succeed");
     let stored_order = store

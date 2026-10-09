@@ -54,7 +54,7 @@ pub enum PlaceHyperliquidPerpLiquidationOrderError {
     InvalidLiquidationId,
     #[error("price_cap must be greater than zero")]
     InvalidPriceCap,
-    #[error("liquidation does not match command liquidation id")]
+    #[error("liquidation does not match on_command liquidation id")]
     LiquidationMismatch,
     #[error("account does not match liquidation account")]
     AccountMismatch,
