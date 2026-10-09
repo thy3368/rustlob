@@ -16,7 +16,6 @@ impl SpotTradeCreatedEventHandler {
     pub fn new(aggregator: SpotKlineAggregator) -> Self {
         Self { aggregator }
     }
-    
 }
 
 impl EntityReplayableEventHandler for SpotTradeCreatedEventHandler {
