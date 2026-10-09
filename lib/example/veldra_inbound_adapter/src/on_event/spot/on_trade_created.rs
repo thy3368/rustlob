@@ -1,11 +1,8 @@
 use cmd_handler::EntityReplayableEvent;
 use example_core_use_case::{KlineUpdate, SpotKlineAggregator};
+use use_case_executor::trading::spot::on_event::handle_trade_created_event as execute_trade_created_event;
 pub use use_case_executor::trading::spot::on_event::{
     SpotTradeCreatedEventError, spot_kline_trade_input_from_event,
-};
-use use_case_executor::trading::spot::on_event::{
-    handle_trade_created_event as execute_trade_created_event,
-    process_trade_created_event as execute_process_trade_created_event,
 };
 
 /// 处理一笔成交 created event，并返回所有周期产生的 K 线更新。
@@ -31,12 +28,4 @@ where
         publish_update(update);
     }
     Ok(())
-}
-
-/// `handle_trade_created_event` 的语义别名，便于事件消费代码表达投影动作。
-pub fn process_trade_created_event(
-    event: &EntityReplayableEvent,
-    aggregator: &mut SpotKlineAggregator,
-) -> Result<Vec<KlineUpdate>, SpotTradeCreatedEventError> {
-    execute_process_trade_created_event(event, aggregator)
 }

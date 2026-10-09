@@ -26,7 +26,7 @@ impl EntityReplayableEventHandler for SpotTradeCreatedEventHandler {
         &mut self,
         event: &EntityReplayableEvent,
     ) -> Result<Option<Self::Output>, Self::Error> {
-        process_trade_created_event_inner(event, &mut self.aggregator)
+        handle_trade_created_event_optional(event, &mut self.aggregator)
     }
 }
 
@@ -53,18 +53,11 @@ pub fn handle_trade_created_event(
     event: &EntityReplayableEvent,
     aggregator: &mut SpotKlineAggregator,
 ) -> Result<Vec<KlineUpdate>, SpotTradeCreatedEventError> {
-    process_trade_created_event_inner(event, aggregator).map(|updates| updates.unwrap_or_default())
+    handle_trade_created_event_optional(event, aggregator)
+        .map(|updates| updates.unwrap_or_default())
 }
 
-/// `handle_trade_created_event` 的语义别名，便于事件消费代码表达投影动作。
-pub fn process_trade_created_event(
-    event: &EntityReplayableEvent,
-    aggregator: &mut SpotKlineAggregator,
-) -> Result<Vec<KlineUpdate>, SpotTradeCreatedEventError> {
-    handle_trade_created_event(event, aggregator)
-}
-
-fn process_trade_created_event_inner(
+fn handle_trade_created_event_optional(
     event: &EntityReplayableEvent,
     aggregator: &mut SpotKlineAggregator,
 ) -> Result<Option<Vec<KlineUpdate>>, SpotTradeCreatedEventError> {

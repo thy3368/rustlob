@@ -9,5 +9,5 @@ pub use match_spot_order_created::{
 };
 pub use spot_trade_created::{
     SpotTradeCreatedEventError, SpotTradeCreatedEventHandler, handle_trade_created_event,
-    process_trade_created_event, spot_kline_trade_input_from_event,
+    spot_kline_trade_input_from_event,
 };
