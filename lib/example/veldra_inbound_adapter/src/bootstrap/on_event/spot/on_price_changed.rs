@@ -18,10 +18,10 @@ fn scheduled_place_command(round: u64, sequence: u8) -> MatchSpotOrderV3Cmd {
     }
 }
 
-pub fn consume_place_order_event() {
-    // todo 1 查询条件单(满足条件的），
+pub fn consume_place_order_event(price:u64) {
+    // todo 1 查询条件单(满足条件的）未触发订单list，
 
-    // todo 2 撮合
+    // todo 2 逐条撮合
 
     let round = Arc::new(AtomicU64::new(1));
     let round_value = round.fetch_add(1, Ordering::Relaxed);
