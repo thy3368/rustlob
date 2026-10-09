@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::spot_order_primitives::{
-    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
-    option_status_reason_value, push_change, stable_order_entity_id,
+    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderTriggerRole,
+    SpotOrderType, option_status_reason_value, push_change, stable_order_entity_id,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -687,6 +687,31 @@ impl SpotOrderV2 {
     /// 返回订单是否仍是未触发条件单。
     pub fn is_pending(&self) -> bool {
         self.status == SpotOrderStatus::Pending
+    }
+
+    /// 判断当前市场成交价是否满足该订单的条件触发规则。
+    ///
+    /// 只有尚未激活的 `Trigger` 订单参与判断；普通限价单和已进入执行生命周期的订单
+    /// 都不会再次触发。触发价相等时视为已满足条件。
+    pub fn is_triggered_by_market_price(&self, market_price: u64) -> bool {
+        if !self.is_pending() {
+            return false;
+        }
+
+        let SpotOrderType::Trigger { trigger_price, tpsl, .. } = self.order_type else {
+            return false;
+        };
+
+        match (self.side, tpsl) {
+            (SpotOrderSide::Buy, SpotOrderTriggerRole::TakeProfit)
+            | (SpotOrderSide::Sell, SpotOrderTriggerRole::StopLoss) => {
+                market_price <= trigger_price
+            }
+            (SpotOrderSide::Buy, SpotOrderTriggerRole::StopLoss)
+            | (SpotOrderSide::Sell, SpotOrderTriggerRole::TakeProfit) => {
+                market_price >= trigger_price
+            }
+        }
     }
 
     /// 返回订单当前是否具备进入撮合执行入口的业务资格。
@@ -1799,6 +1824,68 @@ mod tests {
         assert_eq!(order.reservation.asset_id, "BTC");
         assert_eq!(order.reservation.original_amount, 2);
         assert_eq!(order.fee_reservation.asset_id, "USDT");
+    }
+
+    #[test]
+    fn market_price_triggers_pending_orders_by_side_and_role() {
+        let cases = [
+            (SpotOrderSide::Buy, SpotOrderTriggerRole::TakeProfit, 100, 99, true),
+            (SpotOrderSide::Buy, SpotOrderTriggerRole::StopLoss, 100, 101, true),
+            (SpotOrderSide::Sell, SpotOrderTriggerRole::TakeProfit, 100, 101, true),
+            (SpotOrderSide::Sell, SpotOrderTriggerRole::StopLoss, 100, 99, true),
+        ];
+
+        for (side, role, trigger_price, market_price, expected) in cases {
+            let order = SpotOrderV2::new_pending_trigger(
+                10,
+                10_001,
+                "trader-1".to_string(),
+                "BTCUSDT".to_string(),
+                side,
+                1,
+                100,
+                SpotOrderType::Trigger { is_market: false, trigger_price, tpsl: role },
+                None,
+                1,
+                1,
+            );
+
+            assert_eq!(order.is_triggered_by_market_price(market_price), expected);
+        }
+    }
+
+    #[test]
+    fn market_price_trigger_is_inclusive_and_only_pending_trigger_orders_qualify() {
+        let mut order = SpotOrderV2::new_pending_trigger(
+            11,
+            10_001,
+            "trader-1".to_string(),
+            "BTCUSDT".to_string(),
+            SpotOrderSide::Buy,
+            1,
+            100,
+            SpotOrderType::Trigger {
+                is_market: false,
+                trigger_price: 100,
+                tpsl: SpotOrderTriggerRole::StopLoss,
+            },
+            None,
+            1,
+            1,
+        );
+
+        assert!(order.is_triggered_by_market_price(100));
+
+        order.order_type = SpotOrderType::Limit { tif: SpotOrderTif::Gtc };
+        assert!(!order.is_triggered_by_market_price(100));
+
+        order.order_type = SpotOrderType::Trigger {
+            is_market: false,
+            trigger_price: 100,
+            tpsl: SpotOrderTriggerRole::StopLoss,
+        };
+        order.activate_pending(activation_input(5, 10)).expect("pending trigger should activate");
+        assert!(!order.is_triggered_by_market_price(100));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
+    ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     ActivateSpotOrderV2Cmd, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
     MatchSpotOrderV3Cmd, MatchSpotOrderV3State, MatchSpotOrderV3UseCase,
     PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
@@ -54,6 +55,33 @@ impl StateSource<ActivateSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOutbound
 }
 
 impl StateSink<ActivateSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOutbound {
+    type Error = DefaultSpotOrderV2PlaceOutboundError;
+
+    fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+impl StateSource<ActivateMatchSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOutbound {
+    type Error = DefaultSpotOrderV2PlaceOutboundError;
+
+    fn load_given_state(
+        &self,
+        _cmd: &ActivateMatchSpotOrderV2Cmd,
+    ) -> Result<ActivateMatchSpotOrderV2State, Self::Error> {
+        Err(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable)
+    }
+}
+
+impl StateSink<ActivateMatchSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOutbound {
     type Error = DefaultSpotOrderV2PlaceOutboundError;
 
     fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {

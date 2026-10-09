@@ -1,10 +1,13 @@
 use std::io;
 
 use actix_web::{App, HttpServer};
+use example_outbound_adapter::InMemoryPlaceOrderOutbound;
 use example_veldra_inbound_adapter::bootstrap::on_command::exchange::http::build_exchange_scope;
 use example_veldra_inbound_adapter::bootstrap::on_command::info::http::build_info_scope;
 use example_veldra_inbound_adapter::bootstrap::on_event::spot::on_aeron_match_spot_order::run_match_spot_order_aeron;
-use example_veldra_inbound_adapter::bootstrap::on_event::spot::on_aeron_spot_trade::run_spot_trade_aeron;
+use example_veldra_inbound_adapter::bootstrap::on_event::spot::on_aeron_spot_trade::{
+    run_spot_trade_aeron, run_trigger_pending_spot_orders_aeron,
+};
 use example_veldra_inbound_adapter::bootstrap::on_time::spot::timer::run_timer;
 
 #[actix_web::main]
@@ -27,6 +30,13 @@ async fn main() -> io::Result<()> {
     tokio::task::spawn_blocking(|| {
         if let Err(error) = run_spot_trade_aeron() {
             eprintln!("Aeron spot trade receiver stopped: {error}");
+        }
+    });
+
+    tokio::task::spawn_blocking(|| {
+        let outbound = InMemoryPlaceOrderOutbound::new();
+        if let Err(error) = run_trigger_pending_spot_orders_aeron(outbound) {
+            eprintln!("Aeron spot trade pending order trigger receiver stopped: {error}");
         }
     });
 

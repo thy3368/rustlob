@@ -5,6 +5,7 @@ pub mod match_spot_order_v4;
 pub mod place_only_spot_order_v2;
 
 pub mod modify_spot_order_v2;
+pub mod pending_trigger_spot_order_source;
 
 pub mod agg;
 pub mod generate_spot_klines_from_historical_trades;
@@ -52,6 +53,7 @@ pub use modify_spot_order_v2::{
     ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
     ModifySpotOrderV2UseCase, OrderId,
 };
+pub use pending_trigger_spot_order_source::PendingTriggerSpotOrderSource;
 pub use place_only_spot_order_v2::{
     PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
     PlaceOnlySpotOrderV2Error, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,

@@ -1,8 +1,9 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
-    Balance, MarketRules, ORDER_ENTITY_TYPE, PlaceMatchSpotOrderV2State,
-    PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
+    ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
+    Balance, MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource,
+    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 
@@ -60,6 +61,45 @@ impl MySqlPlaceOrderOutbound {
 }
 
 const DEFAULT_FEE_ACCOUNT_ID: &str = "fee";
+
+impl PendingTriggerSpotOrderSource for MySqlPlaceOrderOutbound {
+    type Error = PlaceOrderOutboundError;
+
+    fn load_pending_trigger_orders(
+        &self,
+        _asset: u32,
+        _market_price: u64,
+    ) -> Result<Vec<SpotOrderV2>, Self::Error> {
+        Err(PlaceOrderOutboundError::UnsupportedCommandBranch)
+    }
+}
+
+impl StateSource<ActivateMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
+    type Error = PlaceOrderOutboundError;
+
+    fn load_given_state(
+        &self,
+        _cmd: &ActivateMatchSpotOrderV2Cmd,
+    ) -> Result<ActivateMatchSpotOrderV2State, Self::Error> {
+        Err(PlaceOrderOutboundError::UnsupportedCommandBranch)
+    }
+}
+
+impl StateSink<ActivateMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
+    type Error = PlaceOrderOutboundError;
+
+    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        <Self as StateSink<PlaceMatchSpotOrderV2UseCase>>::persist(self, events)
+    }
+
+    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        <Self as StateSink<PlaceMatchSpotOrderV2UseCase>>::replay(self, events)
+    }
+
+    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        <Self as StateSink<PlaceMatchSpotOrderV2UseCase>>::publish(self, events)
+    }
+}
 
 impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;

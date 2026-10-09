@@ -1,5 +1,10 @@
+use std::fmt::Debug;
+
+use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+use example_core_use_case::{ActivateMatchSpotOrderV2UseCase, PendingTriggerSpotOrderSource};
 use use_case_executor::trading::spot::on_event::{
-    SpotTradeCreatedEventError, SpotTradeCreatedEventHandler,
+    SpotTradeCreatedEventError, SpotTradeCreatedEventHandler, TriggerPendingSpotOrdersOnTradeError,
+    TriggerPendingSpotOrdersOnTradeHandler,
 };
 
 use crate::common::aeron_listener::{
@@ -37,4 +42,27 @@ pub fn run_spot_trade_aeron() -> Result<(), SpotTradeAeronError> {
     let config =
         AeronListenerConfig::spot_trade_from_env().map_err(AeronListenerError::Configuration)?;
     run_aeron_listener(config, SpotTradeCreatedEventHandler::default())
+}
+
+pub type TriggerPendingSpotOrdersAeronError<OutboundError> =
+    AeronListenerError<TriggerPendingSpotOrdersOnTradeError<OutboundError>>;
+
+pub fn run_trigger_pending_spot_orders_aeron<OB>(
+    outbound: OB,
+) -> Result<
+    (),
+    TriggerPendingSpotOrdersAeronError<<OB as StateSink<ActivateMatchSpotOrderV2UseCase>>::Error>,
+>
+where
+    OB: PendingTriggerSpotOrderSource<
+            Error = <OB as StateSink<ActivateMatchSpotOrderV2UseCase>>::Error,
+        > + StateSource<
+            ActivateMatchSpotOrderV2UseCase,
+            Error = <OB as StateSink<ActivateMatchSpotOrderV2UseCase>>::Error,
+        > + StateSink<ActivateMatchSpotOrderV2UseCase>,
+    <OB as StateSink<ActivateMatchSpotOrderV2UseCase>>::Error: Debug,
+{
+    let config =
+        AeronListenerConfig::spot_trade_from_env().map_err(AeronListenerError::Configuration)?;
+    run_aeron_listener(config, TriggerPendingSpotOrdersOnTradeHandler::new(outbound))
 }

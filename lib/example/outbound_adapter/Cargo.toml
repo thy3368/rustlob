@@ -11,6 +11,7 @@ test-support = []
 
 [dependencies]
 cmd_handler = { path = "../../common/cmd_handler" }
+common_entity = { package = "entity", path = "../../common/entity" }
 example_core_use_case = { path = "../use_case" }
 mysql = "24.0"
 thiserror = "1"

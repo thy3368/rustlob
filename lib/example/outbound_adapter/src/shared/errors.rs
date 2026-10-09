@@ -10,6 +10,8 @@ pub enum StoreError {
 pub enum PlaceOrderOutboundError {
     #[error("balance not found")]
     BalanceNotFound,
+    #[error("spot order not found")]
+    OrderNotFound,
     #[error("market rules not found")]
     MarketRulesNotFound,
     #[error("failed to decode replayable event")]

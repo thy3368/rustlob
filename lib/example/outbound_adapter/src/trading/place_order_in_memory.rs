@@ -1,10 +1,13 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+use common_entity::Entity;
 use example_core_use_case::{
-    Balance, MarketRules, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
-    PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, ReservationStatus, SpotOrderGroupRelation, SpotOrderSide,
-    SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
+    ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
+    Balance, MarketRules, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
+    PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason,
+    ReservationKind, ReservationMarketKind, ReservationStatus, SpotOrderGroupRelation,
+    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
+    SpotOrderV2, SpotTrade,
 };
 
 use crate::shared::{
@@ -61,9 +64,178 @@ impl InMemoryPlaceOrderOutbound {
     pub fn snapshot(&self) -> Result<crate::StoreSnapshot, crate::StoreError> {
         self.store.snapshot()
     }
+
+    fn replay_events(
+        &self,
+        events: &[EntityReplayableEvent],
+    ) -> Result<(), PlaceOrderOutboundError> {
+        let mut state = self.store.lock_state()?;
+
+        for event in events {
+            if event.is_created()
+                && event_string_field(event, "reservation_id").is_some()
+                && event_string_field(event, "owner_account_id").is_some()
+                && event_string_field(event, "caused_by_order_id").is_some()
+            {
+                let reservation = decode_created_reservation(event)?;
+                state.reservations.insert(reservation.reservation_id.clone(), reservation);
+                continue;
+            }
+
+            if event.is_created() && event_string_field(event, "order_id").is_some() {
+                let order = decode_order_from_event(event)?;
+                state.orders.insert(order.order_id, order);
+                state.next_order_sequence = state
+                    .next_order_sequence
+                    .checked_add(1)
+                    .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
+                continue;
+            }
+
+            if event.is_created() && event_string_field(event, "trade_id").is_some() {
+                let trade = decode_created_trade(event)?;
+                state.trades.insert(trade.trade_id.clone(), trade);
+                continue;
+            }
+
+            if event.entity_type == SpotOrderV2::entity_type() && event.is_updated() {
+                apply_order_update_event(&mut state.orders, event)?;
+                state.next_order_sequence = state
+                    .next_order_sequence
+                    .checked_add(1)
+                    .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
+                continue;
+            }
+
+            if event.is_updated() && event_string_field(event, "asset_id").is_some() {
+                let account_id = event_string_field(event, "account_id")
+                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+                let asset_id = event_string_field(event, "asset_id")
+                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+                let key = balance_key(account_id.as_str(), asset_id.as_str());
+                let balance = state
+                    .balances
+                    .entry(key)
+                    .or_insert_with(|| Balance::new(account_id.clone(), asset_id.clone(), 0, 0, 0));
+                if let Some(available) = event_u64_field(event, "available") {
+                    balance.available = available;
+                }
+                if let Some(frozen) = event_u64_field(event, "frozen") {
+                    balance.frozen = frozen;
+                }
+                balance.version = event.new_version;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 const DEFAULT_FEE_ACCOUNT_ID: &str = "fee";
+
+impl PendingTriggerSpotOrderSource for InMemoryPlaceOrderOutbound {
+    type Error = PlaceOrderOutboundError;
+
+    fn load_pending_trigger_orders(
+        &self,
+        asset: u32,
+        market_price: u64,
+    ) -> Result<Vec<SpotOrderV2>, Self::Error> {
+        let state = self.store.lock_state()?;
+        let mut orders = state
+            .orders
+            .values()
+            .filter(|order| {
+                order.trades_asset(asset) && order.is_triggered_by_market_price(market_price)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        orders.sort_by_key(|order| (order.created_at, order.order_id));
+        Ok(orders)
+    }
+}
+
+impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
+    type Error = PlaceOrderOutboundError;
+
+    fn load_given_state(
+        &self,
+        cmd: &ActivateMatchSpotOrderV2Cmd,
+    ) -> Result<ActivateMatchSpotOrderV2State, Self::Error> {
+        let state = self.store.lock_state()?;
+        let pending_order = state
+            .orders
+            .get(&cmd.order_id)
+            .cloned()
+            .ok_or(PlaceOrderOutboundError::OrderNotFound)?;
+        let market_rules = state
+            .market_rules_by_symbol
+            .get(pending_order.symbol())
+            .cloned()
+            .ok_or(PlaceOrderOutboundError::MarketRulesNotFound)?;
+        let base_asset_id = base_asset_id_for(market_rules.symbol.as_str()).to_string();
+        let quote_asset_id = quote_asset_id_for(market_rules.symbol.as_str()).to_string();
+        let mut settlement_balances = state.balances.values().cloned().collect::<Vec<_>>();
+        if !state
+            .balances
+            .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
+        {
+            settlement_balances.push(Balance::new(
+                DEFAULT_FEE_ACCOUNT_ID.to_string(),
+                quote_asset_id.clone(),
+                0,
+                0,
+                1,
+            ));
+        }
+
+        let maker_orders = state
+            .orders
+            .values()
+            .filter(|order| {
+                order.trades_asset(pending_order.asset())
+                    && order.trades_symbol(pending_order.symbol())
+                    && order.side() != pending_order.side()
+                    && matches!(
+                        order.status(),
+                        SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+                    )
+            })
+            .cloned()
+            .collect();
+
+        Ok(ActivateMatchSpotOrderV2State {
+            pending_order,
+            maker_orders,
+            settlement_balances,
+            base_asset_id,
+            quote_asset_id,
+            fee_account_id: DEFAULT_FEE_ACCOUNT_ID.to_string(),
+            maker_fee_bps: 1,
+            taker_fee_bps: 1,
+        })
+    }
+}
+
+impl StateSink<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
+    type Error = PlaceOrderOutboundError;
+
+    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        let mut state = self.store.lock_state()?;
+        state.persisted_events.extend(events.iter().cloned());
+        Ok(())
+    }
+
+    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        self.replay_events(events)
+    }
+
+    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        let mut state = self.store.lock_state()?;
+        state.published_events.extend(events.iter().cloned());
+        Ok(())
+    }
+}
 
 impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
@@ -142,65 +314,7 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
     }
 
     fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
-        let mut state = self.store.lock_state()?;
-
-        for event in events {
-            if event.is_created()
-                && event_string_field(event, "reservation_id").is_some()
-                && event_string_field(event, "owner_account_id").is_some()
-                && event_string_field(event, "caused_by_order_id").is_some()
-            {
-                let reservation = decode_created_reservation(event)?;
-                state.reservations.insert(reservation.reservation_id.clone(), reservation);
-                continue;
-            }
-
-            if event.is_created() && event_string_field(event, "order_id").is_some() {
-                let order = decode_order_from_event(event)?;
-                state.orders.insert(order.order_id, order);
-                state.next_order_sequence = state
-                    .next_order_sequence
-                    .checked_add(1)
-                    .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
-                continue;
-            }
-
-            if event.is_created() && event_string_field(event, "trade_id").is_some() {
-                let trade = decode_created_trade(event)?;
-                state.trades.insert(trade.trade_id.clone(), trade);
-                continue;
-            }
-
-            if event.is_updated() && event_string_field(event, "order_id").is_some() {
-                apply_order_update_event(&mut state.orders, event)?;
-                state.next_order_sequence = state
-                    .next_order_sequence
-                    .checked_add(1)
-                    .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
-                continue;
-            }
-
-            if event.is_updated() && event_string_field(event, "asset_id").is_some() {
-                let account_id = event_string_field(event, "account_id")
-                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-                let asset_id = event_string_field(event, "asset_id")
-                    .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-                let key = balance_key(account_id.as_str(), asset_id.as_str());
-                let balance = state
-                    .balances
-                    .entry(key)
-                    .or_insert_with(|| Balance::new(account_id.clone(), asset_id.clone(), 0, 0, 0));
-                if let Some(available) = event_u64_field(event, "available") {
-                    balance.available = available;
-                }
-                if let Some(frozen) = event_u64_field(event, "frozen") {
-                    balance.frozen = frozen;
-                }
-                balance.version = event.new_version;
-            }
-        }
-
-        Ok(())
+        self.replay_events(events)
     }
 
     fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
@@ -598,10 +712,9 @@ fn apply_order_update_event(
     orders: &mut std::collections::HashMap<u64, SpotOrderV2>,
     event: &EntityReplayableEvent,
 ) -> Result<(), PlaceOrderOutboundError> {
-    let order_id =
-        event_u64_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let order_id = order_id_from_event(event)?;
     if !orders.contains_key(&order_id) {
-        orders.insert(order_id, decode_order_snapshot_from_event(event)?);
+        return Err(PlaceOrderOutboundError::OrderNotFound);
     }
     let order = orders.get_mut(&order_id).ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     if let Some(status) = event_string_field(event, "status") {
@@ -635,6 +748,13 @@ fn apply_order_update_event(
     apply_reservation_update(&mut order.fee_reservation, event, true)?;
     order.version = event.new_version;
     Ok(())
+}
+
+fn order_id_from_event(event: &EntityReplayableEvent) -> Result<u64, PlaceOrderOutboundError> {
+    if let Some(order_id) = event_u64_field(event, "order_id") {
+        return Ok(order_id);
+    }
+    u64::try_from(event.entity_id).map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)
 }
 
 fn decode_order_from_event(
@@ -735,12 +855,6 @@ fn apply_reservation_update(
         reservation.remaining_amount = value;
     }
     Ok(())
-}
-
-fn decode_order_snapshot_from_event(
-    event: &EntityReplayableEvent,
-) -> Result<SpotOrderV2, PlaceOrderOutboundError> {
-    decode_order_from_event(event)
 }
 
 fn decode_status_value(value: &str) -> Result<SpotOrderStatus, PlaceOrderOutboundError> {
