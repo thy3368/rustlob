@@ -9,7 +9,8 @@ use crate::bootstrap::on_command::info::error::InfoHttpError;
 use crate::bootstrap::on_command::info::queries::InfoQueryDeps;
 
 pub mod reply {
-    pub type ResponseWire = crate::bootstrap::on_command::info::common::wire::OrderStatusResponseWire;
+    pub type ResponseWire =
+        crate::bootstrap::on_command::info::common::wire::OrderStatusResponseWire;
 }
 
 #[derive(Debug, serde::Deserialize)]

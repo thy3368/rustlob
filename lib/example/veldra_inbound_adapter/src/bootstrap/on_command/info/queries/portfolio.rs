@@ -1,10 +1,13 @@
-use crate::bootstrap::on_command::info::common::validate::{ensure_type, validate_hex_address_field};
+use crate::bootstrap::on_command::info::common::validate::{
+    ensure_type, validate_hex_address_field,
+};
 use crate::bootstrap::on_command::info::common::wire::PortfolioSliceWire;
 use crate::bootstrap::on_command::info::error::InfoHttpError;
 use crate::bootstrap::on_command::info::queries::InfoQueryDeps;
 
 pub mod reply {
-    pub type ResponseWire = Vec<crate::bootstrap::on_command::info::common::wire::PortfolioPeriodWire>;
+    pub type ResponseWire =
+        Vec<crate::bootstrap::on_command::info::common::wire::PortfolioPeriodWire>;
 }
 
 #[derive(Debug, serde::Deserialize)]

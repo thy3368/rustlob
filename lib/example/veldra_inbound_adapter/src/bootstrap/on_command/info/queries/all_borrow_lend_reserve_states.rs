@@ -4,7 +4,7 @@ use crate::bootstrap::on_command::info::queries::InfoQueryDeps;
 
 pub mod reply {
     pub type ReserveStateWire =
-    crate::bootstrap::on_command::info::queries::borrow_lend_reserve_state::reply::ResponseWire;
+        crate::bootstrap::on_command::info::queries::borrow_lend_reserve_state::reply::ResponseWire;
     pub type ResponseWire = Vec<(u32, ReserveStateWire)>;
 }
 
@@ -23,7 +23,10 @@ pub async fn handle(
 }
 pub(crate) fn stub_response() -> reply::ResponseWire {
     vec![
-        (0, crate::bootstrap::on_command::info::queries::borrow_lend_reserve_state::stub_response()),
+        (
+            0,
+            crate::bootstrap::on_command::info::queries::borrow_lend_reserve_state::stub_response(),
+        ),
         (
             150,
             reply::ReserveStateWire {

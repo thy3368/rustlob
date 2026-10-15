@@ -1,8 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use crate::bootstrap::on_command::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
+use crate::bootstrap::on_command::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler,
+};
 use crate::bootstrap::on_command::exchange::common::validate::validate_envelope_common;
-use crate::bootstrap::on_command::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_status_response};
+use crate::bootstrap::on_command::exchange::common::wire::{
+    ExchangeRequestEnvelopeWire, ok_status_response,
+};
 use crate::bootstrap::on_command::exchange::error::ExchangeHttpError;
 #[cfg(test)]
 use crate::common::parse::parse_json_request;
@@ -20,7 +24,9 @@ pub enum TwapOrderContractError {
 pub mod reply {
     use serde::Serialize;
 
-    use crate::bootstrap::on_command::exchange::common::wire::{ExchangeResponseWire, ExchangeStatusDataWire};
+    use crate::bootstrap::on_command::exchange::common::wire::{
+        ExchangeResponseWire, ExchangeStatusDataWire,
+    };
 
     pub type TwapOrderResponseWire = ExchangeResponseWire<TwapOrderResponseDataWire>;
     pub type TwapOrderResponseDataWire = ExchangeStatusDataWire<TwapOrderStatusWire>;

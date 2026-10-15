@@ -1,5 +1,7 @@
 use crate::bootstrap::on_command::hyperliquid_ws::WsFillWire;
-use crate::bootstrap::on_command::info::common::validate::{ensure_type, validate_hex_address_field};
+use crate::bootstrap::on_command::info::common::validate::{
+    ensure_type, validate_hex_address_field,
+};
 use crate::bootstrap::on_command::info::error::InfoHttpError;
 use crate::bootstrap::on_command::info::queries::InfoQueryDeps;
 

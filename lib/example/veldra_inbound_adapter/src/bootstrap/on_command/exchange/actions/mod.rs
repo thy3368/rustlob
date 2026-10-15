@@ -36,7 +36,9 @@ pub mod withdraw3;
 
 use serde_json::Value as JsonValue;
 
-use crate::bootstrap::on_command::exchange::common::wire::{ExchangeRequestEnvelopeWire, JsonObjectWire};
+use crate::bootstrap::on_command::exchange::common::wire::{
+    ExchangeRequestEnvelopeWire, JsonObjectWire,
+};
 
 pub type ExchangeActionRequestWire = ExchangeRequestEnvelopeWire<ExchangeActionWire>;
 

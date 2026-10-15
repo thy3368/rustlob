@@ -1,5 +1,7 @@
 use crate::bootstrap::on_command::hyperliquid_ws::AllMidsWire;
-use crate::bootstrap::on_command::info::common::validate::{ensure_type, validate_non_empty_string_field};
+use crate::bootstrap::on_command::info::common::validate::{
+    ensure_type, validate_non_empty_string_field,
+};
 use crate::bootstrap::on_command::info::error::InfoHttpError;
 use crate::bootstrap::on_command::info::queries::InfoQueryDeps;
 

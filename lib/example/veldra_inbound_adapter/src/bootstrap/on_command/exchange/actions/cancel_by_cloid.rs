@@ -7,8 +7,12 @@ use crate::bootstrap::on_command::exchange::actions::cancel::{
     CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID, SpotOrderV2CancelExecutionSpec,
     cancel_execution_error_message, execute_cancel_spot_order_v2,
 };
-use crate::bootstrap::on_command::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::bootstrap::on_command::exchange::common::validate::{validate_cloid, validate_envelope_common};
+use crate::bootstrap::on_command::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler,
+};
+use crate::bootstrap::on_command::exchange::common::validate::{
+    validate_cloid, validate_envelope_common,
+};
 use crate::bootstrap::on_command::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::bootstrap::on_command::exchange::error::ExchangeHttpError;
 #[cfg(test)]

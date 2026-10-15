@@ -8,11 +8,13 @@ use use_case_executor::trading::spot::on_event::{
     match_spot_order_command_from_event as command_from_event,
 };
 
+pub use crate::bootstrap::on_event::spot::on_aeron_spot_trade::{
+    SpotTradeAeronError, run_spot_trade_aeron,
+};
 pub use crate::common::aeron_listener::{
     AeronListenerConfig, AeronListenerConfigError, AeronListenerEnv, AeronListenerError,
     decode_entity_replayable_event, handle_aeron_event_fragment, run_aeron_listener,
 };
-pub use crate::bootstrap::on_event::spot::on_aeron_spot_trade::{SpotTradeAeronError, run_spot_trade_aeron};
 
 const DEFAULT_MATCH_SPOT_ORDER_STREAM_ID: i32 = 1001;
 

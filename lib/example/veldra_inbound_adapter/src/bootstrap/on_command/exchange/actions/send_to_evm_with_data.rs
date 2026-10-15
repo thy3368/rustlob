@@ -1,10 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use crate::bootstrap::on_command::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
+use crate::bootstrap::on_command::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler,
+};
 use crate::bootstrap::on_command::exchange::common::validate::{
     validate_common_fields, validate_hyperliquid_chain, validate_signature_chain_id,
 };
-use crate::bootstrap::on_command::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_default_response};
+use crate::bootstrap::on_command::exchange::common::wire::{
+    ExchangeRequestEnvelopeWire, ok_default_response,
+};
 use crate::bootstrap::on_command::exchange::error::ExchangeHttpError;
 #[cfg(test)]
 use crate::common::parse::parse_json_request;

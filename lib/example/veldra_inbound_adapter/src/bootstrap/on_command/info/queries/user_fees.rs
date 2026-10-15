@@ -1,4 +1,6 @@
-use crate::bootstrap::on_command::info::common::validate::{ensure_type, validate_hex_address_field};
+use crate::bootstrap::on_command::info::common::validate::{
+    ensure_type, validate_hex_address_field,
+};
 use crate::bootstrap::on_command::info::common::wire::{
     ActiveStakingDiscountWire, DailyUserVlmWire, FeeScheduleTiersWire, FeeScheduleWire, MmTierWire,
     StakingDiscountTierWire, StakingLinkWire, UserFeesWire, VipTierWire,

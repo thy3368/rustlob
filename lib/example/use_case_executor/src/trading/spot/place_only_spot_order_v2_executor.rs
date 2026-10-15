@@ -1,6 +1,8 @@
+use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
+use common_entity::{ReplayableChanges, StateMachineOwnedV2Diff};
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,
     PlaceOnlySpotOrderV2UseCase,
@@ -40,6 +42,15 @@ where
         outbound,
         outbound,
     )
+}
+
+/// 执行 place-only 单订单的业务热路径，不包含 outbound 状态加载和副作用编排。
+pub fn compute_place_only_spot_order_v2_business(
+    command: &PlaceOnlySpotOrderV2Cmd,
+) -> Result<(PlaceOnlySpotOrderV2Changes, Vec<EntityReplayableEvent>), PlaceOnlySpotOrderV2Error> {
+    let changes = PlaceOnlySpotOrderV2UseCase.compute_state_diff(command, ())?;
+    let events = changes.to_replayable_events()?;
+    Ok((changes, events))
 }
 
 #[cfg(test)]

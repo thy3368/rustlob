@@ -6,7 +6,8 @@ use crate::bootstrap::on_command::info::error::InfoHttpError;
 use crate::bootstrap::on_command::info::queries::InfoQueryDeps;
 
 pub mod reply {
-    pub type ResponseWire = Vec<crate::bootstrap::on_command::info::common::wire::FrontendOrderWire>;
+    pub type ResponseWire =
+        Vec<crate::bootstrap::on_command::info::common::wire::FrontendOrderWire>;
 }
 
 #[derive(Debug, serde::Deserialize)]

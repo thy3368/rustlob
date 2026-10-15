@@ -15,6 +15,11 @@ thiserror = "2"
 [dev-dependencies]
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }
 rstest = "0.23"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "place_only_spot_order_v2"
+harness = false
 
 [lints]
 workspace = true

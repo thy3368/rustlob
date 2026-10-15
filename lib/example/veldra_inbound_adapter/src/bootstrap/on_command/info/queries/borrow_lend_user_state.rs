@@ -1,4 +1,6 @@
-use crate::bootstrap::on_command::info::common::validate::{ensure_type, validate_hex_address_field};
+use crate::bootstrap::on_command::info::common::validate::{
+    ensure_type, validate_hex_address_field,
+};
 use crate::bootstrap::on_command::info::common::wire::{
     BorrowLendPositionWire, BorrowLendStateWire, BorrowLendUserStateWire,
 };
@@ -6,7 +8,8 @@ use crate::bootstrap::on_command::info::error::InfoHttpError;
 use crate::bootstrap::on_command::info::queries::InfoQueryDeps;
 
 pub mod reply {
-    pub type ResponseWire = crate::bootstrap::on_command::info::common::wire::BorrowLendUserStateWire;
+    pub type ResponseWire =
+        crate::bootstrap::on_command::info::common::wire::BorrowLendUserStateWire;
 }
 #[derive(Debug, serde::Deserialize)]
 pub struct RequestWire {

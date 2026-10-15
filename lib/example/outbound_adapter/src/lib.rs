@@ -24,5 +24,6 @@ pub use trading::{
     DefaultSpotOrderV2ModifyOutboundError, DefaultSpotOrderV2PlaceOnlyOutbound,
     DefaultSpotOrderV2PlaceOnlyOutboundError, DefaultSpotOrderV2PlaceOutbound,
     DefaultSpotOrderV2PlaceOutboundError, InMemoryPlaceOrderOutbound, MySqlPlaceOrderOutbound,
-    base_asset_id_for, quote_asset_id_for, symbol_for_asset,
+    NoopSpotOrderV2PlaceOnlyOutbound, NoopSpotOrderV2PlaceOnlyOutboundError, base_asset_id_for,
+    quote_asset_id_for, symbol_for_asset,
 };

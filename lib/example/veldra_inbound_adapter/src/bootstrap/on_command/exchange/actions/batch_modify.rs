@@ -11,8 +11,12 @@ use crate::bootstrap::on_command::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
     RestingOrderStatusWire,
 };
-use crate::bootstrap::on_command::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
-use crate::bootstrap::on_command::exchange::common::validate::{validate_cloid, validate_envelope_common};
+use crate::bootstrap::on_command::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler,
+};
+use crate::bootstrap::on_command::exchange::common::validate::{
+    validate_cloid, validate_envelope_common,
+};
 use crate::bootstrap::on_command::exchange::common::wire::ExchangeRequestEnvelopeWire;
 use crate::bootstrap::on_command::exchange::error::ExchangeHttpError;
 #[cfg(test)]

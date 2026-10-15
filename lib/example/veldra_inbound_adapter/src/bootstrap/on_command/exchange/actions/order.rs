@@ -8,11 +8,15 @@ use serde::{Deserialize, Serialize};
 pub use use_case_executor::trading::spot::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2;
 
 use crate::bootstrap::on_command::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
-use crate::bootstrap::on_command::exchange::common::runner::{ExchangeActionFuture, ExchangeActionHandler};
+use crate::bootstrap::on_command::exchange::common::runner::{
+    ExchangeActionFuture, ExchangeActionHandler,
+};
 use crate::bootstrap::on_command::exchange::common::validate::{
     validate_cloid, validate_envelope_common, validate_hex_address,
 };
-use crate::bootstrap::on_command::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_statuses_response};
+use crate::bootstrap::on_command::exchange::common::wire::{
+    ExchangeRequestEnvelopeWire, ok_statuses_response,
+};
 use crate::bootstrap::on_command::exchange::error::ExchangeHttpError;
 
 const DEFAULT_MAKER_FEE_BPS: u64 = 5;

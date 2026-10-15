@@ -8,7 +8,9 @@ use crate::bootstrap::on_command::exchange::common::runner::{
     ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
 };
 use crate::bootstrap::on_command::exchange::common::validate::validate_envelope_common;
-use crate::bootstrap::on_command::exchange::common::wire::{ExchangeRequestEnvelopeWire, ok_statuses_response};
+use crate::bootstrap::on_command::exchange::common::wire::{
+    ExchangeRequestEnvelopeWire, ok_statuses_response,
+};
 use crate::bootstrap::on_command::exchange::error::ExchangeHttpError;
 
 #[derive(Debug, thiserror::Error)]

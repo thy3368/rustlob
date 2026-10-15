@@ -15,6 +15,7 @@ pub use modify_default::{DefaultSpotOrderV2ModifyOutbound, DefaultSpotOrderV2Mod
 pub use place_default::{DefaultSpotOrderV2PlaceOutbound, DefaultSpotOrderV2PlaceOutboundError};
 pub use place_only_default::{
     DefaultSpotOrderV2PlaceOnlyOutbound, DefaultSpotOrderV2PlaceOnlyOutboundError,
+    NoopSpotOrderV2PlaceOnlyOutbound, NoopSpotOrderV2PlaceOnlyOutboundError,
 };
 pub use place_order_in_memory::{
     InMemoryPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for, symbol_for_asset,
