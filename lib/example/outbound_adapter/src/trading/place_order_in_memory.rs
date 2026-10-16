@@ -84,7 +84,8 @@ impl InMemoryPlaceOrderOutbound {
 
             if event.is_created() && event_string_field(event, "order_id").is_some() {
                 let order = decode_order_from_event(event)?;
-                state.orders.insert(order.order_id, order);
+                state.orders.insert(order.order_id, order.clone());
+                state.lob.upsert(order);
                 state.next_order_sequence = state
                     .next_order_sequence
                     .checked_add(1)
@@ -100,6 +101,9 @@ impl InMemoryPlaceOrderOutbound {
 
             if event.entity_type == SpotOrderV2::entity_type() && event.is_updated() {
                 apply_order_update_event(&mut state.orders, event)?;
+                if let Some(order) = state.orders.get(&(event.entity_id as u64)).cloned() {
+                    state.lob.upsert(order);
+                }
                 state.next_order_sequence = state
                     .next_order_sequence
                     .checked_add(1)
@@ -189,20 +193,11 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound
             ));
         }
 
-        let maker_orders = state
-            .orders
-            .values()
-            .filter(|order| {
-                order.trades_asset(pending_order.asset())
-                    && order.trades_symbol(pending_order.symbol())
-                    && order.side() != pending_order.side()
-                    && matches!(
-                        order.status(),
-                        SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-                    )
-            })
-            .cloned()
-            .collect();
+        let maker_orders = state.lob.maker_orders(
+            pending_order.asset(),
+            pending_order.symbol(),
+            pending_order.side(),
+        );
 
         Ok(ActivateMatchSpotOrderV2State {
             pending_order,
@@ -280,21 +275,9 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
             return Err(PlaceOrderOutboundError::BalanceNotFound);
         }
 
-        let maker_orders = state
-            .orders
-            .values()
-            .filter(|order| {
-                order.trades_asset(order_cmd.asset)
-                    && order.trades_symbol(market_rules.symbol.as_str())
-                    && order.side()
-                        != if order_cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell }
-                    && matches!(
-                        order.status(),
-                        SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-                    )
-            })
-            .cloned()
-            .collect();
+        let taker_side = if order_cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
+        let maker_orders =
+            state.lob.maker_orders(order_cmd.asset, market_rules.symbol.as_str(), taker_side);
 
         Ok(PlaceMatchSpotOrderV2State {
             maker_orders,

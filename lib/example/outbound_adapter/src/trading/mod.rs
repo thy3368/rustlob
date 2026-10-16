@@ -5,6 +5,7 @@ mod modify_default;
 mod place_default;
 mod place_only_default;
 mod place_order_in_memory;
+mod place_order_in_memory_raft;
 mod place_order_mysql;
 mod spot_block_default;
 
@@ -20,5 +21,6 @@ pub use place_only_default::{
 pub use place_order_in_memory::{
     InMemoryPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for, symbol_for_asset,
 };
+pub use place_order_in_memory_raft::{InMemoryPlaceOrderRaftOutbound, InMemoryRaftCluster};
 pub use place_order_mysql::MySqlPlaceOrderOutbound;
 pub use spot_block_default::{DefaultSpotBlockOutbound, DefaultSpotBlockOutboundError};

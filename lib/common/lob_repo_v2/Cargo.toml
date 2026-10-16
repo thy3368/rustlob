@@ -1,0 +1,12 @@
+[package]
+name = "lob_repo_v2"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+example_core_entity = { path = "../../example/entity" }
+
+[lints]
+workspace = true

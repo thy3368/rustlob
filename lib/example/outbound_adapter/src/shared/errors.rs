@@ -8,6 +8,8 @@ pub enum StoreError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PlaceOrderOutboundError {
+    #[error("raft error: {0}")]
+    Raft(String),
     #[error("balance not found")]
     BalanceNotFound,
     #[error("spot order not found")]

@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use cmd_handler::EntityReplayableEvent;
 use example_core_use_case::{Balance, MarketRules, Reservation, SpotOrderV2, SpotTrade};
+use lob_repo_v2::LobRepoV2;
 
 use super::StoreSnapshot;
 use crate::shared::StoreError;
@@ -17,6 +18,7 @@ pub(crate) struct StoreState {
     pub(crate) persisted_events: Vec<EntityReplayableEvent>,
     pub(crate) published_events: Vec<EntityReplayableEvent>,
     pub(crate) next_order_sequence: u64,
+    pub(crate) lob: LobRepoV2,
 }
 
 impl Default for StoreState {
@@ -30,6 +32,7 @@ impl Default for StoreState {
             persisted_events: Vec::new(),
             published_events: Vec::new(),
             next_order_sequence: 1,
+            lob: LobRepoV2::new(),
         }
     }
 }
@@ -69,8 +72,12 @@ impl InMemoryStore {
     }
 
     pub fn seed_order(&self, order: SpotOrderV2) -> Result<(), StoreError> {
+        let order_id = order.order_id;
         let mut state = self.lock_state()?;
-        state.orders.insert(order.order_id, order);
+        state.orders.insert(order_id, order);
+        if let Some(order) = state.orders.get(&order_id).cloned() {
+            state.lob.seed_order(order);
+        }
         Ok(())
     }
 
