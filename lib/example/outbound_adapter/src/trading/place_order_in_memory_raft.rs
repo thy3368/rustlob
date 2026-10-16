@@ -11,6 +11,7 @@ use example_core_use_case::{
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
     SpotOrderV2, SpotTrade,
 };
+use lob_repo_v2::lob::AssetLobV2;
 
 use crate::shared::{
     InMemorySpotPipelineBroker, InMemoryStore, PlaceOrderOutboundError, SpotOrderPlacedMessage,
@@ -25,17 +26,17 @@ pub struct InMemoryRaftCluster {
 }
 
 impl InMemoryRaftCluster {
-    pub fn new(nodes: usize) -> Self {
+    pub fn new(nodes: usize, asset: u32) -> Self {
         let count = nodes.max(1);
         Self {
-            stores: Arc::new((0..count).map(|_| InMemoryStore::new()).collect()),
+            stores: Arc::new((0..count).map(|_| InMemoryStore::new(asset)).collect()),
             leader: Arc::new(Mutex::new(0)),
             committed: Arc::new(Mutex::new(0)),
         }
     }
 
-    pub fn three_node() -> Self {
-        Self::new(3)
+    pub fn three_node(asset: u32) -> Self {
+        Self::new(3, asset)
     }
     pub fn node_count(&self) -> usize {
         self.stores.len()
@@ -103,7 +104,7 @@ impl InMemoryRaftCluster {
 
 impl Default for InMemoryRaftCluster {
     fn default() -> Self {
-        Self::three_node()
+        Self::three_node(1)
     }
 }
 
@@ -125,7 +126,7 @@ impl InMemoryPlaceOrderRaftOutbound {
     }
 
     pub fn from_store(store: InMemoryStore) -> Self {
-        let cluster = InMemoryRaftCluster::new(1);
+        let cluster = InMemoryRaftCluster::new(1, 1);
         Self { store, broker: None, cluster, node_id: 0 }
     }
 
@@ -133,7 +134,7 @@ impl InMemoryPlaceOrderRaftOutbound {
         store: InMemoryStore,
         broker: InMemorySpotPipelineBroker,
     ) -> Self {
-        let cluster = InMemoryRaftCluster::new(1);
+        let cluster = InMemoryRaftCluster::new(1, 1);
         Self { store, broker: Some(broker), cluster, node_id: 0 }
     }
 
@@ -185,7 +186,16 @@ impl InMemoryPlaceOrderRaftOutbound {
             if event.is_created() && event_string_field(event, "order_id").is_some() {
                 let order = decode_order_from_event(event)?;
                 state.orders.insert(order.order_id, order.clone());
-                state.lob.upsert(order);
+                let mut lob_event = event.clone();
+                lob_event.sequence = state
+                    .lob
+                    .sequence()
+                    .checked_add(1)
+                    .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
+                state
+                    .lob
+                    .replay_events(&[lob_event])
+                    .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
                 state.next_order_sequence = state
                     .next_order_sequence
                     .checked_add(1)
@@ -201,9 +211,16 @@ impl InMemoryPlaceOrderRaftOutbound {
 
             if event.entity_type == SpotOrderV2::entity_type() && event.is_updated() {
                 apply_order_update_event(&mut state.orders, event)?;
-                if let Some(order) = state.orders.get(&(event.entity_id as u64)).cloned() {
-                    state.lob.upsert(order);
-                }
+                let mut lob_event = event.clone();
+                lob_event.sequence = state
+                    .lob
+                    .sequence()
+                    .checked_add(1)
+                    .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
+                state
+                    .lob
+                    .replay_events(&[lob_event])
+                    .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
                 state.next_order_sequence = state
                     .next_order_sequence
                     .checked_add(1)
@@ -293,11 +310,10 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutb
             ));
         }
 
-        let maker_orders = state.lob.maker_orders(
-            pending_order.asset(),
-            pending_order.symbol(),
-            pending_order.side(),
-        );
+        let maker_orders = state
+            .lob
+            .maker_orders(pending_order.asset(), pending_order.side())
+            .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
 
         Ok(ActivateMatchSpotOrderV2State {
             pending_order,
@@ -375,8 +391,10 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutboun
         }
 
         let taker_side = if order_cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
-        let maker_orders =
-            state.lob.maker_orders(order_cmd.asset, market_rules.symbol.as_str(), taker_side);
+        let maker_orders = state
+            .lob
+            .maker_orders(order_cmd.asset, taker_side)
+            .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
 
         Ok(PlaceMatchSpotOrderV2State {
             maker_orders,
