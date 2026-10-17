@@ -34,7 +34,7 @@ fn sample_command() -> BuildBlockFromCommandsCommand {
 }
 
 fn execution_context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: 1_717_171_717_000_000_000 }
+    ExecutionContext { execution_time_ns: 1_717_171_717_000_000_000, execution_id: 0 }
 }
 
 fn sample_envelope() -> CommandEnvelope<ProductCommand> {

@@ -195,7 +195,7 @@ where
     let state = outbound.load_given_state(&cmd).map_err(UpdateLeverageExecutionError::LoadState)?;
     use_case.validate_state_given(&cmd, &state).map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
-        .compute_state_changed_unchecked(&cmd, &state, &ExecutionContext::now())
+        .compute_state_changed_unchecked(&cmd, &state, &ExecutionContext::now(0))
         .map_err(UpdateLeverageExecutionError::Business)?;
     let events =
         changes.to_replayable_events().map_err(UpdateLeverageExecutionError::ProjectEvents)?;

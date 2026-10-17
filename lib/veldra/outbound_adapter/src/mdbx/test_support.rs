@@ -140,7 +140,7 @@ pub fn built_block() -> BuildBlockFromCommandsChanges {
         .compute_state_changed_unchecked(
             &sample_command(),
             &sample_state(),
-            &ExecutionContext::now(),
+            &ExecutionContext::now(0),
         )
         .expect("block should build")
 }

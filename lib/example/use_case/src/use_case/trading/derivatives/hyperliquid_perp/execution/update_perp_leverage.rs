@@ -278,7 +278,7 @@ mod tests {
         let state = state(HyperliquidPerpMarginMode::Cross, None);
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, true), &state, &ExecutionContext::now())
+            .compute_state_changed_unchecked(&cmd(10, true), &state, &ExecutionContext::now(0))
             .unwrap();
         let events = changes.to_replayable_events().unwrap();
 
@@ -296,7 +296,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, true), &state, &ExecutionContext::now())
+            .compute_state_changed_unchecked(&cmd(10, true), &state, &ExecutionContext::now(0))
             .unwrap();
         let position = changes.changed_position.as_ref().unwrap();
         let events = changes.to_replayable_events().unwrap();
@@ -317,7 +317,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, false), &state, &ExecutionContext::now())
+            .compute_state_changed_unchecked(&cmd(10, false), &state, &ExecutionContext::now(0))
             .unwrap();
 
         assert_eq!(

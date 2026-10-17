@@ -49,7 +49,7 @@ impl BlockCommandHandler for PlaceSpotOrderV2BlockCommandHandler {
         execute_place_spot_order_v2(
             command,
             &exchange_state.spot,
-            ExecutionContext { execution_time_ns: envelope.timestamp_ns },
+            ExecutionContext { execution_time_ns: envelope.timestamp_ns, execution_id: 0 },
         )
     }
 

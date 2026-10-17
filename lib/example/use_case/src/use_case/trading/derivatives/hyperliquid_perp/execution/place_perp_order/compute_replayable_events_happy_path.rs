@@ -33,7 +33,7 @@ fn compute_after_changes_and_events(
     state: PlaceHyperliquidPerpOrderState,
 ) -> (PlaceHyperliquidPerpOrderChanges, Vec<cmd_handler::EntityReplayableEvent>) {
     let changes = use_case()
-        .compute_state_changed_with_context(cmd, &state, &ExecutionContext::now())
+        .compute_state_changed_with_context(cmd, &state, &ExecutionContext::now(0))
         .unwrap();
     let events = changes.to_replayable_events().unwrap();
     (changes, events)

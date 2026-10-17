@@ -11,7 +11,7 @@ use example_core_use_case::{
 };
 
 fn context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: 100 }
+    ExecutionContext { execution_time_ns: 100, execution_id: 0 }
 }
 
 fn cmd(order_id: u64) -> ActivateSpotOrderV2Cmd {

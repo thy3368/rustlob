@@ -27,7 +27,7 @@ enum ExpectedOutcome {
 }
 
 fn context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: EXECUTION_TIME_NS }
+    ExecutionContext { execution_time_ns: EXECUTION_TIME_NS, execution_id: 0 }
 }
 
 fn cmd(order_id: u64) -> ActivateMatchSpotOrderV2Cmd {

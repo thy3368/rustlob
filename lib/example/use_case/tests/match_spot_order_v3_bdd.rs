@@ -32,7 +32,7 @@ struct Scenario {
 }
 
 fn context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: EXECUTION_TIME_NS }
+    ExecutionContext { execution_time_ns: EXECUTION_TIME_NS, execution_id: 0 }
 }
 
 fn activated_order(

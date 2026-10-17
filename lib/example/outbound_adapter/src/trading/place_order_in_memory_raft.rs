@@ -312,8 +312,12 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutb
 
         let maker_orders = state
             .lob
-            .maker_orders(pending_order.asset(), pending_order.side())
-            .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
+            .match_orders(u64::MAX, u64::MAX, pending_order.side())
+            .0
+            .unwrap_or_default()
+            .into_iter()
+            .cloned()
+            .collect();
 
         Ok(ActivateMatchSpotOrderV2State {
             pending_order,
@@ -393,8 +397,12 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutboun
         let taker_side = if order_cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
         let maker_orders = state
             .lob
-            .maker_orders(order_cmd.asset, taker_side)
-            .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
+            .match_orders(u64::MAX, u64::MAX, taker_side)
+            .0
+            .unwrap_or_default()
+            .into_iter()
+            .cloned()
+            .collect();
 
         Ok(PlaceMatchSpotOrderV2State {
             maker_orders,

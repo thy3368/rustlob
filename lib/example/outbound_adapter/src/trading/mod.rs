@@ -1,6 +1,7 @@
 mod cancel_default;
 #[cfg(feature = "test-support")]
 mod cancel_fake;
+mod in_memory_place_order;
 mod modify_default;
 mod place_default;
 mod place_only_default;

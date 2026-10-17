@@ -66,7 +66,7 @@ fn trigger_order(
 
 /// 返回带稳定执行时间的业务上下文，避免测试依赖系统时钟。
 fn execution_context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: CREATED_AT }
+    ExecutionContext { execution_time_ns: CREATED_AT, execution_id: 0 }
 }
 
 /// 依次执行命令校验、给定状态校验和带固定时间的 Changes 推导。
