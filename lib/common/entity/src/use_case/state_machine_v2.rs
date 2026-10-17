@@ -441,15 +441,18 @@ use crate::{ReplayableChanges, action_type};
 pub struct ExecutionContext {
     /// 当前 use case 执行时间，单位为 Unix 纳秒。
     pub execution_time_ns: u64,
+
+    /// 本次 use case 执行的业务标识，可演进为事务id。
+    pub execution_id: u64,
 }
 
 impl ExecutionContext {
-    pub fn now() -> Self {
+    pub fn now(execution_id: u64) -> Self {
         let execution_time_ns = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_nanos().try_into().unwrap_or(u64::MAX))
             .unwrap_or_default();
-        Self { execution_time_ns }
+        Self { execution_time_ns, execution_id }
     }
 }
 
@@ -540,7 +543,7 @@ pub trait StateMachineOwnedV2Diff: StateMachineV2Unchecked {
         cmd: &Self::Command,
         given_state: Self::StateGiven,
     ) -> Result<Self::StateDiff, Self::Error> {
-        let context = ExecutionContext::now();
+        let context = ExecutionContext::now(0);
         self.compute_state_diff_with_context(cmd, given_state, &context)
     }
 

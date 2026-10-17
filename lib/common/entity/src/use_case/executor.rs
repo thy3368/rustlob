@@ -86,7 +86,7 @@ impl StateMachineExecutor {
         OB: StateSink<F>,
     {
         family.check_command(command).map_err(ExecutionError::Business)?;
-        let context = ExecutionContext::now();
+        let context = ExecutionContext::now(0);
 
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
         let given_state =
