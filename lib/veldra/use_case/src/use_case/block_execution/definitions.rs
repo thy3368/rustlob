@@ -74,7 +74,7 @@ impl ReplayableChanges for BuildBlockFromCommandsChanges {
             .enumerate()
             .map(|(sequence, mut event)| {
                 event.timestamp = 0;
-                event.sequence = sequence as u64;
+                event.lsn = sequence as u64;
                 event
             })
             .collect())

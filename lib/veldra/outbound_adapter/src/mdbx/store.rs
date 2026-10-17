@@ -130,7 +130,7 @@ impl VeldraMdbxBlockStore {
         // 将 replayable events 按 (height, event_sequence) 落盘，供事件重放和核对使用。
         for event in &body.replayable_events {
             let record = StoredReplayableEvent::from_event(header.block_height, event)?;
-            let key = encode_block_sequence_key(header.block_height, event.sequence);
+            let key = encode_block_sequence_key(header.block_height, event.lsn);
             txn.put(&block_events, key, &encode_record(&record)?, WriteFlags::empty())
                 .map_err(|error| VeldraMdbxStorageError::Write(Box::new(error)))?;
         }

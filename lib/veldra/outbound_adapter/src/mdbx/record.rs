@@ -120,7 +120,7 @@ impl StoredReplayableEvent {
         Ok(Self {
             schema_version: SCHEMA_VERSION_V1,
             block_height,
-            event_sequence: event.sequence,
+            event_sequence: event.lsn,
             entity_id: event.entity_id,
             entity_type: event.entity_type,
             change_type: event.change_type,

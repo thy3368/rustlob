@@ -343,7 +343,7 @@ fn mixed_spot_and_treasury_batch_builds_block() -> Result<(), BuildBlockError> {
         .unwrap();
     assert_eq!((spot_usdt_change.available, spot_usdt_change.frozen), (9_800, 200));
 
-    let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
+    let sequences = events.iter().map(|event| event.lsn).collect::<Vec<_>>();
     assert_eq!(sequences, vec![0, 1, 2, 3, 4, 5, 6]);
 
     Ok(())
@@ -366,7 +366,7 @@ fn batch_event_sequences_are_continuous_across_commands() -> Result<(), BuildBlo
     )?;
     let events = changes.to_replayable_events().expect("changes should project to events");
 
-    let sequences = events.iter().map(|event| event.sequence).collect::<Vec<_>>();
+    let sequences = events.iter().map(|event| event.lsn).collect::<Vec<_>>();
     assert_eq!(sequences, vec![0, 1, 2, 3, 4, 5, 6]);
 
     Ok(())

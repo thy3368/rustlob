@@ -136,7 +136,7 @@ pub(crate) fn replay_events(
             let order = decode_order_from_event(event)?;
             state.orders.insert(order.order_id, order);
             let mut lob_event = event.clone();
-            lob_event.sequence = state
+            lob_event.lsn = state
                 .lob
                 .sequence()
                 .checked_add(1)
@@ -159,7 +159,7 @@ pub(crate) fn replay_events(
         if event.entity_type == SpotOrderV2::entity_type() && event.is_updated() {
             apply_order_update_event(&mut state.orders, event)?;
             let mut lob_event = event.clone();
-            lob_event.sequence = state
+            lob_event.lsn = state
                 .lob
                 .sequence()
                 .checked_add(1)

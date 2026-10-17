@@ -31,7 +31,7 @@ pub(crate) fn event_commitment(event: &cmd_handler::EntityReplayableEvent) -> St
         .join("|");
     stable_hash_hex(&[
         event.timestamp.to_string(),
-        event.sequence.to_string(),
+        event.lsn.to_string(),
         event.old_version.to_string(),
         event.new_version.to_string(),
         event.entity_id.to_string(),

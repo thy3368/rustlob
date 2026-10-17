@@ -116,7 +116,7 @@ impl ReplayFieldChange {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
     pub timestamp: u64,
-    pub sequence: u64,
+    pub lsn: u64,
     pub old_version: u64,
     #[serde(default)]
     pub execution_id: u64,
@@ -154,7 +154,7 @@ impl EntityReplayableEvent {
     ) -> Self {
         Self {
             timestamp,
-            sequence,
+            lsn: sequence,
             old_version,
             execution_id: 0,
             new_version,
