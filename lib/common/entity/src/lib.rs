@@ -5,25 +5,26 @@ pub use entity_derive::{ActionType, ObjectType, action_type, function};
 
 mod entity_v2;
 
-mod use_case;
 mod sequence;
+mod use_case;
 
 pub use entity_v2::entity::{
     AggregateRole, Entity, EntityIdGenerator, EntityLifecycle, EntityMutationModel,
     EntityUseCaseApiPolicy, EntityUseCaseApiSurface, FieldDiff, FinancialClassification,
     FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
 };
+pub(crate) use entity_v2::entity_field_change::next_sequence;
 pub use entity_v2::entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayEventFieldParseError,
     ReplayFieldChange,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
+pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::executor::{
     ExecutionError, ExecutionResult, MiFamilyExecutionSpec, StateMachineExecutor, StateSink,
     StateSource,
 };
-pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。

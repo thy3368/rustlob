@@ -1,5 +1,5 @@
-use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use cmd_handler::EntityReplayableEvent;
+use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::Entity;
 use example_core_use_case::{
     Balance, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
@@ -8,15 +8,15 @@ use example_core_use_case::{
 use lob_repo_v2::lob::AssetLobV2;
 
 use super::in_memory_place_order::{
-    apply_order_update_event, decode_created_reservation, decode_created_trade,
-    decode_order_from_event, DEFAULT_FEE_ACCOUNT_ID,
+    DEFAULT_FEE_ACCOUNT_ID, apply_order_update_event, decode_created_reservation,
+    decode_created_trade, decode_order_from_event,
 };
 pub use super::in_memory_place_order::{
-    base_asset_id_for, quote_asset_id_for, symbol_for_asset, InMemoryPlaceOrderOutbound,
+    InMemoryPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for, symbol_for_asset,
 };
 use crate::shared::{
-    balance_key, event_string_field, event_u64_field, PlaceOrderOutboundError,
-    SpotOrderPlacedMessage, SpotPipelineBroker, SpotPipelineMessage,
+    PlaceOrderOutboundError, SpotOrderPlacedMessage, SpotPipelineBroker, SpotPipelineMessage,
+    balance_key, event_string_field, event_u64_field,
 };
 
 impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
@@ -119,9 +119,9 @@ pub(crate) fn replay_events(
     events: &[EntityReplayableEvent],
 ) -> Result<(), PlaceOrderOutboundError> {
     let mut state = outbound.store.lock_state()?;
-    
+
     //todo SpotOrderV2 相关的event, 在单独函数处理， 直接调用 replay_events+ event数组
-    
+
     for event in events {
         if event.is_created()
             && event_string_field(event, "reservation_id").is_some()

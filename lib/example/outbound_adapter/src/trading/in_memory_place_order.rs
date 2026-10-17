@@ -1,9 +1,8 @@
-use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use cmd_handler::EntityReplayableEvent;
+use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    Balance, MarketRules, PendingTriggerSpotOrderSource
-    , Reservation, ReservationCloseReason,
+    Balance, MarketRules, PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason,
     ReservationKind, ReservationMarketKind, ReservationStatus, SpotOrderGroupRelation,
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
     SpotOrderV2, SpotTrade,
@@ -11,8 +10,8 @@ use example_core_use_case::{
 use lob_repo_v2::lob::AssetLobV2;
 
 use crate::shared::{
-    balance_key, event_string_field, event_u64_field,
     InMemorySpotPipelineBroker, InMemoryStore, PlaceOrderOutboundError, SpotPipelineBroker,
+    balance_key, event_string_field, event_u64_field,
 };
 
 #[derive(Debug, Clone, Default)]

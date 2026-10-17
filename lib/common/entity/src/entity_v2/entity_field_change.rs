@@ -118,6 +118,8 @@ pub struct EntityReplayableEvent {
     pub timestamp: u64,
     pub sequence: u64,
     pub old_version: u64,
+    #[serde(default)]
+    pub execution_id: u64,
     pub new_version: u64,
     pub entity_id: i64,
     pub entity_type: u8,
@@ -154,6 +156,7 @@ impl EntityReplayableEvent {
             timestamp,
             sequence,
             old_version,
+            execution_id: 0,
             new_version,
             entity_id,
             entity_type,
@@ -339,6 +342,20 @@ mod tests {
         assert_eq!(event.required_string_field("account_id"), Ok("buyer".to_owned()));
         assert_eq!(event.required_u32_field("asset"), Ok(10001));
         assert_eq!(event.required_u64_field("asset"), Ok(10001));
+    }
+
+    #[test]
+    fn constructors_default_execution_id_to_zero() {
+        assert_eq!(EntityReplayableEvent::new_created(1, 1, 1, 1).execution_id, 0);
+    }
+
+    #[test]
+    fn deserializing_legacy_event_defaults_execution_id_to_zero() {
+        let event: EntityReplayableEvent = serde_json::from_str(
+            r#"{"timestamp":1,"sequence":2,"old_version":0,"new_version":1,"entity_id":3,"entity_type":4,"change_type":1,"field_changes":[]}"#,
+        )
+        .expect("legacy event JSON should remain readable");
+        assert_eq!(event.execution_id, 0);
     }
 
     #[test]

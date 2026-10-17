@@ -1,5 +1,7 @@
 use crate::use_case::state_machine_v2::ExecutionContext;
-use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff};
+use crate::{
+    EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff, next_sequence,
+};
 
 /// 多聚合 MI state-machine family 的运行时编排器。
 ///
@@ -86,7 +88,9 @@ impl StateMachineExecutor {
         OB: StateSink<F>,
     {
         family.check_command(command).map_err(ExecutionError::Business)?;
-        let context = ExecutionContext::now(0);
+        // 事件序列号生成器也提供进程内唯一的执行标识；加一确保首个 ID 非零。
+        let execution_id = next_sequence().wrapping_add(1);
+        let context = ExecutionContext::now(execution_id);
 
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
         let given_state =
@@ -97,7 +101,10 @@ impl StateMachineExecutor {
             .map_err(ExecutionError::Business)?;
 
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
-        let events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;
+        let mut events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;
+        for event in &mut events {
+            event.execution_id = context.execution_id;
+        }
 
         state_sink.persist(&events).map_err(ExecutionError::Persist)?;
         state_sink.replay(&events).map_err(ExecutionError::Replay)?;
