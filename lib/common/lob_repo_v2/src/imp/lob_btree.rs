@@ -35,19 +35,6 @@ impl LocalLobBtree {
         self.ids.get(&id).and_then(|&i| self.slots[i].as_ref())
     }
 
-    /// 返回固定资产簿中按撮合优先级排列的 maker 订单。
-    pub fn maker_orders(
-        &self,
-        asset: u32,
-        taker_side: SpotOrderSide,
-    ) -> Result<Vec<SpotOrderV2>, LobError> {
-        if asset != self.asset {
-            return Err(LobError::Event("wrong order book".into()));
-        }
-        let (orders, _) = self.match_orders(u64::MAX, u64::MAX, taker_side);
-        Ok(orders.unwrap_or_default().into_iter().cloned().collect())
-    }
-
     pub fn insert_order(&mut self, order: SpotOrderV2) -> Result<(), LobError> {
         if order.asset() != self.asset {
             return Err(LobError::Event("wrong order book".into()));
