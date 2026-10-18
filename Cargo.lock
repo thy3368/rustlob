@@ -3098,6 +3098,7 @@ dependencies = [
  "actix-web",
  "axum 0.7.9",
  "cmd_handler",
+ "entity",
  "example_core_use_case",
  "example_outbound_adapter",
  "inbound_adapter_support",
@@ -3956,6 +3957,7 @@ dependencies = [
  "borsh 0.10.4",
  "cmd_handler",
  "ed25519-dalek",
+ "entity",
  "example_core_use_case",
  "example_outbound_adapter",
  "hotstuff_rs",
@@ -4411,19 +4413,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
-]
-
-[[package]]
-name = "inbound_adapter"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "futures-util",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tokio-tungstenite 0.24.0",
 ]
 
 [[package]]
@@ -4987,22 +4976,6 @@ name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
-
-[[package]]
-name = "libmdbx"
-version = "0.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1da773dcce45661428e2b51ca984eb3c64c08f2aa54865397e4b77d1f61c9f07"
-dependencies = [
- "bitflags 2.11.0",
- "derive_more 2.1.1",
- "indexmap 2.13.0",
- "libc",
- "mdbx-sys",
- "parking_lot 0.12.5",
- "sealed",
- "thiserror 2.0.18",
-]
 
 [[package]]
 name = "libmimalloc-sys"
@@ -5680,17 +5653,6 @@ name = "md5"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae960838283323069879657ca3de837e9f7bbb4c7bf6ea7f1b290d5e9476d2e0"
-
-[[package]]
-name = "mdbx-sys"
-version = "13.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4002b9ffed3dd01364ab005bca653a99b8f550ca4cd755470a9d3a31a44f466"
-dependencies = [
- "bindgen",
- "cc",
- "libc",
-]
 
 [[package]]
 name = "memchr"
@@ -6572,21 +6534,6 @@ name = "os_str_bytes"
 version = "6.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2355d85b9a3786f481747ced0e0ff2ba35213a1f9bd406ed906554d7af805a1"
-
-[[package]]
-name = "outbound_adapter"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "cmd_handler",
- "entity",
- "example_core_use_case",
- "libmdbx",
- "serde",
- "thiserror 1.0.69",
- "veldra_core_entity",
- "veldra_core_use_case",
-]
 
 [[package]]
 name = "parity-scale-codec"
@@ -10503,6 +10450,7 @@ dependencies = [
  "example_core_use_case",
  "example_outbound_adapter",
  "rstest",
+ "serde",
  "thiserror 2.0.18",
 ]
 
@@ -10579,31 +10527,6 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
-
-[[package]]
-name = "veldra_core_entity"
-version = "0.1.0"
-dependencies = [
- "cmd_handler",
- "entity",
- "example_core_use_case",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "veldra_core_use_case"
-version = "0.1.0"
-dependencies = [
- "cmd_handler",
- "entity",
- "example_core_use_case",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "veldra_core_entity",
-]
 
 [[package]]
 name = "version_check"
