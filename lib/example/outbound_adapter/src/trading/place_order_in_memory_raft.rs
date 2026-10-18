@@ -187,7 +187,7 @@ impl InMemoryPlaceOrderRaftOutbound {
                 let order = decode_order_from_event(event)?;
                 state.orders.insert(order.order_id, order.clone());
                 let mut lob_event = event.clone();
-                lob_event.lsn = state
+                lob_event.seq = state
                     .lob
                     .sequence()
                     .checked_add(1)
@@ -212,7 +212,7 @@ impl InMemoryPlaceOrderRaftOutbound {
             if event.entity_type == SpotOrderV2::entity_type() && event.is_updated() {
                 apply_order_update_event(&mut state.orders, event)?;
                 let mut lob_event = event.clone();
-                lob_event.lsn = state
+                lob_event.seq = state
                     .lob
                     .sequence()
                     .checked_add(1)
