@@ -10,6 +10,7 @@ default-run = "hotstuff_use_case_demo"
 axum = "0.7"
 borsh = "0.10"
 cmd_handler = { path = "../../common/cmd_handler" }
+common_entity = { package = "entity", path = "../../common/entity" }
 ed25519-dalek = { version = "2.0.0", features = ["rand_core"] }
 example_core_use_case = { path = "../use_case" }
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }

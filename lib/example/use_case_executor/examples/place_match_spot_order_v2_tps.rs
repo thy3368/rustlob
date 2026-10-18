@@ -74,8 +74,17 @@ fn run_round() -> Result<(usize, Duration), Box<dyn std::error::Error>> {
     let out = outbound()?;
     let start = Instant::now();
     for id in 1..=N {
-        let result = execute_place_match_spot_order_v2_with_outbound(&command(id), &out)
-            .map_err(|e| format!("order {id} failed: {e:?}"))?;
+        let result = execute_place_match_spot_order_v2_with_outbound(
+            &LogEntry {
+                lsn: id,
+                logical_ts: id,
+                client_id: 1,
+                request_id: id,
+                payload: command(id),
+            },
+            &out,
+        )
+        .map_err(|e| format!("order {id} failed: {e:?}"))?;
         let trades = match &result.changes {
             example_core_use_case::PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched {
                 match_changes,
@@ -115,3 +124,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("scope=single-threaded in-memory 1000-order-per-round link throughput");
     Ok(())
 }
+use common_entity::LogEntry;

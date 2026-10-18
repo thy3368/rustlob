@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
 use example_core_use_case::MatchSpotOrderV3Cmd;
@@ -26,9 +26,11 @@ pub async fn run_timer() -> TimerResult<()> {
 
     let started_at = Instant::now();
     let round = Arc::new(AtomicU64::new(1));
+    let sequencer = Arc::new(Mutex::new(LogEntrySequencer::new(None)));
     let scheduler = JobScheduler::new().await?;
     let job = Job::new_repeated_async(INTERVAL, move |job_id, _scheduler| {
         let round = round.clone();
+        let sequencer = sequencer.clone();
         Box::pin(async move {
             let round = round.fetch_add(1, Ordering::Relaxed);
             println!(
@@ -41,7 +43,21 @@ pub async fn run_timer() -> TimerResult<()> {
             for (sequence, command) in scheduled_place_commands(round).into_iter().enumerate() {
                 let sequence = sequence + 1;
                 let order_id = command.order_id;
-                match execute_match_spot_order_v3(&command) {
+                let entry = match sequencer.lock() {
+                    Ok(mut sequencer) => sequencer.sequence(0, order_id, command),
+                    Err(error) => {
+                        eprintln!("timer sequencer lock failed: {error}");
+                        continue;
+                    }
+                };
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(error) => {
+                        eprintln!("timer sequencer failed: {error}");
+                        continue;
+                    }
+                };
+                match execute_match_spot_order_v3(&entry) {
                     Ok(result) => println!(
                         "timer spot order succeeded round={round} sequence={sequence} \
                          order_id={order_id} events={}",
@@ -83,3 +99,4 @@ mod tests {
         assert_eq!(commands[1].order_id, 72);
     }
 }
+use common_entity::LogEntrySequencer;

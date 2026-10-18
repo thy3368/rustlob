@@ -263,6 +263,7 @@ pub(crate) mod tests {
 
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, StateSink, StateSource};
+    use common_entity::LogEntry;
     use example_core_use_case::{
         Balance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
         PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, WithdrawQuoteCmd,
@@ -361,7 +362,7 @@ pub(crate) mod tests {
 
         fn load_given_state(
             &self,
-            _cmd: &PlaceOnlySpotOrderV2Cmd,
+            _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
         ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
             let settlement_balances = vec![
                 Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
@@ -458,6 +459,10 @@ pub(crate) mod tests {
 
         fn place_order_outbound(&self) -> &Self::Outbound {
             self
+        }
+
+        fn command_metadata(&self) -> (u64, u64, u64, u64) {
+            (1, 1_000_000_000, 1, 1)
         }
     }
 

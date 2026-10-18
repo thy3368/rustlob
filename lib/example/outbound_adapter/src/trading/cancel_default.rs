@@ -18,7 +18,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for DefaultSpotOrderV2CancelOutbound 
 
     fn load_given_state(
         &self,
-        _cmd: &CancelSpotOrderV2Cmd,
+        _cmd: &LogEntry<CancelSpotOrderV2Cmd>,
     ) -> Result<CancelSpotOrderV2State, Self::Error> {
         // order 只有lob里面取，如果取不到，那说明状态不正确，对吧？
         //     /// 订单已进入执行流程，尚未成交。
@@ -47,3 +47,4 @@ impl StateSink<CancelSpotOrderV2UseCase> for DefaultSpotOrderV2CancelOutbound {
         Ok(())
     }
 }
+use common_entity::LogEntry;

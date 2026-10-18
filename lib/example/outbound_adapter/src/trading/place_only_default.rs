@@ -16,7 +16,7 @@ impl StateSource<PlaceOnlySpotOrderV2UseCase> for NoopSpotOrderV2PlaceOnlyOutbou
 
     fn load_given_state(
         &self,
-        _cmd: &PlaceOnlySpotOrderV2Cmd,
+        _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     ) -> Result<PlaceOnlySpotOrderV2State, Self::Error> {
         Ok(())
     }
@@ -52,7 +52,7 @@ impl StateSource<PlaceOnlySpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOnlyOut
 
     fn load_given_state(
         &self,
-        _cmd: &PlaceOnlySpotOrderV2Cmd,
+        _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     ) -> Result<PlaceOnlySpotOrderV2State, Self::Error> {
         Ok(())
     }
@@ -73,3 +73,4 @@ impl StateSink<PlaceOnlySpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOnlyOutbo
         Ok(())
     }
 }
+use common_entity::LogEntry;

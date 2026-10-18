@@ -5,7 +5,7 @@ use example_core_use_case::{SpotBlockChanges, SpotBlockCmd, SpotBlockError, Spot
 use example_outbound_adapter::{DefaultSpotBlockOutbound, DefaultSpotBlockOutboundError};
 
 pub fn execute_spot_block(
-    command: &SpotBlockCmd,
+    command: &LogEntry<SpotBlockCmd>,
 ) -> Result<
     ExecutionResult<SpotBlockChanges>,
     ExecutionError<SpotBlockError, DefaultSpotBlockOutboundError>,
@@ -14,7 +14,7 @@ pub fn execute_spot_block(
 }
 
 pub fn execute_spot_block_with_outbound<OB>(
-    command: &SpotBlockCmd,
+    command: &LogEntry<SpotBlockCmd>,
     outbound: &OB,
 ) -> Result<
     ExecutionResult<SpotBlockChanges>,
@@ -46,6 +46,10 @@ mod tests {
     };
 
     use super::*;
+
+    fn entry<P>(payload: P) -> LogEntry<P> {
+        LogEntry { lsn: 7, logical_ts: 100, client_id: 1, request_id: 2, payload }
+    }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct FakeSpotBlockOutboundError;
@@ -97,7 +101,10 @@ mod tests {
     impl StateSource<SpotBlockUseCase> for FakeSpotBlockOutbound {
         type Error = FakeSpotBlockOutboundError;
 
-        fn load_given_state(&self, _cmd: &SpotBlockCmd) -> Result<SpotBlockState, Self::Error> {
+        fn load_given_state(
+            &self,
+            _cmd: &LogEntry<SpotBlockCmd>,
+        ) -> Result<SpotBlockState, Self::Error> {
             let order = buy_order()?;
             let frozen = order
                 .reservation
@@ -192,7 +199,7 @@ mod tests {
 
     #[test]
     fn execute_spot_block_with_default_outbound_stops_at_load_state() {
-        let result = execute_spot_block(&valid_command());
+        let result = execute_spot_block(&entry(valid_command()));
 
         assert_eq!(
             result,
@@ -205,7 +212,7 @@ mod tests {
         let command = SpotBlockCmd { commands: vec![cancel_command(), modify_command()] };
         let outbound = FakeSpotBlockOutbound::default();
 
-        let result = match execute_spot_block_with_outbound(&command, &outbound) {
+        let result = match execute_spot_block_with_outbound(&entry(command), &outbound) {
             Ok(result) => result,
             Err(error) => {
                 panic!("mixed spot block should execute with item-level rejection: {error:?}")
@@ -234,3 +241,4 @@ mod tests {
         assert!(sink_calls.iter().all(|call| call.events == result.events));
     }
 }
+use common_entity::LogEntry;

@@ -1,6 +1,6 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, LogEntry, ReplayableChanges,
-    StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
+    StateMachineV2Unchecked,
 };
 use example_core_entity::{
     ReservationStatus, SpotOrderGroupRelation, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
@@ -91,9 +91,8 @@ fn log_entry_keeps_complete_place_only_commands() {
     );
 }
 
-/// 返回带稳定执行时间的业务上下文，避免测试依赖系统时钟。
-fn execution_context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: CREATED_AT, execution_id: 0 }
+fn entry(payload: PlaceOnlySpotOrderV2Cmd) -> LogEntry<PlaceOnlySpotOrderV2Cmd> {
+    LogEntry { lsn: 1, logical_ts: CREATED_AT, client_id: 1, request_id: 1, payload }
 }
 
 /// 依次执行命令校验、给定状态校验和带固定时间的 Changes 推导。
@@ -101,13 +100,14 @@ fn compute_changes(
     command: &PlaceOnlySpotOrderV2Cmd,
 ) -> Result<PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Error> {
     let use_case = PlaceOnlySpotOrderV2UseCase;
+    let command = entry(command.clone());
 
     // 先验证不依赖状态的命令事实，再验证 normalTpsl 的父子业务约束。
-    use_case.check_command(command)?;
-    use_case.validate_state_given(command, &())?;
+    use_case.check_command(&command)?;
+    use_case.validate_state_given(&command, &())?;
 
     // 通过固定上下文推导唯一业务真相 Changes，避免调用默认的系统时间。
-    use_case.compute_state_diff_with_context(command, (), &execution_context())
+    use_case.compute_state_diff(&command, ())
 }
 
 /// 从单订单 Changes 中取出订单，避免测试绕过 Changes 直接构造实体。
@@ -274,7 +274,7 @@ fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
     invalid_price.price = "0".to_owned();
     // 价格必须是正整数字符串。
     assert_eq!(
-        use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_price)),
+        use_case.check_command(&entry(PlaceOnlySpotOrderV2Cmd::Single(invalid_price))),
         Err(PlaceOnlySpotOrderV2Error::InvalidPrice)
     );
 
@@ -282,14 +282,14 @@ fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
     invalid_size.size = "not-a-number".to_owned();
     // 数量必须是正整数字符串。
     assert_eq!(
-        use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_size)),
+        use_case.check_command(&entry(PlaceOnlySpotOrderV2Cmd::Single(invalid_size))),
         Err(PlaceOnlySpotOrderV2Error::InvalidSize)
     );
 
     let invalid_tif = limit_order(202, "day");
     // 现货限价单只允许 gtc、ioc、alo。
     assert_eq!(
-        use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_tif)),
+        use_case.check_command(&entry(PlaceOnlySpotOrderV2Cmd::Single(invalid_tif))),
         Err(PlaceOnlySpotOrderV2Error::InvalidTimeInForce)
     );
 
@@ -301,14 +301,14 @@ fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
     };
     // 触发价格必须是正整数字符串。
     assert_eq!(
-        use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_trigger_price)),
+        use_case.check_command(&entry(PlaceOnlySpotOrderV2Cmd::Single(invalid_trigger_price))),
         Err(PlaceOnlySpotOrderV2Error::InvalidTriggerPrice)
     );
 
     let invalid_trigger_role = trigger_order(204, false, "break_even");
     // 触发角色只允许 TP 或 SL 的公开语义别名。
     assert_eq!(
-        use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(invalid_trigger_role)),
+        use_case.check_command(&entry(PlaceOnlySpotOrderV2Cmd::Single(invalid_trigger_role))),
         Err(PlaceOnlySpotOrderV2Error::InvalidTriggerRole)
     );
 
@@ -316,7 +316,7 @@ fn given_invalid_order_facts_when_command_is_checked_then_rejects_precisely() {
     empty_party.party_id.clear();
     // 命令主体不能为空。
     assert_eq!(
-        use_case.check_command(&PlaceOnlySpotOrderV2Cmd::Single(empty_party)),
+        use_case.check_command(&entry(PlaceOnlySpotOrderV2Cmd::Single(empty_party))),
         Err(PlaceOnlySpotOrderV2Error::EmptyPartyId)
     );
 }
@@ -329,10 +329,10 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
 
     // 空子单列表无法形成 normalTpsl 父子事实，属于 on_command pre-check 错误。
     assert_eq!(
-        use_case.check_command(&PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+        use_case.check_command(&entry(PlaceOnlySpotOrderV2Cmd::NormalTpsl {
             parent: limit_order(300, "gtc"),
             children: vec![],
-        }),
+        })),
         Err(PlaceOnlySpotOrderV2Error::ChildrenRequired)
     );
 
@@ -346,7 +346,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
         children: vec![valid_child.clone()],
     };
     assert_eq!(
-        use_case.validate_state_given(&command, &()),
+        use_case.validate_state_given(&entry(command.clone()), &()),
         Err(PlaceOnlySpotOrderV2Error::ParentMustBeLimit)
     );
 
@@ -355,7 +355,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
         children: vec![valid_child.clone()],
     };
     assert_eq!(
-        use_case.validate_state_given(&command, &()),
+        use_case.validate_state_given(&entry(command.clone()), &()),
         Err(PlaceOnlySpotOrderV2Error::ParentMustNotBeReduceOnly)
     );
 
@@ -371,7 +371,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
         children: vec![non_trigger_child],
     };
     assert_eq!(
-        use_case.validate_state_given(&command, &()),
+        use_case.validate_state_given(&entry(command.clone()), &()),
         Err(PlaceOnlySpotOrderV2Error::ChildMustBeTrigger)
     );
 
@@ -382,7 +382,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
         children: vec![non_reduce_only_child],
     };
     assert_eq!(
-        use_case.validate_state_given(&command, &()),
+        use_case.validate_state_given(&entry(command.clone()), &()),
         Err(PlaceOnlySpotOrderV2Error::ChildMustBeReduceOnly)
     );
 
@@ -393,7 +393,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
         children: vec![same_side_child],
     };
     assert_eq!(
-        use_case.validate_state_given(&command, &()),
+        use_case.validate_state_given(&entry(command.clone()), &()),
         Err(PlaceOnlySpotOrderV2Error::ChildSideMustOpposeParent)
     );
 
@@ -420,7 +420,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
 
         // 每个归属字段都必须被单独校验，避免用一个宽泛错误吞掉关系冲突。
         assert_eq!(
-            use_case.validate_state_given(&command, &()),
+            use_case.validate_state_given(&entry(command.clone()), &()),
             Err(expected_error),
             "child {field_name} mismatch should be rejected"
         );
@@ -434,7 +434,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
         children: vec![oversized_child],
     };
     assert_eq!(
-        use_case.validate_state_given(&command, &()),
+        use_case.validate_state_given(&entry(command.clone()), &()),
         Err(PlaceOnlySpotOrderV2Error::ChildQuantityExceedsParent)
     );
 
@@ -444,7 +444,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
         children: vec![PlaceOnlySpotOrderV2OrderCmd { order_id: 301, ..valid_child.clone() }],
     };
     assert_eq!(
-        use_case.validate_state_given(&duplicate_parent_id, &()),
+        use_case.validate_state_given(&entry(duplicate_parent_id), &()),
         Err(PlaceOnlySpotOrderV2Error::DuplicateOrderId)
     );
 
@@ -453,7 +453,7 @@ fn given_invalid_normal_tpsl_relations_when_state_is_validated_then_rejects_busi
         children: vec![valid_child.clone(), PlaceOnlySpotOrderV2OrderCmd { ..valid_child }],
     };
     assert_eq!(
-        use_case.validate_state_given(&duplicate_child_id, &()),
+        use_case.validate_state_given(&entry(duplicate_child_id), &()),
         Err(PlaceOnlySpotOrderV2Error::DuplicateOrderId)
     );
 }

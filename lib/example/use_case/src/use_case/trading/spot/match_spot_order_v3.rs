@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -335,14 +335,14 @@ fn settle_matched_trades(
 
 fn compute_match_after(
     state: &MatchSpotOrderV3State,
-    context: &ExecutionContext,
+    logical_ts: u64,
 ) -> Result<MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Error> {
     let mut taker_after = state.taker_order.clone();
     let mut maker_orders_after = state.maker_orders.clone();
     let mut balance_book = BalanceMap::new(&state.settlement_balances);
     let mut created_balance_ledger_entries = Vec::new();
-    let executed_at_ms = context.execution_time_ns / 1_000_000;
-    let timestamp = context.execution_time_ns;
+    let executed_at_ms = logical_ts / 1_000_000;
+    let timestamp = logical_ts;
 
     match taker_after.time_in_force() {
         SpotOrderTif::Gtc | SpotOrderTif::Ioc => {
@@ -1059,7 +1059,7 @@ pub struct MatchSpotOrderV3State {
 pub struct MatchSpotOrderV3UseCase;
 
 impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
-    type Command = MatchSpotOrderV3Cmd;
+    type Command = LogEntry<MatchSpotOrderV3Cmd>;
     type StateGiven = MatchSpotOrderV3State;
     type Error = MatchSpotOrderV3Error;
     type StateChanged = MatchSpotOrderV3AfterChanges;
@@ -1116,11 +1116,10 @@ impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
 
     fn compute_state_changed_unchecked(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_match_after(state, context)
+        compute_match_after(state, cmd.logical_ts)
     }
 }
 

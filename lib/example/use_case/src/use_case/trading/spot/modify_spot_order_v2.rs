@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, ExecutionContext, IssuedByParty, ReplayableChanges,
+    Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
     StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -161,7 +161,7 @@ impl ReplayableChanges for ModifySpotOrderV2Changes {
 }
 
 impl StateMachineV2Unchecked for ModifySpotOrderV2UseCase {
-    type Command = ModifySpotOrderV2Cmd;
+    type Command = LogEntry<ModifySpotOrderV2Cmd>;
     type StateGiven = ModifySpotOrderV2State;
     type Error = ModifySpotOrderV2Error;
     type StateChanged = ModifySpotOrderV2AfterChanges;
@@ -219,7 +219,6 @@ impl StateMachineV2Unchecked for ModifySpotOrderV2UseCase {
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
-        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let (price, qty, tif) = parsed_limit_command(cmd)?;
         let side = side_from_command(cmd);

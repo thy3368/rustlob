@@ -1,4 +1,5 @@
 use cmd_handler::command_use_case_def2::{ExecutionError, MiFamilyExecutionSpec};
+use common_entity::LogEntry;
 pub use example_core_use_case::CancelSpotOrderV2Lookup;
 use example_core_use_case::{CancelSpotOrderV2Cmd, CancelSpotOrderV2UseCase};
 use serde::{Deserialize, Serialize};
@@ -87,12 +88,19 @@ pub struct SpotOrderV2CancelExecutionSpec;
 impl MiFamilyExecutionSpec<CancelSpotOrderV2UseCase> for SpotOrderV2CancelExecutionSpec {
     type Request = CancelSpotOrderV2Request;
 
-    fn command(request: &Self::Request) -> CancelSpotOrderV2Cmd {
-        CancelSpotOrderV2Cmd {
+    fn command(
+        request: &Self::Request,
+        lsn: u64,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+    ) -> LogEntry<CancelSpotOrderV2Cmd> {
+        let payload = CancelSpotOrderV2Cmd {
             party_id: request.party_id.clone(),
             asset: request.asset,
             lookup: request.lookup.clone(),
-        }
+        };
+        LogEntry { lsn, logical_ts, client_id, request_id, payload }
     }
 }
 
@@ -149,7 +157,9 @@ async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, Exch
         .map(|cancel| {
             let cancel_request =
                 CancelSpotOrderV2Request::from_wire_cancel(party_id.clone(), cancel);
-            let command = SpotOrderV2CancelExecutionSpec::command(&cancel_request);
+            let nonce = request.common.nonce;
+            let command =
+                SpotOrderV2CancelExecutionSpec::command(&cancel_request, nonce, nonce, 0, nonce);
             match execute_cancel_spot_order_v2(&command) {
                 Ok(_) => reply::CancelStatusWire::Success("success"),
                 Err(error) => {
@@ -191,10 +201,15 @@ mod tests {
             lookup: CancelSpotOrderV2Lookup::Oid(77738308),
         };
 
-        let command = SpotOrderV2CancelExecutionSpec::command(&request);
+        let command = SpotOrderV2CancelExecutionSpec::command(&request, 42, 123, 7, 9);
 
         assert_eq!(
-            command,
+            (command.lsn, command.logical_ts, command.client_id, command.request_id),
+            (42, 123, 7, 9)
+        );
+
+        assert_eq!(
+            command.payload,
             CancelSpotOrderV2Cmd {
                 party_id: "buyer".to_string(),
                 asset: 10_000,

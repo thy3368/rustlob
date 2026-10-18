@@ -9,7 +9,7 @@ use example_outbound_adapter::{
 };
 
 pub fn execute_match_spot_order_v3(
-    command: &MatchSpotOrderV3Cmd,
+    command: &LogEntry<MatchSpotOrderV3Cmd>,
 ) -> Result<
     ExecutionResult<MatchSpotOrderV3Changes>,
     ExecutionError<MatchSpotOrderV3Error, DefaultSpotOrderV2PlaceOutboundError>,
@@ -18,7 +18,7 @@ pub fn execute_match_spot_order_v3(
 }
 
 pub fn execute_match_spot_order_v3_with_outbound<OB>(
-    command: &MatchSpotOrderV3Cmd,
+    command: &LogEntry<MatchSpotOrderV3Cmd>,
     outbound: &OB,
 ) -> Result<
     ExecutionResult<MatchSpotOrderV3Changes>,
@@ -50,6 +50,10 @@ mod tests {
 
     use super::*;
 
+    fn entry<P>(payload: P) -> LogEntry<P> {
+        LogEntry { lsn: 7, logical_ts: 1_000_000_000, client_id: 1, request_id: 2, payload }
+    }
+
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct FakePlaceSpotOrderV2OutboundError;
 
@@ -69,7 +73,7 @@ mod tests {
 
         fn load_given_state(
             &self,
-            _request: &MatchSpotOrderV3Cmd,
+            _request: &LogEntry<MatchSpotOrderV3Cmd>,
         ) -> Result<MatchSpotOrderV3State, Self::Error> {
             Ok(MatchSpotOrderV3State {
                 taker_order: buy_order(1, "buyer", 100, 2, SpotOrderTif::Ioc)?,
@@ -170,7 +174,7 @@ mod tests {
 
     #[test]
     fn execute_place_with_default_outbound_stops_at_load_state() {
-        let result = execute_match_spot_order_v3(&place_cmd());
+        let result = execute_match_spot_order_v3(&entry(place_cmd()));
 
         assert_eq!(
             result,
@@ -180,9 +184,11 @@ mod tests {
 
     #[test]
     fn execute_place_ioc_crosses_book_and_projects_events() {
-        let result =
-            execute_match_spot_order_v3_with_outbound(&place_cmd(), &FakePlaceSpotOrderV2Outbound)
-                .expect("place spot order v2 should execute");
+        let result = execute_match_spot_order_v3_with_outbound(
+            &entry(place_cmd()),
+            &FakePlaceSpotOrderV2Outbound,
+        )
+        .expect("place spot order v2 should execute");
 
         let changes = result.changes;
         assert_eq!(
@@ -199,3 +205,4 @@ mod tests {
         assert!(!result.events.is_empty());
     }
 }
+use common_entity::LogEntry;

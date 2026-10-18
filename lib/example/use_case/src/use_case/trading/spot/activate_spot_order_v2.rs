@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -116,7 +116,7 @@ impl ReplayableChanges for ActivateSpotOrderV2Changes {
 }
 
 impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
-    type Command = ActivateSpotOrderV2Cmd;
+    type Command = LogEntry<ActivateSpotOrderV2Cmd>;
     type StateGiven = ActivateSpotOrderV2State;
     type Error = ActivateSpotOrderV2Error;
     type StateChanged = ActivateSpotOrderV2AfterChanges;
@@ -141,9 +141,8 @@ impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
 
     fn compute_state_changed_unchecked(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut activated_order_after = state.pending_order.clone();
         activated_order_after.activate_pending(ActivatePendingSpotOrderV2Input {
@@ -151,7 +150,7 @@ impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
             quote_asset_id: state.quote_asset_id.clone(),
             maker_fee_bps: state.maker_fee_bps,
             taker_fee_bps: state.taker_fee_bps,
-            timestamp: context.execution_time_ns,
+            timestamp: cmd.logical_ts,
         })?;
 
         let mut balance_book = BalanceMap::new(&state.balances);

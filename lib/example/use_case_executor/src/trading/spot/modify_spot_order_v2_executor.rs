@@ -10,7 +10,7 @@ use example_outbound_adapter::{
 };
 
 pub fn execute_modify_spot_order_v2(
-    command: &ModifySpotOrderV2Cmd,
+    command: &LogEntry<ModifySpotOrderV2Cmd>,
 ) -> Result<
     ExecutionResult<ModifySpotOrderV2Changes>,
     ExecutionError<ModifySpotOrderV2Error, DefaultSpotOrderV2ModifyOutboundError>,
@@ -19,7 +19,7 @@ pub fn execute_modify_spot_order_v2(
 }
 
 pub fn execute_modify_spot_order_v2_with_outbound<OB>(
-    command: &ModifySpotOrderV2Cmd,
+    command: &LogEntry<ModifySpotOrderV2Cmd>,
     outbound: &OB,
 ) -> Result<
     ExecutionResult<ModifySpotOrderV2Changes>,
@@ -51,6 +51,10 @@ mod tests {
     };
 
     use super::*;
+
+    fn entry<P>(payload: P) -> LogEntry<P> {
+        LogEntry { lsn: 7, logical_ts: 100, client_id: 1, request_id: 2, payload }
+    }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct FakeModifyOutboundError;
@@ -92,7 +96,7 @@ mod tests {
 
         fn load_given_state(
             &self,
-            _cmd: &ModifySpotOrderV2Cmd,
+            _cmd: &LogEntry<ModifySpotOrderV2Cmd>,
         ) -> Result<ModifySpotOrderV2State, Self::Error> {
             let mut order = SpotOrderV2::new_pending_limit(
                 1,
@@ -184,7 +188,7 @@ mod tests {
 
     #[test]
     fn execute_modify_with_default_outbound_stops_at_load_state() {
-        let result = execute_modify_spot_order_v2(&valid_command());
+        let result = execute_modify_spot_order_v2(&entry(valid_command()));
 
         assert_eq!(
             result,
@@ -197,7 +201,7 @@ mod tests {
     #[test]
     fn execute_modify_open_buy_limit_order_projects_events_and_runs_all_sink_phases() {
         let outbound = FakeModifyOutbound::default();
-        let result = execute_modify_spot_order_v2_with_outbound(&valid_command(), &outbound)
+        let result = execute_modify_spot_order_v2_with_outbound(&entry(valid_command()), &outbound)
             .expect("open buy limit order modification should execute");
 
         let changes = &result.changes;
@@ -227,3 +231,4 @@ mod tests {
         assert!(sink_calls.iter().all(|call| call.events == result.events));
     }
 }
+use common_entity::LogEntry;

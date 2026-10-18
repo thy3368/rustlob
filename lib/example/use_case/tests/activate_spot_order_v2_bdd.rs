@@ -1,5 +1,5 @@
 use common_entity::{
-    ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    LogEntry, ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use example_core_entity::{
     ActivatePendingSpotOrderV2Input, Balance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
@@ -10,8 +10,8 @@ use example_core_use_case::{
     ActivateSpotOrderV2UseCase,
 };
 
-fn context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: 100, execution_id: 0 }
+fn entry(payload: ActivateSpotOrderV2Cmd) -> LogEntry<ActivateSpotOrderV2Cmd> {
+    LogEntry { lsn: 1, logical_ts: 100, client_id: 1, request_id: 1, payload }
 }
 
 fn cmd(order_id: u64) -> ActivateSpotOrderV2Cmd {
@@ -76,7 +76,7 @@ fn buy_activation_freezes_quote_principal_and_quote_fee() {
     let order = pending_limit(1, SpotOrderSide::Buy);
 
     let changes = ActivateSpotOrderV2UseCase
-        .compute_state_diff_with_context(&cmd(1), state(order, 5, 10), &context())
+        .compute_state_diff(&entry(cmd(1)), state(order, 5, 10))
         .expect("buy activation should compute changes");
 
     assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Open);
@@ -104,7 +104,7 @@ fn sell_activation_freezes_base_principal() {
     let order = pending_limit(2, SpotOrderSide::Sell);
 
     let changes = ActivateSpotOrderV2UseCase
-        .compute_state_diff_with_context(&cmd(2), state(order, 5, 10), &context())
+        .compute_state_diff(&entry(cmd(2)), state(order, 5, 10))
         .expect("sell activation should compute changes");
 
     assert_eq!(changes.updated_order.after.reservation.asset_id, "BTC");
@@ -121,7 +121,7 @@ fn zero_fee_activation_skips_fee_ledger() {
     let order = pending_limit(3, SpotOrderSide::Buy);
 
     let changes = ActivateSpotOrderV2UseCase
-        .compute_state_diff_with_context(&cmd(3), state(order, 0, 0), &context())
+        .compute_state_diff(&entry(cmd(3)), state(order, 0, 0))
         .expect("zero fee activation should compute changes");
 
     assert_eq!(changes.updated_order.after.fee_reservation.original_amount, 0);
@@ -137,7 +137,7 @@ fn pending_trigger_activation_does_not_need_market_price() {
     let order = pending_trigger(4);
 
     let changes = ActivateSpotOrderV2UseCase
-        .compute_state_diff_with_context(&cmd(4), state(order, 5, 10), &context())
+        .compute_state_diff(&entry(cmd(4)), state(order, 5, 10))
         .expect("trigger activation should compute without market price");
 
     assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Open);
@@ -160,7 +160,8 @@ fn open_order_is_rejected_by_activation_state_validation() {
         })
         .expect("fixture activation should work");
 
-    let result = ActivateSpotOrderV2UseCase.validate_state_given(&cmd(5), &state(order, 5, 10));
+    let result =
+        ActivateSpotOrderV2UseCase.validate_state_given(&entry(cmd(5)), &state(order, 5, 10));
 
     assert_eq!(result, Err(ActivateSpotOrderV2Error::OrderNotPending));
 }

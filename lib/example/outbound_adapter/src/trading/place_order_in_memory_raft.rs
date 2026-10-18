@@ -281,7 +281,7 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutb
 
     fn load_given_state(
         &self,
-        cmd: &ActivateMatchSpotOrderV2Cmd,
+        cmd: &LogEntry<ActivateMatchSpotOrderV2Cmd>,
     ) -> Result<ActivateMatchSpotOrderV2State, Self::Error> {
         let state = self.store.lock_state()?;
         let pending_order = state
@@ -356,9 +356,9 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutboun
 
     fn load_given_state(
         &self,
-        cmd: &PlaceOnlySpotOrderV2Cmd,
+        cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
-        let order_cmd = match cmd {
+        let order_cmd = match &cmd.payload {
             PlaceOnlySpotOrderV2Cmd::Single(order)
             | PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent: order, .. } => order,
         };
@@ -975,3 +975,4 @@ fn decode_status_value(value: &str) -> Result<SpotOrderStatus, PlaceOrderOutboun
         _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
     }
 }
+use common_entity::LogEntry;

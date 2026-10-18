@@ -10,7 +10,7 @@ use example_outbound_adapter::{
 };
 
 pub fn execute_cancel_spot_order_v2(
-    command: &CancelSpotOrderV2Cmd,
+    command: &LogEntry<CancelSpotOrderV2Cmd>,
 ) -> Result<
     ExecutionResult<CancelSpotOrderV2Changes>,
     ExecutionError<CancelSpotOrderV2Error, DefaultSpotOrderV2CancelOutboundError>,
@@ -19,7 +19,7 @@ pub fn execute_cancel_spot_order_v2(
 }
 
 pub fn execute_cancel_spot_order_v2_with_outbound<OB>(
-    command: &CancelSpotOrderV2Cmd,
+    command: &LogEntry<CancelSpotOrderV2Cmd>,
     outbound: &OB,
 ) -> Result<
     ExecutionResult<CancelSpotOrderV2Changes>,
@@ -47,6 +47,10 @@ mod tests {
 
     use super::*;
 
+    fn entry<P>(payload: P) -> LogEntry<P> {
+        LogEntry { lsn: 7, logical_ts: 100, client_id: 1, request_id: 2, payload }
+    }
+
     // Matrix: 本地 order_id / CLOID lookup + default state not wired -> load-state failure.
     #[rstest]
     #[case::order_id(CancelSpotOrderV2Lookup::Oid(1))]
@@ -56,7 +60,7 @@ mod tests {
     ) {
         let command = CancelSpotOrderV2Cmd { party_id: "buyer".to_string(), asset: 10000, lookup };
 
-        let result = execute_cancel_spot_order_v2(&command);
+        let result = execute_cancel_spot_order_v2(&entry(command));
 
         assert_eq!(
             result,
@@ -80,7 +84,7 @@ mod tests {
         };
         let outbound = FakeSpotOrderV2CancelOutbound::default();
 
-        let result = execute_cancel_spot_order_v2_with_outbound(&command, &outbound)
+        let result = execute_cancel_spot_order_v2_with_outbound(&entry(command), &outbound)
             .expect("open order cancellation should execute");
 
         let changes = result.changes;
@@ -102,3 +106,4 @@ mod tests {
         );
     }
 }
+use common_entity::LogEntry;

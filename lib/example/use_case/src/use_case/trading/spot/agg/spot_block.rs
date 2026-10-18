@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, ExecutionContext, IssuedByParty, ReplayableChanges,
+    Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
     StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -143,7 +143,7 @@ impl ReplayableChanges for SpotBlockChanges {
 }
 
 impl StateMachineV2Unchecked for SpotBlockUseCase {
-    type Command = SpotBlockCmd;
+    type Command = LogEntry<SpotBlockCmd>;
     type StateGiven = SpotBlockState;
     type Error = SpotBlockError;
     type StateChanged = SpotBlockChanges;
@@ -174,7 +174,6 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
-        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut working = WorkingSpotBlockState::try_from_state(given_state)?;
         let mut item_results = Vec::with_capacity(cmd.commands.len());
@@ -182,7 +181,11 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
         for (command_index, command) in cmd.commands.iter().cloned().enumerate() {
             let item_result = match &command {
                 SpotBlockCommand::Activate(activate_cmd) => {
-                    match apply_activate(activate_cmd, given_state, &mut working) {
+                    match apply_activate(
+                        &cmd.with_payload(activate_cmd.clone()),
+                        given_state,
+                        &mut working,
+                    ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
                             command,
@@ -194,7 +197,11 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                     }
                 }
                 SpotBlockCommand::Cancel(cancel_cmd) => {
-                    match apply_cancel(cancel_cmd, given_state, &mut working) {
+                    match apply_cancel(
+                        &cmd.with_payload(cancel_cmd.clone()),
+                        given_state,
+                        &mut working,
+                    ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
                             command,
@@ -206,7 +213,11 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                     }
                 }
                 SpotBlockCommand::Modify(modify_cmd) => {
-                    match apply_modify(modify_cmd, given_state, &mut working) {
+                    match apply_modify(
+                        &cmd.with_payload(modify_cmd.clone()),
+                        given_state,
+                        &mut working,
+                    ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
                             command,
@@ -218,7 +229,11 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                     }
                 }
                 SpotBlockCommand::PlaceMatch(place_cmd) => {
-                    match apply_place_match(place_cmd, given_state, &mut working) {
+                    match apply_place_match(
+                        &cmd.with_payload(place_cmd.clone()),
+                        given_state,
+                        &mut working,
+                    ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
                             command,
@@ -230,7 +245,11 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                     }
                 }
                 SpotBlockCommand::Match(match_cmd) => {
-                    match apply_match(match_cmd, given_state, &mut working) {
+                    match apply_match(
+                        &cmd.with_payload(match_cmd.clone()),
+                        given_state,
+                        &mut working,
+                    ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
                             command,
@@ -380,7 +399,7 @@ impl WorkingSpotBlockState {
 }
 
 fn apply_cancel(
-    cmd: &CancelSpotOrderV2Cmd,
+    cmd: &LogEntry<CancelSpotOrderV2Cmd>,
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<CancelSpotOrderV2Changes, SpotBlockItemError> {
@@ -412,7 +431,7 @@ fn apply_cancel(
 }
 
 fn apply_activate(
-    cmd: &ActivateSpotOrderV2Cmd,
+    cmd: &LogEntry<ActivateSpotOrderV2Cmd>,
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<ActivateSpotOrderV2Changes, SpotBlockItemError> {
@@ -444,7 +463,7 @@ fn apply_activate(
 }
 
 fn apply_modify(
-    cmd: &ModifySpotOrderV2Cmd,
+    cmd: &LogEntry<ModifySpotOrderV2Cmd>,
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<ModifySpotOrderV2Changes, SpotBlockItemError> {
@@ -476,12 +495,12 @@ fn apply_modify(
 }
 
 fn apply_place_match(
-    cmd: &PlaceOnlySpotOrderV2Cmd,
+    cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<PlaceMatchSpotOrderV2Changes, SpotBlockItemError> {
     PlaceMatchSpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::PlaceMatch)?;
-    let place_order = place_parent_order_cmd(cmd);
+    let place_order = place_parent_order_cmd(&cmd.payload);
     let state = PlaceMatchSpotOrderV2State {
         maker_orders: maker_candidates_for(place_order, &working.orders),
         settlement_balances: working.balances.clone(),
@@ -498,7 +517,7 @@ fn apply_place_match(
 }
 
 fn apply_match(
-    cmd: &MatchSpotOrderV3Cmd,
+    cmd: &LogEntry<MatchSpotOrderV3Cmd>,
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<MatchSpotOrderV3Changes, SpotBlockItemError> {

@@ -18,7 +18,7 @@ impl StateSource<ModifySpotOrderV2UseCase> for DefaultSpotOrderV2ModifyOutbound 
 
     fn load_given_state(
         &self,
-        _cmd: &ModifySpotOrderV2Cmd,
+        _cmd: &LogEntry<ModifySpotOrderV2Cmd>,
     ) -> Result<ModifySpotOrderV2State, Self::Error> {
         Err(DefaultSpotOrderV2ModifyOutboundError::StateUnavailable)
     }
@@ -39,3 +39,4 @@ impl StateSink<ModifySpotOrderV2UseCase> for DefaultSpotOrderV2ModifyOutbound {
         Ok(())
     }
 }
+use common_entity::LogEntry;

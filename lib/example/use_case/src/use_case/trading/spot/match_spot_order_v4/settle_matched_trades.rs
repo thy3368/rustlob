@@ -1,6 +1,6 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -117,7 +117,7 @@ pub struct SettleMatchedSpotTradesV4State {
 pub struct SettleMatchedSpotTradesV4UseCase;
 
 impl StateMachineV2Unchecked for SettleMatchedSpotTradesV4UseCase {
-    type Command = SettleMatchedSpotTradesV4Cmd;
+    type Command = LogEntry<SettleMatchedSpotTradesV4Cmd>;
     type StateGiven = SettleMatchedSpotTradesV4State;
     type Error = MatchSpotOrderV4Error;
     type StateChanged = SettleMatchedSpotTradesV4AfterChanges;
@@ -159,9 +159,8 @@ impl StateMachineV2Unchecked for SettleMatchedSpotTradesV4UseCase {
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_settlement_after(cmd, state, context)
+        compute_settlement_after(cmd, state, cmd.logical_ts)
     }
 }
 
@@ -203,7 +202,7 @@ impl StateMachineOwnedV2Diff for SettleMatchedSpotTradesV4UseCase {
 fn compute_settlement_after(
     cmd: &SettleMatchedSpotTradesV4Cmd,
     state: &SettleMatchedSpotTradesV4State,
-    context: &ExecutionContext,
+    logical_ts: u64,
 ) -> Result<SettleMatchedSpotTradesV4AfterChanges, MatchSpotOrderV4Error> {
     let mut taker_after = state.taker_order.clone();
     let mut maker_orders_after = state.maker_orders.clone();
@@ -232,12 +231,8 @@ fn compute_settlement_after(
         state.taker_fee_bps,
     )?;
 
-    bump_order_version_if_changed(&state.taker_order, &mut taker_after, context.execution_time_ns)?;
-    bump_changed_maker_versions(
-        &state.maker_orders,
-        &mut maker_orders_after,
-        context.execution_time_ns,
-    )?;
+    bump_order_version_if_changed(&state.taker_order, &mut taker_after, logical_ts)?;
+    bump_changed_maker_versions(&state.maker_orders, &mut maker_orders_after, logical_ts)?;
 
     if taker_after == state.taker_order
         && maker_orders_after == state.maker_orders

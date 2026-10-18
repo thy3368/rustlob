@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
 };
-use common_entity::{Entity, ExecutionContext, StateMachineV2Unchecked};
+use common_entity::{Entity, LogEntry, StateMachineV2Unchecked};
 use thiserror::Error;
 
 use crate::entity::{
@@ -95,7 +95,7 @@ impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
 }
 
 impl StateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
-    type Command = UpdateHyperliquidPerpLeverageCmd;
+    type Command = LogEntry<UpdateHyperliquidPerpLeverageCmd>;
     type StateGiven = UpdateHyperliquidPerpLeverageState;
     type Error = UpdateHyperliquidPerpLeverageError;
     type StateChanged = UpdateHyperliquidPerpLeverageChanges;
@@ -149,7 +149,6 @@ impl StateMachineV2Unchecked for UpdateHyperliquidPerpLeverageUseCase {
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
-        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let before = state.leverage_setting.clone();
         let after = before.update_leverage(cmd.leverage).map_err(map_leverage_setting_error)?;
@@ -215,10 +214,16 @@ fn map_leverage_setting_error(
 #[cfg(test)]
 mod tests {
     use cmd_handler::command_use_case_def2::ReplayableChanges;
-    use common_entity::StateMachineV2Unchecked;
+    use common_entity::{LogEntry, StateMachineV2Unchecked};
 
     use super::*;
     use crate::entity::HyperliquidPerpPositionStatus;
+
+    fn entry(
+        payload: UpdateHyperliquidPerpLeverageCmd,
+    ) -> LogEntry<UpdateHyperliquidPerpLeverageCmd> {
+        LogEntry { lsn: 1, logical_ts: 100, client_id: 1, request_id: 1, payload }
+    }
 
     fn cmd(leverage: u64, is_cross: bool) -> UpdateHyperliquidPerpLeverageCmd {
         UpdateHyperliquidPerpLeverageCmd {
@@ -264,11 +269,11 @@ mod tests {
         let mut invalid_party = cmd(10, true);
         invalid_party.party_id.clear();
         assert_eq!(
-            UpdateHyperliquidPerpLeverageUseCase.check_command(&invalid_party),
+            UpdateHyperliquidPerpLeverageUseCase.check_command(&entry(invalid_party)),
             Err(UpdateHyperliquidPerpLeverageError::InvalidPartyId)
         );
         assert_eq!(
-            UpdateHyperliquidPerpLeverageUseCase.check_command(&cmd(0, true)),
+            UpdateHyperliquidPerpLeverageUseCase.check_command(&entry(cmd(0, true))),
             Err(UpdateHyperliquidPerpLeverageError::InvalidLeverage)
         );
     }
@@ -278,7 +283,7 @@ mod tests {
         let state = state(HyperliquidPerpMarginMode::Cross, None);
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, true), &state, &ExecutionContext::now(0))
+            .compute_state_changed(&entry(cmd(10, true)), &state)
             .unwrap();
         let events = changes.to_replayable_events().unwrap();
 
@@ -296,7 +301,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, true), &state, &ExecutionContext::now(0))
+            .compute_state_changed(&entry(cmd(10, true)), &state)
             .unwrap();
         let position = changes.changed_position.as_ref().unwrap();
         let events = changes.to_replayable_events().unwrap();
@@ -317,7 +322,7 @@ mod tests {
         );
 
         let changes = UpdateHyperliquidPerpLeverageUseCase
-            .compute_state_changed_unchecked(&cmd(10, false), &state, &ExecutionContext::now(0))
+            .compute_state_changed(&entry(cmd(10, false)), &state)
             .unwrap();
 
         assert_eq!(
@@ -335,7 +340,8 @@ mod tests {
         );
 
         assert_eq!(
-            UpdateHyperliquidPerpLeverageUseCase.validate_state_given(&cmd(10, true), &state),
+            UpdateHyperliquidPerpLeverageUseCase
+                .validate_state_given(&entry(cmd(10, true)), &state),
             Err(UpdateHyperliquidPerpLeverageError::MarginModeMismatch)
         );
     }

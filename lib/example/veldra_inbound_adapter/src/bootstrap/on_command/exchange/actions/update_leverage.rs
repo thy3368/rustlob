@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{EventProjectError, ReplayableChanges};
-use common_entity::{ExecutionContext, StateMachineV2Unchecked};
+use common_entity::{LogEntry, StateMachineV2Unchecked};
 use example_core_use_case::entity::{HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode};
 use example_core_use_case::{
     UpdateHyperliquidPerpLeverageChanges, UpdateHyperliquidPerpLeverageCmd,
@@ -178,27 +178,37 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 
 pub fn execute_update_perp_leverage<OB>(
     request: &UpdateLeverageRequest,
+    lsn: u64,
+    logical_ts: u64,
+    client_id: u64,
+    request_id: u64,
     outbound: &OB,
 ) -> Result<UpdateHyperliquidPerpLeverageChanges, UpdateLeverageExecutionError<OB::Error>>
 where
     OB: UpdateLeverageOutbound,
 {
     let use_case = UpdateHyperliquidPerpLeverageUseCase;
-    let cmd = UpdateHyperliquidPerpLeverageCmd {
+    let payload = UpdateHyperliquidPerpLeverageCmd {
         party_id: request.party_id.clone(),
         asset: request.asset,
         is_cross: request.is_cross,
         leverage: request.leverage,
     };
+    let cmd = LogEntry { lsn, logical_ts, client_id, request_id, payload };
 
     use_case.check_command(&cmd).map_err(UpdateLeverageExecutionError::Business)?;
-    let state = outbound.load_given_state(&cmd).map_err(UpdateLeverageExecutionError::LoadState)?;
+    let state =
+        outbound.load_given_state(&cmd.payload).map_err(UpdateLeverageExecutionError::LoadState)?;
     use_case.validate_state_given(&cmd, &state).map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
-        .compute_state_changed_unchecked(&cmd, &state, &ExecutionContext::now(0))
+        .compute_state_changed_unchecked(&cmd, &state)
         .map_err(UpdateLeverageExecutionError::Business)?;
-    let events =
+    let mut events =
         changes.to_replayable_events().map_err(UpdateLeverageExecutionError::ProjectEvents)?;
+    for event in &mut events {
+        event.lsn = cmd.lsn;
+        event.logical_ts = cmd.logical_ts;
+    }
 
     outbound.persist(&events).map_err(UpdateLeverageExecutionError::Persist)?;
     outbound.replay(&events).map_err(UpdateLeverageExecutionError::Replay)?;
@@ -210,9 +220,11 @@ where
 async fn execute(
     request: RequestWire,
 ) -> Result<reply::UpdateLeverageResponseWire, ExchangeHttpError> {
+    let nonce = request.common.nonce;
     let request = UpdateLeverageRequest::from_wire(request);
     let outbound = DefaultUpdateLeverageOutbound;
-    execute_update_perp_leverage(&request, &outbound).map_err(ExchangeHttpError::contract)?;
+    execute_update_perp_leverage(&request, nonce, nonce, 0, nonce, &outbound)
+        .map_err(ExchangeHttpError::contract)?;
     Ok(ok_default_response())
 }
 
@@ -299,7 +311,7 @@ mod tests {
         };
         let outbound = ObservingUpdateLeverageOutbound::new(4);
 
-        let changes = execute_update_perp_leverage(&request, &outbound)
+        let changes = execute_update_perp_leverage(&request, 1, 1, 0, 1, &outbound)
             .expect("cross leverage update should execute");
 
         let seen_cmd = outbound.seen_cmd.borrow().clone().expect("on_command should be observed");
@@ -336,7 +348,8 @@ mod tests {
         };
         let outbound = ObservingUpdateLeverageOutbound::new(8);
 
-        execute_update_perp_leverage(&request, &outbound).expect("execution should succeed");
+        execute_update_perp_leverage(&request, 1, 1, 0, 1, &outbound)
+            .expect("execution should succeed");
 
         assert_eq!(
             outbound.steps.borrow().as_slice(),

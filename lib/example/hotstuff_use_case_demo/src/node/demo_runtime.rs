@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+use common_entity::LogEntry;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
@@ -140,14 +141,23 @@ impl SpotOrderApp {
         AppStateUpdates::new()
     }
 
-    fn execute(requests: &[SpotBlockCommand]) -> Option<AppStateUpdates> {
+    fn execute(requests: &[SpotBlockCommand], block_height: u64) -> Option<AppStateUpdates> {
         if requests.is_empty() {
             return None;
         }
 
         let spot_block_command = SpotBlockCmd { commands: requests.to_vec() };
+        let block_sequence = block_height.checked_add(1)?;
+        let logical_ts = block_sequence.checked_mul(1_000_000_000)?;
+        let entry = LogEntry {
+            lsn: block_sequence,
+            logical_ts,
+            client_id: 0,
+            request_id: block_sequence,
+            payload: spot_block_command,
+        };
         let outbound = DemoSpotBlockOutbound;
-        let Ok(result) = execute_spot_block_with_outbound(&spot_block_command, &outbound) else {
+        let Ok(result) = execute_spot_block_with_outbound(&entry, &outbound) else {
             return None;
         };
 
@@ -275,7 +285,10 @@ struct DemoSpotBlockOutbound;
 impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
     type Error = DemoSpotBlockOutboundError;
 
-    fn load_given_state(&self, _request: &SpotBlockCmd) -> Result<SpotBlockState, Self::Error> {
+    fn load_given_state(
+        &self,
+        _request: &LogEntry<SpotBlockCmd>,
+    ) -> Result<SpotBlockState, Self::Error> {
         let cancel_order = demo_buy_order()?;
         let buyer_frozen = cancel_order
             .reservation
@@ -387,7 +400,25 @@ fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
 }
 
 impl App<MemDB> for SpotOrderApp {
-    fn produce_block(&mut self, _request: ProduceBlockRequest<MemDB>) -> ProduceBlockResponse {
+    fn produce_block(&mut self, request: ProduceBlockRequest<MemDB>) -> ProduceBlockResponse {
+        let block_height = match request.parent_block() {
+            Some(parent) => request
+                .block_tree()
+                .block_height(&parent)
+                .ok()
+                .flatten()
+                .and_then(|height| height.int().checked_add(1)),
+            None => Some(0),
+        };
+        let Some(block_height) = block_height else {
+            let data = Data::new(Vec::new());
+            return ProduceBlockResponse {
+                data_hash: data_hash(&data),
+                data,
+                app_state_updates: None,
+                validator_set_updates: None,
+            };
+        };
         let requests = self
             .request_queue
             .lock()
@@ -395,7 +426,7 @@ impl App<MemDB> for SpotOrderApp {
             .unwrap_or_default();
         let data = encode_requests(&requests).unwrap_or_else(|_| Data::new(Vec::new()));
         let data_hash = data_hash(&data);
-        let app_state_updates = Self::execute(&requests);
+        let app_state_updates = Self::execute(&requests, block_height);
 
         ProduceBlockResponse { data_hash, data, app_state_updates, validator_set_updates: None }
     }
@@ -418,7 +449,7 @@ impl App<MemDB> for SpotOrderApp {
         };
 
         ValidateBlockResponse::Valid {
-            app_state_updates: Self::execute(&requests),
+            app_state_updates: Self::execute(&requests, block.height.int()),
             validator_set_updates: None,
         }
     }

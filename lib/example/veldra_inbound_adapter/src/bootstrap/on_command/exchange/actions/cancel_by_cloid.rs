@@ -108,7 +108,9 @@ async fn execute(
                 cancel.asset,
                 cancel.cloid.clone(),
             );
-            let command = SpotOrderV2CancelExecutionSpec::command(&cancel_request);
+            let nonce = request.common.nonce;
+            let command =
+                SpotOrderV2CancelExecutionSpec::command(&cancel_request, nonce, nonce, 0, nonce);
             match execute_cancel_spot_order_v2(&command) {
                 Ok(_) => reply::CancelByCloidStatusWire::Success("success"),
                 Err(error) => reply::CancelByCloidStatusWire::Error {
@@ -218,7 +220,7 @@ mod tests {
 
         fn load_given_state(
             &self,
-            request: &CancelSpotOrderV2Cmd,
+            request: &common_entity::LogEntry<CancelSpotOrderV2Cmd>,
         ) -> Result<CancelSpotOrderV2State, Self::Error> {
             *self.observed_lookup.lock().expect("lookup observation lock should be available") =
                 Some(request.lookup.clone());
@@ -261,7 +263,7 @@ mod tests {
             cancel.asset,
             cancel.cloid.clone(),
         );
-        let command = SpotOrderV2CancelExecutionSpec::command(&cancel_request);
+        let command = SpotOrderV2CancelExecutionSpec::command(&cancel_request, 1, 1, 0, 1);
         let outbound = ObservingCancelOutbound::default();
 
         let error = execute_cancel_spot_order_v2_with_outbound(&command, &outbound)

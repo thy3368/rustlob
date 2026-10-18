@@ -38,7 +38,7 @@ fn run() -> Result<(), example_inbound_adapter::CliInboundError> {
     println!("== CLI Command ==");
     println!("{command:#?}");
 
-    let response = run_place_order_cli(command, app.place_order_outbound())
+    let response = run_place_order_cli(command, 1, 1, 1, 1, app.place_order_outbound())
         .map_err(example_inbound_adapter::CliInboundError::from_mi_execution_error)?;
     println!("== CLI Response ==");
     println!("{response:#?}");
@@ -69,5 +69,9 @@ impl PlaceOrderOutboundAccess for InMemoryCliApp {
 
     fn place_order_outbound(&self) -> &Self::Outbound {
         &self.place_order_outbound
+    }
+
+    fn command_metadata(&self) -> (u64, u64, u64, u64) {
+        (1, 1, 1, 1)
     }
 }

@@ -24,9 +24,9 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
 
     fn load_given_state(
         &self,
-        cmd: &PlaceOnlySpotOrderV2Cmd,
+        cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
-        let order_cmd = match cmd {
+        let order_cmd = match &cmd.payload {
             PlaceOnlySpotOrderV2Cmd::Single(order)
             | PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent: order, .. } => order,
         };
@@ -194,3 +194,4 @@ pub(crate) fn replay_events(
     }
     Ok(())
 }
+use common_entity::LogEntry;

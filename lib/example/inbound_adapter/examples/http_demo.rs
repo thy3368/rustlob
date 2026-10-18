@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use axum::Json;
 use axum::extract::State;
@@ -80,6 +81,7 @@ impl IntoResponse for SnapshotApiError {
 
 #[derive(Debug, Clone)]
 struct InMemoryDemoApp {
+    command_sequence: Arc<AtomicU64>,
     store: InMemoryStore,
     place_order_outbound: InMemoryPlaceOrderOutbound,
     deposit_quote_outbound: InMemoryDepositQuoteOutbound,
@@ -97,7 +99,13 @@ impl InMemoryDemoApp {
         let deposit_quote_outbound = InMemoryDepositQuoteOutbound::from_store(store.clone());
         let withdraw_quote_outbound = InMemoryWithdrawQuoteOutbound::from_store(store.clone());
 
-        Ok(Self { store, place_order_outbound, deposit_quote_outbound, withdraw_quote_outbound })
+        Ok(Self {
+            command_sequence: Arc::new(AtomicU64::new(1)),
+            store,
+            place_order_outbound,
+            deposit_quote_outbound,
+            withdraw_quote_outbound,
+        })
     }
 
     fn snapshot(&self) -> Result<StoreSnapshot, StoreError> {
@@ -111,6 +119,11 @@ impl PlaceOrderOutboundAccess for InMemoryDemoApp {
 
     fn place_order_outbound(&self) -> &Self::Outbound {
         &self.place_order_outbound
+    }
+
+    fn command_metadata(&self) -> (u64, u64, u64, u64) {
+        let sequence = self.command_sequence.fetch_add(1, Ordering::Relaxed);
+        (sequence, sequence, 1, sequence)
     }
 }
 

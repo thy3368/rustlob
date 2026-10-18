@@ -79,7 +79,7 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
 
     fn load_given_state(
         &self,
-        _cmd: &ActivateMatchSpotOrderV2Cmd,
+        _cmd: &LogEntry<ActivateMatchSpotOrderV2Cmd>,
     ) -> Result<ActivateMatchSpotOrderV2State, Self::Error> {
         Err(PlaceOrderOutboundError::UnsupportedCommandBranch)
     }
@@ -106,9 +106,9 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
 
     fn load_given_state(
         &self,
-        cmd: &PlaceOnlySpotOrderV2Cmd,
+        cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
-        let order_cmd = match cmd {
+        let order_cmd = match &cmd.payload {
             PlaceOnlySpotOrderV2Cmd::Single(order)
             | PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent: order, .. } => order,
         };
@@ -382,3 +382,4 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
         Ok(())
     }
 }
+use common_entity::LogEntry;

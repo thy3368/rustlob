@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, IssuedByParty, ReplayableChanges,
+    Entity, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
     StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use thiserror::Error;
@@ -86,7 +86,7 @@ impl ReplayableChanges for GenerateSpotKlinesFromHistoricalTradesChanges {
 }
 
 impl StateMachineV2Unchecked for GenerateSpotKlinesFromHistoricalTradesUseCase {
-    type Command = GenerateSpotKlinesFromHistoricalTradesCmd;
+    type Command = LogEntry<GenerateSpotKlinesFromHistoricalTradesCmd>;
     type StateGiven = GenerateSpotKlinesFromHistoricalTradesState;
     type Error = GenerateSpotKlinesFromHistoricalTradesError;
     type StateChanged = GenerateSpotKlinesFromHistoricalTradesChanges;
@@ -137,7 +137,6 @@ impl StateMachineV2Unchecked for GenerateSpotKlinesFromHistoricalTradesUseCase {
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
-        _context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut trades = state.trades.clone();
         trades.sort_by(|left, right| {

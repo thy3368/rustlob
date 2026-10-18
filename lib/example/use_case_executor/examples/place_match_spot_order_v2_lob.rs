@@ -71,8 +71,11 @@ fn command(asset: u32) -> PlaceOnlySpotOrderV2Cmd {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let outbound = outbound(true)?;
     // executor -> outbound.load_given_state -> LocalLobBtree::maker_orders -> use case 撮合
-    let result = execute_place_match_spot_order_v2_with_outbound(&command(ASSET), &outbound)
-        .map_err(|error| format!("place-match failed: {error:?}"))?;
+    let result = execute_place_match_spot_order_v2_with_outbound(
+        &LogEntry { lsn: 1, logical_ts: 1, client_id: 1, request_id: 1, payload: command(ASSET) },
+        &outbound,
+    )
+    .map_err(|error| format!("place-match failed: {error:?}"))?;
     let PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched { match_changes, .. } = result.changes
     else {
         return Err("expected a matched single order".into());
@@ -109,3 +112,4 @@ mod tests {
         Ok(())
     }
 }
+use common_entity::LogEntry;

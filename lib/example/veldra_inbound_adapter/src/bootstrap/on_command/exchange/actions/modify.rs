@@ -1,4 +1,5 @@
 use cmd_handler::command_use_case_def2::{ExecutionError, MiFamilyExecutionSpec};
+use common_entity::LogEntry;
 use example_core_use_case::{
     ModifySpotOrderV2Cmd, ModifySpotOrderV2OrderType, ModifySpotOrderV2UseCase, OrderId,
 };
@@ -139,8 +140,14 @@ pub struct SpotOrderV2ModifyExecutionSpec;
 impl MiFamilyExecutionSpec<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecutionSpec {
     type Request = ModifySpotOrderV2Request;
 
-    fn command(request: &Self::Request) -> ModifySpotOrderV2Cmd {
-        ModifySpotOrderV2Cmd {
+    fn command(
+        request: &Self::Request,
+        lsn: u64,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+    ) -> LogEntry<ModifySpotOrderV2Cmd> {
+        let payload = ModifySpotOrderV2Cmd {
             party_id: request.party_id.clone(),
             asset: request.asset,
             order_id: request.order_id.clone(),
@@ -149,7 +156,8 @@ impl MiFamilyExecutionSpec<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecut
             size: request.size.clone(),
             order_type: request.order_type.clone(),
             cloid: request.cloid.clone(),
-        }
+        };
+        LogEntry { lsn, logical_ts, client_id, request_id, payload }
     }
 }
 
@@ -283,7 +291,8 @@ async fn execute(request: RequestWire) -> Result<reply::ModifyResponseWire, Exch
         request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
     let modify_request = ModifySpotOrderV2Request::from_wire_modify(party_id, &request.action)
         .map_err(ExchangeHttpError::contract)?;
-    let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+    let nonce = request.common.nonce;
+    let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request, nonce, nonce, 0, nonce);
     let status = match execute_modify_spot_order_v2(&command) {
         Ok(result) => OrderStatusWire::Resting {
             resting: RestingOrderStatusWire { oid: result.changes.updated_order.after.order_id() },
@@ -360,7 +369,7 @@ mod tests {
             ModifySpotOrderV2Request::from_wire_modify("buyer".to_string(), &request.action)
                 .expect("modify request should build");
 
-        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request, 1, 1, 0, 1);
 
         assert_eq!(command.party_id, "buyer");
         assert_eq!(command.asset, 10_000);
@@ -410,7 +419,7 @@ mod tests {
             ModifySpotOrderV2Request::from_wire_modify("seller".to_string(), &request.action)
                 .expect("modify request should build");
 
-        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request, 1, 1, 0, 1);
 
         assert_eq!(
             command.order_id,

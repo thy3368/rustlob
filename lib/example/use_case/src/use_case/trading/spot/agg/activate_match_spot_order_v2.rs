@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, ExecutionContext, ReplayableChanges,
-    StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
+    StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -66,13 +66,13 @@ impl ReplayableChanges for ActivateMatchSpotOrderV2Changes {
 }
 
 impl StateMachineV2Unchecked for ActivateMatchSpotOrderV2UseCase {
-    type Command = ActivateMatchSpotOrderV2Cmd;
+    type Command = LogEntry<ActivateMatchSpotOrderV2Cmd>;
     type StateGiven = ActivateMatchSpotOrderV2State;
     type Error = ActivateMatchSpotOrderV2Error;
     type StateChanged = ActivateMatchSpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        ActivateSpotOrderV2UseCase.check_command(&activation_cmd(cmd))?;
+        ActivateSpotOrderV2UseCase.check_command(&cmd.with_payload(activation_cmd(cmd)))?;
         Ok(())
     }
 
@@ -82,7 +82,8 @@ impl StateMachineV2Unchecked for ActivateMatchSpotOrderV2UseCase {
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         let activation_state = activation_state_from_given(state);
-        ActivateSpotOrderV2UseCase.validate_state_given(&activation_cmd(cmd), &activation_state)?;
+        ActivateSpotOrderV2UseCase
+            .validate_state_given(&cmd.with_payload(activation_cmd(cmd)), &activation_state)?;
         if state.fee_account_id.is_empty() {
             return Err(MatchSpotOrderV3Error::InvalidFeeAccountId.into());
         }
@@ -93,23 +94,16 @@ impl StateMachineV2Unchecked for ActivateMatchSpotOrderV2UseCase {
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let activation_cmd = activation_cmd(cmd);
+        let activation_cmd = cmd.with_payload(activation_cmd(cmd));
         let activation_state = activation_state_from_given(state);
-        let activation_after = ActivateSpotOrderV2UseCase.compute_state_changed_with_context(
-            &activation_cmd,
-            &activation_state,
-            context,
-        )?;
+        let activation_after =
+            ActivateSpotOrderV2UseCase.compute_state_changed(&activation_cmd, &activation_state)?;
 
-        let match_cmd = match_cmd(cmd);
+        let match_cmd = cmd.with_payload(match_cmd(cmd));
         let match_state = match_state_from_activation(state, &activation_after);
-        let match_after = MatchSpotOrderV3UseCase.compute_state_changed_with_context(
-            &match_cmd,
-            &match_state,
-            context,
-        )?;
+        let match_after =
+            MatchSpotOrderV3UseCase.compute_state_changed(&match_cmd, &match_state)?;
 
         Ok(ActivateMatchSpotOrderV2AfterChanges { activation_after, match_after })
     }

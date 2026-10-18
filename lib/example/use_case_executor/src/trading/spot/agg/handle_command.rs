@@ -1,4 +1,5 @@
 use cmd_handler::command_use_case_def2::{ExecutionError, ExecutionResult};
+use common_entity::LogEntry;
 use example_core_use_case::{
     CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd, CancelSpotOrderV2Error,
     ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd, ModifySpotOrderV2Error,
@@ -41,19 +42,23 @@ pub enum SpotBlockCommandResult {
 }
 
 /// 按输入顺序逐条执行现货命令，并为每条命令保留独立结果。
-pub fn handler(commands: Vec<SpotBlockCommand>) -> Vec<SpotBlockCommandResult> {
+pub fn handler(commands: Vec<LogEntry<SpotBlockCommand>>) -> Vec<SpotBlockCommandResult> {
     commands
         .into_iter()
-        .map(|command| match command {
+        .map(|entry| match entry.payload.clone() {
             SpotBlockCommand::Cancel(command) => SpotBlockCommandResult::Cancel(
-                super::super::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2(&command),
+                super::super::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2(
+                    &entry.with_payload(command),
+                ),
             ),
             SpotBlockCommand::Modify(command) => SpotBlockCommandResult::Modify(
-                super::super::modify_spot_order_v2_executor::execute_modify_spot_order_v2(&command),
+                super::super::modify_spot_order_v2_executor::execute_modify_spot_order_v2(
+                    &entry.with_payload(command),
+                ),
             ),
             SpotBlockCommand::PlaceMatch(command) => SpotBlockCommandResult::PlaceMatch(
                 super::super::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2(
-                    &command,
+                    &entry.with_payload(command),
                 ),
             ),
         })
@@ -63,6 +68,7 @@ pub fn handler(commands: Vec<SpotBlockCommand>) -> Vec<SpotBlockCommandResult> {
 #[cfg(test)]
 mod tests {
     use cmd_handler::command_use_case_def2::ExecutionError;
+    use common_entity::LogEntry;
     use example_core_use_case::{
         CancelSpotOrderV2Lookup, ModifySpotOrderV2OrderType, OrderId, PlaceOnlySpotOrderV2OrderCmd,
         PlaceOnlySpotOrderV2OrderType,
@@ -117,7 +123,19 @@ mod tests {
 
     #[test]
     fn handler_dispatches_each_command_and_preserves_input_order_after_failure() {
-        let results = handler(vec![cancel_command(), modify_command(""), place_match_command()]);
+        let results = handler(
+            vec![cancel_command(), modify_command(""), place_match_command()]
+                .into_iter()
+                .enumerate()
+                .map(|(index, payload)| LogEntry {
+                    lsn: index as u64 + 1,
+                    logical_ts: index as u64 + 1,
+                    client_id: 1,
+                    request_id: index as u64 + 1,
+                    payload,
+                })
+                .collect(),
+        );
 
         assert_eq!(results.len(), 3);
         assert!(matches!(

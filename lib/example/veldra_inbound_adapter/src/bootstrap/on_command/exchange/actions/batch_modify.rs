@@ -217,7 +217,7 @@ async fn execute(
         .action
         .modifies
         .iter()
-        .map(|modify| execute_single_modify(&party_id, modify))
+        .map(|modify| execute_single_modify(&party_id, request.common.nonce, modify))
         .collect();
 
     Ok(OrderResponseWire {
@@ -229,12 +229,12 @@ async fn execute(
     })
 }
 
-fn execute_single_modify(party_id: &str, modify: &ModifyWire) -> OrderStatusWire {
+fn execute_single_modify(party_id: &str, nonce: u64, modify: &ModifyWire) -> OrderStatusWire {
     let modify_request = match from_wire_batch_modify(party_id, modify) {
         Ok(request) => request,
         Err(error) => return OrderStatusWire::Error { error: error.to_string() },
     };
-    let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+    let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request, nonce, nonce, 0, nonce);
 
     match execute_modify_spot_order_v2(&command) {
         Ok(result) => OrderStatusWire::Resting {
@@ -352,7 +352,7 @@ mod tests {
 
         let first = from_wire_batch_modify("trader", &request.action.modifies[0])
             .expect("first modify request should build");
-        let first_command = SpotOrderV2ModifyExecutionSpec::command(&first);
+        let first_command = SpotOrderV2ModifyExecutionSpec::command(&first, 1, 1, 0, 1);
         assert_eq!(first_command.party_id, "trader");
         assert_eq!(first_command.asset, 10_000);
         assert_eq!(first_command.order_id, OrderId::Oid(77738308));
@@ -366,7 +366,7 @@ mod tests {
 
         let second = from_wire_batch_modify("trader", &request.action.modifies[1])
             .expect("second modify request should build");
-        let second_command = SpotOrderV2ModifyExecutionSpec::command(&second);
+        let second_command = SpotOrderV2ModifyExecutionSpec::command(&second, 1, 1, 0, 1);
         assert_eq!(
             second_command.order_id,
             OrderId::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
@@ -416,7 +416,7 @@ mod tests {
 
         let modify_request = from_wire_batch_modify("seller", &request.action.modifies[0])
             .expect("modify request should build");
-        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request);
+        let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request, 1, 1, 0, 1);
 
         assert_eq!(command.party_id, "seller");
         assert_eq!(command.cloid.as_deref(), Some("0xfedcba0987654321fedcba0987654321"));

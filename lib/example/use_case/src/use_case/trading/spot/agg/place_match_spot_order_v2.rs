@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, ExecutionContext, ReplayableChanges,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges,
     StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use thiserror::Error;
@@ -111,7 +111,7 @@ impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
 }
 
 impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
-    type Command = PlaceOnlySpotOrderV2Cmd;
+    type Command = LogEntry<PlaceOnlySpotOrderV2Cmd>;
     type StateGiven = PlaceMatchSpotOrderV2State;
     type Error = PlaceMatchSpotOrderV2Error;
     type StateChanged = PlaceMatchSpotOrderV2AfterChanges;
@@ -137,11 +137,9 @@ impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let place_after =
-            PlaceOnlySpotOrderV2UseCase.compute_state_changed_with_context(cmd, &(), context)?;
-        match (cmd, place_after) {
+        let place_after = PlaceOnlySpotOrderV2UseCase.compute_state_changed(cmd, &())?;
+        match (&cmd.payload, place_after) {
             (
                 PlaceOnlySpotOrderV2Cmd::Single(order_cmd),
                 PlaceOnlySpotOrderV2AfterChanges::Single { created_order },
@@ -156,7 +154,7 @@ impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
                         order_cmd,
                         created_order.clone(),
                         state,
-                        context,
+                        cmd,
                     )?;
                 Ok(PlaceMatchSpotOrderV2AfterChanges::SinglePlacedAndMatched {
                     created_taker_order: created_order,
@@ -176,7 +174,7 @@ impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
                         parent,
                         created_parent_order.clone(),
                         state,
-                        context,
+                        cmd,
                     )?;
                 Ok(PlaceMatchSpotOrderV2AfterChanges::NormalTpslPlacedAndMatched {
                     created_parent_order,
@@ -245,7 +243,7 @@ fn compute_activate_and_match_after_for_created_taker(
     order_cmd: &PlaceOnlySpotOrderV2OrderCmd,
     created_taker_order: SpotOrderV2,
     state: &PlaceMatchSpotOrderV2State,
-    context: &ExecutionContext,
+    entry: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
 ) -> Result<
     (ActivateSpotOrderV2AfterChanges, MatchSpotOrderV3AfterChanges),
     PlaceMatchSpotOrderV2Error,
@@ -263,11 +261,8 @@ fn compute_activate_and_match_after_for_created_taker(
         maker_fee_bps: order_cmd.maker_fee_bps,
         taker_fee_bps: order_cmd.taker_fee_bps,
     };
-    let activation_after = ActivateSpotOrderV2UseCase.compute_state_changed_with_context(
-        &activation_cmd,
-        &activation_state,
-        context,
-    )?;
+    let activation_after = ActivateSpotOrderV2UseCase
+        .compute_state_changed(&entry.with_payload(activation_cmd), &activation_state)?;
     let match_cmd = MatchSpotOrderV3Cmd {
         party_id: order_cmd.party_id.clone(),
         asset: order_cmd.asset,
@@ -283,11 +278,8 @@ fn compute_activate_and_match_after_for_created_taker(
         maker_fee_bps: order_cmd.maker_fee_bps,
         taker_fee_bps: order_cmd.taker_fee_bps,
     };
-    let match_after = MatchSpotOrderV3UseCase.compute_state_changed_with_context(
-        &match_cmd,
-        &match_state,
-        context,
-    )?;
+    let match_after = MatchSpotOrderV3UseCase
+        .compute_state_changed(&entry.with_payload(match_cmd), &match_state)?;
     Ok((activation_after, match_after))
 }
 

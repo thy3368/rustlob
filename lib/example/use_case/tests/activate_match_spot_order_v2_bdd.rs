@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use example_core_entity::{
@@ -26,8 +26,8 @@ enum ExpectedOutcome {
     Rejected,
 }
 
-fn context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: EXECUTION_TIME_NS, execution_id: 0 }
+fn entry(payload: ActivateMatchSpotOrderV2Cmd) -> LogEntry<ActivateMatchSpotOrderV2Cmd> {
+    LogEntry { lsn: 1, logical_ts: EXECUTION_TIME_NS, client_id: 1, request_id: 1, payload }
 }
 
 fn cmd(order_id: u64) -> ActivateMatchSpotOrderV2Cmd {
@@ -123,7 +123,7 @@ fn compute(
     expected: ExpectedOutcome,
 ) -> (ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2Changes) {
     let after = ActivateMatchSpotOrderV2UseCase
-        .compute_state_changed_with_context(&cmd(TAKER_BUY_ORDER_ID), &state, &context())
+        .compute_state_changed(&entry(cmd(TAKER_BUY_ORDER_ID)), &state)
         .expect("activate-match should compute after truth");
     assert_after_variant(&after.match_after, expected);
     let changes = ActivateMatchSpotOrderV2UseCase::do_compute_state_diff(state.clone(), after)
@@ -188,13 +188,13 @@ fn command_rejects_empty_party_id_and_order_id() {
     let mut invalid = cmd(TAKER_BUY_ORDER_ID);
     invalid.party_id.clear();
     assert!(matches!(
-        ActivateMatchSpotOrderV2UseCase.check_command(&invalid),
+        ActivateMatchSpotOrderV2UseCase.check_command(&entry(invalid.clone())),
         Err(ActivateMatchSpotOrderV2Error::Activation(ActivateSpotOrderV2Error::InvalidPartyId))
     ));
 
     let invalid = cmd(0);
     assert!(matches!(
-        ActivateMatchSpotOrderV2UseCase.check_command(&invalid),
+        ActivateMatchSpotOrderV2UseCase.check_command(&entry(invalid.clone())),
         Err(ActivateMatchSpotOrderV2Error::Activation(ActivateSpotOrderV2Error::InvalidOrderId))
     ));
 }
@@ -205,14 +205,16 @@ fn state_validation_reuses_activation_rules_and_rejects_empty_fee_account() {
     state.fee_account_id.clear();
 
     assert_eq!(
-        ActivateMatchSpotOrderV2UseCase.validate_state_given(&cmd(TAKER_BUY_ORDER_ID), &state),
+        ActivateMatchSpotOrderV2UseCase
+            .validate_state_given(&entry(cmd(TAKER_BUY_ORDER_ID)), &state),
         Err(ActivateMatchSpotOrderV2Error::Match(MatchSpotOrderV3Error::InvalidFeeAccountId))
     );
 
     state.fee_account_id = "fee".to_owned();
     state.pending_order.order_id = 99;
     assert!(matches!(
-        ActivateMatchSpotOrderV2UseCase.validate_state_given(&cmd(TAKER_BUY_ORDER_ID), &state),
+        ActivateMatchSpotOrderV2UseCase
+            .validate_state_given(&entry(cmd(TAKER_BUY_ORDER_ID)), &state),
         Err(ActivateMatchSpotOrderV2Error::Activation(ActivateSpotOrderV2Error::OrderIdMismatch))
     ));
 }
@@ -228,11 +230,8 @@ fn insufficient_available_balance_is_reported_by_activation_stage() {
     buyer_quote.available = 1;
 
     assert!(matches!(
-        ActivateMatchSpotOrderV2UseCase.compute_state_changed_with_context(
-            &cmd(TAKER_BUY_ORDER_ID),
-            &state,
-            &context()
-        ),
+        ActivateMatchSpotOrderV2UseCase
+            .compute_state_changed(&entry(cmd(TAKER_BUY_ORDER_ID)), &state,),
         Err(ActivateMatchSpotOrderV2Error::Activation(
             ActivateSpotOrderV2Error::InsufficientAvailableBalance
         ))

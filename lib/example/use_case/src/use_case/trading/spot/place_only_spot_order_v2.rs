@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, ExecutionContext, IssuedByParty, ReplayableChanges,
+    Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
     StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -137,13 +137,13 @@ impl ReplayableChanges for PlaceOnlySpotOrderV2Changes {
 }
 
 impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
-    type Command = PlaceOnlySpotOrderV2Cmd;
+    type Command = LogEntry<PlaceOnlySpotOrderV2Cmd>;
     type StateGiven = PlaceOnlySpotOrderV2State;
     type Error = PlaceOnlySpotOrderV2Error;
     type StateChanged = PlaceOnlySpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        match cmd {
+        match &cmd.payload {
             PlaceOnlySpotOrderV2Cmd::Single(order) => check_order_command(order),
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
                 check_order_command(parent)?;
@@ -163,7 +163,7 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
         cmd: &Self::Command,
         _given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        if let PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } = cmd {
+        if let PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } = &cmd.payload {
             validate_normal_tpsl(parent, children)?;
         }
         Ok(())
@@ -173,22 +173,21 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
         &self,
         cmd: &Self::Command,
         _given_state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
-        match cmd {
+        match &cmd.payload {
             PlaceOnlySpotOrderV2Cmd::Single(order) => {
                 Ok(PlaceOnlySpotOrderV2AfterChanges::Single {
-                    created_order: build_order(order, context.execution_time_ns)?,
+                    created_order: build_order(order, cmd.logical_ts)?,
                 })
             }
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
                 let parent_order_id = parent.order_id.clone();
-                let mut created_parent_order = build_order(parent, context.execution_time_ns)?;
+                let mut created_parent_order = build_order(parent, cmd.logical_ts)?;
                 created_parent_order.group_relation = SpotOrderGroupRelation::NormalTpslParent;
 
                 let mut created_child_orders = Vec::with_capacity(children.len());
                 for child in children {
-                    let mut child_order = build_order(child, context.execution_time_ns)?;
+                    let mut child_order = build_order(child, cmd.logical_ts)?;
                     child_order.group_relation = SpotOrderGroupRelation::NormalTpslChild {
                         parent_order_id: parent_order_id.clone(),
                     };

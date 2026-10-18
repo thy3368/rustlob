@@ -14,7 +14,10 @@ pub struct DefaultSpotBlockOutbound;
 impl StateSource<SpotBlockUseCase> for DefaultSpotBlockOutbound {
     type Error = DefaultSpotBlockOutboundError;
 
-    fn load_given_state(&self, _cmd: &SpotBlockCmd) -> Result<SpotBlockState, Self::Error> {
+    fn load_given_state(
+        &self,
+        _cmd: &LogEntry<SpotBlockCmd>,
+    ) -> Result<SpotBlockState, Self::Error> {
         Err(DefaultSpotBlockOutboundError::StateUnavailable)
     }
 }
@@ -34,3 +37,4 @@ impl StateSink<SpotBlockUseCase> for DefaultSpotBlockOutbound {
         Ok(())
     }
 }
+use common_entity::LogEntry;

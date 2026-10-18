@@ -69,12 +69,17 @@ where
                 asset: order.asset(),
                 order_id,
             };
-            let result =
-                execute_activate_match_spot_order_v2_with_outbound(&command, &self.outbound)
-                    .map_err(|error| TriggerPendingSpotOrdersOnTradeError::Execute {
-                        order_id,
-                        error,
-                    })?;
+            let result = execute_activate_match_spot_order_v2_with_outbound(
+                &LogEntry {
+                    lsn: event.lsn,
+                    logical_ts: event.logical_ts,
+                    client_id: 0,
+                    request_id: order_id,
+                    payload: command,
+                },
+                &self.outbound,
+            )
+            .map_err(|error| TriggerPendingSpotOrdersOnTradeError::Execute { order_id, error })?;
             results.push(result);
         }
 
@@ -222,3 +227,4 @@ mod tests {
         assert_eq!(handler.handle(&event).expect("non-target event should be ignored"), None);
     }
 }
+use common_entity::LogEntry;

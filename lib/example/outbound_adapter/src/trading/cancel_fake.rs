@@ -27,7 +27,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
 
     fn load_given_state(
         &self,
-        request: &CancelSpotOrderV2Cmd,
+        request: &LogEntry<CancelSpotOrderV2Cmd>,
     ) -> Result<CancelSpotOrderV2State, Self::Error> {
         *self.observed_lookup.lock().map_err(|_| FakeSpotOrderV2CancelOutboundError)? =
             Some(request.lookup.clone());
@@ -104,3 +104,4 @@ impl StateSink<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         Ok(())
     }
 }
+use common_entity::LogEntry;

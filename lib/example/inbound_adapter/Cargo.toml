@@ -9,6 +9,7 @@ license.workspace = true
 actix-web = "4"
 axum = "0.7"
 cmd_handler = { path = "../../common/cmd_handler" }
+common_entity = { package = "entity", path = "../../common/entity" }
 example_core_use_case = { path = "../use_case" }
 inbound_adapter_support = { path = "../../common/inbound_adapter_support" }
 serde = { version = "1", features = ["derive"] }

@@ -8,6 +8,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     ExecutionError, StateMachineExecutor, StateSink, StateSource, UseCaseReplyMapper,
 };
+use common_entity::LogEntry;
 use example_core_use_case::{
     PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
@@ -22,6 +23,7 @@ pub trait PlaceOrderOutboundAccess {
         + StateSink<PlaceMatchSpotOrderV2UseCase, Error = Self::OutboundError>;
 
     fn place_order_outbound(&self) -> &Self::Outbound;
+    fn command_metadata(&self) -> (u64, u64, u64, u64);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,10 +37,16 @@ pub struct PlaceOrderHttpRequest {
 }
 
 impl PlaceOrderHttpRequest {
-    fn into_command(self) -> PlaceOnlySpotOrderV2Cmd {
+    fn into_command(
+        self,
+        lsn: u64,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+    ) -> LogEntry<PlaceOnlySpotOrderV2Cmd> {
         let _trace_id = self.trace_id;
         let _command_id = self.command_id;
-        PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
+        let payload = PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
             order_id: 11,
             party_id: self.trader_id,
             asset: 10_001,
@@ -53,7 +61,8 @@ impl PlaceOrderHttpRequest {
             quote_asset_id: "USDT".to_string(),
             maker_fee_bps: 5,
             taker_fee_bps: 10,
-        })
+        });
+        LogEntry { lsn, logical_ts, client_id, request_id, payload }
     }
 }
 
@@ -97,6 +106,10 @@ impl UseCaseReplyMapper for PlaceOrderHttpReplyMapper {
 
 pub fn handle_place_order_http<OB>(
     request: PlaceOrderHttpRequest,
+    lsn: u64,
+    logical_ts: u64,
+    client_id: u64,
+    request_id: u64,
     outbound: &OB,
 ) -> Result<
     PlaceOrderHttpResponse,
@@ -111,7 +124,7 @@ where
             Error = <OB as StateSink<PlaceMatchSpotOrderV2UseCase>>::Error,
         > + StateSink<PlaceMatchSpotOrderV2UseCase>,
 {
-    let command = request.into_command();
+    let command = request.into_command(lsn, logical_ts, client_id, request_id);
     let result = StateMachineExecutor.execute::<PlaceMatchSpotOrderV2UseCase, OB, OB>(
         &PlaceMatchSpotOrderV2UseCase,
         &command,
@@ -163,8 +176,16 @@ async fn create_order<S>(
 where
     S: Send + Sync + 'static + PlaceOrderOutboundAccess,
 {
-    let response = handle_place_order_http(payload, state.place_order_outbound())
-        .map_err(HttpInboundError::from_mi_execution_error)?;
+    let (lsn, logical_ts, client_id, request_id) = state.command_metadata();
+    let response = handle_place_order_http(
+        payload,
+        lsn,
+        logical_ts,
+        client_id,
+        request_id,
+        state.place_order_outbound(),
+    )
+    .map_err(HttpInboundError::from_mi_execution_error)?;
     Ok(Json(response))
 }
 
@@ -175,9 +196,16 @@ async fn create_order_actix<S>(
 where
     S: Send + Sync + 'static + PlaceOrderOutboundAccess,
 {
-    let response =
-        handle_place_order_http(payload.into_inner(), state.get_ref().place_order_outbound())
-            .map_err(HttpInboundError::from_mi_execution_error)?;
+    let (lsn, logical_ts, client_id, request_id) = state.command_metadata();
+    let response = handle_place_order_http(
+        payload.into_inner(),
+        lsn,
+        logical_ts,
+        client_id,
+        request_id,
+        state.get_ref().place_order_outbound(),
+    )
+    .map_err(HttpInboundError::from_mi_execution_error)?;
     Ok(HttpResponse::Ok().json(response))
 }
 
@@ -236,8 +264,8 @@ mod tests {
             price: 100,
         };
 
-        let response =
-            handle_place_order_http(request, &outbound).expect("place-match order should execute");
+        let response = handle_place_order_http(request, 1, 1_000_000_000, 1, 1, &outbound)
+            .expect("place-match order should execute");
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.order_id, 11);

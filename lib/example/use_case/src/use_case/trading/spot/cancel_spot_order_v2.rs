@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -108,7 +108,7 @@ impl ReplayableChanges for CancelSpotOrderV2Changes {
 }
 
 impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
-    type Command = CancelSpotOrderV2Cmd;
+    type Command = LogEntry<CancelSpotOrderV2Cmd>;
     type StateGiven = CancelSpotOrderV2State;
     type Error = CancelSpotOrderV2Error;
     type StateChanged = CancelSpotOrderV2AfterChanges;
@@ -136,9 +136,8 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
 
     fn compute_state_changed_unchecked(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         given_state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut order_after = given_state.order.clone();
         let mut balance_book = BalanceMap::new(&given_state.balances);
@@ -149,7 +148,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
                 &given_state.balances,
                 &given_state.order.reservation,
             )?,
-            timestamp: context.execution_time_ns,
+            timestamp: cmd.logical_ts,
         })?;
         if let Some(unfreeze_ledger_entry) = cancel_outcome.unfreeze_ledger_entry {
             let unfreeze_ledger_entry =

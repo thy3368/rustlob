@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use common_entity::{
-    Entity, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    Entity, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use example_core_entity::{
     Balance, BalanceLedgerEntryV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
@@ -42,8 +42,8 @@ struct V4Pipeline {
     settle_changes: SettleMatchedSpotTradesV4Changes,
 }
 
-fn context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: EXECUTION_TIME_NS, execution_id: 0 }
+fn entry<P>(payload: P) -> LogEntry<P> {
+    LogEntry { lsn: 1, logical_ts: EXECUTION_TIME_NS, client_id: 1, request_id: 1, payload }
 }
 
 fn activated_order(
@@ -144,18 +144,14 @@ fn scenario(taker_qty: u64, taker_tif: SpotOrderTif, maker_qty: Option<u64>) -> 
 
 fn run_v4(scenario: &Scenario) -> V4Pipeline {
     let match_after = MatchSpotOrderV4UseCase
-        .compute_state_changed_with_context(&scenario.v4_command, &scenario.v4_state, &context())
+        .compute_state_changed(&entry(scenario.v4_command.clone()), &scenario.v4_state)
         .expect("V4 match should compute after truth");
     let settlement_state = settlement_state_from_match_after(scenario, &match_after);
     let match_changes =
         MatchSpotOrderV4UseCase::do_compute_state_diff(scenario.v4_state.clone(), match_after)
             .expect("V4 match should compute changes");
     let settlement_after = SettleMatchedSpotTradesV4UseCase
-        .compute_state_changed_with_context(
-            &SettleMatchedSpotTradesV4Cmd::default(),
-            &settlement_state,
-            &context(),
-        )
+        .compute_state_changed(&entry(SettleMatchedSpotTradesV4Cmd::default()), &settlement_state)
         .expect("V4 settlement should compute after truth");
     let settle_changes =
         SettleMatchedSpotTradesV4UseCase::do_compute_state_diff(settlement_state, settlement_after)
@@ -317,7 +313,7 @@ fn v3_parts(
 
 fn run_v3(scenario: &Scenario) -> MatchSpotOrderV3Changes {
     let after = MatchSpotOrderV3UseCase
-        .compute_state_changed_with_context(&scenario.v3_command, &scenario.v3_state, &context())
+        .compute_state_changed(&entry(scenario.v3_command.clone()), &scenario.v3_state)
         .expect("V3 should compute after truth");
     MatchSpotOrderV3UseCase::do_compute_state_diff(scenario.v3_state.clone(), after)
         .expect("V3 should compute changes")

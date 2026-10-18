@@ -21,7 +21,7 @@ impl StateSource<MatchSpotOrderV3UseCase> for DefaultSpotOrderV2PlaceOutbound {
 
     fn load_given_state(
         &self,
-        _cmd: &MatchSpotOrderV3Cmd,
+        _cmd: &LogEntry<MatchSpotOrderV3Cmd>,
     ) -> Result<MatchSpotOrderV3State, Self::Error> {
         Err(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable)
     }
@@ -48,7 +48,7 @@ impl StateSource<ActivateSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOutbound
 
     fn load_given_state(
         &self,
-        _cmd: &ActivateSpotOrderV2Cmd,
+        _cmd: &LogEntry<ActivateSpotOrderV2Cmd>,
     ) -> Result<ActivateSpotOrderV2State, Self::Error> {
         Err(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable)
     }
@@ -75,7 +75,7 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOut
 
     fn load_given_state(
         &self,
-        _cmd: &ActivateMatchSpotOrderV2Cmd,
+        _cmd: &LogEntry<ActivateMatchSpotOrderV2Cmd>,
     ) -> Result<ActivateMatchSpotOrderV2State, Self::Error> {
         Err(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable)
     }
@@ -102,7 +102,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOutbou
 
     fn load_given_state(
         &self,
-        _cmd: &PlaceOnlySpotOrderV2Cmd,
+        _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
         Err(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable)
     }
@@ -123,3 +123,4 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for DefaultSpotOrderV2PlaceOutbound
         Ok(())
     }
 }
+use common_entity::LogEntry;

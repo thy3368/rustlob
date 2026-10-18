@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    Entity, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use example_core_entity::{
     BalanceLedgerEntryV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
@@ -29,8 +29,8 @@ struct Scenario {
     command: MatchSpotOrderV4Cmd,
 }
 
-fn context() -> ExecutionContext {
-    ExecutionContext { execution_time_ns: EXECUTION_TIME_NS, execution_id: 0 }
+fn entry(payload: MatchSpotOrderV4Cmd) -> LogEntry<MatchSpotOrderV4Cmd> {
+    LogEntry { lsn: 1, logical_ts: EXECUTION_TIME_NS, client_id: 1, request_id: 1, payload }
 }
 
 fn activated_order(
@@ -103,7 +103,7 @@ fn compute(
 ) -> (MatchSpotOrderV4State, MatchSpotOrderV4Changes) {
     let Scenario { state, command } = scenario;
     let after = MatchSpotOrderV4UseCase
-        .compute_state_changed_with_context(&command, &state, &context())
+        .compute_state_changed(&entry(command.clone()), &state)
         .expect("V4 match should compute after truth");
     assert_after_variant(&after, expected);
     let changes = MatchSpotOrderV4UseCase::do_compute_state_diff(state.clone(), after)

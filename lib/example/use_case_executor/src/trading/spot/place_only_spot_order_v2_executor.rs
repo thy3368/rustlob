@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
-use common_entity::{ReplayableChanges, StateMachineOwnedV2Diff};
+use common_entity::{LogEntry, ReplayableChanges, StateMachineOwnedV2Diff};
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,
     PlaceOnlySpotOrderV2UseCase,
@@ -12,7 +12,7 @@ use example_outbound_adapter::{
 };
 
 pub fn execute_place_only_spot_order_v2(
-    command: &PlaceOnlySpotOrderV2Cmd,
+    command: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
 ) -> Result<
     ExecutionResult<PlaceOnlySpotOrderV2Changes>,
     ExecutionError<PlaceOnlySpotOrderV2Error, DefaultSpotOrderV2PlaceOnlyOutboundError>,
@@ -21,7 +21,7 @@ pub fn execute_place_only_spot_order_v2(
 }
 
 pub fn execute_place_only_spot_order_v2_with_outbound<OB>(
-    command: &PlaceOnlySpotOrderV2Cmd,
+    command: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     outbound: &OB,
 ) -> Result<
     ExecutionResult<PlaceOnlySpotOrderV2Changes>,
@@ -46,7 +46,7 @@ where
 
 /// 执行 place-only 单订单的业务热路径，不包含 outbound 状态加载和副作用编排。
 pub fn compute_place_only_spot_order_v2_business(
-    command: &PlaceOnlySpotOrderV2Cmd,
+    command: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
 ) -> Result<(PlaceOnlySpotOrderV2Changes, Vec<EntityReplayableEvent>), PlaceOnlySpotOrderV2Error> {
     let changes = PlaceOnlySpotOrderV2UseCase.compute_state_diff(command, ())?;
     let events = changes.to_replayable_events()?;
@@ -67,6 +67,10 @@ mod tests {
     };
 
     use super::*;
+
+    fn entry<P>(payload: P) -> LogEntry<P> {
+        LogEntry { lsn: 7, logical_ts: 100, client_id: 1, request_id: 2, payload }
+    }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct FakePlaceOnlySpotOrderV2OutboundError;
@@ -91,7 +95,7 @@ mod tests {
 
         fn load_given_state(
             &self,
-            _cmd: &PlaceOnlySpotOrderV2Cmd,
+            _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
         ) -> Result<PlaceOnlySpotOrderV2State, Self::Error> {
             Ok(())
         }
@@ -163,15 +167,18 @@ mod tests {
 
     #[test]
     fn execute_place_only_single_limit_with_default_outbound_projects_events() {
-        let result =
-            execute_place_only_spot_order_v2(&PlaceOnlySpotOrderV2Cmd::Single(limit_cmd("gtc")))
-                .expect("place-only single limit should execute with default outbound");
+        let result = execute_place_only_spot_order_v2(&entry(PlaceOnlySpotOrderV2Cmd::Single(
+            limit_cmd("gtc"),
+        )))
+        .expect("place-only single limit should execute with default outbound");
 
         let PlaceOnlySpotOrderV2Changes::Single { created_order } = &result.changes else {
             panic!("single limit on_command should produce single-order changes");
         };
         assert_eq!(created_order.status, SpotOrderStatus::Pending);
         assert_eq!(result.events.len(), 1);
+        assert_eq!(result.events[0].lsn, 7);
+        assert_eq!(result.events[0].logical_ts, 100);
         assert!(result.events[0].is_created());
         assert_eq!(result.events[0].entity_type, SpotOrderV2::entity_type());
     }
@@ -180,7 +187,7 @@ mod tests {
     fn execute_place_only_with_custom_outbound_persists_replays_and_publishes_events() {
         let outbound = FakePlaceOnlySpotOrderV2Outbound::default();
         let result = execute_place_only_spot_order_v2_with_outbound(
-            &PlaceOnlySpotOrderV2Cmd::Single(limit_cmd("gtc")),
+            &entry(PlaceOnlySpotOrderV2Cmd::Single(limit_cmd("gtc"))),
             &outbound,
         )
         .expect("place-only single limit should execute with custom outbound");
@@ -200,11 +207,12 @@ mod tests {
 
     #[test]
     fn execute_place_only_normal_tpsl_creates_parent_and_children() {
-        let result = execute_place_only_spot_order_v2(&PlaceOnlySpotOrderV2Cmd::NormalTpsl {
-            parent: limit_cmd("gtc"),
-            children: vec![trigger_cmd(2, false), trigger_cmd(3, true)],
-        })
-        .expect("place-only normal tpsl should execute with default outbound");
+        let result =
+            execute_place_only_spot_order_v2(&entry(PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+                parent: limit_cmd("gtc"),
+                children: vec![trigger_cmd(2, false), trigger_cmd(3, true)],
+            }))
+            .expect("place-only normal tpsl should execute with default outbound");
 
         let PlaceOnlySpotOrderV2Changes::NormalTpsl { created_parent_order, created_child_orders } =
             &result.changes

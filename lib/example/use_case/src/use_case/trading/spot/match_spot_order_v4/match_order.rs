@@ -1,6 +1,6 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
     StateMachineV2Unchecked,
 };
 use serde::{Deserialize, Serialize};
@@ -126,7 +126,7 @@ pub struct MatchSpotOrderV4State {
 pub struct MatchSpotOrderV4UseCase;
 
 impl StateMachineV2Unchecked for MatchSpotOrderV4UseCase {
-    type Command = MatchSpotOrderV4Cmd;
+    type Command = LogEntry<MatchSpotOrderV4Cmd>;
     type StateGiven = MatchSpotOrderV4State;
     type Error = MatchSpotOrderV4Error;
     type StateChanged = MatchSpotOrderV4AfterChanges;
@@ -179,11 +179,10 @@ impl StateMachineV2Unchecked for MatchSpotOrderV4UseCase {
 
     fn compute_state_changed_unchecked(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_match_after(state, context)
+        compute_match_after(state, cmd.logical_ts)
     }
 }
 
@@ -264,12 +263,12 @@ impl StateMachineOwnedV2Diff for MatchSpotOrderV4UseCase {
 
 fn compute_match_after(
     state: &MatchSpotOrderV4State,
-    context: &ExecutionContext,
+    logical_ts: u64,
 ) -> Result<MatchSpotOrderV4AfterChanges, MatchSpotOrderV4Error> {
     let mut taker_after = state.taker_order.clone();
     let mut maker_orders_after = state.maker_orders.clone();
-    let executed_at_ms = context.execution_time_ns / 1_000_000;
-    let timestamp = context.execution_time_ns;
+    let executed_at_ms = logical_ts / 1_000_000;
+    let timestamp = logical_ts;
 
     match taker_after.time_in_force() {
         SpotOrderTif::Gtc | SpotOrderTif::Ioc => {

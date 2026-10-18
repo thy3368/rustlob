@@ -10,7 +10,7 @@ use example_outbound_adapter::{
 };
 
 pub fn execute_activate_match_spot_order_v2(
-    command: &ActivateMatchSpotOrderV2Cmd,
+    command: &LogEntry<ActivateMatchSpotOrderV2Cmd>,
 ) -> Result<
     ExecutionResult<ActivateMatchSpotOrderV2Changes>,
     ExecutionError<ActivateMatchSpotOrderV2Error, DefaultSpotOrderV2PlaceOutboundError>,
@@ -19,7 +19,7 @@ pub fn execute_activate_match_spot_order_v2(
 }
 
 pub fn execute_activate_match_spot_order_v2_with_outbound<OB>(
-    command: &ActivateMatchSpotOrderV2Cmd,
+    command: &LogEntry<ActivateMatchSpotOrderV2Cmd>,
     outbound: &OB,
 ) -> Result<
     ExecutionResult<ActivateMatchSpotOrderV2Changes>,
@@ -41,3 +41,4 @@ where
         outbound,
     )
 }
+use common_entity::LogEntry;

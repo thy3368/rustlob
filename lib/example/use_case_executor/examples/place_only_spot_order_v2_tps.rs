@@ -7,6 +7,12 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
+use common_entity::LogEntry;
+
+fn entry(payload: PlaceOnlySpotOrderV2Cmd, lsn: u64) -> LogEntry<PlaceOnlySpotOrderV2Cmd> {
+    LogEntry { lsn, logical_ts: lsn, client_id: 1, request_id: lsn, payload }
+}
+
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
 };
@@ -76,7 +82,10 @@ fn run_business(warmup: Duration, measurement: Duration) -> RunStats {
     while warmup_start.elapsed() < warmup {
         set_order_id(&mut command, order_id);
         order_id = order_id.saturating_add(1);
-        let _ = black_box(compute_place_only_spot_order_v2_business(black_box(&command)));
+        let _ = black_box(compute_place_only_spot_order_v2_business(black_box(&entry(
+            command.clone(),
+            order_id,
+        ))));
     }
 
     let start = Instant::now();
@@ -84,7 +93,8 @@ fn run_business(warmup: Duration, measurement: Duration) -> RunStats {
     while start.elapsed() < measurement {
         set_order_id(&mut command, order_id);
         order_id = order_id.saturating_add(1);
-        let result = compute_place_only_spot_order_v2_business(black_box(&command));
+        let result =
+            compute_place_only_spot_order_v2_business(black_box(&entry(command.clone(), order_id)));
         if result.is_ok() {
             successful = successful.saturating_add(1);
         }
@@ -103,7 +113,7 @@ fn run_executor(warmup: Duration, measurement: Duration) -> RunStats {
         set_order_id(&mut command, order_id);
         order_id = order_id.saturating_add(1);
         let _ = black_box(execute_place_only_spot_order_v2_with_outbound(
-            black_box(&command),
+            black_box(&entry(command.clone(), order_id)),
             &outbound,
         ));
     }
@@ -113,7 +123,10 @@ fn run_executor(warmup: Duration, measurement: Duration) -> RunStats {
     while start.elapsed() < measurement {
         set_order_id(&mut command, order_id);
         order_id = order_id.saturating_add(1);
-        let result = execute_place_only_spot_order_v2_with_outbound(black_box(&command), &outbound);
+        let result = execute_place_only_spot_order_v2_with_outbound(
+            black_box(&entry(command.clone(), order_id)),
+            &outbound,
+        );
         if result.is_ok() {
             successful = successful.saturating_add(1);
         }
