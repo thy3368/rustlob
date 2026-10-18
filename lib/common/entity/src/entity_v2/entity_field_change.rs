@@ -1,13 +1,13 @@
 use std::borrow::Cow;
-use std::sync::atomic::Ordering;
 use std::sync::LazyLock;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 use thiserror::Error;
 
-use crate::{EntityError, EVENT_SEQUENCE};
+use crate::{EVENT_SEQUENCE, EntityError};
 
 /// Logical entity change kind used before encoding into compact replay tags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -115,20 +115,27 @@ impl ReplayFieldChange {
 /// Entity event optimized for deterministic replay and optimistic locking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
+
     /// 全局单调递增的序列号 来自command
     /// 这是"全序"的唯一依据
     pub lsn: u64,
-    /// lsn内唯一
-    pub seq: u64,
+    pub entity_id: i64,
+    pub entity_type: u8,
 
+    pub previous_lsn: u64,
+    
     /// 逻辑时间戳（由定序器分配，非物理时钟）来自command
     /// 用于替代 NTP/PTP，作为系统的逻辑时间
     pub logical_ts: u64,
 
+
+    #[serde(default)]
     pub old_version: u64,
+    #[serde(default)]
     pub new_version: u64,
-    pub entity_id: i64,
-    pub entity_type: u8,
+    #[serde(default)]
+    pub seq: u64,
+
     pub change_type: u8,
     pub field_changes: Vec<ReplayFieldChange>,
 }
@@ -152,22 +159,23 @@ impl EntityReplayableEvent {
     pub fn new(
         timestamp: u64,
         sequence: u64,
-        old_version: u64,
-        new_version: u64,
+        previous_lsn: u64,
+        lsn: u64,
         entity_id: i64,
         entity_type: u8,
         change_type: u8,
     ) -> Self {
         Self {
             logical_ts: timestamp,
+            previous_lsn,
+            old_version: previous_lsn,
+            new_version: lsn,
             seq: sequence,
-            old_version,
-            lsn: 0,
-            new_version,
+            lsn,
             entity_id,
             entity_type,
             change_type,
-            field_changes: Vec::with_capacity(0),
+            field_changes: Vec::new(),
         }
     }
 
@@ -177,7 +185,7 @@ impl EntityReplayableEvent {
             timestamp,
             sequence,
             0,
-            1,
+            0,
             entity_id,
             entity_type,
             EntityChangeType::Created.as_tag(),
@@ -188,16 +196,16 @@ impl EntityReplayableEvent {
     pub fn new_updated(
         timestamp: u64,
         sequence: u64,
-        old_version: u64,
-        new_version: u64,
+        previous_lsn: u64,
+        lsn: u64,
         entity_id: i64,
         entity_type: u8,
     ) -> Self {
         Self::new(
             timestamp,
             sequence,
-            old_version,
-            new_version,
+            previous_lsn,
+            lsn,
             entity_id,
             entity_type,
             EntityChangeType::Updated.as_tag(),
@@ -208,16 +216,16 @@ impl EntityReplayableEvent {
     pub fn new_deleted(
         timestamp: u64,
         sequence: u64,
-        old_version: u64,
-        new_version: u64,
+        previous_lsn: u64,
+        lsn: u64,
         entity_id: i64,
         entity_type: u8,
     ) -> Self {
         Self::new(
             timestamp,
             sequence,
-            old_version,
-            new_version,
+            previous_lsn,
+            lsn,
             entity_id,
             entity_type,
             EntityChangeType::Deleted.as_tag(),
@@ -291,7 +299,7 @@ impl EntityReplayableEvent {
 
     #[inline]
     pub fn verify_version(&self, expected_version: u64) -> bool {
-        self.old_version == expected_version
+        self.previous_lsn == expected_version
     }
 
     #[inline]

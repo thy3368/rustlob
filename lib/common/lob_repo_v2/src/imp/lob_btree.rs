@@ -142,12 +142,12 @@ impl AssetLobV2 for LocalLobBtree {
         }
         let id =
             u64::try_from(e.entity_id).map_err(|_| LobError::Event("negative entity id".into()))?;
-        if e.seq != self.sequence + 1 {
+        if e.lsn <= self.sequence {
             return Err(LobError::Event("nonconsecutive event sequence".into()));
         }
         match e.change_type {
             t if t == EntityChangeType::Created.as_tag() => {
-                if self.ids.contains_key(&id) || e.old_version != 0 || e.new_version != 1 {
+                if self.ids.contains_key(&id) || e.previous_lsn != 0 {
                     return Err(LobError::Event("invalid create".into()));
                 }
                 let o = create_order(e, id)?;
@@ -161,7 +161,7 @@ impl AssetLobV2 for LocalLobBtree {
                     .order(id)
                     .ok_or_else(|| LobError::Event("order does not exist".into()))?
                     .clone();
-                if old.version != e.old_version || e.new_version != e.old_version + 1 {
+                if old.version != e.previous_lsn {
                     return Err(LobError::Event("invalid update".into()));
                 }
                 let o = apply_fields(old, e)?;
@@ -173,14 +173,14 @@ impl AssetLobV2 for LocalLobBtree {
             t if t == EntityChangeType::Deleted.as_tag() => {
                 let o =
                     self.order(id).ok_or_else(|| LobError::Event("order does not exist".into()))?;
-                if o.version != e.old_version || e.new_version != e.old_version + 1 {
+                if o.version != e.previous_lsn {
                     return Err(LobError::Event("invalid delete".into()));
                 }
                 self.delete(id)
             }
             _ => return Err(LobError::Event("unknown change type".into())),
         }
-        self.sequence = e.seq;
+        self.sequence = e.lsn;
         Ok(())
     }
 }

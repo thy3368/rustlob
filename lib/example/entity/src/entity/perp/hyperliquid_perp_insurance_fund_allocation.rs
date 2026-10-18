@@ -77,7 +77,7 @@ impl Entity for HyperliquidPerpInsuranceFundAllocation {
         HYPERLIQUID_PERP_INSURANCE_FUND_ALLOCATION_ENTITY_TYPE
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         1
     }
     fn replay_field_type(field_name: &str) -> u8 {

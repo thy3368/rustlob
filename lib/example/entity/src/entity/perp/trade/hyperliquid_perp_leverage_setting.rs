@@ -148,7 +148,7 @@ impl Entity for HyperliquidPerpLeverageSetting {
         HYPERLIQUID_PERP_LEVERAGE_SETTING_ENTITY_TYPE
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         self.version
     }
     fn replay_field_type(field_name: &str) -> u8 {

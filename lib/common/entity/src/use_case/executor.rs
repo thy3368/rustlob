@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::use_case::log_entry::LogEntryMetadata;
 use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff};
 
@@ -23,6 +25,7 @@ pub enum ExecutionError<BE, OE> {
     Persist(OE),
     Replay(OE),
     Publish(OE),
+    DuplicateEventKey { lsn: u64, entity_type: u8, entity_id: i64 },
 }
 
 /// adapter-side request 到 family on_command 的映射约定。
@@ -103,7 +106,17 @@ impl StateMachineExecutor {
         let mut events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;
         for event in &mut events {
             event.lsn = command.lsn();
+            event.new_version = event.lsn;
             event.logical_ts = command.logical_ts();
+        }
+        let mut keys = HashSet::with_capacity(events.len());
+        for event in &events {
+            if !keys.insert((event.lsn, event.entity_type, event.entity_id)) {
+                return Err(ExecutionError::ProjectEvents(EntityError::Custom(format!(
+                    "duplicate event key ({}, {}, {})",
+                    event.lsn, event.entity_type, event.entity_id
+                ))));
+            }
         }
 
         state_sink.persist(&events).map_err(ExecutionError::Persist)?;

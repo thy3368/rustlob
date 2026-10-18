@@ -92,7 +92,7 @@ pub(crate) fn apply_fields(
             .map_err(|e| LobError::Event(e.to_string()))?;
         if name == "version" {
             if raw.parse::<u64>().map_err(|_| LobError::Event("invalid version".into()))?
-                != event.new_version
+                != event.lsn
             {
                 return Err(LobError::Event("version field mismatch".into()));
             }
@@ -209,7 +209,7 @@ pub(crate) fn apply_fields(
             _ => return Err(LobError::Event("invalid order_type".into())),
         };
     }
-    value["version"] = json!(event.new_version);
+    value["version"] = json!(event.lsn);
     let result: SpotOrderV2 =
         serde_json::from_value(value).map_err(|e| LobError::Event(e.to_string()))?;
     if result.order_id != event.entity_id as u64 {

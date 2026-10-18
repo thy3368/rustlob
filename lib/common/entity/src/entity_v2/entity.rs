@@ -256,13 +256,6 @@ pub trait EntityLifecycle {
     fn updated_at(&self) -> u64;
 
     /// 有点版本号的意思，如果command的高于entity里面的，说明entity没有更新，use case里面要报错，在check state里面有用，解决数据一致问题。
-    fn last_lsn(&self) -> u8;
-    fn last_seq(&self) -> u8;
-
-    /// 创建时的序号，可以代替 entity_id
-    fn first_lsn(&self) -> u8;
-    fn first_seq(&self) -> u8;
-    fn entity_id(&self) -> u64;
 
     /// 返回生命周期时间是否满足 `created_at <= updated_at`。
     #[inline]
@@ -275,12 +268,10 @@ pub trait EntityLifecycle {
 // ///
 // /// 该 trait 不要求实现者同时实现 [`Entity`]，用于让实体创建流程依赖
 // /// ID 生成能力，而不把 ID 生成职责绑定到实体生命周期契约。
-// pub trait EntityIdGenerator {
-//     type Id: Clone + PartialEq + ToString;
-//
-//     /// 生成下一个实体 ID。
-//     fn next_id(&self) -> Self::Id;
-// }
+pub trait EntityIdGenerator {
+    type Id: Clone + PartialEq + ToString;
+    fn next_id(&self) -> Self::Id;
+}
 
 // /// 全局单调递增的序列号 来自command
 // /// 这是"全序"的唯一依据
@@ -418,7 +409,7 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
         &[]
     }
 
-    fn entity_version(&self) -> u64;
+    fn lsn(&self) -> u64;
 
     #[inline]
     fn replay_field_type(_field_name: &str) -> u8 {
@@ -483,15 +474,8 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     {
         ensure_same_entity(old_state, self)?;
 
-        let old_version = old_state.entity_version();
-        let expected_next = increment_version(old_version)?;
-        let new_version = self.entity_version();
-        if new_version != expected_next {
-            return Err(EntityError::EntityVersionMismatch {
-                expected_next,
-                actual_next: new_version,
-            });
-        }
+        let old_version = old_state.lsn();
+        let new_version = self.lsn();
 
         let changes = old_state.diff(self);
         if changes.is_empty() {
@@ -521,7 +505,7 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     where
         Self: Sized,
     {
-        let old_version = self.entity_version();
+        let old_version = self.lsn();
         Ok(EntityReplayableEvent::new_deleted(
             current_timestamp()?,
             next_sequence(),

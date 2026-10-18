@@ -197,7 +197,7 @@ impl Entity for HyperliquidPerpFundingSettlement {
         FinancialClassification::BusinessVoucher
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         1
     }
     fn replay_field_type(field_name: &str) -> u8 {

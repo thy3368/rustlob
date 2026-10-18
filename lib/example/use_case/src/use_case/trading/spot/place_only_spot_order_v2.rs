@@ -22,7 +22,7 @@ pub enum PlaceOnlySpotOrderV2OrderType {
 pub struct PlaceOnlySpotOrderV2OrderCmd {
     pub party_id: String,
     pub asset: u32,
-    pub order_id: u64,
+    pub order_id: u64, //创建时，是没有orderId的，其实也挺聪明的，你直接在外面带给我就好
     pub symbol: String,
     pub is_buy: bool,
     pub price: String,

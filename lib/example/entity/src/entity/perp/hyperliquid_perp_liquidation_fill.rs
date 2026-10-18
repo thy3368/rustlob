@@ -90,7 +90,7 @@ impl Entity for HyperliquidPerpLiquidationFill {
         HYPERLIQUID_PERP_LIQUIDATION_FILL_ENTITY_TYPE
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         1
     }
     fn replay_field_type(field_name: &str) -> u8 {

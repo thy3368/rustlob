@@ -134,7 +134,7 @@ impl Entity for SpotKline {
         EntityMutationModel::DerivedReadModel
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         1
     }
 

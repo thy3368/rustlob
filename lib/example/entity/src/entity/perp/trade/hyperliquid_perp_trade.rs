@@ -441,7 +441,7 @@ impl Entity for HyperliquidPerpTrade {
         HYPERLIQUID_PERP_TRADE_ENTITY_TYPE
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         1
     }
     fn replay_field_type(field_name: &str) -> u8 {

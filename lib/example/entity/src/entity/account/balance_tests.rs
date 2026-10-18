@@ -51,7 +51,7 @@ fn entity_identifier_is_account_and_asset_pair() {
 
     assert_eq!(balance.entity_id(), "trader-1:USDT");
     assert_eq!(Balance::entity_type(), 7);
-    assert_eq!(balance.entity_version(), 3);
+    assert_eq!(balance.lsn(), 3);
     assert!(balance.replay_entity_id().unwrap() >= 0);
 }
 

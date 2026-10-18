@@ -202,7 +202,7 @@ impl Entity for HyperliquidPerpShortfall {
         HYPERLIQUID_PERP_SHORTFALL_ENTITY_TYPE
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         self.version
     }
     fn replay_field_type(field_name: &str) -> u8 {

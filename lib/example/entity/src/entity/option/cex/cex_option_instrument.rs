@@ -171,7 +171,7 @@ impl Entity for CexOptionInstrument {
         FourColorArchetype::Description
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         self.version
     }
 

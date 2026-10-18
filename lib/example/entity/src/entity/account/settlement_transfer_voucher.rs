@@ -211,7 +211,7 @@ impl Entity for SettlementTransferLeg {
         EntityMutationModel::AppendOnlyRecord
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         1
     }
     fn replay_field_type(field_name: &str) -> u8 {
@@ -620,7 +620,7 @@ impl Entity for SettlementTransferVoucher {
         EntityUseCaseApiSurface::MinimalBusinessApi
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         1
     }
     fn replay_field_type(field_name: &str) -> u8 {

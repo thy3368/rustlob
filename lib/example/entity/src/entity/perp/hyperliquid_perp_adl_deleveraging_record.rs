@@ -98,7 +98,7 @@ impl Entity for HyperliquidPerpAdlDeleveragingRecord {
         HYPERLIQUID_PERP_ADL_DELEVERAGING_RECORD_ENTITY_TYPE
     }
 
-    fn entity_version(&self) -> u64 {
+    fn lsn(&self) -> u64 {
         1
     }
     fn replay_field_type(field_name: &str) -> u8 {
