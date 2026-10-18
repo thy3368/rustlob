@@ -336,6 +336,7 @@ fn settle_matched_trades(
 fn compute_match_after(
     state: &MatchSpotOrderV3State,
     logical_ts: u64,
+    version: u64,
 ) -> Result<MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Error> {
     let mut taker_after = state.taker_order.clone();
     let mut maker_orders_after = state.maker_orders.clone();
@@ -355,6 +356,7 @@ fn compute_match_after(
                     taker_fee_bps: state.taker_fee_bps,
                     executed_at_ms,
                     timestamp,
+                    version: Some(version),
                 },
             )?;
             if matches!(taker_after.time_in_force(), SpotOrderTif::Gtc)
@@ -372,6 +374,7 @@ fn compute_match_after(
                 created_balance_ledger_entries,
                 match_outcome.trades,
                 timestamp,
+                version,
             )
         }
         SpotOrderTif::Alo => {
@@ -382,7 +385,7 @@ fn compute_match_after(
                 return Ok(MatchSpotOrderV3AfterChanges::Resting);
             }
 
-            taker_after.reject_as_bad_alo(timestamp)?;
+            taker_after.reject_as_bad_alo_at_version(timestamp, version)?;
             release_remaining_for_terminal(
                 &mut taker_after,
                 &mut balance_book,
@@ -408,6 +411,7 @@ fn finish_matched_after(
     mut created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
     trades: Vec<SpotTrade>,
     timestamp: u64,
+    version: u64,
 ) -> Result<MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Error> {
     let MatchedTradeEffects {
         created_trades,
@@ -433,7 +437,7 @@ fn finish_matched_after(
     taker_after = taker_before_match;
     taker_after.reservation = taker_reservation_after_match;
     taker_after.fee_reservation = taker_fee_reservation_after_match;
-    taker_after.finish_after_match(total_taker_fill, timestamp)?;
+    taker_after.finish_after_match_at_version(total_taker_fill, timestamp, version)?;
     release_remaining_for_terminal(
         &mut taker_after,
         &mut balance_book,
@@ -1119,7 +1123,7 @@ impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_match_after(state, cmd.logical_ts())
+        compute_match_after(state, cmd.logical_ts(), cmd.lsn())
     }
 }
 

@@ -1167,9 +1167,13 @@ impl SpotOrderV2 {
                 input.executed_at_ms,
             );
 
-            let version = input.version.unwrap_or(maker.next_version()?);
-            maker.fill_at_version(terms.trade_qty, input.timestamp, version)?;
-            self.fill_at_version(terms.trade_qty, input.timestamp, version)?;
+            if let Some(version) = input.version {
+                maker.fill_at_version(terms.trade_qty, input.timestamp, version)?;
+                self.fill_at_version(terms.trade_qty, input.timestamp, version)?;
+            } else {
+                maker.fill(terms.trade_qty, input.timestamp)?;
+                self.fill(terms.trade_qty, input.timestamp)?;
+            }
             trades.push(trade);
 
             if self.remaining_qty().ok_or(SpotOrderV2BehaviorError::OrderNotMatchable)? == 0 {
@@ -1298,12 +1302,24 @@ impl SpotOrderV2 {
             }
             SpotOrderTif::Ioc => {
                 if added_fill_qty == 0 {
-                    self.transition_to(next_version, SpotOrderStatus::Rejected, Some(self.no_liquidity_status_reason()), timestamp); Ok(())
+                    self.transition_to(
+                        next_version,
+                        SpotOrderStatus::Rejected,
+                        Some(self.no_liquidity_status_reason()),
+                        timestamp,
+                    );
+                    Ok(())
                 } else if next_filled_qty == self.qty {
                     self.fill_at_version(added_fill_qty, timestamp, next_version)
                 } else {
                     self.filled_qty = next_filled_qty;
-                    self.transition_to(next_version, SpotOrderStatus::Canceled, Some(SpotOrderStatusReason::IocCancelRejected), timestamp); Ok(())
+                    self.transition_to(
+                        next_version,
+                        SpotOrderStatus::Canceled,
+                        Some(SpotOrderStatusReason::IocCancelRejected),
+                        timestamp,
+                    );
+                    Ok(())
                 }
             }
         }
@@ -1317,7 +1333,11 @@ impl SpotOrderV2 {
         self.reject_as_bad_alo_at_version(timestamp, next_version)
     }
 
-    pub fn reject_as_bad_alo_at_version(&mut self, timestamp: u64, next_version: u64) -> Result<(), SpotOrderV2MatchError> {
+    pub fn reject_as_bad_alo_at_version(
+        &mut self,
+        timestamp: u64,
+        next_version: u64,
+    ) -> Result<(), SpotOrderV2MatchError> {
         self.transition_to(
             next_version,
             SpotOrderStatus::Rejected,

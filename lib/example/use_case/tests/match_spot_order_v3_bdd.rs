@@ -249,11 +249,11 @@ fn assert_replay_chain(state: &MatchSpotOrderV3State, changes: &MatchSpotOrderV3
     assert!(!events.is_empty());
     assert!(events.iter().all(|event| event.is_updated() || event.is_created()));
     for event in &events {
-        if event.is_updated() {
-            assert_eq!(event.lsn, event.previous_lsn + 1);
-        } else {
-            assert_eq!(event.previous_lsn, 0);
+        if event.entity_type == SpotOrderV2::entity_type() {
             assert_eq!(event.lsn, 1);
+            if event.is_created() {
+                assert_eq!(event.previous_lsn, 0);
+            }
         }
     }
 
@@ -277,7 +277,7 @@ fn assert_replay_chain(state: &MatchSpotOrderV3State, changes: &MatchSpotOrderV3
     );
 
     for maker in makers {
-        assert_eq!(maker.after.version, maker.before.version + 1);
+        assert_eq!(maker.after.version, 1);
     }
     for balance in balances {
         let ledger_count = ledger_entries

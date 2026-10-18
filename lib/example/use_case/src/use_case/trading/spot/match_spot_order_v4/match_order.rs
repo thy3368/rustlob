@@ -182,7 +182,7 @@ impl StateMachineV2Unchecked for MatchSpotOrderV4UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_match_after(state, cmd.logical_ts())
+        compute_match_after(state, cmd.logical_ts(), cmd.lsn())
     }
 }
 
@@ -264,6 +264,7 @@ impl StateMachineOwnedV2Diff for MatchSpotOrderV4UseCase {
 fn compute_match_after(
     state: &MatchSpotOrderV4State,
     logical_ts: u64,
+    version: u64,
 ) -> Result<MatchSpotOrderV4AfterChanges, MatchSpotOrderV4Error> {
     let mut taker_after = state.taker_order.clone();
     let mut maker_orders_after = state.maker_orders.clone();
@@ -281,6 +282,7 @@ fn compute_match_after(
                     taker_fee_bps: state.taker_fee_bps,
                     executed_at_ms,
                     timestamp,
+                    version: Some(version),
                 },
             )?;
             if matches!(taker_after.time_in_force(), SpotOrderTif::Gtc)
@@ -295,6 +297,7 @@ fn compute_match_after(
                 maker_orders_after,
                 match_outcome.trades,
                 timestamp,
+                version,
             )
         }
         SpotOrderTif::Alo => {
@@ -305,7 +308,7 @@ fn compute_match_after(
                 return Ok(MatchSpotOrderV4AfterChanges::Resting);
             }
 
-            taker_after.reject_as_bad_alo(timestamp)?;
+            taker_after.reject_as_bad_alo_at_version(timestamp, version)?;
             Ok(MatchSpotOrderV4AfterChanges::Rejected { rejected_taker_order_after: taker_after })
         }
     }
@@ -317,6 +320,7 @@ fn finish_match_after(
     maker_orders_after: Vec<SpotOrderV2>,
     created_trades: Vec<SpotTrade>,
     timestamp: u64,
+    version: u64,
 ) -> Result<MatchSpotOrderV4AfterChanges, MatchSpotOrderV4Error> {
     let total_taker_fill = created_trades.iter().try_fold(0_u64, |acc, trade| {
         acc.checked_add(trade.qty).ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)
@@ -326,7 +330,7 @@ fn finish_match_after(
     taker_after = taker_before_match;
     taker_after.reservation = taker_reservation_after_match;
     taker_after.fee_reservation = taker_fee_reservation_after_match;
-    taker_after.finish_after_match(total_taker_fill, timestamp)?;
+    taker_after.finish_after_match_at_version(total_taker_fill, timestamp, version)?;
 
     match taker_after.status() {
         SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderV4AfterChanges::PartiallyFilled {

@@ -160,7 +160,7 @@ impl StateMachineV2Unchecked for SettleMatchedSpotTradesV4UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_settlement_after(cmd, state, cmd.logical_ts())
+        compute_settlement_after(cmd, state, cmd.logical_ts(), cmd.lsn())
     }
 }
 
@@ -203,6 +203,7 @@ fn compute_settlement_after(
     cmd: &SettleMatchedSpotTradesV4Cmd,
     state: &SettleMatchedSpotTradesV4State,
     logical_ts: u64,
+    version: u64,
 ) -> Result<SettleMatchedSpotTradesV4AfterChanges, MatchSpotOrderV4Error> {
     let mut taker_after = state.taker_order.clone();
     let mut maker_orders_after = state.maker_orders.clone();
@@ -231,8 +232,8 @@ fn compute_settlement_after(
         state.taker_fee_bps,
     )?;
 
-    bump_order_version_if_changed(&state.taker_order, &mut taker_after, logical_ts)?;
-    bump_changed_maker_versions(&state.maker_orders, &mut maker_orders_after, logical_ts)?;
+    bump_order_version_if_changed(&state.taker_order, &mut taker_after, logical_ts, version)?;
+    bump_changed_maker_versions(&state.maker_orders, &mut maker_orders_after, logical_ts, version)?;
 
     if taker_after == state.taker_order
         && maker_orders_after == state.maker_orders
@@ -255,12 +256,13 @@ fn bump_changed_maker_versions(
     before: &[SpotOrderV2],
     after: &mut [SpotOrderV2],
     timestamp: u64,
+    version: u64,
 ) -> Result<(), MatchSpotOrderV4Error> {
     if before.len() != after.len() {
         return Err(MatchSpotOrderV4Error::ReservationCountMismatch);
     }
     for (before, after) in before.iter().zip(after.iter_mut()) {
-        bump_order_version_if_changed(before, after, timestamp)?;
+        bump_order_version_if_changed(before, after, timestamp, version)?;
     }
     Ok(())
 }
@@ -269,12 +271,12 @@ fn bump_order_version_if_changed(
     before: &SpotOrderV2,
     after: &mut SpotOrderV2,
     timestamp: u64,
+    version: u64,
 ) -> Result<(), MatchSpotOrderV4Error> {
     if before == after {
         return Ok(());
     }
-    after.version =
-        before.version.checked_add(1).ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
+    after.version = version;
     after.updated_at = timestamp;
     Ok(())
 }
