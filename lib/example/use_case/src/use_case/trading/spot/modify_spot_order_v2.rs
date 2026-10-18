@@ -251,8 +251,8 @@ impl StateMachineV2Unchecked for ModifySpotOrderV2UseCase {
         order_after.reservation = principal_after;
         order_after.fee_reservation = fee_after;
         order_after.updated_at = cmd.logical_ts();
-        order_after.version =
-            order.version.checked_add(1).ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?;
+        // 订单版本由改变订单的命令序列号定义，而不是当前版本的递增值。
+        order_after.version = cmd.lsn();
 
         let mut balance_book = BalanceMap::new(&given_state.balances);
         let mut created_balance_ledger_entries = Vec::with_capacity(2);

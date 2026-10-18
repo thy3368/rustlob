@@ -152,6 +152,8 @@ impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
             taker_fee_bps: state.taker_fee_bps,
             timestamp: cmd.logical_ts(),
         })?;
+        // 订单版本由改变它的命令 LSN 定义；激活行为内部的递增版本仅是实体默认值。
+        activated_order_after.version = cmd.lsn();
 
         let mut balance_book = BalanceMap::new(&state.balances);
         let mut created_balance_ledger_entries = Vec::with_capacity(2);

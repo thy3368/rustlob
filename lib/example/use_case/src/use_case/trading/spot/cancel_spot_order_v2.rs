@@ -164,6 +164,9 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
             given_state.taker_fee_bps,
         )?;
 
+        // 订单版本由改变它的命令 LSN 定义；撤单行为内部的递增版本仅是实体默认值。
+        order_after.version = cmd.lsn();
+
         Ok(CancelSpotOrderV2AfterChanges {
             order_after,
             balances_after: balance_book.into_balances(),

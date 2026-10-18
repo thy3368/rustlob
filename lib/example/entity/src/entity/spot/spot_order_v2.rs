@@ -179,6 +179,9 @@ pub struct MatchSpotOrderV2Input {
     pub executed_at_ms: u64,
     /// 本次订单状态变更时间，单位为 Unix 纳秒。
     pub timestamp: u64,
+    /// 本次命令对应的订单版本。
+    #[serde(default)]
+    pub version: Option<u64>,
 }
 
 /// 撮合行为结果。
@@ -1089,6 +1092,22 @@ impl SpotOrderV2 {
             return Err(SpotOrderV2MatchError::InconsistentExecutionState);
         }
         let next_version = self.next_version()?;
+        self.fill_at_version(added_fill_qty, timestamp, next_version)
+    }
+
+    fn fill_at_version(
+        &mut self,
+        added_fill_qty: u64,
+        timestamp: u64,
+        next_version: u64,
+    ) -> Result<(), SpotOrderV2MatchError> {
+        let next_filled_qty = self
+            .filled_qty
+            .checked_add(added_fill_qty)
+            .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
+        if next_filled_qty > self.qty {
+            return Err(SpotOrderV2MatchError::InconsistentExecutionState);
+        }
         self.filled_qty = next_filled_qty;
         self.transition_to(next_version, self.matched_status_for(next_filled_qty), None, timestamp);
         Ok(())
@@ -1148,8 +1167,9 @@ impl SpotOrderV2 {
                 input.executed_at_ms,
             );
 
-            maker.fill(terms.trade_qty, input.timestamp)?;
-            self.fill(terms.trade_qty, input.timestamp)?;
+            let version = input.version.unwrap_or(maker.next_version()?);
+            maker.fill_at_version(terms.trade_qty, input.timestamp, version)?;
+            self.fill_at_version(terms.trade_qty, input.timestamp, version)?;
             trades.push(trade);
 
             if self.remaining_qty().ok_or(SpotOrderV2BehaviorError::OrderNotMatchable)? == 0 {
@@ -1255,25 +1275,35 @@ impl SpotOrderV2 {
         added_fill_qty: u64,
         timestamp: u64,
     ) -> Result<(), SpotOrderV2MatchError> {
+        let next_version = self.next_version()?;
+        self.finish_after_match_at_version(added_fill_qty, timestamp, next_version)
+    }
+
+    pub fn finish_after_match_at_version(
+        &mut self,
+        added_fill_qty: u64,
+        timestamp: u64,
+        next_version: u64,
+    ) -> Result<(), SpotOrderV2MatchError> {
         let next_filled_qty = self
             .filled_qty
             .checked_add(added_fill_qty)
             .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
-
         match self.time_in_force() {
             SpotOrderTif::Gtc | SpotOrderTif::Alo => {
                 if added_fill_qty == 0 {
                     return Err(SpotOrderV2MatchError::NoTradesMatched);
                 }
-                self.fill(added_fill_qty, timestamp)
+                self.fill_at_version(added_fill_qty, timestamp, next_version)
             }
             SpotOrderTif::Ioc => {
                 if added_fill_qty == 0 {
-                    self.reject_as_no_liquidity(timestamp)
+                    self.transition_to(next_version, SpotOrderStatus::Rejected, Some(self.no_liquidity_status_reason()), timestamp); Ok(())
                 } else if next_filled_qty == self.qty {
-                    self.fill(added_fill_qty, timestamp)
+                    self.fill_at_version(added_fill_qty, timestamp, next_version)
                 } else {
-                    self.cancel_ioc_unfilled(next_filled_qty, timestamp)
+                    self.filled_qty = next_filled_qty;
+                    self.transition_to(next_version, SpotOrderStatus::Canceled, Some(SpotOrderStatusReason::IocCancelRejected), timestamp); Ok(())
                 }
             }
         }
@@ -1284,6 +1314,10 @@ impl SpotOrderV2 {
     /// 可 BDD 规格化的聚合根行为：ALO 会立即吃单时被拒绝。
     pub fn reject_as_bad_alo(&mut self, timestamp: u64) -> Result<(), SpotOrderV2MatchError> {
         let next_version = self.next_version()?;
+        self.reject_as_bad_alo_at_version(timestamp, next_version)
+    }
+
+    pub fn reject_as_bad_alo_at_version(&mut self, timestamp: u64, next_version: u64) -> Result<(), SpotOrderV2MatchError> {
         self.transition_to(
             next_version,
             SpotOrderStatus::Rejected,

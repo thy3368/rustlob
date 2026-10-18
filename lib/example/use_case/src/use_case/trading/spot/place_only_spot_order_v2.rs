@@ -177,17 +177,17 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
         match cmd.payload() {
             PlaceOnlySpotOrderV2Cmd::Single(order) => {
                 Ok(PlaceOnlySpotOrderV2AfterChanges::Single {
-                    created_order: build_order(order, cmd.logical_ts())?,
+                    created_order: build_order(order, cmd.lsn(), cmd.logical_ts())?,
                 })
             }
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
                 let parent_order_id = parent.order_id.clone();
-                let mut created_parent_order = build_order(parent, cmd.logical_ts())?;
+                let mut created_parent_order = build_order(parent, cmd.lsn(), cmd.logical_ts())?;
                 created_parent_order.group_relation = SpotOrderGroupRelation::NormalTpslParent;
 
                 let mut created_child_orders = Vec::with_capacity(children.len());
                 for child in children {
-                    let mut child_order = build_order(child, cmd.logical_ts())?;
+                    let mut child_order = build_order(child, cmd.lsn(), cmd.logical_ts())?;
                     child_order.group_relation = SpotOrderGroupRelation::NormalTpslChild {
                         parent_order_id: parent_order_id.clone(),
                     };
@@ -303,6 +303,7 @@ fn validate_normal_tpsl(
 
 fn build_order(
     order: &PlaceOnlySpotOrderV2OrderCmd,
+    version: u64,
     created_at: u64,
 ) -> Result<SpotOrderV2, PlaceOnlySpotOrderV2Error> {
     let side = if order.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
@@ -321,7 +322,7 @@ fn build_order(
                 price,
                 SpotOrderType::Limit { tif },
                 order.cloid.clone(),
-                1,
+                version,
                 created_at,
             );
             created.reduce_only = order.reduce_only;
@@ -345,7 +346,7 @@ fn build_order(
                     tpsl: parse_trigger_role(trigger_role)?,
                 },
                 order.cloid.clone(),
-                1,
+                version,
                 created_at,
             );
             created.reduce_only = order.reduce_only;
