@@ -108,7 +108,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
         &self,
         cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
     ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
-        let order_cmd = match &cmd.payload {
+        let order_cmd = match cmd.payload() {
             PlaceOnlySpotOrderV2Cmd::Single(order)
             | PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent: order, .. } => order,
         };

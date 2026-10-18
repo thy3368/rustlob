@@ -160,7 +160,7 @@ impl StateMachineV2Unchecked for SettleMatchedSpotTradesV4UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_settlement_after(cmd, state, cmd.logical_ts)
+        compute_settlement_after(cmd, state, cmd.logical_ts())
     }
 }
 

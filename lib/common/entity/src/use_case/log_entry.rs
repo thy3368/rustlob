@@ -4,15 +4,15 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogEntry<P> {
     /// 全局单调递增的序列号，是全序的依据。
-    pub lsn: u64,
+    lsn: u64,
     /// 由定序器分配的逻辑时间戳。
-    pub logical_ts: u64,
+    logical_ts: u64,
     /// 用于幂等去重的客户端标识。
-    pub client_id: u64,
+    client_id: u64,
     /// 在客户端标识内唯一的请求序号。
-    pub request_id: u64,
+    request_id: u64,
     /// 完整的业务命令或其他日志负载。
-    pub payload: P,
+    payload: P,
 }
 
 /// 提供状态机 executor 投影事件时所需的日志元数据。
@@ -39,33 +39,32 @@ impl<P> std::ops::Deref for LogEntry<P> {
 }
 
 impl<P> LogEntry<P> {
-    /// 为同一次业务编排中的子命令复用日志元数据。
-    pub fn with_payload<Q>(&self, payload: Q) -> LogEntry<Q> {
-        LogEntry {
-            lsn: self.lsn,
-            logical_ts: self.logical_ts,
-            client_id: self.client_id,
-            request_id: self.request_id,
-            payload,
-        }
+    pub(crate) fn new(
+        lsn: u64,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+        payload: P,
+    ) -> Self {
+        Self { lsn, logical_ts, client_id, request_id, payload }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::LogEntry;
-
-    #[test]
-    fn nested_command_keeps_outer_metadata() {
-        let outer =
-            LogEntry { lsn: 42, logical_ts: 123, client_id: 7, request_id: 9, payload: "outer" };
-
-        let inner = outer.with_payload("inner");
-
-        assert_eq!(
-            (inner.lsn, inner.logical_ts, inner.client_id, inner.request_id),
-            (42, 123, 7, 9)
-        );
-        assert_eq!(inner.payload, "inner");
+    pub const fn lsn(&self) -> u64 {
+        self.lsn
+    }
+    pub const fn logical_ts(&self) -> u64 {
+        self.logical_ts
+    }
+    pub const fn client_id(&self) -> u64 {
+        self.client_id
+    }
+    pub const fn request_id(&self) -> u64 {
+        self.request_id
+    }
+    pub const fn payload(&self) -> &P {
+        &self.payload
+    }
+    pub fn into_payload(self) -> P {
+        self.payload
     }
 }

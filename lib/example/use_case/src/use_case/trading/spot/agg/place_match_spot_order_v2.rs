@@ -139,7 +139,7 @@ impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let place_after = PlaceOnlySpotOrderV2UseCase.compute_state_changed(cmd, &())?;
-        match (&cmd.payload, place_after) {
+        match (cmd.payload(), place_after) {
             (
                 PlaceOnlySpotOrderV2Cmd::Single(order_cmd),
                 PlaceOnlySpotOrderV2AfterChanges::Single { created_order },
@@ -261,8 +261,10 @@ fn compute_activate_and_match_after_for_created_taker(
         maker_fee_bps: order_cmd.maker_fee_bps,
         taker_fee_bps: order_cmd.taker_fee_bps,
     };
-    let activation_after = ActivateSpotOrderV2UseCase
-        .compute_state_changed(&entry.with_payload(activation_cmd), &activation_state)?;
+    let activation_after = ActivateSpotOrderV2UseCase.compute_state_changed(
+        &common_entity::LogEntrySequencer::derive(entry, activation_cmd),
+        &activation_state,
+    )?;
     let match_cmd = MatchSpotOrderV3Cmd {
         party_id: order_cmd.party_id.clone(),
         asset: order_cmd.asset,
@@ -278,8 +280,10 @@ fn compute_activate_and_match_after_for_created_taker(
         maker_fee_bps: order_cmd.maker_fee_bps,
         taker_fee_bps: order_cmd.taker_fee_bps,
     };
-    let match_after = MatchSpotOrderV3UseCase
-        .compute_state_changed(&entry.with_payload(match_cmd), &match_state)?;
+    let match_after = MatchSpotOrderV3UseCase.compute_state_changed(
+        &common_entity::LogEntrySequencer::derive(entry, match_cmd),
+        &match_state,
+    )?;
     Ok((activation_after, match_after))
 }
 

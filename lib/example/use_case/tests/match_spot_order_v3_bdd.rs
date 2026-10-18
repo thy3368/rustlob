@@ -32,7 +32,7 @@ struct Scenario {
 }
 
 fn entry(payload: MatchSpotOrderV3Cmd) -> LogEntry<MatchSpotOrderV3Cmd> {
-    LogEntry { lsn: 1, logical_ts: EXECUTION_TIME_NS, client_id: 1, request_id: 1, payload }
+    common_entity::LogEntrySequencer::from_metadata(1, EXECUTION_TIME_NS, 1, 1, payload)
 }
 
 fn activated_order(

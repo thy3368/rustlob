@@ -48,7 +48,7 @@ mod tests {
     use super::*;
 
     fn entry<P>(payload: P) -> LogEntry<P> {
-        LogEntry { lsn: 7, logical_ts: 100, client_id: 1, request_id: 2, payload }
+        common_entity::LogEntrySequencer::from_metadata(7, 100, 1, 2, payload)
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]

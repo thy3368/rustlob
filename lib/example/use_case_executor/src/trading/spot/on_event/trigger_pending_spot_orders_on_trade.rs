@@ -70,13 +70,13 @@ where
                 order_id,
             };
             let result = execute_activate_match_spot_order_v2_with_outbound(
-                &LogEntry {
-                    lsn: event.lsn,
-                    logical_ts: event.logical_ts,
-                    client_id: 0,
-                    request_id: order_id,
-                    payload: command,
-                },
+                &common_entity::LogEntrySequencer::from_metadata(
+                    event.lsn,
+                    event.logical_ts,
+                    0,
+                    order_id,
+                    command,
+                ),
                 &self.outbound,
             )
             .map_err(|error| TriggerPendingSpotOrdersOnTradeError::Execute { order_id, error })?;
@@ -227,4 +227,3 @@ mod tests {
         assert_eq!(handler.handle(&event).expect("non-target event should be ignored"), None);
     }
 }
-use common_entity::LogEntry;

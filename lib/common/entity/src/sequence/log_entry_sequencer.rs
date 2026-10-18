@@ -33,6 +33,28 @@ pub struct LogEntrySequencer {
 }
 
 impl LogEntrySequencer {
+    /// 使用已有权威元数据创建日志，不改变定序器检查点。
+    pub fn from_metadata<P>(
+        lsn: u64,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+        payload: P,
+    ) -> LogEntry<P> {
+        LogEntry::new(lsn, logical_ts, client_id, request_id, payload)
+    }
+
+    /// 为子命令复用父日志的元数据，不分配新的序号。
+    pub fn derive<P, Q>(parent: &LogEntry<P>, payload: Q) -> LogEntry<Q> {
+        Self::from_metadata(
+            parent.lsn(),
+            parent.logical_ts(),
+            parent.client_id(),
+            parent.request_id(),
+            payload,
+        )
+    }
+
     /// 从最后一个已提交日志恢复；没有历史日志时首个 LSN 为 `1`。
     pub const fn new(last_committed: Option<(u64, u64)>) -> Self {
         let (next_lsn, last_logical_ts) = match last_committed {
@@ -79,7 +101,7 @@ impl LogEntrySequencer {
 
         self.next_lsn = lsn;
         self.last_logical_ts = logical_ts;
-        Ok(LogEntry { lsn, logical_ts, client_id, request_id, payload })
+        Ok(Self::from_metadata(lsn, logical_ts, client_id, request_id, payload))
     }
 }
 
@@ -98,22 +120,22 @@ mod tests {
         let mut sequencer = LogEntrySequencer::new(None);
         let first = sequencer.sequence_at(at(10), 1, 2, "a").unwrap();
         let second = sequencer.sequence_at(at(10), 3, 4, "b").unwrap();
-        assert_eq!((first.lsn, first.logical_ts), (1, 10));
-        assert_eq!((second.lsn, second.logical_ts), (2, 11));
+        assert_eq!((first.lsn(), first.logical_ts()), (1, 10));
+        assert_eq!((second.lsn(), second.logical_ts()), (2, 11));
     }
 
     #[test]
     fn clock_stall_or_regression_still_advances_logical_time() {
         let mut sequencer = LogEntrySequencer::new(None);
-        assert_eq!(sequencer.sequence_at(at(100), 0, 0, ()).unwrap().logical_ts, 100);
-        assert_eq!(sequencer.sequence_at(at(90), 0, 1, ()).unwrap().logical_ts, 101);
+        assert_eq!(sequencer.sequence_at(at(100), 0, 0, ()).unwrap().logical_ts(), 100);
+        assert_eq!(sequencer.sequence_at(at(90), 0, 1, ()).unwrap().logical_ts(), 101);
     }
 
     #[test]
     fn recovers_from_last_committed_entry() {
         let mut sequencer = LogEntrySequencer::new(Some((41, 900)));
         let entry = sequencer.sequence_at(at(800), 1, 1, ()).unwrap();
-        assert_eq!((entry.lsn, entry.logical_ts), (42, 901));
+        assert_eq!((entry.lsn(), entry.logical_ts()), (42, 901));
     }
 
     #[test]
@@ -123,7 +145,7 @@ mod tests {
             sequencer.sequence_at(UNIX_EPOCH - Duration::from_nanos(1), 0, 0, ()),
             Err(LogEntrySequenceError::ClockBeforeUnixEpoch)
         );
-        assert_eq!(sequencer.sequence_at(at(21), 0, 0, ()).unwrap().lsn, 8);
+        assert_eq!(sequencer.sequence_at(at(21), 0, 0, ()).unwrap().lsn(), 8);
     }
 
     #[test]
@@ -135,5 +157,18 @@ mod tests {
         );
         let mut lsn = LogEntrySequencer::new(Some((u64::MAX, 0)));
         assert_eq!(lsn.sequence_at(at(0), 0, 0, ()), Err(LogEntrySequenceError::LsnOverflow));
+    }
+
+    #[test]
+    fn existing_metadata_and_derived_entries_do_not_advance_checkpoint() {
+        let sequencer = LogEntrySequencer::new(Some((7, 20)));
+        let parent = LogEntrySequencer::from_metadata(42, 123, 3, 4, "parent");
+        let child = LogEntrySequencer::derive(&parent, String::from("child"));
+        assert_eq!(
+            (child.lsn(), child.logical_ts(), child.client_id(), child.request_id()),
+            (42, 123, 3, 4)
+        );
+        assert_eq!(child.into_payload(), "child");
+        assert_eq!(sequencer.last_committed(), Some((7, 20)));
     }
 }

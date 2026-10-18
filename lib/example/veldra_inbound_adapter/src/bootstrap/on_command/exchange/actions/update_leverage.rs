@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{EventProjectError, ReplayableChanges};
-use common_entity::{LogEntry, StateMachineV2Unchecked};
+use common_entity::StateMachineV2Unchecked;
 use example_core_use_case::entity::{HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode};
 use example_core_use_case::{
     UpdateHyperliquidPerpLeverageChanges, UpdateHyperliquidPerpLeverageCmd,
@@ -194,11 +194,14 @@ where
         is_cross: request.is_cross,
         leverage: request.leverage,
     };
-    let cmd = LogEntry { lsn, logical_ts, client_id, request_id, payload };
+    let cmd = common_entity::LogEntrySequencer::from_metadata(
+        lsn, logical_ts, client_id, request_id, payload,
+    );
 
     use_case.check_command(&cmd).map_err(UpdateLeverageExecutionError::Business)?;
-    let state =
-        outbound.load_given_state(&cmd.payload).map_err(UpdateLeverageExecutionError::LoadState)?;
+    let state = outbound
+        .load_given_state(cmd.payload())
+        .map_err(UpdateLeverageExecutionError::LoadState)?;
     use_case.validate_state_given(&cmd, &state).map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
         .compute_state_changed_unchecked(&cmd, &state)
@@ -206,8 +209,8 @@ where
     let mut events =
         changes.to_replayable_events().map_err(UpdateLeverageExecutionError::ProjectEvents)?;
     for event in &mut events {
-        event.lsn = cmd.lsn;
-        event.logical_ts = cmd.logical_ts;
+        event.lsn = cmd.lsn();
+        event.logical_ts = cmd.logical_ts();
     }
 
     outbound.persist(&events).map_err(UpdateLeverageExecutionError::Persist)?;

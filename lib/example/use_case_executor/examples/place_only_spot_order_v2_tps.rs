@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use common_entity::LogEntry;
 
 fn entry(payload: PlaceOnlySpotOrderV2Cmd, lsn: u64) -> LogEntry<PlaceOnlySpotOrderV2Cmd> {
-    LogEntry { lsn, logical_ts: lsn, client_id: 1, request_id: lsn, payload }
+    common_entity::LogEntrySequencer::from_metadata(lsn, lsn, 1, lsn, payload)
 }
 
 use example_core_use_case::{

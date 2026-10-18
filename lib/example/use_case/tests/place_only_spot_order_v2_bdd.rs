@@ -68,13 +68,13 @@ fn trigger_order(
 fn log_entry_keeps_complete_place_only_commands() {
     let single = PlaceOnlySpotOrderV2Cmd::Single(limit_order(1, "gtc"));
     let single_entry: LogEntry<PlaceOnlySpotOrderV2Cmd> =
-        LogEntry { lsn: 42, logical_ts: 100, client_id: 7, request_id: 9, payload: single.clone() };
+        common_entity::LogEntrySequencer::from_metadata(42, 100, 7, 9, single.clone());
 
-    assert_eq!(single_entry.lsn, 42);
-    assert_eq!(single_entry.logical_ts, 100);
-    assert_eq!(single_entry.client_id, 7);
-    assert_eq!(single_entry.request_id, 9);
-    assert_eq!(single_entry.payload, single);
+    assert_eq!(single_entry.lsn(), 42);
+    assert_eq!(single_entry.logical_ts(), 100);
+    assert_eq!(single_entry.client_id(), 7);
+    assert_eq!(single_entry.request_id(), 9);
+    assert_eq!(single_entry.payload(), &single);
 
     let normal_tpsl = PlaceOnlySpotOrderV2Cmd::NormalTpsl {
         parent: limit_order(NORMAL_TPSL_PARENT_ID, "gtc"),
@@ -83,16 +83,16 @@ fn log_entry_keeps_complete_place_only_commands() {
             trigger_order(NORMAL_TPSL_SL_ID, true, "sl"),
         ],
     };
-    let tpsl_entry = LogEntry { payload: normal_tpsl.clone(), ..single_entry };
+    let tpsl_entry = common_entity::LogEntrySequencer::derive(&single_entry, normal_tpsl.clone());
 
-    assert_eq!(tpsl_entry.payload, normal_tpsl);
+    assert_eq!(tpsl_entry.payload(), &normal_tpsl);
     assert!(
-        matches!(tpsl_entry.payload, PlaceOnlySpotOrderV2Cmd::NormalTpsl { children, .. } if children.len() == 2)
+        matches!(tpsl_entry.payload(), PlaceOnlySpotOrderV2Cmd::NormalTpsl { children, .. } if children.len() == 2)
     );
 }
 
 fn entry(payload: PlaceOnlySpotOrderV2Cmd) -> LogEntry<PlaceOnlySpotOrderV2Cmd> {
-    LogEntry { lsn: 1, logical_ts: CREATED_AT, client_id: 1, request_id: 1, payload }
+    common_entity::LogEntrySequencer::from_metadata(1, CREATED_AT, 1, 1, payload)
 }
 
 /// 依次执行命令校验、给定状态校验和带固定时间的 Changes 推导。

@@ -148,7 +148,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
                 &given_state.balances,
                 &given_state.order.reservation,
             )?,
-            timestamp: cmd.logical_ts,
+            timestamp: cmd.logical_ts(),
         })?;
         if let Some(unfreeze_ledger_entry) = cancel_outcome.unfreeze_ledger_entry {
             let unfreeze_ledger_entry =

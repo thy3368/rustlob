@@ -157,7 +157,9 @@ impl MiFamilyExecutionSpec<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecut
             order_type: request.order_type.clone(),
             cloid: request.cloid.clone(),
         };
-        LogEntry { lsn, logical_ts, client_id, request_id, payload }
+        common_entity::LogEntrySequencer::from_metadata(
+            lsn, logical_ts, client_id, request_id, payload,
+        )
     }
 }
 

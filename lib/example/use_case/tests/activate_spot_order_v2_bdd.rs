@@ -11,7 +11,7 @@ use example_core_use_case::{
 };
 
 fn entry(payload: ActivateSpotOrderV2Cmd) -> LogEntry<ActivateSpotOrderV2Cmd> {
-    LogEntry { lsn: 1, logical_ts: 100, client_id: 1, request_id: 1, payload }
+    common_entity::LogEntrySequencer::from_metadata(1, 100, 1, 1, payload)
 }
 
 fn cmd(order_id: u64) -> ActivateSpotOrderV2Cmd {

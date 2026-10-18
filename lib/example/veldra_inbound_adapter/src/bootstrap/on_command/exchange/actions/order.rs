@@ -421,13 +421,15 @@ fn execute_with_default_outbound(request: RequestWire) -> Vec<reply::OrderStatus
     units
         .into_iter()
         .flat_map(|unit| {
-            match execute_place_match_spot_order_v2(&LogEntry {
-                lsn: nonce,
-                logical_ts: nonce,
-                client_id: 0,
-                request_id: nonce,
-                payload: unit.command,
-            }) {
+            match execute_place_match_spot_order_v2(
+                &common_entity::LogEntrySequencer::from_metadata(
+                    nonce,
+                    nonce,
+                    0,
+                    nonce,
+                    unit.command,
+                ),
+            ) {
                 Ok(result) => order_statuses_from_place_match_changes(&result.changes),
                 Err(error) => repeated_error_statuses(unit.input_order_count, error),
             }
@@ -814,4 +816,3 @@ mod tests {
         );
     }
 }
-use common_entity::LogEntry;

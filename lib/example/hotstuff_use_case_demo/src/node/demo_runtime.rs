@@ -149,13 +149,13 @@ impl SpotOrderApp {
         let spot_block_command = SpotBlockCmd { commands: requests.to_vec() };
         let block_sequence = block_height.checked_add(1)?;
         let logical_ts = block_sequence.checked_mul(1_000_000_000)?;
-        let entry = LogEntry {
-            lsn: block_sequence,
+        let entry = common_entity::LogEntrySequencer::from_metadata(
+            block_sequence,
             logical_ts,
-            client_id: 0,
-            request_id: block_sequence,
-            payload: spot_block_command,
-        };
+            0,
+            block_sequence,
+            spot_block_command,
+        );
         let outbound = DemoSpotBlockOutbound;
         let Ok(result) = execute_spot_block_with_outbound(&entry, &outbound) else {
             return None;

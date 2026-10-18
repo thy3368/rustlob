@@ -143,7 +143,7 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
     type StateChanged = PlaceOnlySpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        match &cmd.payload {
+        match cmd.payload() {
             PlaceOnlySpotOrderV2Cmd::Single(order) => check_order_command(order),
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
                 check_order_command(parent)?;
@@ -163,7 +163,7 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
         cmd: &Self::Command,
         _given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        if let PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } = &cmd.payload {
+        if let PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } = cmd.payload() {
             validate_normal_tpsl(parent, children)?;
         }
         Ok(())
@@ -174,20 +174,20 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
         cmd: &Self::Command,
         _given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        match &cmd.payload {
+        match cmd.payload() {
             PlaceOnlySpotOrderV2Cmd::Single(order) => {
                 Ok(PlaceOnlySpotOrderV2AfterChanges::Single {
-                    created_order: build_order(order, cmd.logical_ts)?,
+                    created_order: build_order(order, cmd.logical_ts())?,
                 })
             }
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
                 let parent_order_id = parent.order_id.clone();
-                let mut created_parent_order = build_order(parent, cmd.logical_ts)?;
+                let mut created_parent_order = build_order(parent, cmd.logical_ts())?;
                 created_parent_order.group_relation = SpotOrderGroupRelation::NormalTpslParent;
 
                 let mut created_child_orders = Vec::with_capacity(children.len());
                 for child in children {
-                    let mut child_order = build_order(child, cmd.logical_ts)?;
+                    let mut child_order = build_order(child, cmd.logical_ts())?;
                     child_order.group_relation = SpotOrderGroupRelation::NormalTpslChild {
                         parent_order_id: parent_order_id.clone(),
                     };

@@ -45,20 +45,20 @@ pub enum SpotBlockCommandResult {
 pub fn handler(commands: Vec<LogEntry<SpotBlockCommand>>) -> Vec<SpotBlockCommandResult> {
     commands
         .into_iter()
-        .map(|entry| match entry.payload.clone() {
+        .map(|entry| match entry.payload().clone() {
             SpotBlockCommand::Cancel(command) => SpotBlockCommandResult::Cancel(
                 super::super::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2(
-                    &entry.with_payload(command),
+                    &common_entity::LogEntrySequencer::derive(&entry, command),
                 ),
             ),
             SpotBlockCommand::Modify(command) => SpotBlockCommandResult::Modify(
                 super::super::modify_spot_order_v2_executor::execute_modify_spot_order_v2(
-                    &entry.with_payload(command),
+                    &common_entity::LogEntrySequencer::derive(&entry, command),
                 ),
             ),
             SpotBlockCommand::PlaceMatch(command) => SpotBlockCommandResult::PlaceMatch(
                 super::super::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2(
-                    &entry.with_payload(command),
+                    &common_entity::LogEntrySequencer::derive(&entry, command),
                 ),
             ),
         })
@@ -68,7 +68,6 @@ pub fn handler(commands: Vec<LogEntry<SpotBlockCommand>>) -> Vec<SpotBlockComman
 #[cfg(test)]
 mod tests {
     use cmd_handler::command_use_case_def2::ExecutionError;
-    use common_entity::LogEntry;
     use example_core_use_case::{
         CancelSpotOrderV2Lookup, ModifySpotOrderV2OrderType, OrderId, PlaceOnlySpotOrderV2OrderCmd,
         PlaceOnlySpotOrderV2OrderType,
@@ -127,12 +126,14 @@ mod tests {
             vec![cancel_command(), modify_command(""), place_match_command()]
                 .into_iter()
                 .enumerate()
-                .map(|(index, payload)| LogEntry {
-                    lsn: index as u64 + 1,
-                    logical_ts: index as u64 + 1,
-                    client_id: 1,
-                    request_id: index as u64 + 1,
-                    payload,
+                .map(|(index, payload)| {
+                    common_entity::LogEntrySequencer::from_metadata(
+                        index as u64 + 1,
+                        index as u64 + 1,
+                        1,
+                        index as u64 + 1,
+                        payload,
+                    )
                 })
                 .collect(),
         );

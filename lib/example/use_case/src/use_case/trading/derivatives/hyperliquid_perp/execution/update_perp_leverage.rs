@@ -222,7 +222,7 @@ mod tests {
     fn entry(
         payload: UpdateHyperliquidPerpLeverageCmd,
     ) -> LogEntry<UpdateHyperliquidPerpLeverageCmd> {
-        LogEntry { lsn: 1, logical_ts: 100, client_id: 1, request_id: 1, payload }
+        common_entity::LogEntrySequencer::from_metadata(1, 100, 1, 1, payload)
     }
 
     fn cmd(leverage: u64, is_cross: bool) -> UpdateHyperliquidPerpLeverageCmd {

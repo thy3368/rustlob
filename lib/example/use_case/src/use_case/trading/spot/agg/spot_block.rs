@@ -182,7 +182,7 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
             let item_result = match &command {
                 SpotBlockCommand::Activate(activate_cmd) => {
                     match apply_activate(
-                        &cmd.with_payload(activate_cmd.clone()),
+                        &common_entity::LogEntrySequencer::derive(cmd, activate_cmd.clone()),
                         given_state,
                         &mut working,
                     ) {
@@ -198,7 +198,7 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                 }
                 SpotBlockCommand::Cancel(cancel_cmd) => {
                     match apply_cancel(
-                        &cmd.with_payload(cancel_cmd.clone()),
+                        &common_entity::LogEntrySequencer::derive(cmd, cancel_cmd.clone()),
                         given_state,
                         &mut working,
                     ) {
@@ -214,7 +214,7 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                 }
                 SpotBlockCommand::Modify(modify_cmd) => {
                     match apply_modify(
-                        &cmd.with_payload(modify_cmd.clone()),
+                        &common_entity::LogEntrySequencer::derive(cmd, modify_cmd.clone()),
                         given_state,
                         &mut working,
                     ) {
@@ -230,7 +230,7 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                 }
                 SpotBlockCommand::PlaceMatch(place_cmd) => {
                     match apply_place_match(
-                        &cmd.with_payload(place_cmd.clone()),
+                        &common_entity::LogEntrySequencer::derive(cmd, place_cmd.clone()),
                         given_state,
                         &mut working,
                     ) {
@@ -246,7 +246,7 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
                 }
                 SpotBlockCommand::Match(match_cmd) => {
                     match apply_match(
-                        &cmd.with_payload(match_cmd.clone()),
+                        &common_entity::LogEntrySequencer::derive(cmd, match_cmd.clone()),
                         given_state,
                         &mut working,
                     ) {
@@ -500,7 +500,7 @@ fn apply_place_match(
     working: &mut WorkingSpotBlockState,
 ) -> Result<PlaceMatchSpotOrderV2Changes, SpotBlockItemError> {
     PlaceMatchSpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::PlaceMatch)?;
-    let place_order = place_parent_order_cmd(&cmd.payload);
+    let place_order = place_parent_order_cmd(cmd.payload());
     let state = PlaceMatchSpotOrderV2State {
         maker_orders: maker_candidates_for(place_order, &working.orders),
         settlement_balances: working.balances.clone(),

@@ -58,8 +58,8 @@ mod tests {
         assert_eq!(restored.last_committed(), sequencer.last_committed());
 
         let second = restored.sequence(1, 3, ()).unwrap();
-        assert_eq!(second.lsn, first.lsn + 1);
-        assert!(second.logical_ts > first.logical_ts);
+        assert_eq!(second.lsn(), first.lsn() + 1);
+        assert!(second.logical_ts() > first.logical_ts());
     }
 
     #[test]

@@ -46,13 +46,13 @@ mod tests {
     #[test]
     fn append_delegates_to_append_batch_for_non_copy_payload() {
         let mut repo = RecordingRepo { batches: Vec::new() };
-        let entry = LogEntry {
-            lsn: 7,
-            logical_ts: 11,
-            client_id: 13,
-            request_id: 17,
-            payload: String::from("non-copy payload"),
-        };
+        let entry = crate::LogEntrySequencer::from_metadata(
+            7,
+            11,
+            13,
+            17,
+            String::from("non-copy payload"),
+        );
 
         repo.append(entry.clone()).expect("append should succeed");
 

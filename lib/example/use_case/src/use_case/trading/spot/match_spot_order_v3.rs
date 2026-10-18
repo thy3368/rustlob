@@ -1119,7 +1119,7 @@ impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_match_after(state, cmd.logical_ts)
+        compute_match_after(state, cmd.logical_ts())
     }
 }
 

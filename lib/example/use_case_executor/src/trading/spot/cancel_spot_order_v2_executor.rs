@@ -48,7 +48,7 @@ mod tests {
     use super::*;
 
     fn entry<P>(payload: P) -> LogEntry<P> {
-        LogEntry { lsn: 7, logical_ts: 100, client_id: 1, request_id: 2, payload }
+        common_entity::LogEntrySequencer::from_metadata(7, 100, 1, 2, payload)
     }
 
     // Matrix: 本地 order_id / CLOID lookup + default state not wired -> load-state failure.

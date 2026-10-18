@@ -4,7 +4,7 @@ use common_entity::{LogEntry, StateMachineV2Unchecked};
 use super::*;
 
 fn entry(payload: PlaceHyperliquidPerpOrderCmd) -> LogEntry<PlaceHyperliquidPerpOrderCmd> {
-    LogEntry { lsn: 1, logical_ts: 1_000_000_000, client_id: 1, request_id: 1, payload }
+    common_entity::LogEntrySequencer::from_metadata(1, 1_000_000_000, 1, 1, payload)
 }
 
 // 目的:

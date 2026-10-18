@@ -62,7 +62,9 @@ impl PlaceOrderHttpRequest {
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         });
-        LogEntry { lsn, logical_ts, client_id, request_id, payload }
+        common_entity::LogEntrySequencer::from_metadata(
+            lsn, logical_ts, client_id, request_id, payload,
+        )
     }
 }
 

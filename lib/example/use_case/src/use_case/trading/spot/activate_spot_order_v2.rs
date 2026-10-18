@@ -150,7 +150,7 @@ impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
             quote_asset_id: state.quote_asset_id.clone(),
             maker_fee_bps: state.maker_fee_bps,
             taker_fee_bps: state.taker_fee_bps,
-            timestamp: cmd.logical_ts,
+            timestamp: cmd.logical_ts(),
         })?;
 
         let mut balance_book = BalanceMap::new(&state.balances);

@@ -40,13 +40,13 @@ impl EntityReplayableEventHandler for MatchSpotOrderCreatedEventHandler {
             return Ok(None);
         };
 
-        execute_match_spot_order_v3(&LogEntry {
-            lsn: event.lsn,
-            logical_ts: event.logical_ts,
-            client_id: 0,
-            request_id: event.lsn,
-            payload: command,
-        })
+        execute_match_spot_order_v3(&common_entity::LogEntrySequencer::from_metadata(
+            event.lsn,
+            event.logical_ts,
+            0,
+            event.lsn,
+            command,
+        ))
         .map(Some)
         .map_err(MatchSpotOrderCreatedEventError::Executor)
     }
@@ -95,4 +95,3 @@ impl From<ReplayEventFieldParseError> for MatchSpotOrderCreatedEventParseError {
         }
     }
 }
-use common_entity::LogEntry;

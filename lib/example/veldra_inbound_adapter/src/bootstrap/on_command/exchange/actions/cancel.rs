@@ -100,7 +100,9 @@ impl MiFamilyExecutionSpec<CancelSpotOrderV2UseCase> for SpotOrderV2CancelExecut
             asset: request.asset,
             lookup: request.lookup.clone(),
         };
-        LogEntry { lsn, logical_ts, client_id, request_id, payload }
+        common_entity::LogEntrySequencer::from_metadata(
+            lsn, logical_ts, client_id, request_id, payload,
+        )
     }
 }
 
@@ -204,13 +206,13 @@ mod tests {
         let command = SpotOrderV2CancelExecutionSpec::command(&request, 42, 123, 7, 9);
 
         assert_eq!(
-            (command.lsn, command.logical_ts, command.client_id, command.request_id),
+            (command.lsn(), command.logical_ts(), command.client_id(), command.request_id()),
             (42, 123, 7, 9)
         );
 
         assert_eq!(
-            command.payload,
-            CancelSpotOrderV2Cmd {
+            command.payload(),
+            &CancelSpotOrderV2Cmd {
                 party_id: "buyer".to_string(),
                 asset: 10_000,
                 lookup: CancelSpotOrderV2Lookup::Oid(77738308),
