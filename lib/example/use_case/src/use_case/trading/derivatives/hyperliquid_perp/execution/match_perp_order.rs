@@ -441,12 +441,12 @@ mod tests {
         event: &EntityReplayableEvent,
         expected_filled_qty: u64,
         expected_status: HyperliquidPerpOrderStatus,
-        expected_old_version: u64,
-        expected_new_version: u64,
+        expected_previous_lsn: u64,
+        expected_lsn: u64,
     ) {
         assert!(event.is_updated());
-        assert_eq!(event.old_version, expected_old_version);
-        assert_eq!(event.new_version, expected_new_version);
+        assert_eq!(event.previous_lsn, expected_previous_lsn);
+        assert_eq!(event.lsn, expected_lsn);
         assert_eq!(field_as_u64(event, "filled_qty"), Some(expected_filled_qty));
         assert_eq!(event_field(event, "status"), Some(expected_status.as_str()));
     }

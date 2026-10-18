@@ -101,7 +101,7 @@ mod tests {
             result.events.iter().filter(|event| event.is_updated()).collect::<Vec<_>>();
         assert!(!updated_events.is_empty());
         assert!(
-            updated_events.iter().all(|event| event.new_version == event.old_version + 1
+            updated_events.iter().all(|event| event.lsn == event.previous_lsn + 1
                 && !event.field_changes.is_empty())
         );
     }

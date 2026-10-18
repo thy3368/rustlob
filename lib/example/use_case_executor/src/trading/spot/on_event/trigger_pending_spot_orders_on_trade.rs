@@ -146,7 +146,7 @@ mod tests {
     use super::*;
 
     fn trade_event(asset: u32, price: u64) -> EntityReplayableEvent {
-        let mut event = EntityReplayableEvent::new_created(1, 1, 1, SpotTrade::entity_type());
+        let mut event = EntityReplayableEvent::new_created(1, 1, SpotTrade::entity_type());
         for (name, value) in [("asset", asset.to_string()), ("price", price.to_string())] {
             event.add_field_change(ReplayFieldChange::new(
                 ReplayFieldChange::field_name_from_str(name),
@@ -222,7 +222,7 @@ mod tests {
     fn non_spot_trade_events_are_ignored() {
         let mut handler =
             TriggerPendingSpotOrdersOnTradeHandler::new(InMemoryPlaceOrderOutbound::new());
-        let event = EntityReplayableEvent::new_created(1, 1, 1, 99);
+        let event = EntityReplayableEvent::new_created(1, 1, 99);
 
         assert_eq!(handler.handle(&event).expect("non-target event should be ignored"), None);
     }

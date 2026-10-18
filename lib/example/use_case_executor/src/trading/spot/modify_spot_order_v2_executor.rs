@@ -221,7 +221,7 @@ mod tests {
         assert!(result.events[2].is_updated());
         assert!(result.events[3].is_created());
         assert!(result.events[4].is_created());
-        assert!(result.events.iter().all(|event| event.new_version == event.old_version + 1));
+        assert!(result.events.iter().all(|event| event.lsn == event.previous_lsn + 1));
 
         let sink_calls = outbound.sink_calls();
         assert_eq!(sink_calls.len(), 3);

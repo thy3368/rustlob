@@ -526,7 +526,7 @@ pub(crate) fn decode_created_reservation(
         close_reason: decode_optional_close_reason(
             event_string_field(event, "close_reason").as_deref(),
         )?,
-        version: event.new_version,
+        version: event.lsn,
     })
 }
 
@@ -669,7 +669,7 @@ pub(crate) fn apply_order_update_event(
     }
     apply_reservation_update(&mut order.reservation, event, false)?;
     apply_reservation_update(&mut order.fee_reservation, event, true)?;
-    order.version = event.new_version;
+    order.version = event.lsn;
     Ok(())
 }
 

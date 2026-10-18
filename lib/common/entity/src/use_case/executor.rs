@@ -106,7 +106,6 @@ impl StateMachineExecutor {
         let mut events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;
         for event in &mut events {
             event.lsn = command.lsn();
-            event.new_version = event.lsn;
             event.logical_ts = command.logical_ts();
         }
         let mut keys = HashSet::with_capacity(events.len());

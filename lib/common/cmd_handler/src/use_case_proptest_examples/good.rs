@@ -131,7 +131,6 @@ impl CommandUseCase3 for DepositUseCase {
         let output = DepositOutput { party_id: cmd.party_id.clone(), accepted_amount: cmd.amount };
         let mut event = EntityReplayableEvent::new_created(
             0,
-            0,
             stable_entity_id(&cmd.party_id),
             DEPOSIT_ENTITY_TYPE,
         );

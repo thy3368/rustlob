@@ -86,10 +86,10 @@ fn mixed_lifecycle_versions_form_replayable_steps() {
     let consume_event = after_consume.track_update_event_from(&initial).unwrap();
     let release_event = after_release.track_update_event_from(&after_consume).unwrap();
 
-    assert_eq!(consume_event.old_version, 1);
-    assert_eq!(consume_event.new_version, 2);
-    assert_eq!(release_event.old_version, 2);
-    assert_eq!(release_event.new_version, 3);
+    assert_eq!(consume_event.previous_lsn, 1);
+    assert_eq!(consume_event.lsn, 2);
+    assert_eq!(release_event.previous_lsn, 2);
+    assert_eq!(release_event.lsn, 3);
     assert_eq!(after_release.status, ReservationStatus::ClosedMixed);
 }
 

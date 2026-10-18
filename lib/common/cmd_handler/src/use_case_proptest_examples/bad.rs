@@ -95,7 +95,6 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         let output = SubmitOutput { accepted: state.accepted };
         let mut event = EntityReplayableEvent::new_created(
             0,
-            0,
             stable_entity_id(&state.accepted.to_string()),
             SUBMIT_ENTITY_TYPE,
         );

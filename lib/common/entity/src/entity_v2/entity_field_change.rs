@@ -1,13 +1,12 @@
 use std::borrow::Cow;
 use std::sync::LazyLock;
-use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 use thiserror::Error;
 
-use crate::{EVENT_SEQUENCE, EntityError};
+use crate::EntityError;
 
 /// Logical entity change kind used before encoding into compact replay tags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -115,7 +114,6 @@ impl ReplayFieldChange {
 /// Entity event optimized for deterministic replay and optimistic locking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
-
     /// 全局单调递增的序列号 来自command
     /// 这是"全序"的唯一依据
     pub lsn: u64,
@@ -123,18 +121,10 @@ pub struct EntityReplayableEvent {
     pub entity_type: u8,
 
     pub previous_lsn: u64,
-    
+
     /// 逻辑时间戳（由定序器分配，非物理时钟）来自command
     /// 用于替代 NTP/PTP，作为系统的逻辑时间
     pub logical_ts: u64,
-
-
-    #[serde(default)]
-    pub old_version: u64,
-    #[serde(default)]
-    pub new_version: u64,
-    #[serde(default)]
-    pub seq: u64,
 
     pub change_type: u8,
     pub field_changes: Vec<ReplayFieldChange>,
@@ -158,7 +148,6 @@ impl EntityReplayableEvent {
     #[inline]
     pub fn new(
         timestamp: u64,
-        sequence: u64,
         previous_lsn: u64,
         lsn: u64,
         entity_id: i64,
@@ -168,9 +157,6 @@ impl EntityReplayableEvent {
         Self {
             logical_ts: timestamp,
             previous_lsn,
-            old_version: previous_lsn,
-            new_version: lsn,
-            seq: sequence,
             lsn,
             entity_id,
             entity_type,
@@ -180,22 +166,13 @@ impl EntityReplayableEvent {
     }
 
     #[inline]
-    pub fn new_created(timestamp: u64, sequence: u64, entity_id: i64, entity_type: u8) -> Self {
-        Self::new(
-            timestamp,
-            sequence,
-            0,
-            0,
-            entity_id,
-            entity_type,
-            EntityChangeType::Created.as_tag(),
-        )
+    pub fn new_created(timestamp: u64, entity_id: i64, entity_type: u8) -> Self {
+        Self::new(timestamp, 0, 0, entity_id, entity_type, EntityChangeType::Created.as_tag())
     }
 
     #[inline]
     pub fn new_updated(
         timestamp: u64,
-        sequence: u64,
         previous_lsn: u64,
         lsn: u64,
         entity_id: i64,
@@ -203,7 +180,6 @@ impl EntityReplayableEvent {
     ) -> Self {
         Self::new(
             timestamp,
-            sequence,
             previous_lsn,
             lsn,
             entity_id,
@@ -215,7 +191,6 @@ impl EntityReplayableEvent {
     #[inline]
     pub fn new_deleted(
         timestamp: u64,
-        sequence: u64,
         previous_lsn: u64,
         lsn: u64,
         entity_id: i64,
@@ -223,7 +198,6 @@ impl EntityReplayableEvent {
     ) -> Self {
         Self::new(
             timestamp,
-            sequence,
             previous_lsn,
             lsn,
             entity_id,
@@ -308,11 +282,6 @@ impl EntityReplayableEvent {
     }
 }
 
-#[inline]
-pub fn next_sequence() -> u64 {
-    EVENT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-}
-
 static START_INSTANT: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 #[inline]
@@ -359,20 +328,6 @@ mod tests {
     }
 
     #[test]
-    fn constructors_default_execution_id_to_zero() {
-        assert_eq!(EntityReplayableEvent::new_created(1, 1, 1, 1).lsn, 0);
-    }
-
-    #[test]
-    fn deserializing_legacy_event_defaults_execution_id_to_zero() {
-        let event: EntityReplayableEvent = serde_json::from_str(
-            r#"{"timestamp":1,"sequence":2,"old_version":0,"new_version":1,"entity_id":3,"entity_type":4,"change_type":1,"field_changes":[]}"#,
-        )
-        .expect("legacy event JSON should remain readable");
-        assert_eq!(event.lsn, 0);
-    }
-
-    #[test]
     fn missing_field_returns_explicit_error() {
         let event = event_with_fields(&[("account_id", b"buyer")]);
 
@@ -415,7 +370,7 @@ mod tests {
     }
 
     fn event_with_fields(fields: &[(&str, &[u8])]) -> EntityReplayableEvent {
-        let mut event = EntityReplayableEvent::new_created(1, 1, 1, 1);
+        let mut event = EntityReplayableEvent::new_created(1, 1, 1);
         for (field_name, value) in fields {
             event.add_field_change(ReplayFieldChange::new(
                 ReplayFieldChange::field_name_from_str(field_name),

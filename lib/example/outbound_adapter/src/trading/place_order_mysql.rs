@@ -177,12 +177,12 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
             conn.exec_drop(
                 format!(
                     "INSERT INTO {EVENT_TABLE} (
-	                        entity_type, change_type, entity_id, old_version, new_version,
+	                        entity_type, change_type, entity_id, previous_lsn, lsn, logical_ts,
 	                        order_id, account_id, asset, symbol, side, execution, time_in_force,
 	                        qty, price,
 	                        available_base, frozen_base, available_quote, frozen_quote
 	                     ) VALUES (
-	                        :entity_type, :change_type, :entity_id, :old_version, :new_version,
+	                        :entity_type, :change_type, :entity_id, :previous_lsn, :lsn, :logical_ts,
 	                        :order_id, :account_id, :asset, :symbol, :side, :execution, :time_in_force,
 	                        :qty, :price,
 	                        :available_base, :frozen_base, :available_quote, :frozen_quote
@@ -192,8 +192,9 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
                     ("entity_type", mysql::Value::from(event.entity_type)),
                     ("change_type", mysql::Value::from(event.change_type)),
                     ("entity_id", mysql::Value::from(event.entity_id)),
-                    ("old_version", mysql::Value::from(event.old_version)),
-                    ("new_version", mysql::Value::from(event.new_version)),
+                    ("previous_lsn", mysql::Value::from(event.previous_lsn)),
+                    ("lsn", mysql::Value::from(event.lsn)),
+                    ("logical_ts", mysql::Value::from(event.logical_ts)),
                     (
                         "order_id",
                         optional_string_param(event_string_field_mysql(event, "order_id")),
@@ -361,7 +362,7 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
                             "frozen_value",
                             optional_u64_param(event_u64_field_mysql(event, "frozen")),
                         ),
-                        ("version", mysql::Value::from(event.new_version)),
+                        ("version", mysql::Value::from(event.lsn)),
                     ]),
                 )
                 .map_err(map_mysql_error)?;

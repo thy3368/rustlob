@@ -140,7 +140,6 @@ impl CommandUseCase3 for PlaceOrderUseCase {
 
         let mut event = EntityReplayableEvent::new_created(
             0,
-            0,
             stable_entity_id(&order_key),
             PLACE_ORDER_ENTITY_TYPE,
         );

@@ -5,6 +5,7 @@ use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandUseCase4, CommandUseCaseExecutionError, CommandUseCaseExecutor4,
     CommandUseCaseOutbound, CommandUseCaseOutboundPhase, ExecutionError, UseCaseReplyMapper,
 };
+use common_entity::EntityError;
 use example_core_use_case::{
     DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, WithdrawQuoteCmd,
     WithdrawQuoteError, WithdrawQuoteState, WithdrawQuoteUseCase,
@@ -151,6 +152,9 @@ where
         ExecutionError::Publish(error) => {
             CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Publish, error)
         }
+        ExecutionError::DuplicateEventKey { .. } => CommandUseCaseExecutionError::event_project(
+            EntityError::Custom("duplicate replay event key".to_owned()),
+        ),
     }
 }
 

@@ -59,7 +59,7 @@ impl CommandUseCaseOutbound for InMemoryDepositQuoteOutbound {
                 if let Some(frozen) = event_u64_field(event, "frozen") {
                     balance.frozen = frozen;
                 }
-                balance.version = event.new_version;
+                balance.version = event.lsn;
             }
         }
 

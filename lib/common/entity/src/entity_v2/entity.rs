@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::entity_v2::entity_field_change::{current_timestamp, next_sequence};
+use crate::entity_v2::entity_field_change::current_timestamp;
 use crate::{EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange};
 
 /// 四色建模中的实体原型分类。
@@ -432,7 +432,6 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     {
         let mut event = EntityReplayableEvent::new_created(
             current_timestamp()?,
-            next_sequence(),
             self.replay_entity_id()?,
             Self::entity_type(),
         );
@@ -484,7 +483,6 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
 
         let mut event = EntityReplayableEvent::new_updated(
             current_timestamp()?,
-            next_sequence(),
             old_version,
             new_version,
             self.replay_entity_id()?,
@@ -508,7 +506,6 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
         let old_version = self.lsn();
         Ok(EntityReplayableEvent::new_deleted(
             current_timestamp()?,
-            next_sequence(),
             old_version,
             increment_version(old_version)?,
             self.replay_entity_id()?,

@@ -90,7 +90,6 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
 
         let mut event = EntityReplayableEvent::new_created(
             0,
-            0,
             stable_entity_id(&cmd.trace_id),
             SUBMIT_ENTITY_TYPE,
         );

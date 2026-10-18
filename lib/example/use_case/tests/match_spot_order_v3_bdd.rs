@@ -250,16 +250,16 @@ fn assert_replay_chain(state: &MatchSpotOrderV3State, changes: &MatchSpotOrderV3
     assert!(events.iter().all(|event| event.is_updated() || event.is_created()));
     for event in &events {
         if event.is_updated() {
-            assert_eq!(event.new_version, event.old_version + 1);
+            assert_eq!(event.lsn, event.previous_lsn + 1);
         } else {
-            assert_eq!(event.old_version, 0);
-            assert_eq!(event.new_version, 1);
+            assert_eq!(event.previous_lsn, 0);
+            assert_eq!(event.lsn, 1);
         }
     }
 
     if let Some(taker) = taker {
-        assert_eq!(events[0].old_version, taker.before.version);
-        assert_eq!(events[0].new_version, taker.after.version);
+        assert_eq!(events[0].previous_lsn, taker.before.version);
+        assert_eq!(events[0].lsn, taker.after.version);
     }
     if !trades.is_empty() {
         assert!(events.iter().any(|event| {

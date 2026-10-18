@@ -1,6 +1,3 @@
-use std::sync::LazyLock;
-use std::sync::atomic::AtomicU64;
-
 pub use entity_derive::{ActionType, ObjectType, action_type, function};
 
 mod entity_v2;
@@ -38,8 +35,6 @@ pub use use_case::state_machine_v2::StateMachineOwnedV2Diff as MultiAggregateUse
 pub use use_case::state_machine_v2::StateMachineV2Unchecked as MultiAggregateUseCaseUnchecked;
 pub use use_case::state_machine_v2::{StateMachineOwnedV2Diff, StateMachineV2Unchecked};
 pub use use_case::support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair};
-
-static EVENT_SEQUENCE: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(0));
 
 /// Error raised while tracking entity state into replayable events.
 #[derive(Debug, Clone, PartialEq, Eq)]

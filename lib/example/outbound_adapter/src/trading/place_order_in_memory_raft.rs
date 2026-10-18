@@ -186,12 +186,7 @@ impl InMemoryPlaceOrderRaftOutbound {
             if event.is_created() && event_string_field(event, "order_id").is_some() {
                 let order = decode_order_from_event(event)?;
                 state.orders.insert(order.order_id, order.clone());
-                let mut lob_event = event.clone();
-                lob_event.seq = state
-                    .lob
-                    .sequence()
-                    .checked_add(1)
-                    .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
+                let lob_event = event.clone();
                 state
                     .lob
                     .replay_events(&[lob_event])
@@ -211,12 +206,7 @@ impl InMemoryPlaceOrderRaftOutbound {
 
             if event.entity_type == SpotOrderV2::entity_type() && event.is_updated() {
                 apply_order_update_event(&mut state.orders, event)?;
-                let mut lob_event = event.clone();
-                lob_event.seq = state
-                    .lob
-                    .sequence()
-                    .checked_add(1)
-                    .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
+                let lob_event = event.clone();
                 state
                     .lob
                     .replay_events(&[lob_event])
@@ -244,7 +234,7 @@ impl InMemoryPlaceOrderRaftOutbound {
                 if let Some(frozen) = event_u64_field(event, "frozen") {
                     balance.frozen = frozen;
                 }
-                balance.version = event.new_version;
+                balance.version = event.lsn;
             }
         }
 
@@ -710,7 +700,7 @@ fn decode_created_reservation(
         close_reason: decode_optional_close_reason(
             event_string_field(event, "close_reason").as_deref(),
         )?,
-        version: event.new_version,
+        version: event.lsn,
     })
 }
 
@@ -853,7 +843,7 @@ fn apply_order_update_event(
     }
     apply_reservation_update(&mut order.reservation, event, false)?;
     apply_reservation_update(&mut order.fee_reservation, event, true)?;
-    order.version = event.new_version;
+    order.version = event.lsn;
     Ok(())
 }
 

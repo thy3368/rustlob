@@ -151,8 +151,8 @@ fn assert_created_event_for_order(
         event.entity_id,
         order.track_create_event().expect("订单创建事件应可投影").entity_id
     );
-    assert_eq!(event.old_version, 0);
-    assert_eq!(event.new_version, 1);
+    assert_eq!(event.previous_lsn, 0);
+    assert_eq!(event.lsn, 1);
 }
 
 /// 场景：Given 五种 Hyperliquid 现货订单形态；When 通过 place-only use case 创建；

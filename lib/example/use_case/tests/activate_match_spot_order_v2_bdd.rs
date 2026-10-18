@@ -179,7 +179,7 @@ fn match_taker_before(changes: &MatchSpotOrderV3Changes) -> Option<&SpotOrderV2>
 fn event_signatures(events: &[EntityReplayableEvent]) -> Vec<(u8, u8, u64, u64)> {
     events
         .iter()
-        .map(|event| (event.entity_type, event.change_type, event.old_version, event.new_version))
+        .map(|event| (event.entity_type, event.change_type, event.previous_lsn, event.lsn))
         .collect()
 }
 

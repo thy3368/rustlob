@@ -374,12 +374,12 @@ fn execute_projects_create_and_update_events_in_stable_order()
     assert!(result.events[0].is_created());
     assert_eq!(field_value(&result.events[0], "value").as_deref(), Some("trade-1"));
     assert!(result.events[1].is_updated());
-    assert_eq!(result.events[1].old_version, 1);
-    assert_eq!(result.events[1].new_version, 2);
+    assert_eq!(result.events[1].previous_lsn, 1);
+    assert_eq!(result.events[1].lsn, 2);
     assert_eq!(field_value(&result.events[1], "value").as_deref(), Some("maker-after"));
     assert!(result.events[2].is_updated());
-    assert_eq!(result.events[2].old_version, 4);
-    assert_eq!(result.events[2].new_version, 5);
+    assert_eq!(result.events[2].previous_lsn, 4);
+    assert_eq!(result.events[2].lsn, 5);
     assert_eq!(field_value(&result.events[2], "value").as_deref(), Some("taker-after"));
     Ok(())
 }
@@ -429,8 +429,8 @@ fn updated_entity_pair_projects_before_after_diff() -> Result<(), Box<dyn std::e
     let event = pair.after.track_update_event_from(&pair.before)?;
 
     assert!(event.is_updated());
-    assert_eq!(event.old_version, 9);
-    assert_eq!(event.new_version, 10);
+    assert_eq!(event.previous_lsn, 9);
+    assert_eq!(event.lsn, 10);
     assert_eq!(field_value(&event, "value").as_deref(), Some("after"));
     Ok(())
 }
