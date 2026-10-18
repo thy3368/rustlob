@@ -142,7 +142,7 @@ impl AssetLobV2 for LocalLobBtree {
         }
         let id =
             u64::try_from(e.entity_id).map_err(|_| LobError::Event("negative entity id".into()))?;
-        if e.lsn != self.sequence + 1 {
+        if e.seq != self.sequence + 1 {
             return Err(LobError::Event("nonconsecutive event sequence".into()));
         }
         match e.change_type {
@@ -180,7 +180,7 @@ impl AssetLobV2 for LocalLobBtree {
             }
             _ => return Err(LobError::Event("unknown change type".into())),
         }
-        self.sequence = e.lsn;
+        self.sequence = e.seq;
         Ok(())
     }
 }
