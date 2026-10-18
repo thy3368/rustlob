@@ -34,7 +34,13 @@ where
 {
     type Request;
 
-    fn command(request: &Self::Request) -> F::Command;
+    fn command(
+        request: &Self::Request,
+        lsn: u64,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+    ) -> F::Command;
 }
 
 /// MI family runtime 所需的 authoritative given state source port。

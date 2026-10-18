@@ -440,7 +440,8 @@ use crate::{ReplayableChanges, action_type};
 
 /// 多聚合 `use-case family` 编排的最低实现契约。
 ///
-/// `Command` 可以是单个业务命令，也可以是一组相关动作的命令族；
+/// `Command` 是携带 LSN、逻辑时间和请求标识的日志条目；其负载可以是单个业务命令，
+/// 也可以是一组相关动作的命令族。
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
 /// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
 pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {

@@ -42,6 +42,11 @@ impl LogEntrySequencer {
         Self { next_lsn, last_logical_ts }
     }
 
+    /// 返回最后一次分配的检查点；尚未分配日志时返回 `None`。
+    pub const fn last_committed(&self) -> Option<(u64, u64)> {
+        if self.next_lsn == 0 { None } else { Some((self.next_lsn, self.last_logical_ts)) }
+    }
+
     /// 分配一个新的日志条目。
     pub fn sequence<P>(
         &mut self,

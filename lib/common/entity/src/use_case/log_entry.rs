@@ -15,6 +15,7 @@ pub struct LogEntry<P> {
     pub payload: P,
 }
 
+/// 提供状态机 executor 投影事件时所需的日志元数据。
 pub trait LogEntryMetadata {
     fn lsn(&self) -> u64;
     fn logical_ts(&self) -> u64;
@@ -38,16 +39,7 @@ impl<P> std::ops::Deref for LogEntry<P> {
 }
 
 impl<P> LogEntry<P> {
-    pub fn map_payload<Q>(self, f: impl FnOnce(P) -> Q) -> LogEntry<Q> {
-        LogEntry {
-            lsn: self.lsn,
-            logical_ts: self.logical_ts,
-            client_id: self.client_id,
-            request_id: self.request_id,
-            payload: f(self.payload),
-        }
-    }
-
+    /// 为同一次业务编排中的子命令复用日志元数据。
     pub fn with_payload<Q>(&self, payload: Q) -> LogEntry<Q> {
         LogEntry {
             lsn: self.lsn,
@@ -56,5 +48,24 @@ impl<P> LogEntry<P> {
             request_id: self.request_id,
             payload,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LogEntry;
+
+    #[test]
+    fn nested_command_keeps_outer_metadata() {
+        let outer =
+            LogEntry { lsn: 42, logical_ts: 123, client_id: 7, request_id: 9, payload: "outer" };
+
+        let inner = outer.with_payload("inner");
+
+        assert_eq!(
+            (inner.lsn, inner.logical_ts, inner.client_id, inner.request_id),
+            (42, 123, 7, 9)
+        );
+        assert_eq!(inner.payload, "inner");
     }
 }
