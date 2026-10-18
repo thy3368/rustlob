@@ -14,3 +14,47 @@ pub struct LogEntry<P> {
     /// 完整的业务命令或其他日志负载。
     pub payload: P,
 }
+
+pub trait LogEntryMetadata {
+    fn lsn(&self) -> u64;
+    fn logical_ts(&self) -> u64;
+}
+
+impl<P> LogEntryMetadata for LogEntry<P> {
+    fn lsn(&self) -> u64 {
+        self.lsn
+    }
+    fn logical_ts(&self) -> u64 {
+        self.logical_ts
+    }
+}
+
+impl<P> std::ops::Deref for LogEntry<P> {
+    type Target = P;
+
+    fn deref(&self) -> &Self::Target {
+        &self.payload
+    }
+}
+
+impl<P> LogEntry<P> {
+    pub fn map_payload<Q>(self, f: impl FnOnce(P) -> Q) -> LogEntry<Q> {
+        LogEntry {
+            lsn: self.lsn,
+            logical_ts: self.logical_ts,
+            client_id: self.client_id,
+            request_id: self.request_id,
+            payload: f(self.payload),
+        }
+    }
+
+    pub fn with_payload<Q>(&self, payload: Q) -> LogEntry<Q> {
+        LogEntry {
+            lsn: self.lsn,
+            logical_ts: self.logical_ts,
+            client_id: self.client_id,
+            request_id: self.request_id,
+            payload,
+        }
+    }
+}

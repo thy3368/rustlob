@@ -13,12 +13,12 @@ pub use entity_v2::entity::{
     EntityUseCaseApiPolicy, EntityUseCaseApiSurface, FieldDiff, FinancialClassification,
     FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
 };
-pub(crate) use entity_v2::entity_field_change::next_sequence;
 pub use entity_v2::entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayEventFieldParseError,
     ReplayFieldChange,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
+pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer};
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::executor::{
@@ -35,9 +35,7 @@ pub use use_case::state_machine_v2::StateMachineOwnedV2Diff as MultiAggregateUse
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
 pub use use_case::state_machine_v2::StateMachineV2Unchecked as MultiAggregateUseCaseUnchecked;
-pub use use_case::state_machine_v2::{
-    ExecutionContext, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
-};
+pub use use_case::state_machine_v2::{StateMachineOwnedV2Diff, StateMachineV2Unchecked};
 pub use use_case::support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair};
 
 static EVENT_SEQUENCE: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(0));

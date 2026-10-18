@@ -435,26 +435,8 @@
 
 use std::fmt::Debug;
 
+use crate::use_case::log_entry::LogEntryMetadata;
 use crate::{ReplayableChanges, action_type};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ExecutionContext {
-    /// 当前 use case 执行时间，单位为 Unix 纳秒。
-    pub execution_time_ns: u64,
-
-    /// 本次 use case 执行的业务标识，可演进为事务id。
-    pub execution_id: u64,
-}
-
-impl ExecutionContext {
-    pub fn now(execution_id: u64) -> Self {
-        let execution_time_ns = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_nanos().try_into().unwrap_or(u64::MAX))
-            .unwrap_or_default();
-        Self { execution_time_ns, execution_id }
-    }
-}
 
 /// 多聚合 `use-case family` 编排的最低实现契约。
 ///
@@ -462,7 +444,7 @@ impl ExecutionContext {
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
 /// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
 pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {
-    type Command;
+    type Command: LogEntryMetadata;
 
     type StateGiven;
 
@@ -504,18 +486,16 @@ pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error>;
 
-    fn compute_state_changed_with_context(
+    fn compute_state_changed(
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
-        context: &ExecutionContext,
     ) -> Result<Self::StateChanged, Self::Error> {
         self.check_command(cmd)?;
         self.validate_state_given(cmd, given_state)?;
-        self.compute_state_changed_unchecked(cmd, given_state, context)
+        self.compute_state_changed_unchecked(cmd, given_state)
     }
 }
 
@@ -543,17 +523,7 @@ pub trait StateMachineOwnedV2Diff: StateMachineV2Unchecked {
         cmd: &Self::Command,
         given_state: Self::StateGiven,
     ) -> Result<Self::StateDiff, Self::Error> {
-        let context = ExecutionContext::now(0);
-        self.compute_state_diff_with_context(cmd, given_state, &context)
-    }
-
-    fn compute_state_diff_with_context(
-        &self,
-        cmd: &Self::Command,
-        given_state: Self::StateGiven,
-        context: &ExecutionContext,
-    ) -> Result<Self::StateDiff, Self::Error> {
-        let after = self.compute_state_changed_with_context(cmd, &given_state, context)?;
+        let after = self.compute_state_changed(cmd, &given_state)?;
         Self::do_compute_state_diff(given_state, after)
     }
 }

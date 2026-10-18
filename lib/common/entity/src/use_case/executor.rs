@@ -1,7 +1,5 @@
-use crate::use_case::state_machine_v2::ExecutionContext;
-use crate::{
-    EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff, next_sequence,
-};
+use crate::use_case::log_entry::LogEntryMetadata;
+use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineOwnedV2Diff};
 
 /// 多聚合 MI state-machine family 的运行时编排器。
 ///
@@ -88,22 +86,18 @@ impl StateMachineExecutor {
         OB: StateSink<F>,
     {
         family.check_command(command).map_err(ExecutionError::Business)?;
-        // 事件序列号生成器也提供进程内唯一的执行标识；加一确保首个 ID 非零。
-        let execution_id = next_sequence().wrapping_add(1);
-        let context = ExecutionContext::now(execution_id);
-
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
         let given_state =
             state_source.load_given_state(command).map_err(ExecutionError::LoadState)?;
 
-        let changes = family
-            .compute_state_diff_with_context(command, given_state, &context)
-            .map_err(ExecutionError::Business)?;
+        let changes =
+            family.compute_state_diff(command, given_state).map_err(ExecutionError::Business)?;
 
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
         let mut events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;
         for event in &mut events {
-            event.lsn = context.execution_id;
+            event.lsn = command.lsn();
+            event.logical_ts = command.logical_ts();
         }
 
         state_sink.persist(&events).map_err(ExecutionError::Persist)?;

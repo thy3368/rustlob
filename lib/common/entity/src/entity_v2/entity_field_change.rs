@@ -1,13 +1,13 @@
 use std::borrow::Cow;
-use std::sync::atomic::Ordering;
 use std::sync::LazyLock;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 use thiserror::Error;
 
-use crate::{EntityError, EVENT_SEQUENCE};
+use crate::{EVENT_SEQUENCE, EntityError};
 
 /// Logical entity change kind used before encoding into compact replay tags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
