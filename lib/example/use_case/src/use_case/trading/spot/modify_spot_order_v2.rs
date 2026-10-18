@@ -250,6 +250,7 @@ impl StateMachineV2Unchecked for ModifySpotOrderV2UseCase {
         order_after.client_order_id = cmd.cloid.clone().or_else(|| order.client_order_id.clone());
         order_after.reservation = principal_after;
         order_after.fee_reservation = fee_after;
+        order_after.updated_at = cmd.logical_ts();
         order_after.version =
             order.version.checked_add(1).ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?;
 

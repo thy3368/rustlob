@@ -115,7 +115,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
 
     fn validate_state_given(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         let mut order_after = given_state.order.clone();
@@ -124,7 +124,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
                 &given_state.balances,
                 &given_state.order.reservation,
             )?,
-            timestamp: given_state.order.updated_at,
+            timestamp: cmd.logical_ts(),
         })?;
         validate_all_reservations_for_order(
             &given_state.order,
