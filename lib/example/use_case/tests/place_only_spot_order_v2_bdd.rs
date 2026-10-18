@@ -1,6 +1,6 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, ExecutionContext, ReplayableChanges, StateMachineOwnedV2Diff,
-    StateMachineV2Unchecked,
+    Entity, EntityReplayableEvent, ExecutionContext, LogEntry, ReplayableChanges,
+    StateMachineOwnedV2Diff, StateMachineV2Unchecked,
 };
 use example_core_entity::{
     ReservationStatus, SpotOrderGroupRelation, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
@@ -62,6 +62,33 @@ fn trigger_order(
         maker_fee_bps: 1,
         taker_fee_bps: 5,
     }
+}
+
+#[test]
+fn log_entry_keeps_complete_place_only_commands() {
+    let single = PlaceOnlySpotOrderV2Cmd::Single(limit_order(1, "gtc"));
+    let single_entry: LogEntry<PlaceOnlySpotOrderV2Cmd> =
+        LogEntry { lsn: 42, logical_ts: 100, client_id: 7, request_id: 9, payload: single.clone() };
+
+    assert_eq!(single_entry.lsn, 42);
+    assert_eq!(single_entry.logical_ts, 100);
+    assert_eq!(single_entry.client_id, 7);
+    assert_eq!(single_entry.request_id, 9);
+    assert_eq!(single_entry.payload, single);
+
+    let normal_tpsl = PlaceOnlySpotOrderV2Cmd::NormalTpsl {
+        parent: limit_order(NORMAL_TPSL_PARENT_ID, "gtc"),
+        children: vec![
+            trigger_order(NORMAL_TPSL_TP_ID, false, "tp"),
+            trigger_order(NORMAL_TPSL_SL_ID, true, "sl"),
+        ],
+    };
+    let tpsl_entry = LogEntry { payload: normal_tpsl.clone(), ..single_entry };
+
+    assert_eq!(tpsl_entry.payload, normal_tpsl);
+    assert!(
+        matches!(tpsl_entry.payload, PlaceOnlySpotOrderV2Cmd::NormalTpsl { children, .. } if children.len() == 2)
+    );
 }
 
 /// 返回带稳定执行时间的业务上下文，避免测试依赖系统时钟。
