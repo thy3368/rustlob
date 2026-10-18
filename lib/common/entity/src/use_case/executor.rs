@@ -103,7 +103,7 @@ impl StateMachineExecutor {
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
         let mut events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;
         for event in &mut events {
-            event.execution_id = context.execution_id;
+            event.lsn = context.execution_id;
         }
 
         state_sink.persist(&events).map_err(ExecutionError::Persist)?;

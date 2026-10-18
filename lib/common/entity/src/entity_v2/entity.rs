@@ -537,6 +537,12 @@ where
     }
 }
 
+/// 唯一id = lsn+sub_seq/create
+/// create_ts = event_ts/create
+/// version=lsn+sub_seq/create/update/delete
+/// update_ts= event_ts/create/update/delete
+/// delete=x
+
 #[cfg(test)]
 mod tests {
     use super::*;

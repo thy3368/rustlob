@@ -1,13 +1,13 @@
 use std::borrow::Cow;
-use std::sync::LazyLock;
 use std::sync::atomic::Ordering;
+use std::sync::LazyLock;
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 use thiserror::Error;
 
-use crate::{EVENT_SEQUENCE, EntityError};
+use crate::{EntityError, EVENT_SEQUENCE};
 
 /// Logical entity change kind used before encoding into compact replay tags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -115,11 +115,20 @@ impl ReplayFieldChange {
 /// Entity event optimized for deterministic replay and optimistic locking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
-    pub timestamp: u64,
-    pub lsn: u64,
+    /// 逻辑时间戳（由定序器分配，非物理时钟）来自command
+    /// 用于替代 NTP/PTP，作为系统的逻辑时间
+    pub logical_ts: u64,
+
+    pub seq: u64,
+
+    // /// lsn内的子seq, lsn+sub_seq =唯一
+    // pub sub_seq: u64,
     pub old_version: u64,
-    #[serde(default)]
-    pub execution_id: u64,
+
+    /// 全局单调递增的序列号 来自command
+    /// 这是"全序"的唯一依据
+    ///
+    pub lsn: u64,
     pub new_version: u64,
     pub entity_id: i64,
     pub entity_type: u8,
@@ -153,10 +162,10 @@ impl EntityReplayableEvent {
         change_type: u8,
     ) -> Self {
         Self {
-            timestamp,
-            lsn: sequence,
+            logical_ts: timestamp,
+            seq: sequence,
             old_version,
-            execution_id: 0,
+            lsn: 0,
             new_version,
             entity_id,
             entity_type,
@@ -346,7 +355,7 @@ mod tests {
 
     #[test]
     fn constructors_default_execution_id_to_zero() {
-        assert_eq!(EntityReplayableEvent::new_created(1, 1, 1, 1).execution_id, 0);
+        assert_eq!(EntityReplayableEvent::new_created(1, 1, 1, 1).lsn, 0);
     }
 
     #[test]
@@ -355,7 +364,7 @@ mod tests {
             r#"{"timestamp":1,"sequence":2,"old_version":0,"new_version":1,"entity_id":3,"entity_type":4,"change_type":1,"field_changes":[]}"#,
         )
         .expect("legacy event JSON should remain readable");
-        assert_eq!(event.execution_id, 0);
+        assert_eq!(event.lsn, 0);
     }
 
     #[test]
