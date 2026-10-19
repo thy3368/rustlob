@@ -1,18 +1,22 @@
 //! 运行：`cargo run -p use_case_executor --example place_only_spot_order_v2`
 
 use cmd_handler::EntityReplayableEvent;
-use common_entity::{EntityChangeType, LogEntry, LogEntrySequenceError, LogEntrySequencer};
+use common_entity::{EntityChangeType, LogEntry, LogEntrySequencer, SingleThreadSequencer};
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
 };
 use example_outbound_adapter::NoopSpotOrderV2PlaceOnlyOutbound;
 use use_case_executor::trading::spot::place_only_spot_order_v2_executor::execute_place_only_spot_order_v2_with_outbound;
 
-fn command() -> Result<LogEntry<PlaceOnlySpotOrderV2Cmd>, LogEntrySequenceError> {
+fn command() -> Result<LogEntry<PlaceOnlySpotOrderV2Cmd>, Box<dyn std::error::Error>> {
+    // 使用 SingleThreadSequencer 生成 order_id
+    let mut order_id_sequencer = SingleThreadSequencer::new(1);
+    let order_id = order_id_sequencer.next()?;
+
     let payload = PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
         party_id: "example-trader".to_string(),
         asset: 10_001,
-        order_id: 1,
+        order_id,
         symbol: "BTCUSDT".to_string(),
         is_buy: true,
         price: "100".to_string(),
@@ -26,7 +30,7 @@ fn command() -> Result<LogEntry<PlaceOnlySpotOrderV2Cmd>, LogEntrySequenceError>
         taker_fee_bps: 5,
     });
     let mut sequencer = LogEntrySequencer::new(None);
-    sequencer.sequence(7, 9, payload)
+    Ok(sequencer.sequence(7, 9, payload)?)
 }
 
 fn main() {

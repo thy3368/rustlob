@@ -15,6 +15,7 @@ pub use entity_v2::entity_field_change::{
     ReplayFieldChange,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
+pub use sequence::id_generator::EntityIdGenerator;
 pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer};
 pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
