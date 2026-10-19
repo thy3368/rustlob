@@ -87,6 +87,8 @@ impl FieldDiff for HyperliquidPerpAdlDeleveragingRecord {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpAdlDeleveragingRecord {}
+
 impl Entity for HyperliquidPerpAdlDeleveragingRecord {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.adl_deleveraging_record_id)

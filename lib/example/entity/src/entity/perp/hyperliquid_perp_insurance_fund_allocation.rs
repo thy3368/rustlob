@@ -66,6 +66,8 @@ impl FieldDiff for HyperliquidPerpInsuranceFundAllocation {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpInsuranceFundAllocation {}
+
 impl Entity for HyperliquidPerpInsuranceFundAllocation {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.insurance_fund_allocation_id)

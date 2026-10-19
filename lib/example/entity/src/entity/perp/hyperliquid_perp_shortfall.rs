@@ -191,6 +191,8 @@ impl FieldDiff for HyperliquidPerpShortfall {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpShortfall {}
+
 impl Entity for HyperliquidPerpShortfall {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.shortfall_id)

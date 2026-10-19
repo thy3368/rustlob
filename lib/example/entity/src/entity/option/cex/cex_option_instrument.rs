@@ -153,6 +153,8 @@ impl FieldDiff for CexOptionInstrument {
     }
 }
 
+impl common_entity::Shard for CexOptionInstrument {}
+
 impl Entity for CexOptionInstrument {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.instrument_id)

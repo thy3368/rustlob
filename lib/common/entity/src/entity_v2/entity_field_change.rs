@@ -290,6 +290,11 @@ impl EntityReplayableEvent {
     }
 }
 
+impl crate::use_case::shard::Shard for EntityReplayableEvent {
+    fn topic(&self) -> u8 { self.t }
+    fn partition(&self) -> u8 { self.p }
+}
+
 static START_INSTANT: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 #[inline]

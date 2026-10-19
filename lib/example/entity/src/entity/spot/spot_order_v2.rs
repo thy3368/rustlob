@@ -1783,10 +1783,10 @@ impl Entity for SpotOrderV2 {
     }
 
 
-    fn partition(&self) -> u8 {
-        self.asset as u8
+}
 
-    }
+impl common_entity::Shard for SpotOrderV2 {
+    fn partition(&self) -> u8 { self.asset as u8 }
 }
 
 impl EntityLifecycle for SpotOrderV2 {

@@ -566,6 +566,8 @@ impl FieldDiff for CexOptionOrder {
     }
 }
 
+impl common_entity::Shard for CexOptionOrder {}
+
 impl Entity for CexOptionOrder {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.order_id)

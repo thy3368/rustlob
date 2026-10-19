@@ -430,6 +430,8 @@ impl FieldDiff for HyperliquidPerpTrade {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpTrade {}
+
 impl Entity for HyperliquidPerpTrade {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.trade_id)

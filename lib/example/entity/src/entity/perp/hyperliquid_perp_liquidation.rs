@@ -345,6 +345,8 @@ impl FieldDiff for HyperliquidPerpLiquidation {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpLiquidation {}
+
 impl Entity for HyperliquidPerpLiquidation {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.liquidation_id)

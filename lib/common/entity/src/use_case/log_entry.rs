@@ -1,3 +1,5 @@
+use super::shard::Shard;
+
 /// 内存中的有序日志条目，携带完整负载。
 ///
 /// 当前类型不定义持久化或传输格式；日志成为唯一真相源取决于后续写入链路。
@@ -18,22 +20,23 @@ pub struct LogEntry<P> {
 }
 
 /// 提供状态机 executor 投影事件时所需的日志元数据。
-pub trait LogEntryMetadata {
-    fn topic(&self) -> u8;
-    fn partition(&self) -> u8;
+pub trait LogEntryMetadata: Shard {
     fn lsn(&self) -> u64;
     fn logical_ts(&self) -> u64;
 }
 
 impl<P> LogEntryMetadata for LogEntry<P> {
-    fn topic(&self) -> u8 { self.t }
-    fn partition(&self) -> u8 { self.p }
     fn lsn(&self) -> u64 {
         self.lsn
     }
     fn logical_ts(&self) -> u64 {
         self.logical_ts
     }
+}
+
+impl<P> Shard for LogEntry<P> {
+    fn topic(&self) -> u8 { self.t }
+    fn partition(&self) -> u8 { self.p }
 }
 
 impl<P> std::ops::Deref for LogEntry<P> {

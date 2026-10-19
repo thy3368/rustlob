@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::entity_v2::entity_field_change::current_timestamp;
 use crate::{
     EntityChangeType, EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
+    use_case::shard::Shard,
 };
 
 /// 四色建模中的实体原型分类。
@@ -267,15 +268,8 @@ pub trait EntityLifecycle {
 }
 
 /// Enhanced entity contract for generating compact replayable entity events.
-pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
+pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
     fn entity_id(&self) -> u64;
-
-    fn topic(&self) -> u8 {
-        0
-    }
-    fn partition(&self) -> u8 {
-        0
-    }
 
     fn entity_type() -> u8
     where
@@ -539,6 +533,8 @@ mod identity_tests {
 
     #[derive(Clone, Debug)]
     struct Sample { id: u64, version: u64 }
+
+    impl Shard for Sample {}
 
     impl FieldDiff for Sample {
         fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {

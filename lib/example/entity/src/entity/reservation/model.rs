@@ -396,6 +396,8 @@ impl FieldDiff for Reservation {
     }
 }
 
+impl common_entity::Shard for Reservation {}
+
 impl Entity for Reservation {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.reservation_id)

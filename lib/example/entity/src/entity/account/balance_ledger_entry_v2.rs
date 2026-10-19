@@ -379,6 +379,8 @@ impl FieldDiff for BalanceLedgerEntryV2 {
     }
 }
 
+impl common_entity::Shard for BalanceLedgerEntryV2 {}
+
 impl Entity for BalanceLedgerEntryV2 {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.entry_id)

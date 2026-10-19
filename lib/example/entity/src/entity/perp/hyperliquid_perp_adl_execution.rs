@@ -152,6 +152,8 @@ impl FieldDiff for HyperliquidPerpAdlExecution {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpAdlExecution {}
+
 impl Entity for HyperliquidPerpAdlExecution {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.adl_execution_id)

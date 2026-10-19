@@ -138,6 +138,8 @@ impl FieldDiff for Account {
     }
 }
 
+impl common_entity::Shard for Account {}
+
 impl Entity for Account {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.account_id)

@@ -244,6 +244,8 @@ impl FieldDiff for Balance {
     }
 }
 
+impl common_entity::Shard for Balance {}
+
 impl Entity for Balance {
 
 

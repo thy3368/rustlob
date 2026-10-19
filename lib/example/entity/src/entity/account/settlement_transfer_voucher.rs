@@ -192,6 +192,8 @@ impl FieldDiff for SettlementTransferLeg {
     }
 }
 
+impl common_entity::Shard for SettlementTransferLeg {}
+
 impl Entity for SettlementTransferLeg {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.leg_id)
@@ -583,6 +585,8 @@ impl FieldDiff for SettlementTransferVoucher {
         Vec::with_capacity(0)
     }
 }
+
+impl common_entity::Shard for SettlementTransferVoucher {}
 
 impl Entity for SettlementTransferVoucher {
     fn entity_id(&self) -> u64 {

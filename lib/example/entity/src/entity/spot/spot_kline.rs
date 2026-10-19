@@ -116,10 +116,6 @@ impl Entity for SpotKline {
         self.id
     }
 
-    fn partition(&self) -> u8 {
-        self.asset as u8
-    }
-
     fn entity_type() -> u8 {
         SPOT_KLINE_ENTITY_TYPE
     }
@@ -151,6 +147,10 @@ impl Entity for SpotKline {
             _ => 0,
         }
     }
+}
+
+impl common_entity::Shard for SpotKline {
+    fn partition(&self) -> u8 { self.asset as u8 }
 }
 
 #[cfg(test)]

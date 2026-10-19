@@ -137,6 +137,8 @@ impl FieldDiff for HyperliquidPerpLeverageSetting {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpLeverageSetting {}
+
 impl Entity for HyperliquidPerpLeverageSetting {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.setting_id)

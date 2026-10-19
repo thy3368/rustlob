@@ -664,6 +664,8 @@ impl FieldDiff for HyperliquidPerpPosition {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpPosition {}
+
 impl Entity for HyperliquidPerpPosition {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.position_key)

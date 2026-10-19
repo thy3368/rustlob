@@ -27,6 +27,7 @@ pub use use_case::executor::{
     StateSource,
 };
 pub use use_case::log_entry::LogEntry;
+pub use use_case::shard::Shard;
 pub use use_case::log_entry_repo::LogEntryRepo;
 pub use use_case::rewal_log_entry_repo::{RewalLogEntryRepo, RewalLogEntryRepoError};
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。

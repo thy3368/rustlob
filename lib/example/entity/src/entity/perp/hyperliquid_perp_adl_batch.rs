@@ -133,6 +133,8 @@ impl FieldDiff for HyperliquidPerpAdlBatch {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpAdlBatch {}
+
 impl Entity for HyperliquidPerpAdlBatch {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.adl_batch_id)

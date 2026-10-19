@@ -635,6 +635,8 @@ impl FieldDiff for HyperliquidPerpOrder {
     }
 }
 
+impl common_entity::Shard for HyperliquidPerpOrder {}
+
 impl Entity for HyperliquidPerpOrder {
     fn entity_id(&self) -> u64 {
         self.order_id

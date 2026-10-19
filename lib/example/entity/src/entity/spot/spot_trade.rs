@@ -476,10 +476,10 @@ impl Entity for SpotTrade {
     }
 
 
-    fn partition(&self) -> u8 {
-        self.asset as u8
-  
-    }
+}
+
+impl common_entity::Shard for SpotTrade {
+    fn partition(&self) -> u8 { self.asset as u8 }
 }
 
 
