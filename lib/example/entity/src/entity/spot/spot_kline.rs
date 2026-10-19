@@ -11,6 +11,8 @@ const SPOT_KLINE_ENTITY_TYPE: u8 = 6;
 /// 同一交易对、周期和开盘时间只对应一个稳定实体 ID。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotKline {
+    /// 按交易对、周期和开盘时间生成的稳定数值身份。
+    pub id: u64,
     /// Hyperliquid 现货资产编号。
     pub asset: u32,
     /// 交易对。
@@ -60,7 +62,12 @@ impl SpotKline {
         first_trade_id: String,
         last_trade_id: String,
     ) -> Self {
+        let id = crate::support::derived_entity_id(
+            SPOT_KLINE_ENTITY_TYPE,
+            &[symbol.as_bytes(), &interval_ms.to_le_bytes(), &open_time_ms.to_le_bytes()],
+        );
         Self {
+            id,
             asset,
             symbol,
             interval_ms,
@@ -76,11 +83,6 @@ impl SpotKline {
             first_trade_id,
             last_trade_id,
         }
-    }
-
-    /// 返回 K 线快照的确定性业务身份。
-    pub fn kline_key(&self) -> String {
-        kline_key(self.symbol.as_str(), self.interval_ms, self.open_time_ms)
     }
 }
 
@@ -111,7 +113,7 @@ impl FieldDiff for SpotKline {
 
 impl Entity for SpotKline {
     fn entity_id(&self) -> u64 {
-        common_entity::stable_string_entity_id(&self.kline_key())
+        self.id
     }
 
     fn partition(&self) -> u8 {
@@ -149,13 +151,7 @@ impl Entity for SpotKline {
             _ => 0,
         }
     }
-
 }
-
-fn kline_key(symbol: &str, interval_ms: u64, open_time_ms: u64) -> String {
-    format!("spot-kline:{symbol}:{interval_ms}:{open_time_ms}")
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -184,10 +180,10 @@ mod tests {
 
     #[test]
     fn identity_is_deterministic_from_symbol_interval_and_open_time() {
-        let kline = kline();
+        let snapshot = kline();
 
-        assert_eq!(kline.kline_key(), "spot-kline:BTCUSDT:60000:1717171680000");
-        assert_eq!(kline.entity_id(), common_entity::stable_string_entity_id(&kline.kline_key()));
+        assert_eq!(snapshot.entity_id(), snapshot.id);
+        assert_eq!(snapshot.entity_id(), kline().entity_id());
     }
 
     #[test]
