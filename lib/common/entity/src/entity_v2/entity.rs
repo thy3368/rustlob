@@ -264,21 +264,6 @@ pub trait EntityLifecycle {
     }
 }
 
-// /// 运行时生成实体 ID 的独立能力。
-// ///
-// /// 该 trait 不要求实现者同时实现 [`Entity`]，用于让实体创建流程依赖
-// /// ID 生成能力，而不把 ID 生成职责绑定到实体生命周期契约。
-pub trait EntityIdGenerator {
-    type Id: Clone + PartialEq + ToString;
-    fn next_id(&self) -> Self::Id;
-}
-
-// /// 全局单调递增的序列号 来自command
-// /// 这是"全序"的唯一依据
-// pub lsn: u64,
-// /// lsn内唯一
-// pub seq: u64,
-
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     type Id: Debug + Clone + PartialEq + ToString;
