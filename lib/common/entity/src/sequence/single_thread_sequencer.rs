@@ -1,3 +1,5 @@
+use crate::EntityIdGenerator;
+
 /// 单线程序号耗尽错误。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SequenceExhausted;
@@ -40,6 +42,18 @@ impl SingleThreadSequencer {
         Ok(sequence)
     }
 }
+
+/// 使用单线程递增序列生成实体 ID。
+///
+/// 起始值由 [`SingleThreadSequencer::new`] 指定，`u64::MAX` 可以分配一次，
+/// 后续调用返回 [`SequenceExhausted`]。
+impl EntityIdGenerator for SingleThreadSequencer {
+    #[inline]
+    fn next_id(&mut self) -> Result<u64, SequenceExhausted> {
+        self.next()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

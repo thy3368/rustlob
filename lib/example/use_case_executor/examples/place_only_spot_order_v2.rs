@@ -1,14 +1,46 @@
 //! 运行：`cargo run -p use_case_executor --example place_only_spot_order_v2`
 
 use cmd_handler::EntityReplayableEvent;
-use common_entity::{EntityChangeType, LogEntry, LogEntrySequencer, SingleThreadSequencer};
+use common_entity::{
+    EntityChangeType, LogEntry, LogEntrySequenceError, LogEntrySequencer, SequenceExhausted,
+    SingleThreadSequencer,
+};
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
 };
 use example_outbound_adapter::NoopSpotOrderV2PlaceOnlyOutbound;
 use use_case_executor::trading::spot::place_only_spot_order_v2_executor::execute_place_only_spot_order_v2_with_outbound;
 
-fn command() -> Result<LogEntry<PlaceOnlySpotOrderV2Cmd>, Box<dyn std::error::Error>> {
+#[derive(Debug)]
+enum CommandError {
+    SequenceExhausted(SequenceExhausted),
+    LogEntrySequence(LogEntrySequenceError),
+}
+
+impl std::fmt::Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SequenceExhausted(error) => error.fmt(f),
+            Self::LogEntrySequence(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for CommandError {}
+
+impl From<SequenceExhausted> for CommandError {
+    fn from(error: SequenceExhausted) -> Self {
+        Self::SequenceExhausted(error)
+    }
+}
+
+impl From<LogEntrySequenceError> for CommandError {
+    fn from(error: LogEntrySequenceError) -> Self {
+        Self::LogEntrySequence(error)
+    }
+}
+
+fn command() -> Result<LogEntry<PlaceOnlySpotOrderV2Cmd>, CommandError> {
     // 使用 SingleThreadSequencer 生成 order_id
     let mut order_id_sequencer = SingleThreadSequencer::new(1);
     let order_id = order_id_sequencer.next()?;
