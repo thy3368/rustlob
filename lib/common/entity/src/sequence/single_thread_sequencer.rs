@@ -1,16 +1,11 @@
+use thiserror::Error;
+
 use crate::EntityIdGenerator;
 
 /// 单线程序号耗尽错误。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("sequence exhausted")]
 pub struct SequenceExhausted;
-
-impl std::fmt::Display for SequenceExhausted {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("sequence exhausted")
-    }
-}
-
-impl std::error::Error for SequenceExhausted {}
 
 /// 为单线程调用方分配递增的 `u64` 序号。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,7 +48,6 @@ impl EntityIdGenerator for SingleThreadSequencer {
         self.next()
     }
 }
-
 
 #[cfg(test)]
 mod tests {

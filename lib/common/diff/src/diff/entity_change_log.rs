@@ -27,6 +27,8 @@ use zerocopy::{FromZeros, Immutable, IntoBytes, Unaligned};
 /// - Deleted 事件: old_version=N, new_version=N+1
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityReplayableEvent {
+    pub t: u8,
+    pub p: u8,
     /// 变更时间戳（纳秒）
     pub timestamp: u64,
     /// 变更序列号（用于全局排序）
@@ -137,6 +139,14 @@ impl FieldChange {
 }
 
 impl EntityReplayableEvent {
+    pub fn with_topic_partition(mut self, t: u8, p: u8) -> Self { self.t = t; self.p = p; self }
+
+    pub fn new_with_topic(t: u8, p: u8, timestamp: u64, sequence: u64, old_version: u64, new_version: u64, entity_id: i64, entity_type: u8, change_type: u8) -> Self {
+        let mut event = Self::new(timestamp, sequence, old_version, new_version, entity_id, entity_type, change_type);
+        event.t = t;
+        event.p = p;
+        event
+    }
     /// 创建新的变更日志条目
     pub fn new(
         timestamp: u64,
@@ -148,6 +158,8 @@ impl EntityReplayableEvent {
         change_type: u8,
     ) -> Self {
         Self {
+            t: 0,
+            p: 0,
             timestamp,
             sequence,
             old_version,
@@ -394,6 +406,8 @@ impl Default for FieldChangeSoa {
 #[derive(Debug, Clone, PartialEq, Eq)]
 
 pub struct EntityChangeLogSoa {
+    pub topics: Vec<u8>,
+    pub partitions: Vec<u8>,
     /// 变更时间戳数组（纳秒）
     pub timestamps: Vec<u64>,
     /// 变更序列号数组（用于排序）
@@ -416,6 +430,8 @@ impl EntityChangeLogSoa {
     /// 创建新的空 SOA 结构
     pub fn new() -> Self {
         Self {
+            topics: Vec::new(),
+            partitions: Vec::new(),
             timestamps: Vec::with_capacity(0),
             sequences: Vec::with_capacity(0),
             old_versions: Vec::with_capacity(0),
@@ -430,6 +446,8 @@ impl EntityChangeLogSoa {
     /// 创建预分配容量的 SOA 结构
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
+            topics: Vec::with_capacity(capacity),
+            partitions: Vec::with_capacity(capacity),
             timestamps: Vec::with_capacity(capacity),
             sequences: Vec::with_capacity(capacity),
             old_versions: Vec::with_capacity(capacity),
@@ -465,6 +483,8 @@ impl EntityChangeLogSoa {
 
     /// 从 AOS 条目添加
     pub fn push_entry(&mut self, entry: EntityReplayableEvent) {
+        self.topics.push(entry.t);
+        self.partitions.push(entry.p);
         self.timestamps.push(entry.timestamp);
         self.sequences.push(entry.sequence);
         self.old_versions.push(entry.old_version);
@@ -487,6 +507,8 @@ impl EntityChangeLogSoa {
 
     /// 清空所有数据（保留容量）
     pub fn clear(&mut self) {
+        self.topics.clear();
+        self.partitions.clear();
         self.timestamps.clear();
         self.sequences.clear();
         self.old_versions.clear();
@@ -504,6 +526,8 @@ impl EntityChangeLogSoa {
         }
 
         Some(EntityReplayableEvent {
+            t: *self.topics.get(index)?,
+            p: *self.partitions.get(index)?,
             timestamp: *self.timestamps.get(index)?,
             sequence: *self.sequences.get(index)?,
             old_version: *self.old_versions.get(index)?,

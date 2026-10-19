@@ -28,11 +28,24 @@ impl std::error::Error for LogEntrySequenceError {}
 /// 由单线程调用方持有的日志条目定序器。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogEntrySequencer {
+    ///topic
+    t: u8,
+    ///partition
+    p: u8,
     next_lsn: u64,
     last_logical_ts: u64,
 }
 
 impl LogEntrySequencer {
+    /// 创建带固定 topic/partition 上下文的定序器。
+    pub const fn with_topic_partition(t: u8, p: u8, last_committed: Option<(u64, u64)>) -> Self {
+        let (next_lsn, last_logical_ts) = match last_committed {
+            Some((lsn, ts)) => (lsn, ts),
+            None => (0, 0),
+        };
+        Self { t, p, next_lsn, last_logical_ts }
+    }
+
     /// 使用已有权威元数据创建日志，不改变定序器检查点。
     pub fn from_metadata<P>(
         lsn: u64,
@@ -44,9 +57,14 @@ impl LogEntrySequencer {
         LogEntry::new(lsn, logical_ts, client_id, request_id, payload)
     }
 
+    pub fn from_metadata_with_topic<P>(t: u8, p: u8, lsn: u64, logical_ts: u64, client_id: u64, request_id: u64, payload: P) -> LogEntry<P> {
+        LogEntry::new_with_topic(t, p, lsn, logical_ts, client_id, request_id, payload)
+    }
+
     /// 为子命令复用父日志的元数据，不分配新的序号。
     pub fn derive<P, Q>(parent: &LogEntry<P>, payload: Q) -> LogEntry<Q> {
-        Self::from_metadata(
+        Self::from_metadata_with_topic(
+            parent.topic(), parent.partition(),
             parent.lsn(),
             parent.logical_ts(),
             parent.client_id(),
@@ -61,13 +79,16 @@ impl LogEntrySequencer {
             Some((lsn, logical_ts)) => (lsn, logical_ts),
             None => (0, 0),
         };
-        Self { next_lsn, last_logical_ts }
+        Self { t: 0, p: 0, next_lsn, last_logical_ts }
     }
 
     /// 返回最后一次分配的检查点；尚未分配日志时返回 `None`。
     pub const fn last_committed(&self) -> Option<(u64, u64)> {
         if self.next_lsn == 0 { None } else { Some((self.next_lsn, self.last_logical_ts)) }
     }
+
+    pub const fn topic(&self) -> u8 { self.t }
+    pub const fn partition(&self) -> u8 { self.p }
 
     /// 分配一个新的日志条目。
     pub fn sequence<P>(

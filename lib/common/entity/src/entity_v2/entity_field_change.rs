@@ -114,6 +114,8 @@ impl ReplayFieldChange {
 /// Entity event optimized for deterministic replay and optimistic locking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
+    pub t: u8,
+    pub p: u8,
     /// 全局单调递增的序列号 来自command
     /// 这是"全序"的唯一依据
     pub lsn: u64,
@@ -154,7 +156,13 @@ impl EntityReplayableEvent {
         entity_type: u8,
         change_type: u8,
     ) -> Self {
+        Self::new_with_topic(0, 0, timestamp, previous_lsn, lsn, entity_id, entity_type, change_type)
+    }
+
+    pub fn new_with_topic(t: u8, p: u8, timestamp: u64, previous_lsn: u64, lsn: u64, entity_id: i64, entity_type: u8, change_type: u8) -> Self {
         Self {
+            t,
+            p,
             logical_ts: timestamp,
             previous_lsn,
             lsn,

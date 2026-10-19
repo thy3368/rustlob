@@ -6,8 +6,10 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+bincode = "1.3.3"
 entity_derive = { path = "../entity_derive" }
 minstant = "0.1"
+rewal = "=0.1.0"
 serde = { version = "1", features = ["derive"] }
 serde-big-array = "0.5"
 thiserror = "1"

@@ -26,6 +26,7 @@ pub use use_case::executor::{
 };
 pub use use_case::log_entry::LogEntry;
 pub use use_case::log_entry_repo::LogEntryRepo;
+pub use use_case::rewal_log_entry_repo::{RewalLogEntryRepo, RewalLogEntryRepoError};
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。

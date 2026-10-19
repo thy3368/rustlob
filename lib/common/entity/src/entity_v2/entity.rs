@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::entity_v2::entity_field_change::current_timestamp;
-use crate::{EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange};
+use crate::{EntityChangeType, EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange};
 
 /// 四色建模中的实体原型分类。
 ///
@@ -270,6 +270,9 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
 
     fn entity_id(&self) -> Self::Id;
 
+    fn topic(&self) -> u8 { 0 }
+    fn partition(&self) -> u8 { 0 }
+
     fn entity_type() -> u8
     where
         Self: Sized;
@@ -415,10 +418,13 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     where
         Self: Sized,
     {
-        let mut event = EntityReplayableEvent::new_created(
+        let mut event = EntityReplayableEvent::new_with_topic(
+            self.topic(), self.partition(),
             current_timestamp()?,
+            0, 0,
             self.replay_entity_id()?,
             Self::entity_type(),
+            EntityChangeType::Created.as_tag(),
         );
 
         for change in self.created_field_changes() {
@@ -457,6 +463,9 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
         Self: Sized,
     {
         ensure_same_entity(old_state, self)?;
+        if old_state.topic() != self.topic() || old_state.partition() != self.partition() {
+            return Err(EntityError::EntityIdMismatch { expected: format!("{}/{}", old_state.topic(), old_state.partition()), actual: format!("{}/{}", self.topic(), self.partition()) });
+        }
 
         let old_version = old_state.lsn();
         let new_version = self.lsn();
@@ -466,12 +475,13 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
             return Err(EntityError::NoChangesDetected);
         }
 
-        let mut event = EntityReplayableEvent::new_updated(
+        let mut event = EntityReplayableEvent::new_with_topic(
+            self.topic(), self.partition(),
             current_timestamp()?,
             old_version,
             new_version,
             self.replay_entity_id()?,
-            Self::entity_type(),
+            Self::entity_type(), EntityChangeType::Updated.as_tag(),
         );
 
         for change in changes {
@@ -489,12 +499,13 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
         Self: Sized,
     {
         let old_version = self.lsn();
-        Ok(EntityReplayableEvent::new_deleted(
+        Ok(EntityReplayableEvent::new_with_topic(
+            self.topic(), self.partition(),
             current_timestamp()?,
             old_version,
             increment_version(old_version)?,
             self.replay_entity_id()?,
-            Self::entity_type(),
+            Self::entity_type(), EntityChangeType::Deleted.as_tag(),
         ))
     }
 }
