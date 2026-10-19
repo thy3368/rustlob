@@ -241,9 +241,9 @@ impl FieldDiff for Balance {
 }
 
 impl Entity for Balance {
-    type Id = String;
 
-    fn entity_id(&self) -> Self::Id {
+
+    fn entity_id(&self) -> u64 {
         concat3(self.account_id.as_str(), ":", self.asset_id.as_str())
     }
 

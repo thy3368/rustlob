@@ -1787,6 +1787,11 @@ impl Entity for SpotOrderV2 {
     fn replay_entity_id(&self) -> Result<i64, EntityError> {
         Ok(stable_order_entity_id(self.order_id))
     }
+
+    fn partition(&self) -> u8 {
+        self.asset as u8
+
+    }
 }
 
 impl EntityLifecycle for SpotOrderV2 {

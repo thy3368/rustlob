@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 
 use crate::entity_v2::entity_field_change::current_timestamp;
-use crate::{EntityChangeType, EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange};
+use crate::{
+    EntityChangeType, EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
+};
 
 /// 四色建模中的实体原型分类。
 ///
@@ -266,12 +268,12 @@ pub trait EntityLifecycle {
 
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
-    type Id: Debug + Clone + PartialEq + ToString;
+    fn entity_id(&self) -> u64;
 
-    fn entity_id(&self) -> Self::Id;
-
-    fn topic(&self) -> u8 { 0 }
-    fn partition(&self) -> u8 { 0 }
+    fn topic(&self) -> u8 {
+        0
+    }
+    fn partition(&self) -> u8;
 
     fn entity_type() -> u8
     where
@@ -419,9 +421,11 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
         Self: Sized,
     {
         let mut event = EntityReplayableEvent::new_with_topic(
-            self.topic(), self.partition(),
+            self.topic(),
+            self.partition(),
             current_timestamp()?,
-            0, 0,
+            0,
+            0,
             self.replay_entity_id()?,
             Self::entity_type(),
             EntityChangeType::Created.as_tag(),
@@ -464,7 +468,10 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     {
         ensure_same_entity(old_state, self)?;
         if old_state.topic() != self.topic() || old_state.partition() != self.partition() {
-            return Err(EntityError::EntityIdMismatch { expected: format!("{}/{}", old_state.topic(), old_state.partition()), actual: format!("{}/{}", self.topic(), self.partition()) });
+            return Err(EntityError::EntityIdMismatch {
+                expected: format!("{}/{}", old_state.topic(), old_state.partition()),
+                actual: format!("{}/{}", self.topic(), self.partition()),
+            });
         }
 
         let old_version = old_state.lsn();
@@ -476,12 +483,14 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
         }
 
         let mut event = EntityReplayableEvent::new_with_topic(
-            self.topic(), self.partition(),
+            self.topic(),
+            self.partition(),
             current_timestamp()?,
             old_version,
             new_version,
             self.replay_entity_id()?,
-            Self::entity_type(), EntityChangeType::Updated.as_tag(),
+            Self::entity_type(),
+            EntityChangeType::Updated.as_tag(),
         );
 
         for change in changes {
@@ -500,12 +509,14 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     {
         let old_version = self.lsn();
         Ok(EntityReplayableEvent::new_with_topic(
-            self.topic(), self.partition(),
+            self.topic(),
+            self.partition(),
             current_timestamp()?,
             old_version,
             increment_version(old_version)?,
             self.replay_entity_id()?,
-            Self::entity_type(), EntityChangeType::Deleted.as_tag(),
+            Self::entity_type(),
+            EntityChangeType::Deleted.as_tag(),
         ))
     }
 }

@@ -480,6 +480,11 @@ impl Entity for SpotTrade {
     fn replay_entity_id(&self) -> Result<i64, EntityError> {
         Ok(stable_trade_entity_id(&self.trade_id))
     }
+
+    fn partition(&self) -> u8 {
+        self.asset as u8
+  
+    }
 }
 
 fn stable_trade_entity_id(value: &str) -> i64 {

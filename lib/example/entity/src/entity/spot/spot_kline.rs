@@ -116,6 +116,10 @@ impl Entity for SpotKline {
         self.kline_key()
     }
 
+    fn partition(&self) -> u8 {
+        self.asset as u8
+    }
+
     fn entity_type() -> u8 {
         SPOT_KLINE_ENTITY_TYPE
     }

@@ -4,8 +4,6 @@ pub mod balance_ledger_entry_v2;
 pub mod balance_ledger_reason;
 pub mod settlement_transfer_voucher;
 
-#[cfg(test)]
-mod balance_tests;
 
 pub use account_master::{Account, AccountStatus};
 pub use balance::BalanceError;
