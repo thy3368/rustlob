@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn event_order_sequence_prefers_explicit_field() {
-        let mut event = EntityReplayableEvent::new_created(0, 0, 1, ORDER_ENTITY_TYPE);
+        let mut event = EntityReplayableEvent::new_created(0, 1, ORDER_ENTITY_TYPE);
         event.add_field_change(string_field("order_id", "trader-1-BTCUSDT-9"));
         event.add_field_change(int_field("order_sequence", 7));
 
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn event_order_sequence_falls_back_to_order_id_suffix() {
-        let mut event = EntityReplayableEvent::new_created(0, 0, 1, ORDER_ENTITY_TYPE);
+        let mut event = EntityReplayableEvent::new_created(0, 1, ORDER_ENTITY_TYPE);
         event.add_field_change(string_field("order_id", "trader-1-BTCUSDT-9"));
 
         assert_eq!(event_order_sequence(&event), Some(9));

@@ -1,4 +1,4 @@
-# 确定性复制状态机：从有序 command 到一致的领域事实
+#  Rust之从0-1低时延CEX：定序器架构之基于确定性复制状态机：从有序 command 到一致的领域事实
 
 核心命题是：**节点以相同顺序执行相同的 command，在相同初始状态、相同领域规则和确定性执行环境下，才会得到相同的 entity 状态与 event 序列。** 全局有序只解决“先做哪件事”；每一步做出相同决定，还取决于 use case 和 entity 的确定性。这里复制的是业务意图及其顺序，event 是各节点独立推导出的领域事实。
 
@@ -16,13 +16,38 @@ command 表示“下单”等业务意图；有序日志为它分配 `lsn`，所
     -> persist / replay / publish
 ```
 
-在本例中，core 的 `PlaceOnlySpotOrderV2UseCase` 负责校验和计算 `SpotOrderV2` 的创建变化；entity 提供订单行为和创建事件的字段投影。`StateMachineExecutor` 负责装载状态、调用规则、绑定日志元数据及按序调用 outbound；状态来源和事件落点属于 adapter/infra 边界，不参与业务决定。
+在本例中，core 的 `PlaceOnlySpotOrderV2UseCase` 负责校验和计算 `SpotOrderV2` 的创建变化；entity 提供订单行为和创建事件的字段投影。`StateMachineExecutor` 负责装载 authoritative state、调用规则、绑定日志元数据及按序调用 outbound；状态来源和事件落点属于 adapter/infra 边界，不参与业务决定。示例默认 outbound 的 `persist`、`replay`、`publish` 是 no-op，不能把这个示例称为已经完成持久化、共识或跨节点复制的系统。
+
+## 领域框架中的几种对象
+
+这些对象把“业务意图如何变成领域事实”拆成几个明确职责：
+
+- `Command` 描述一次业务意图，同时携带 `lsn`、`logical_ts`、请求标识等日志元数据；它是复制和决策的输入，不是执行结果。
+- `GivenState` 是 use case 决策所依赖的 authoritative 前置状态。它由 `StateSource` 装载，可能包含多个实体和上下文，不能用执行器本地缓存的偶然状态替代。
+- `UseCase`（在本框架中由 `StateMachineOwnedV2Diff` 约束）完成命令校验、基于 `GivenState` 的业务校验，并计算本次 case 的结果。
+- `Changes` 是一次业务 case 的领域真相，描述状态从 before 到 after 的变化；`ReplayableChanges` 负责把它稳定投影为事件，不描述数据库写入或消息发送等基础设施副作用。
+- `Entity` 维护订单等领域对象的状态、版本和行为，并生成自己的字段变化投影。它决定实体如何演进，不负责选择存储或发布方式。
+- `EntityReplayableEvent` 是 changes 的可重放领域事件，带有实体坐标、`previous_lsn`、字段变化以及稍后绑定的 command 元数据。
+
+边界可以概括为：core 持有业务规则、实体行为以及 changes/event 投影；adapter 将外部请求转换为 command，并通过 `StateSource` / `StateSink` 提供状态加载和副作用端口；infra 实现具体存储、事件重放和发布。`StateMachineExecutor` 是编排器，不是领域规则容器，它固定执行 `check -> load -> compute -> project -> persist -> replay -> publish`：规则在 use case、状态行为在 entity，执行器只负责顺序、元数据绑定和错误阶段映射。
+
+因此，一条业务链可以读作：`Command + GivenState -> UseCase/StateMachineOwnedV2Diff -> Changes/ReplayableChanges -> EntityReplayableEvent -> StateSink`。这条链解释了为什么复制输入是 command，而持久化、重放和发布使用的是由各节点从相同输入独立推导出的领域事实。
+
+## 与低延时架构演进的呼应
+
+本文与同目录的[低延时架构的演进与启示](https://mp.weixin.qq.com/s/Fk0NDOj2cq8wNVaEYnHESQ)在三个层面呼应，但这里讨论的是领域框架及其可选择的部署方式，不是已经测得的延迟收益：
+
+- **关注点分离**：日志接收与定序、领域计算、事件落地各有职责。`StateMachineExecutor` 只编排状态加载、use case/entity 计算及 `StateSink` 的输出顺序；业务规则留在 core 的 use case 和 entity，adapter/infra 承接输入与持久化、重放、发布。
+- **确定性复制**：全序的 `LogEntry<Command>` 固定输入顺序和逻辑时间。若前置状态、规则版本与执行环境也一致，各节点就能本地推导相同的 `Changes`，经 `ReplayableChanges` 投影并绑定日志元数据后得到相同的 `EntityReplayableEvent`。这对应文章所说的“以计算换一致性”，其成立条件见下文。
+- **通信路径折叠**：`StateSource` / `StateSink` 保留状态加载和输出的逻辑边界。如果部署在同一进程或执行线程，adapter/infra 的实现可以用本地函数调用或内存传递缩短通信路径；这是运行时部署优化，不改变 `StateMachineOwnedV2Diff` 的领域契约，也不自动保证低延迟。
+
+定序器架构的对应关系是：定序器只为原始 command 分配顺序与 `logical_ts`，不执行业务规则；业务状态机在定序之后消费有序日志，独立推进状态并产生输出。概念流程是 `sequencer -> ordered command -> deterministic use case/entity -> changes -> replayable events -> local/persistent/published outputs`。当前示例用 `LogEntrySequencer` 和执行器展示元数据分配与执行顺序；它没有实现独立的共识定序集群、检查点追赶、Active-Active fastest-wins 或故障恢复，也没有集成 Aeron。
 
 ## 单订单：一个意图，一个创建事实
 
-[`place_only_spot_order_v2.rs`](place_only_spot_order_v2.rs) 构造 `PlaceOnlySpotOrderV2Cmd::Single`，其中订单 ID、价格、数量、方向等均来自 command。`LogEntrySequencer` 在进入执行器前分配 `lsn` 和 `logical_ts`。`check_command` 校验输入，`validate_state_given` 校验给定状态，`compute_state_changed_unchecked` 以 command 的 `logical_ts` 创建待处理订单；`compute_state_diff` 得到 `PlaceOnlySpotOrderV2Changes::Single`。
+[`place_only_spot_order_v2.rs`](place_only_spot_order_v2.rs) 构造 `PlaceOnlySpotOrderV2Cmd::Single`，其中订单 ID、价格、数量、方向等均来自 command。`LogEntrySequencer` 在进入执行器前分配 `lsn` 和 `logical_ts`。`check_command` 校验输入，`compute_state_diff` 在给定状态上完成校验与计算；其内部构造待处理订单时，把 `command.lsn()` 传给 `SpotOrderV2.version`，把 `command.logical_ts()` 传给 `created_at` 和 `updated_at`，最后得到 `PlaceOnlySpotOrderV2Changes::Single`。
 
-`changes.to_replayable_events()` 对该订单调用 `track_create_event()`，生成一个 `SpotOrderV2` 创建事件。执行器再将 event 的 `lsn`、`logical_ts` 设为 command 的值。因此，两个节点收到相同日志条目且使用相同规则时，订单 ID、状态、字段变化及最终事件元数据一致。示例断言了一个订单、一个创建事件，以及 event 与 command 的 `lsn`、`logical_ts` 相等。此创建事件的 `previous_lsn` 为 `0`，表示没有该实体的前一版本。
+`changes.to_replayable_events()` 对该订单调用 `track_create_event()`，生成一个 `SpotOrderV2` 创建事件。执行器再将 event 的 `lsn`、`logical_ts` 设为 command 的值。因此，两个节点收到相同日志条目且使用相同规则时，订单 ID、状态、`version`、字段变化及最终事件元数据一致。示例断言了一个订单、一个创建事件，以及 event 与 command 的 `lsn`、`logical_ts` 相等。此创建事件的 `previous_lsn` 为 `0`，表示没有该实体的前一版本。
 
 ## Normal TPSL：一个 command，多个有序事实
 
@@ -44,6 +69,6 @@ event 的 `previous_lsn` 表示**同一实体**的前一版本坐标，不是前
 2. 从相同的初始快照或相同历史得到相同的 authoritative given state；缺失历史、不同装载结果或不同处理进度都可能使决定分叉。
 3. use case 和 entity 规则版本兼容，分支、错误处理、字段投影和事件顺序一致；升级时须明确历史日志适用的规则版本。
 4. 决策不得依赖节点本地随机数、当前时间、实时外部行情或无序容器迭代；所需外部事实应先固定为有序输入。ID、数值运算、溢出行为和序列化规则也必须一致。
-5. event 的 `lsn`、`logical_ts` 必须取自同一 command；单实体 `previous_lsn` 和版本推进必须依据相同的旧状态。副作用失败后的重试与恢复还需保证既有事件不会被重复应用。
+5. event 的 `lsn`、`logical_ts` 必须取自同一 command；单实体 `previous_lsn` 和版本推进必须依据相同的旧状态。副作用失败后的重试与恢复还需保证既有事件不会被重复应用；当前示例的默认 outbound 只返回成功，不提供这种恢复保证。
 
 这些条件满足时，可以逐个 `lsn` 归纳：同一前置状态与同一 command 产生同一 `changes` 和同一规范化 event，应用后得到同一后置状态；下一条 command 因而也从同一状态开始。`persist`、`replay`、`publish` 只是同一批已决定领域事实的不同落点，不应改变业务计算结果。工程上仍须处理持久化、应用和发布之间的失败恢复；领域计算的确定性本身不提供跨落点的原子性。

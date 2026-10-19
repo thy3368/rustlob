@@ -6,6 +6,7 @@
 )]
 
 use cmd_handler::EntityReplayableEvent;
+use common_entity::{LogEntry, LogEntrySequencer};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
@@ -41,6 +42,10 @@ fn set_order_id(command: &mut PlaceOnlySpotOrderV2Cmd, order_id: u64) {
     order.order_id = order_id;
 }
 
+fn log_entry(command: PlaceOnlySpotOrderV2Cmd, sequence: u64) -> LogEntry<PlaceOnlySpotOrderV2Cmd> {
+    LogEntrySequencer::from_metadata(sequence, sequence, 1, sequence, command)
+}
+
 fn black_box_events(result: Result<(impl Sized, Vec<EntityReplayableEvent>), impl Sized>) {
     let _ = black_box(result);
 }
@@ -55,9 +60,8 @@ fn benchmark_place_only_spot_order_v2(c: &mut Criterion) {
         b.iter(|| {
             set_order_id(&mut business_command, business_order_id);
             business_order_id = business_order_id.saturating_add(1);
-            black_box_events(compute_place_only_spot_order_v2_business(black_box(
-                &business_command,
-            )));
+            let entry = log_entry(business_command.clone(), business_order_id);
+            black_box_events(compute_place_only_spot_order_v2_business(black_box(&entry)));
         });
     });
 
@@ -68,8 +72,9 @@ fn benchmark_place_only_spot_order_v2(c: &mut Criterion) {
         b.iter(|| {
             set_order_id(&mut executor_command, executor_order_id);
             executor_order_id = executor_order_id.saturating_add(1);
+            let entry = log_entry(executor_command.clone(), executor_order_id);
             let _ = black_box(execute_place_only_spot_order_v2_with_outbound(
-                black_box(&executor_command),
+                black_box(&entry),
                 &outbound,
             ));
         });
