@@ -39,7 +39,7 @@ pub struct Account {
     /// 账户 ID。
     pub account_id: String,
     /// 用户 ID 或业务主体 ID。
-    pub user_id: String,
+    pub party_id: String,
     /// 账户生命周期状态。
     pub status: AccountStatus,
     /// 当前账户实体版本。
@@ -51,7 +51,7 @@ impl Account {
     ///
     /// 该构造器只装配事实，不承担业务校验；风控冻结/解冻应通过业务方法完成。
     pub fn new(account_id: String, user_id: String, status: AccountStatus, version: u64) -> Self {
-        Self { account_id, user_id, status, version }
+        Self { account_id, user_id: party_id, status, version }
     }
 
     /// 返回账户当前是否处于可交易、可资金操作的激活状态。
@@ -89,7 +89,7 @@ impl Account {
 
         Some(Self::new(
             self.account_id.clone(),
-            self.user_id.clone(),
+            self.party_id.clone(),
             AccountStatus::Frozen,
             self.version.checked_add(1).unwrap_or(self.version),
         ))
@@ -106,7 +106,7 @@ impl Account {
 
         Some(Self::new(
             self.account_id.clone(),
-            self.user_id.clone(),
+            self.party_id.clone(),
             AccountStatus::Active,
             self.version.checked_add(1).unwrap_or(self.version),
         ))
@@ -117,15 +117,15 @@ impl FieldDiff for Account {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
-            EntityFieldChange::new("user_id", "", self.user_id.clone()),
+            EntityFieldChange::new("user_id", "", self.party_id.clone()),
             EntityFieldChange::new("status", "", self.status.as_str()),
         ]
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = Vec::with_capacity(0);
-        if self.user_id != other.user_id {
-            changes.push(EntityFieldChange::new("user_id", &self.user_id, &other.user_id));
+        if self.party_id != other.party_id {
+            changes.push(EntityFieldChange::new("user_id", &self.party_id, &other.party_id));
         }
         if self.status != other.status {
             changes.push(EntityFieldChange::new(
@@ -138,7 +138,11 @@ impl FieldDiff for Account {
     }
 }
 
-impl common_entity::Shard for Account {}
+impl common_entity::Shard for Account {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for Account {
     fn entity_id(&self) -> u64 {
@@ -224,7 +228,7 @@ mod tests {
         assert_eq!(next.status, AccountStatus::Frozen);
         assert_eq!(next.version, 8);
         assert_eq!(next.account_id, active.account_id);
-        assert_eq!(next.user_id, active.user_id);
+        assert_eq!(next.party_id, active.party_id);
 
         assert_eq!(frozen.freeze_for_risk(), None);
         assert_eq!(closed.freeze_for_risk(), None);
@@ -240,7 +244,7 @@ mod tests {
         assert_eq!(next.status, AccountStatus::Active);
         assert_eq!(next.version, 10);
         assert_eq!(next.account_id, frozen.account_id);
-        assert_eq!(next.user_id, frozen.user_id);
+        assert_eq!(next.party_id, frozen.party_id);
 
         assert_eq!(active.unfreeze_from_risk(), None);
         assert_eq!(closed.unfreeze_from_risk(), None);

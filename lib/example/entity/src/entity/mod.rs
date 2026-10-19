@@ -2,6 +2,8 @@ mod market_rules;
 pub mod option;
 mod reservation;
 
+pub mod transfer;
+
 pub mod hyperliquid_account;
 pub use market_data::{
     KlineAggregationError, KlineCandle, KlineInterval, KlineUpdate, SpotKlineAggregator,
@@ -21,7 +23,7 @@ pub use account::balance_ledger_entry_v2::{
     BalanceLedgerOperation,
 };
 pub use account::balance_ledger_reason::BalanceLedgerReason;
-pub use account::settlement_transfer_voucher::{
+pub use transfer::settlement_transfer_voucher::{
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferSummary,
     SettlementTransferVoucher,
 };

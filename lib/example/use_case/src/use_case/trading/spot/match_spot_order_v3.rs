@@ -13,7 +13,7 @@ use crate::entity::account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
-use crate::entity::account::settlement_transfer_voucher::SettlementTransferPurpose;
+use example_core_entity::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
     SettlementTransferVoucher, SpotOrderSide, SpotOrderStatus, SpotOrderTif, spot as spot_entity,

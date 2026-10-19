@@ -244,7 +244,11 @@ impl FieldDiff for Balance {
     }
 }
 
-impl common_entity::Shard for Balance {}
+impl common_entity::Shard for Balance {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for Balance {
 

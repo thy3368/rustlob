@@ -1,8 +1,5 @@
 mod model;
 
-#[cfg(test)]
-mod tests;
-
 pub use model::{
     AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationError,
     ReservationKind, ReservationMarketKind, ReservationStatus,

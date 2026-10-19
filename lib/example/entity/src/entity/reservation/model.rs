@@ -396,7 +396,11 @@ impl FieldDiff for Reservation {
     }
 }
 
-impl common_entity::Shard for Reservation {}
+impl common_entity::Shard for Reservation {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for Reservation {
     fn entity_id(&self) -> u64 {

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::settlement_transfer_voucher::SettlementTransferPurpose;
+use crate::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 
 /// 余额变更原因。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
