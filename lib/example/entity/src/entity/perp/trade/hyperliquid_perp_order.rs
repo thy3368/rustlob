@@ -323,7 +323,10 @@ impl HyperliquidPerpOrder {
                 )?;
 
                 let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
-                    concat2("balance-ledger:freeze:", input.order_id.to_string().as_str()),
+                    common_entity::stable_string_entity_id(&concat2(
+                        "balance-ledger:freeze:",
+                        input.order_id.to_string().as_str(),
+                    )),
                     input.account_id.clone(),
                     reservation.asset_id.clone(),
                     margin_balance_entity_id,
@@ -704,7 +707,6 @@ impl Entity for HyperliquidPerpOrder {
             _ => 0,
         }
     }
-
 }
 
 fn option_u64_value(value: Option<u64>) -> String {
@@ -731,7 +733,6 @@ fn reservation_amount(
 ) -> String {
     reservation.as_ref().map(field).map(|value| value.to_string()).unwrap_or_default()
 }
-
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

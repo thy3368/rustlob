@@ -77,7 +77,7 @@ impl From<BalanceError> for BalanceLedgerEntryV2Error {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BalanceLedgerEntryV2 {
     /// 流水记录 ID。
-    pub entry_id: String,
+    pub entry_id: u64,
     /// 账户 ID。
     pub account_id: String,
     /// 资产 ID。
@@ -100,10 +100,30 @@ pub struct BalanceLedgerEntryV2 {
     pub reason: BalanceLedgerReason,
 }
 
+/// 接受迁移期间的旧字符串调用方，并在边界处转换为数值 ID。
+pub trait BalanceLedgerEntryIdInput {
+    fn into_entry_id(self) -> u64;
+}
+impl BalanceLedgerEntryIdInput for u64 {
+    fn into_entry_id(self) -> u64 {
+        self
+    }
+}
+impl BalanceLedgerEntryIdInput for String {
+    fn into_entry_id(self) -> u64 {
+        common_entity::stable_string_entity_id(&self)
+    }
+}
+impl BalanceLedgerEntryIdInput for &str {
+    fn into_entry_id(self) -> u64 {
+        common_entity::stable_string_entity_id(self)
+    }
+}
+
 impl BalanceLedgerEntryV2 {
     /// 构造一条冻结可用余额的流水事实。
-    pub fn freeze(
-        entry_id: String,
+    pub fn freeze<I: BalanceLedgerEntryIdInput>(
+        entry_id: I,
         account_id: String,
         asset_id: String,
         balance_entity_id: String,
@@ -111,7 +131,7 @@ impl BalanceLedgerEntryV2 {
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
-            entry_id,
+            entry_id.into_entry_id(),
             account_id,
             asset_id,
             balance_entity_id,
@@ -122,8 +142,8 @@ impl BalanceLedgerEntryV2 {
     }
 
     /// 构造一条解冻冻结余额的流水事实。
-    pub fn unfreeze(
-        entry_id: String,
+    pub fn unfreeze<I: BalanceLedgerEntryIdInput>(
+        entry_id: I,
         account_id: String,
         asset_id: String,
         balance_entity_id: String,
@@ -131,7 +151,7 @@ impl BalanceLedgerEntryV2 {
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
-            entry_id,
+            entry_id.into_entry_id(),
             account_id,
             asset_id,
             balance_entity_id,
@@ -142,8 +162,8 @@ impl BalanceLedgerEntryV2 {
     }
 
     /// 构造一条增加可用余额的流水事实。
-    pub fn credit_available(
-        entry_id: String,
+    pub fn credit_available<I: BalanceLedgerEntryIdInput>(
+        entry_id: I,
         account_id: String,
         asset_id: String,
         balance_entity_id: String,
@@ -151,7 +171,7 @@ impl BalanceLedgerEntryV2 {
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
-            entry_id,
+            entry_id.into_entry_id(),
             account_id,
             asset_id,
             balance_entity_id,
@@ -162,8 +182,8 @@ impl BalanceLedgerEntryV2 {
     }
 
     /// 构造一条扣减可用余额的流水事实。
-    pub fn debit_available(
-        entry_id: String,
+    pub fn debit_available<I: BalanceLedgerEntryIdInput>(
+        entry_id: I,
         account_id: String,
         asset_id: String,
         balance_entity_id: String,
@@ -171,7 +191,7 @@ impl BalanceLedgerEntryV2 {
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
-            entry_id,
+            entry_id.into_entry_id(),
             account_id,
             asset_id,
             balance_entity_id,
@@ -182,8 +202,8 @@ impl BalanceLedgerEntryV2 {
     }
 
     /// 构造一条扣减冻结余额的流水事实。
-    pub fn debit_frozen(
-        entry_id: String,
+    pub fn debit_frozen<I: BalanceLedgerEntryIdInput>(
+        entry_id: I,
         account_id: String,
         asset_id: String,
         balance_entity_id: String,
@@ -191,7 +211,7 @@ impl BalanceLedgerEntryV2 {
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
-            entry_id,
+            entry_id.into_entry_id(),
             account_id,
             asset_id,
             balance_entity_id,
@@ -202,7 +222,7 @@ impl BalanceLedgerEntryV2 {
     }
 
     fn new_operation(
-        entry_id: String,
+        entry_id: u64,
         account_id: String,
         asset_id: String,
         balance_entity_id: String,
@@ -323,7 +343,7 @@ impl BalanceLedgerEntryV2 {
 impl FieldDiff for BalanceLedgerEntryV2 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            EntityFieldChange::new("entry_id", "", self.entry_id.clone()),
+            EntityFieldChange::new("entry_id", "", self.entry_id.to_string()),
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
             EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
             EntityFieldChange::new("balance_entity_id", "", self.balance_entity_id.clone()),
@@ -387,7 +407,7 @@ impl common_entity::Shard for BalanceLedgerEntryV2 {
 
 impl Entity for BalanceLedgerEntryV2 {
     fn entity_id(&self) -> u64 {
-        common_entity::stable_string_entity_id(&self.entry_id)
+        self.entry_id
     }
 
     fn entity_type() -> u8 {
@@ -415,8 +435,7 @@ impl Entity for BalanceLedgerEntryV2 {
     }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "entry_id"
-            | "account_id"
+            "account_id"
             | "asset_id"
             | "balance_entity_id"
             | "operation"
@@ -429,12 +448,12 @@ impl Entity for BalanceLedgerEntryV2 {
             | "reason_settlement_batch_id"
             | "reason_settlement_leg"
             | "reason_position_ids" => 0,
+            "entry_id" => 1,
             "amount" | "command_amount" | "available_delta" | "frozen_delta"
             | "before_available" | "before_frozen" | "after_available" | "after_frozen" => 1,
             _ => 0,
         }
     }
-
 }
 
 fn option_u64_value(value: Option<u64>) -> String {

@@ -102,6 +102,7 @@ impl HyperliquidPerpFundingSettlement {
         margin_asset_id: String,
         balance_entity_id: String,
     ) -> Result<BalanceLedgerEntry, BalanceLedgerEntryV2Error> {
+        let entry_id = common_entity::stable_string_entity_id(&entry_id);
         let reason = BalanceLedgerReason::SettlePerpFunding {
             funding_batch_id: self.funding_batch_id.clone(),
             settlement_ids: vec![self.funding_settlement_id.clone()],
@@ -217,9 +218,7 @@ impl Entity for HyperliquidPerpFundingSettlement {
             _ => 0,
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {

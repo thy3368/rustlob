@@ -602,7 +602,11 @@ fn apply_trade_balance_effects(
         context.ledger_entries,
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::CreditAvailable,
-            entry_id: concat3("balance-ledger:", context.settlement_id, ":buyer-base"),
+            entry_id: common_entity::stable_string_entity_id(&concat3(
+                "balance-ledger:",
+                context.settlement_id,
+                ":buyer-base",
+            )),
             account_id: buyer_account_id.clone(),
             asset_id: context.base_asset_id.to_string(),
             amount: trade.qty,
@@ -614,7 +618,11 @@ fn apply_trade_balance_effects(
         context.ledger_entries,
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::DebitFrozen,
-            entry_id: concat3("balance-ledger:", context.settlement_id, ":buyer-quote"),
+            entry_id: common_entity::stable_string_entity_id(&concat3(
+                "balance-ledger:",
+                context.settlement_id,
+                ":buyer-quote",
+            )),
             account_id: buyer_account_id,
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
@@ -626,7 +634,11 @@ fn apply_trade_balance_effects(
         context.ledger_entries,
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::CreditAvailable,
-            entry_id: concat3("balance-ledger:", context.settlement_id, ":seller-quote"),
+            entry_id: common_entity::stable_string_entity_id(&concat3(
+                "balance-ledger:",
+                context.settlement_id,
+                ":seller-quote",
+            )),
             account_id: seller_account_id.clone(),
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
@@ -638,7 +650,11 @@ fn apply_trade_balance_effects(
         context.ledger_entries,
         BalanceLedgerDraft {
             operation: BalanceLedgerOperation::DebitFrozen,
-            entry_id: concat3("balance-ledger:", context.settlement_id, ":seller-base"),
+            entry_id: common_entity::stable_string_entity_id(&concat3(
+                "balance-ledger:",
+                context.settlement_id,
+                ":seller-base",
+            )),
             account_id: seller_account_id,
             asset_id: context.base_asset_id.to_string(),
             amount: trade.qty,
@@ -657,7 +673,11 @@ fn apply_trade_balance_effects(
             context.ledger_entries,
             BalanceLedgerDraft {
                 operation: BalanceLedgerOperation::DebitFrozen,
-                entry_id: concat3("balance-ledger:", context.settlement_id, ":buyer-fee"),
+                entry_id: common_entity::stable_string_entity_id(&concat3(
+                    "balance-ledger:",
+                    context.settlement_id,
+                    ":buyer-fee",
+                )),
                 account_id: buyer_fee_account_id,
                 asset_id: context.quote_asset_id.to_string(),
                 amount: buyer_fee_amount,
@@ -669,7 +689,11 @@ fn apply_trade_balance_effects(
             context.ledger_entries,
             BalanceLedgerDraft {
                 operation: BalanceLedgerOperation::CreditAvailable,
-                entry_id: concat3("balance-ledger:", context.settlement_id, ":buyer-fee-recv"),
+                entry_id: common_entity::stable_string_entity_id(&concat3(
+                    "balance-ledger:",
+                    context.settlement_id,
+                    ":buyer-fee-recv",
+                )),
                 account_id: context.fee_account_id.to_string(),
                 asset_id: context.quote_asset_id.to_string(),
                 amount: buyer_fee_amount,
@@ -689,7 +713,11 @@ fn apply_trade_balance_effects(
             context.ledger_entries,
             BalanceLedgerDraft {
                 operation: BalanceLedgerOperation::DebitFrozen,
-                entry_id: concat3("balance-ledger:", context.settlement_id, ":seller-fee"),
+                entry_id: common_entity::stable_string_entity_id(&concat3(
+                    "balance-ledger:",
+                    context.settlement_id,
+                    ":seller-fee",
+                )),
                 account_id: seller_fee_account_id,
                 asset_id: context.quote_asset_id.to_string(),
                 amount: seller_fee_amount,
@@ -701,7 +729,11 @@ fn apply_trade_balance_effects(
             context.ledger_entries,
             BalanceLedgerDraft {
                 operation: BalanceLedgerOperation::CreditAvailable,
-                entry_id: concat3("balance-ledger:", context.settlement_id, ":seller-fee-recv"),
+                entry_id: common_entity::stable_string_entity_id(&concat3(
+                    "balance-ledger:",
+                    context.settlement_id,
+                    ":seller-fee-recv",
+                )),
                 account_id: context.fee_account_id.to_string(),
                 asset_id: context.quote_asset_id.to_string(),
                 amount: seller_fee_amount,

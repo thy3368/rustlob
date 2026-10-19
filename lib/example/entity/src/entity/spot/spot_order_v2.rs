@@ -1217,7 +1217,10 @@ impl SpotOrderV2 {
         let mut released_reservation = self.reservation.clone();
         released_reservation.release(release_amount, Some(ReservationCloseReason::Canceled))?;
         let unfreeze_ledger_entry = BalanceLedgerEntryV2::unfreeze(
-            concat2("balance-ledger:unfreeze:", self.order_id.to_string().as_str()),
+            common_entity::stable_string_entity_id(&concat2(
+                "balance-ledger:unfreeze:",
+                self.order_id.to_string().as_str(),
+            )),
             self.account_id.clone(),
             self.reservation.asset_id.clone(),
             input.balance_entity_id,
@@ -1781,12 +1784,12 @@ impl Entity for SpotOrderV2 {
             _ => 0,
         }
     }
-
-
 }
 
 impl common_entity::Shard for SpotOrderV2 {
-    fn partition(&self) -> u8 { self.asset as u8 }
+    fn partition(&self) -> u8 {
+        self.asset as u8
+    }
 }
 
 impl EntityLifecycle for SpotOrderV2 {

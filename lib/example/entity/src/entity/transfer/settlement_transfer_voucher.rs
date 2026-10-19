@@ -11,6 +11,25 @@ use crate::support::{concat2, derived_entity_id};
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;
 const SETTLEMENT_TRANSFER_LEG_ENTITY_TYPE: u8 = 22;
 
+pub trait IntoLedgerEntryId {
+    fn into_ledger_entry_id(self) -> u64;
+}
+impl IntoLedgerEntryId for u64 {
+    fn into_ledger_entry_id(self) -> u64 {
+        self
+    }
+}
+impl IntoLedgerEntryId for &str {
+    fn into_ledger_entry_id(self) -> u64 {
+        common_entity::stable_string_entity_id(self)
+    }
+}
+impl IntoLedgerEntryId for String {
+    fn into_ledger_entry_id(self) -> u64 {
+        common_entity::stable_string_entity_id(&self)
+    }
+}
+
 /// 统一结算转账凭证的业务类型。
 ///
 /// 该分类只区分凭证服务的是现货还是永续结算；具体资金腿语义由
@@ -93,8 +112,10 @@ pub struct SettlementTransferLeg {
     amount: u64,
     /// 该腿的业务用途。
     purpose: SettlementTransferPurpose,
-    /// 对应底层余额流水 ID。
-    balance_ledger_entry_id: String,
+    /// 付款方扣账流水 ID。
+    debit_entry_id: u64,
+    /// 收款方入账流水 ID。
+    credit_entry_id: u64,
 }
 
 impl SettlementTransferLeg {
@@ -108,6 +129,7 @@ impl SettlementTransferLeg {
         purpose: SettlementTransferPurpose,
         balance_ledger_entry_id: String,
     ) -> Self {
+        let base = common_entity::stable_string_entity_id(&balance_ledger_entry_id);
         Self {
             leg_id,
             from_account_id,
@@ -115,7 +137,30 @@ impl SettlementTransferLeg {
             asset_id,
             amount,
             purpose,
-            balance_ledger_entry_id,
+            debit_entry_id: base,
+            credit_entry_id: base.saturating_add(1),
+        }
+    }
+
+    pub fn new_with_entry_ids(
+        leg_id: String,
+        from_account_id: String,
+        to_account_id: String,
+        asset_id: String,
+        amount: u64,
+        purpose: SettlementTransferPurpose,
+        debit_entry_id: u64,
+        credit_entry_id: u64,
+    ) -> Self {
+        Self {
+            leg_id,
+            from_account_id,
+            to_account_id,
+            asset_id,
+            amount,
+            purpose,
+            debit_entry_id,
+            credit_entry_id,
         }
     }
 
@@ -149,19 +194,21 @@ impl SettlementTransferLeg {
         self.purpose
     }
 
-    /// 返回底层余额流水 ID。
-    pub fn balance_ledger_entry_id(&self) -> &str {
-        self.balance_ledger_entry_id.as_str()
+    pub const fn debit_entry_id(&self) -> u64 {
+        self.debit_entry_id
     }
-
+    pub const fn credit_entry_id(&self) -> u64 {
+        self.credit_entry_id
+    }
     /// 返回该腿是否涉及指定账户。
     pub fn references_account(&self, account_id: &str) -> bool {
         self.from_account_id == account_id || self.to_account_id == account_id
     }
 
     /// 返回该腿是否引用指定底层余额流水。
-    pub fn references_ledger_entry(&self, entry_id: &str) -> bool {
-        self.balance_ledger_entry_id == entry_id
+    pub fn references_ledger_entry<I: IntoLedgerEntryId>(&self, entry_id: I) -> bool {
+        let entry_id = entry_id.into_ledger_entry_id();
+        self.debit_entry_id == entry_id || self.credit_entry_id == entry_id
     }
 
     /// 返回该腿是否为手续费腿。
@@ -179,11 +226,8 @@ impl FieldDiff for SettlementTransferLeg {
             EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
             EntityFieldChange::new("amount", "", self.amount.to_string()),
             EntityFieldChange::new("purpose", "", self.purpose.as_str()),
-            EntityFieldChange::new(
-                "balance_ledger_entry_id",
-                "",
-                self.balance_ledger_entry_id.clone(),
-            ),
+            EntityFieldChange::new("debit_entry_id", "", self.debit_entry_id.to_string()),
+            EntityFieldChange::new("credit_entry_id", "", self.credit_entry_id.to_string()),
         ]
     }
 
@@ -369,8 +413,6 @@ impl SettlementTransferVoucher {
 
         for leg in &self.legs {
             let reason = self.balance_ledger_reason_for(leg);
-            let debit_entry_id = concat2(leg.balance_ledger_entry_id(), ":debit");
-            let credit_entry_id = concat2(leg.balance_ledger_entry_id(), ":credit");
             let debit_balance_entity_id =
                 balance_entity_id_for(leg.from_account_id(), leg.asset_id());
             let credit_balance_entity_id =
@@ -378,7 +420,7 @@ impl SettlementTransferVoucher {
 
             let debit = match self.debit_operation_for(leg.purpose()) {
                 SettlementDebitOperation::DebitFrozen => BalanceLedgerEntryV2::debit_frozen(
-                    debit_entry_id,
+                    leg.debit_entry_id(),
                     leg.from_account_id().to_string(),
                     leg.asset_id().to_string(),
                     debit_balance_entity_id,
@@ -386,7 +428,7 @@ impl SettlementTransferVoucher {
                     reason.clone(),
                 ),
                 SettlementDebitOperation::DebitAvailable => BalanceLedgerEntryV2::debit_available(
-                    debit_entry_id,
+                    leg.debit_entry_id(),
                     leg.from_account_id().to_string(),
                     leg.asset_id().to_string(),
                     debit_balance_entity_id,
@@ -395,7 +437,7 @@ impl SettlementTransferVoucher {
                 ),
             }?;
             let credit = BalanceLedgerEntryV2::credit_available(
-                credit_entry_id,
+                leg.credit_entry_id(),
                 leg.to_account_id().to_string(),
                 leg.asset_id().to_string(),
                 credit_balance_entity_id,
@@ -459,7 +501,8 @@ impl SettlementTransferVoucher {
     }
 
     /// [General] 返回该凭证是否引用指定底层余额流水。
-    pub fn references_ledger_entry(&self, entry_id: &str) -> bool {
+    pub fn references_ledger_entry<I: IntoLedgerEntryId>(&self, entry_id: I) -> bool {
+        let entry_id = entry_id.into_ledger_entry_id();
         self.legs.iter().any(|leg| leg.references_ledger_entry(entry_id))
     }
 
@@ -581,9 +624,14 @@ impl FieldDiff for SettlementTransferVoucher {
                 leg.purpose.as_str(),
             ));
             changes.push(EntityFieldChange::new(
-                concat2(prefix.as_str(), "_balance_ledger_entry_id"),
+                concat2(prefix.as_str(), "_debit_entry_id"),
                 "",
-                leg.balance_ledger_entry_id.clone(),
+                leg.debit_entry_id.to_string(),
+            ));
+            changes.push(EntityFieldChange::new(
+                concat2(prefix.as_str(), "_credit_entry_id"),
+                "",
+                leg.credit_entry_id.to_string(),
             ));
         }
 
