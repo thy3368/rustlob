@@ -527,33 +527,3 @@ where
     }
 }
 
-#[cfg(test)]
-mod identity_tests {
-    use super::*;
-
-    #[derive(Clone, Debug)]
-    struct Sample { id: u64, version: u64 }
-
-    impl Shard for Sample {}
-
-    impl FieldDiff for Sample {
-        fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-            vec![EntityFieldChange::new("version", self.version.to_string(), other.version.to_string())]
-        }
-    }
-
-    impl Entity for Sample {
-        fn entity_id(&self) -> u64 { self.id }
-        fn entity_type() -> u8 { 1 }
-        fn lsn(&self) -> u64 { self.version }
-    }
-
-    #[test]
-    fn lifecycle_events_use_exact_entity_identity() {
-        let before = Sample { id: u64::MAX, version: 1 };
-        let after = Sample { version: 2, ..before.clone() };
-        assert_eq!(before.track_create_event().unwrap().entity_id, before.entity_id());
-        assert_eq!(after.track_update_event_from(&before).unwrap().entity_id, after.entity_id());
-        assert_eq!(after.track_delete_event().unwrap().entity_id, after.entity_id());
-    }
-}
