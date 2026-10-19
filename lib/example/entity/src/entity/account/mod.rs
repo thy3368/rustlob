@@ -2,7 +2,7 @@ pub mod account_master;
 pub mod balance;
 pub mod balance_ledger_entry_v2;
 pub mod balance_ledger_reason;
-
+pub mod hyperliquid_perp_position;
 
 pub use account_master::{Account, AccountStatus};
 pub use balance::BalanceError;

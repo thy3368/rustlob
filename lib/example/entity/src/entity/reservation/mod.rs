@@ -1,6 +1,6 @@
-mod model;
+mod reservation;
 
-pub use model::{
+pub use reservation::{
     AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationError,
     ReservationKind, ReservationMarketKind, ReservationStatus,
 };

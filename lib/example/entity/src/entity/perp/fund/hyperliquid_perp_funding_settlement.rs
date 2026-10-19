@@ -158,7 +158,11 @@ impl FieldDiff for HyperliquidPerpFundingSettlement {
     }
 }
 
-impl common_entity::Shard for HyperliquidPerpFundingSettlement {}
+impl common_entity::Shard for HyperliquidPerpFundingSettlement {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for HyperliquidPerpFundingSettlement {
     fn entity_id(&self) -> u64 {

@@ -245,7 +245,6 @@ impl HyperliquidPerpTrade {
     #[allow(clippy::too_many_arguments)]
     pub fn derive_perp_settlement_transfer_voucher(
         &self,
-        voucher_id: String,
         settlement_id: String,
         margin_asset_id: &str,
         fee_account_id: String,
@@ -361,7 +360,6 @@ impl HyperliquidPerpTrade {
         }
 
         Some(SettlementTransferVoucher::new(
-            voucher_id,
             SettlementKind::Perp,
             settlement_id,
             self.trade_id.clone(),
@@ -430,7 +428,11 @@ impl FieldDiff for HyperliquidPerpTrade {
     }
 }
 
-impl common_entity::Shard for HyperliquidPerpTrade {}
+impl common_entity::Shard for HyperliquidPerpTrade {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for HyperliquidPerpTrade {
     fn entity_id(&self) -> u64 {
@@ -452,9 +454,7 @@ impl Entity for HyperliquidPerpTrade {
             _ => 0,
         }
     }
-
 }
-
 
 fn abs_i64_to_u64(value: i64) -> Option<u64> {
     value.checked_abs().and_then(|abs| u64::try_from(abs).ok())
@@ -696,7 +696,6 @@ mod tests {
     fn derive_perp_settlement_transfer_voucher_creates_pnl_and_fee_legs() {
         let voucher = trade()
             .derive_perp_settlement_transfer_voucher(
-                "voucher-1".to_string(),
                 "settle-1".to_string(),
                 "USDC",
                 "fee-account".to_string(),
@@ -725,7 +724,6 @@ mod tests {
     fn derive_perp_settlement_transfer_voucher_skips_zero_pnl_and_fee() {
         let voucher = trade()
             .derive_perp_settlement_transfer_voucher(
-                "voucher-1".to_string(),
                 "settle-1".to_string(),
                 "USDC",
                 "fee-account".to_string(),
@@ -748,7 +746,6 @@ mod tests {
     fn derive_perp_settlement_transfer_voucher_returns_none_for_bad_pnl_pair() {
         assert_eq!(
             trade().derive_perp_settlement_transfer_voucher(
-                "voucher-1".to_string(),
                 "settle-1".to_string(),
                 "USDC",
                 "fee-account".to_string(),
@@ -761,7 +758,6 @@ mod tests {
         );
         assert_eq!(
             trade().derive_perp_settlement_transfer_voucher(
-                "voucher-1".to_string(),
                 "settle-1".to_string(),
                 "USDC",
                 "fee-account".to_string(),

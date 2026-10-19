@@ -27,7 +27,6 @@ fn derive_spot_principal_settlement_transfer_voucher_creates_expected_legs() {
     // When: 从成交事实派生 principal-only settlement transfer voucher。
     let voucher = trade
         .derive_spot_principal_settlement_transfer_voucher(
-            "voucher-1".to_string(),
             "settle-1".to_string(),
             "BTC",
             "USDT",
@@ -71,7 +70,6 @@ fn derive_spot_settlement_transfer_voucher_with_fees_uses_trade_fee_facts() {
     // When: 派生包含 principal 与 trading fee 的 settlement transfer voucher。
     let voucher = trade
         .derive_spot_settlement_transfer_voucher_with_fees(
-            "voucher-1".to_string(),
             "settle-1".to_string(),
             "BTC",
             "USDT",
@@ -106,7 +104,6 @@ fn derive_spot_settlement_transfer_voucher_returns_none_when_notional_overflows(
     // When / Then: principal voucher 派生无法获得 quote notional，返回 None。
     assert_eq!(
         overflow_trade.derive_spot_principal_settlement_transfer_voucher(
-            "voucher-overflow".to_string(),
             "settle-overflow".to_string(),
             "BTC",
             "USDT",

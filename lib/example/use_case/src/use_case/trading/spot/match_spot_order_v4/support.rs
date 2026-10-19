@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{Entity, EntityReplayableEvent};
+use example_core_entity::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;
 
@@ -10,7 +11,6 @@ use crate::entity::account::balance_ledger_entry_v2::{
     BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
-use example_core_entity::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
     SettlementTransferVoucher, SpotOrderSide, spot as spot_entity,
@@ -151,8 +151,10 @@ pub(super) fn merge_balance_pairs(
     before: Vec<Balance>,
     after: Vec<Balance>,
 ) -> Result<Vec<UpdatedEntityPair<Balance>>, MatchSpotOrderV4Error> {
-    let before_map =
-        before.into_iter().map(|balance| (balance.business_entity_id(), balance)).collect::<HashMap<_, _>>();
+    let before_map = before
+        .into_iter()
+        .map(|balance| (balance.business_entity_id(), balance))
+        .collect::<HashMap<_, _>>();
     let mut seen = HashSet::new();
     let mut pairs = Vec::with_capacity(after.len());
     for balance in after {
@@ -328,7 +330,6 @@ pub(super) fn settle_matched_trades(
         let settlement_id = settlement_id_for_trade(settlement_id_prefix, &trade.trade_id);
         let voucher = trade
             .derive_spot_settlement_transfer_voucher_with_fees(
-                concat2("spot-voucher:", trade.trade_id.as_str()),
                 settlement_id.clone(),
                 base_asset_id,
                 quote_asset_id,

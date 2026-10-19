@@ -172,7 +172,6 @@ impl SpotTrade {
     /// 若 `price * qty` 溢出，则返回 `None`。
     pub fn derive_spot_principal_settlement_transfer_voucher(
         &self,
-        voucher_id: String,
         settlement_id: String,
         base_asset_id: &str,
         quote_asset_id: &str,
@@ -183,7 +182,6 @@ impl SpotTrade {
         let seller_account_id = self.seller_account_id();
 
         Some(SettlementTransferVoucher::new(
-            voucher_id,
             SettlementKind::Spot,
             settlement_id.clone(),
             self.trade_id.clone(),
@@ -277,14 +275,12 @@ impl SpotTrade {
     /// 若 quote notional 溢出则返回 `None`。
     pub fn derive_spot_settlement_transfer_voucher_with_fees(
         &self,
-        voucher_id: String,
         settlement_id: String,
         base_asset_id: &str,
         quote_asset_id: &str,
         fee_account_id: String,
     ) -> Option<SettlementTransferVoucher> {
         let mut voucher = self.derive_spot_principal_settlement_transfer_voucher(
-            voucher_id,
             settlement_id.clone(),
             base_asset_id,
             quote_asset_id,
@@ -474,14 +470,13 @@ impl Entity for SpotTrade {
             _ => 0,
         }
     }
-
-
 }
 
 impl common_entity::Shard for SpotTrade {
-    fn partition(&self) -> u8 { self.asset as u8 }
+    fn partition(&self) -> u8 {
+        self.asset as u8
+    }
 }
-
 
 #[cfg(test)]
 mod tests {

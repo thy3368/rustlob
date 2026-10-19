@@ -4,9 +4,9 @@ use common_entity::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::account::balance_ledger_entry_v2::{BalanceLedgerEntryV2, BalanceLedgerEntryV2Error};
 use crate::BalanceLedgerReason;
-use crate::support::concat2;
+use crate::account::balance_ledger_entry_v2::{BalanceLedgerEntryV2, BalanceLedgerEntryV2Error};
+use crate::support::{concat2, derived_entity_id};
 
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;
 const SETTLEMENT_TRANSFER_LEG_ENTITY_TYPE: u8 = 22;
@@ -221,7 +221,6 @@ impl Entity for SettlementTransferLeg {
     fn replay_field_type(field_name: &str) -> u8 {
         if field_name == "amount" { 1 } else { 0 }
     }
-
 }
 
 /// 一条面向 use case 暴露的稳定转账结论。
@@ -278,7 +277,7 @@ impl<'a> SettlementTransferSummary<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettlementTransferVoucher {
     /// 凭证 ID。
-    voucher_id: String,
+    voucher_id: u64,
     /// 结算业务类型。
     settlement_kind: SettlementKind,
     /// 上层结算记录 ID。
@@ -298,7 +297,6 @@ impl SettlementTransferVoucher {
     ///
     /// 构造器只负责装配事实，不直接校验余额是否足够，也不直接修改余额。
     pub(crate) fn new(
-        voucher_id: String,
         settlement_kind: SettlementKind,
         settlement_id: String,
         trade_id: String,
@@ -307,7 +305,14 @@ impl SettlementTransferVoucher {
         legs: Vec<SettlementTransferLeg>,
     ) -> Self {
         Self {
-            voucher_id,
+            voucher_id: derived_entity_id(
+                SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE,
+                &[
+                    settlement_kind.as_str().as_bytes(),
+                    settlement_id.as_bytes(),
+                    trade_id.as_bytes(),
+                ],
+            ),
             settlement_kind,
             settlement_id,
             trade_id,
@@ -318,8 +323,8 @@ impl SettlementTransferVoucher {
     }
 
     /// 返回凭证 ID。
-    pub fn voucher_id(&self) -> &str {
-        self.voucher_id.as_str()
+    pub const fn voucher_id(&self) -> u64 {
+        self.voucher_id
     }
 
     /// 返回结算业务类型。
@@ -534,7 +539,7 @@ enum TransferDirection {
 impl FieldDiff for SettlementTransferVoucher {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         let mut changes = vec![
-            EntityFieldChange::new("voucher_id", "", self.voucher_id.clone()),
+            EntityFieldChange::new("voucher_id", "", self.voucher_id.to_string()),
             EntityFieldChange::new("settlement_kind", "", self.settlement_kind.as_str()),
             EntityFieldChange::new("settlement_id", "", self.settlement_id.clone()),
             EntityFieldChange::new("trade_id", "", self.trade_id.clone()),
@@ -592,13 +597,13 @@ impl FieldDiff for SettlementTransferVoucher {
 
 impl common_entity::Shard for SettlementTransferVoucher {
     fn partition(&self) -> u8 {
-        todo!()
+        self.voucher_id() as u8
     }
 }
 
 impl Entity for SettlementTransferVoucher {
     fn entity_id(&self) -> u64 {
-        common_entity::stable_string_entity_id(&self.voucher_id)
+        self.voucher_id
     }
 
     fn entity_type() -> u8 {
@@ -629,7 +634,7 @@ impl Entity for SettlementTransferVoucher {
         1
     }
     fn replay_field_type(field_name: &str) -> u8 {
-        if matches!(field_name, "leg_count")
+        if matches!(field_name, "voucher_id" | "leg_count")
             || (field_name.starts_with("leg_") && field_name.ends_with("_amount"))
         {
             1
@@ -637,7 +642,4 @@ impl Entity for SettlementTransferVoucher {
             0
         }
     }
-
 }
-
-

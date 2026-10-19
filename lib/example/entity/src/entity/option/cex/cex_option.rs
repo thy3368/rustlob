@@ -566,7 +566,11 @@ impl FieldDiff for CexOptionOrder {
     }
 }
 
-impl common_entity::Shard for CexOptionOrder {}
+impl common_entity::Shard for CexOptionOrder {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for CexOptionOrder {
     fn entity_id(&self) -> u64 {

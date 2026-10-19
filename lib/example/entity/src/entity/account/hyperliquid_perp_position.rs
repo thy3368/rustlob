@@ -664,7 +664,11 @@ impl FieldDiff for HyperliquidPerpPosition {
     }
 }
 
-impl common_entity::Shard for HyperliquidPerpPosition {}
+impl common_entity::Shard for HyperliquidPerpPosition {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for HyperliquidPerpPosition {
     fn entity_id(&self) -> u64 {

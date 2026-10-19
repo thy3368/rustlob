@@ -37,9 +37,9 @@ impl AccountStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Account {
     /// 账户 ID。
-    pub account_id: String,
+    pub account_id: u64,
     /// 用户 ID 或业务主体 ID。
-    pub party_id: String,
+    pub party_id: u64,
     /// 账户生命周期状态。
     pub status: AccountStatus,
     /// 当前账户实体版本。
@@ -50,8 +50,8 @@ impl Account {
     /// 从已经校验过的业务事实或回放事件装配账户主档。
     ///
     /// 该构造器只装配事实，不承担业务校验；风控冻结/解冻应通过业务方法完成。
-    pub fn new(account_id: String, user_id: String, status: AccountStatus, version: u64) -> Self {
-        Self { account_id, user_id: party_id, status, version }
+    pub fn new(account_id: u64, party_id: u64, status: AccountStatus, version: u64) -> Self {
+        Self { account_id, party_id, status, version }
     }
 
     /// 返回账户当前是否处于可交易、可资金操作的激活状态。
@@ -88,8 +88,8 @@ impl Account {
         }
 
         Some(Self::new(
-            self.account_id.clone(),
-            self.party_id.clone(),
+            self.account_id,
+            self.party_id,
             AccountStatus::Frozen,
             self.version.checked_add(1).unwrap_or(self.version),
         ))
@@ -105,8 +105,8 @@ impl Account {
         }
 
         Some(Self::new(
-            self.account_id.clone(),
-            self.party_id.clone(),
+            self.account_id,
+            self.party_id,
             AccountStatus::Active,
             self.version.checked_add(1).unwrap_or(self.version),
         ))
@@ -116,8 +116,8 @@ impl Account {
 impl FieldDiff for Account {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            EntityFieldChange::new("account_id", "", self.account_id.clone()),
-            EntityFieldChange::new("user_id", "", self.party_id.clone()),
+            EntityFieldChange::new("account_id", "", self.account_id.to_string()),
+            EntityFieldChange::new("party_id", "", self.party_id.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
         ]
     }
@@ -125,7 +125,11 @@ impl FieldDiff for Account {
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = Vec::with_capacity(0);
         if self.party_id != other.party_id {
-            changes.push(EntityFieldChange::new("user_id", &self.party_id, &other.party_id));
+            changes.push(EntityFieldChange::new(
+                "party_id",
+                self.party_id.to_string(),
+                other.party_id.to_string(),
+            ));
         }
         if self.status != other.status {
             changes.push(EntityFieldChange::new(
@@ -140,13 +144,13 @@ impl FieldDiff for Account {
 
 impl common_entity::Shard for Account {
     fn partition(&self) -> u8 {
-        todo!()
+        (self.party_id % 256) as u8
     }
 }
 
 impl Entity for Account {
     fn entity_id(&self) -> u64 {
-        common_entity::stable_string_entity_id(&self.account_id)
+        self.account_id
     }
 
     fn entity_type() -> u8 {
@@ -172,13 +176,12 @@ impl Entity for Account {
     }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "account_id" | "user_id" | "status" => 0,
+            "account_id" | "party_id" => 1,
+            "status" => 0,
             _ => 0,
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -187,7 +190,7 @@ mod tests {
     use super::*;
 
     fn sample_account(status: AccountStatus, version: u64) -> Account {
-        Account::new("account-1".to_string(), "user-1".to_string(), status, version)
+        Account::new(1001, 513, status, version)
     }
 
     #[test]
@@ -259,24 +262,24 @@ mod tests {
         assert_eq!(
             active.created_field_changes(),
             vec![
-                EntityFieldChange::new("account_id", "", "account-1"),
-                EntityFieldChange::new("user_id", "", "user-1"),
+                EntityFieldChange::new("account_id", "", "1001"),
+                EntityFieldChange::new("party_id", "", "513"),
                 EntityFieldChange::new("status", "", "active"),
             ]
         );
         assert_eq!(
             frozen.created_field_changes(),
             vec![
-                EntityFieldChange::new("account_id", "", "account-1"),
-                EntityFieldChange::new("user_id", "", "user-1"),
+                EntityFieldChange::new("account_id", "", "1001"),
+                EntityFieldChange::new("party_id", "", "513"),
                 EntityFieldChange::new("status", "", "frozen"),
             ]
         );
         assert_eq!(
             closed.created_field_changes(),
             vec![
-                EntityFieldChange::new("account_id", "", "account-1"),
-                EntityFieldChange::new("user_id", "", "user-1"),
+                EntityFieldChange::new("account_id", "", "1001"),
+                EntityFieldChange::new("party_id", "", "513"),
                 EntityFieldChange::new("status", "", "closed"),
             ]
         );
@@ -286,5 +289,24 @@ mod tests {
             vec![EntityFieldChange::new("status", "active", "frozen")]
         );
         assert_eq!(Account::replay_field_type("status"), 0);
+        assert_eq!(Account::replay_field_type("account_id"), 1);
+        assert_eq!(Account::replay_field_type("party_id"), 1);
+        assert_eq!(
+            active.diff(&Account::new(1001, 514, AccountStatus::Active, 2)),
+            vec![EntityFieldChange::new("party_id", "513", "514")]
+        );
+    }
+
+    #[test]
+    fn entity_id_and_shard_follow_numeric_ids() {
+        use common_entity::Shard;
+
+        let account = sample_account(AccountStatus::Active, 1);
+        assert_eq!(account.account_id, 1001);
+        assert_eq!(account.party_id, 513);
+        assert_eq!(account.entity_id(), 1001);
+        assert_eq!(account.topic(), 0);
+        assert_eq!(account.partition(), 1);
+        assert_eq!(Account::new(9999, 255, AccountStatus::Active, 1).partition(), 255);
     }
 }

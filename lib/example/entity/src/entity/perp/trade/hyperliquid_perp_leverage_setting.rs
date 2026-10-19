@@ -137,7 +137,11 @@ impl FieldDiff for HyperliquidPerpLeverageSetting {
     }
 }
 
-impl common_entity::Shard for HyperliquidPerpLeverageSetting {}
+impl common_entity::Shard for HyperliquidPerpLeverageSetting {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for HyperliquidPerpLeverageSetting {
     fn entity_id(&self) -> u64 {

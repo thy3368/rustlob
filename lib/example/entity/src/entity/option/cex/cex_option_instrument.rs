@@ -153,7 +153,11 @@ impl FieldDiff for CexOptionInstrument {
     }
 }
 
-impl common_entity::Shard for CexOptionInstrument {}
+impl common_entity::Shard for CexOptionInstrument {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for CexOptionInstrument {
     fn entity_id(&self) -> u64 {

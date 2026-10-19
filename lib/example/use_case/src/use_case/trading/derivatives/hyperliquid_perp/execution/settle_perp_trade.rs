@@ -11,7 +11,7 @@ use crate::entity::{
     Balance, HyperliquidPerpPosition, HyperliquidPerpPositionError, HyperliquidPerpTrade,
     SettlementTransferVoucher,
 };
-use crate::support::{concat3, concat4};
+use crate::support::concat3;
 
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
 
@@ -334,15 +334,8 @@ fn derive_settlement_outcome(
         let next_index =
             index.checked_add(1).ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
         let settlement_id = settlement_id(cmd.settlement_batch_id.as_str(), next_index);
-        let voucher_id = concat4(
-            "perp-voucher:",
-            cmd.settlement_batch_id.as_str(),
-            ":",
-            trade.trade_id.as_str(),
-        );
         let voucher = trade
             .derive_perp_settlement_transfer_voucher(
-                voucher_id,
                 settlement_id,
                 state.margin_asset_id.as_str(),
                 state.fee_account_id.clone(),
@@ -742,7 +735,7 @@ mod tests {
         assert_eq!(changes.changed_positions[0].after.required_margin().unwrap_or(0), 20);
         assert_eq!(changes.changed_margin_balances[0].before.available, 1_000);
         assert_eq!(changes.changed_margin_balances[0].after.frozen, 20);
-        assert_eq!(voucher.voucher_id(), "perp-voucher:settle-1:trade-1");
+        assert_eq!(voucher.voucher_id(), voucher.entity_id());
         assert_eq!(voucher.settlement_id(), "settle-1-1");
         assert_eq!(voucher.trade_id(), "trade-1");
         assert_eq!(voucher.match_id(), Some("match-1"));
@@ -760,7 +753,7 @@ mod tests {
                 .is_empty()
         );
         assert!(events[0].is_created());
-        assert_eq!(event_field(&events[0], "voucher_id"), Some("perp-voucher:settle-1:trade-1"));
+        assert_eq!(field_as_u64(&events[0], "voucher_id"), Some(voucher.voucher_id()));
         assert_eq!(event_field(&events[0], "settlement_kind"), Some("perp"));
         assert_eq!(event_field(&events[0], "settlement_id"), Some("settle-1-1"));
         assert_eq!(event_field(&events[0], "trade_id"), Some("trade-1"));
