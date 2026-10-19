@@ -44,7 +44,6 @@ fn derive_balance_ledger_entries_maps_spot_principal_and_fee_legs() {
     );
     let voucher = trade
         .derive_spot_settlement_transfer_voucher_with_fees(
-            "voucher-ledger-1".to_string(),
             "settle-ledger-1".to_string(),
             "BTC",
             "USDT",
@@ -182,7 +181,6 @@ fn derive_balance_ledger_entries_maps_spot_principal_and_fee_legs() {
 fn derive_balance_ledger_entries_maps_perp_pnl_and_fee_to_available() {
     let voucher = perp_trade()
         .derive_perp_settlement_transfer_voucher(
-            "voucher-perp-ledger".to_string(),
             "settlement-perp-ledger".to_string(),
             "USDC",
             "fee-account".to_string(),
