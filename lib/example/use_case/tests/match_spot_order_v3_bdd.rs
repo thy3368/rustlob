@@ -282,7 +282,7 @@ fn assert_replay_chain(state: &MatchSpotOrderV3State, changes: &MatchSpotOrderV3
     for balance in balances {
         let ledger_count = ledger_entries
             .iter()
-            .filter(|entry| entry.balance_entity_id == balance.after.entity_id().to_string())
+            .filter(|entry| entry.balance_entity_id == balance.after.business_entity_id())
             .count() as u64;
         assert_eq!(balance.after.version, balance.before.version + ledger_count);
     }

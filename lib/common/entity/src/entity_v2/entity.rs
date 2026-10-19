@@ -273,7 +273,9 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     fn topic(&self) -> u8 {
         0
     }
-    fn partition(&self) -> u8;
+    fn partition(&self) -> u8 {
+        0
+    }
 
     fn entity_type() -> u8
     where
@@ -407,15 +409,6 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
     }
 
     #[inline]
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        let entity_id = self.entity_id().to_string();
-        entity_id.parse::<i64>().map_err(|error| EntityError::EntityIdParseError {
-            entity_id,
-            reason: error.to_string(),
-        })
-    }
-
-    #[inline]
     fn track_create_event(&self) -> Result<EntityReplayableEvent, EntityError>
     where
         Self: Sized,
@@ -426,7 +419,7 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
             current_timestamp()?,
             0,
             0,
-            self.replay_entity_id()?,
+            self.entity_id(),
             Self::entity_type(),
             EntityChangeType::Created.as_tag(),
         );
@@ -488,7 +481,7 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
             current_timestamp()?,
             old_version,
             new_version,
-            self.replay_entity_id()?,
+            self.entity_id(),
             Self::entity_type(),
             EntityChangeType::Updated.as_tag(),
         );
@@ -514,7 +507,7 @@ pub trait Entity: FieldDiff + Clone + Debug + Send + Sync + 'static {
             current_timestamp()?,
             old_version,
             increment_version(old_version)?,
-            self.replay_entity_id()?,
+            self.entity_id(),
             Self::entity_type(),
             EntityChangeType::Deleted.as_tag(),
         ))
@@ -537,5 +530,34 @@ where
         Ok(())
     } else {
         Err(EntityError::EntityIdMismatch { expected, actual })
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    #[derive(Clone, Debug)]
+    struct Sample { id: u64, version: u64 }
+
+    impl FieldDiff for Sample {
+        fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+            vec![EntityFieldChange::new("version", self.version.to_string(), other.version.to_string())]
+        }
+    }
+
+    impl Entity for Sample {
+        fn entity_id(&self) -> u64 { self.id }
+        fn entity_type() -> u8 { 1 }
+        fn lsn(&self) -> u64 { self.version }
+    }
+
+    #[test]
+    fn lifecycle_events_use_exact_entity_identity() {
+        let before = Sample { id: u64::MAX, version: 1 };
+        let after = Sample { version: 2, ..before.clone() };
+        assert_eq!(before.track_create_event().unwrap().entity_id, before.entity_id());
+        assert_eq!(after.track_update_event_from(&before).unwrap().entity_id, after.entity_id());
+        assert_eq!(after.track_delete_event().unwrap().entity_id, after.entity_id());
     }
 }

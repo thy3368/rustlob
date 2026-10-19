@@ -677,7 +677,7 @@ fn order_id_from_event(event: &EntityReplayableEvent) -> Result<u64, PlaceOrderO
     if let Some(order_id) = event_u64_field(event, "order_id") {
         return Ok(order_id);
     }
-    u64::try_from(event.entity_id).map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)
+    Ok(event.entity_id)
 }
 
 pub(crate) fn decode_order_from_event(

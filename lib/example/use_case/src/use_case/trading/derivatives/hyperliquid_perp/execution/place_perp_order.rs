@@ -311,7 +311,7 @@ impl StateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
                             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
                     PlaceHyperliquidPerpOrderIntent::OpenPosition {
                         margin_asset_id: state.margin_asset_id.clone(),
-                        margin_balance_entity_id: state.margin_balance.entity_id(),
+                        margin_balance_entity_id: state.margin_balance.business_entity_id(),
                         margin_amount: required_margin,
                     }
                 }
@@ -321,7 +321,7 @@ impl StateMachineV2Unchecked for PlaceHyperliquidPerpOrderUseCase {
                             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
                     PlaceHyperliquidPerpOrderIntent::IncreasePosition {
                         margin_asset_id: state.margin_asset_id.clone(),
-                        margin_balance_entity_id: state.margin_balance.entity_id(),
+                        margin_balance_entity_id: state.margin_balance.business_entity_id(),
                         margin_amount: required_margin,
                     }
                 }

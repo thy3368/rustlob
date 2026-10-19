@@ -217,14 +217,14 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
                 "balance-ledger:funding:",
                 cmd.funding_batch_id.as_str(),
                 ":",
-                balance.entity_id().as_str(),
+                balance.business_entity_id().as_str(),
             );
             let mut entry = if delta.available_delta > 0 {
                 BalanceLedgerEntry::credit_available(
                     entry_id,
                     balance.account_id.clone(),
                     balance.asset_id.clone(),
-                    balance.entity_id(),
+                    balance.business_entity_id(),
                     amount,
                     reason,
                 )
@@ -233,7 +233,7 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
                     entry_id,
                     balance.account_id.clone(),
                     balance.asset_id.clone(),
-                    balance.entity_id(),
+                    balance.business_entity_id(),
                     amount,
                     reason,
                 )

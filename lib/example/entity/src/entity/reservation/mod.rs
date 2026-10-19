@@ -9,11 +9,3 @@ pub use model::{
 };
 
 pub(super) const RESERVATION_ENTITY_TYPE: u8 = 23;
-
-pub(super) fn stable_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
-}

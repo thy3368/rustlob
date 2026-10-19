@@ -64,7 +64,7 @@ struct StubState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TestEntity {
-    id: i64,
+    id: u64,
     value: String,
     version: u64,
 }
@@ -84,9 +84,7 @@ impl FieldDiff for TestEntity {
 }
 
 impl Entity for TestEntity {
-    type Id = i64;
-
-    fn entity_id(&self) -> Self::Id {
+    fn entity_id(&self) -> u64 {
         self.id
     }
 

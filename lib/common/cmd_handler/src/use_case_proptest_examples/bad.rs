@@ -7,12 +7,8 @@ use crate::{EntityReplayableEvent, ReplayFieldChange};
 const SUBMIT_ENTITY_TYPE: u8 = 4;
 const FIELD_TYPE_BOOL: u8 = 3;
 
-fn stable_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
+fn stable_entity_id(value: &str) -> u64 {
+    common_entity::stable_string_entity_id(value)
 }
 
 fn bool_field(name: &str, value: bool) -> ReplayFieldChange {

@@ -25,7 +25,7 @@ pub enum ExecutionError<BE, OE> {
     Persist(OE),
     Replay(OE),
     Publish(OE),
-    DuplicateEventKey { lsn: u64, entity_type: u8, entity_id: i64 },
+    DuplicateEventKey { lsn: u64, entity_type: u8, entity_id: u64 },
 }
 
 /// adapter-side request 到 family on_command 的映射约定。

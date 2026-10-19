@@ -236,7 +236,7 @@ impl BalanceLedgerEntryV2 {
         }
         if self.account_id != balance.account_id
             || self.asset_id != balance.asset_id
-            || self.balance_entity_id != balance.entity_id()
+            || self.balance_entity_id != balance.business_entity_id()
         {
             return Err(BalanceLedgerEntryV2Error::BalanceIdentityMismatch);
         }
@@ -280,7 +280,7 @@ impl BalanceLedgerEntryV2 {
         self.is_applied()
             && self.account_id == updated_balance.after.account_id
             && self.asset_id == updated_balance.after.asset_id
-            && self.balance_entity_id == updated_balance.after.entity_id()
+            && self.balance_entity_id == updated_balance.after.business_entity_id()
             && self.before_available == Some(updated_balance.before.available)
             && self.before_frozen == Some(updated_balance.before.frozen)
             && self.after_available == Some(updated_balance.after.available)
@@ -380,10 +380,8 @@ impl FieldDiff for BalanceLedgerEntryV2 {
 }
 
 impl Entity for BalanceLedgerEntryV2 {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.entry_id.clone()
+    fn entity_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(&self.entry_id)
     }
 
     fn entity_type() -> u8 {
@@ -431,19 +429,8 @@ impl Entity for BalanceLedgerEntryV2 {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_balance_ledger_entry_id(&self.entry_id))
-    }
 }
 
 fn option_u64_value(value: Option<u64>) -> String {
     value.map_or_else(|| String::with_capacity(0), |value| value.to_string())
-}
-
-fn stable_balance_ledger_entry_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
 }

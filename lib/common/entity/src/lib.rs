@@ -1,6 +1,8 @@
 pub use entity_derive::{ActionType, ObjectType, action_type, function};
 
 mod entity_v2;
+mod stable_id;
+pub use stable_id::stable_string_entity_id;
 
 mod sequence;
 mod use_case;

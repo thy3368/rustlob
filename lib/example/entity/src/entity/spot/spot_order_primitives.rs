@@ -234,9 +234,6 @@ impl SpotOrderStatusReason {
     }
 }
 
-pub(crate) fn stable_order_entity_id(value: u64) -> i64 {
-    (value & i64::MAX as u64) as i64
-}
 
 pub(crate) fn push_change(
     changes: &mut Vec<EntityFieldChange>,

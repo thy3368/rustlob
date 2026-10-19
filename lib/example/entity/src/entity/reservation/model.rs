@@ -5,7 +5,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{RESERVATION_ENTITY_TYPE, stable_entity_id};
+use super::RESERVATION_ENTITY_TYPE;
 
 /// 统一的冻结归属市场。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -397,10 +397,8 @@ impl FieldDiff for Reservation {
 }
 
 impl Entity for Reservation {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.reservation_id.clone()
+    fn entity_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(&self.reservation_id)
     }
 
     fn entity_type() -> u8 {
@@ -458,9 +456,6 @@ impl Entity for Reservation {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_entity_id(&self.reservation_id))
-    }
 }
 
 fn option_close_reason_value(reason: Option<ReservationCloseReason>) -> String {

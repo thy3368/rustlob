@@ -13,12 +13,8 @@ const DEPOSIT_ENTITY_TYPE: u8 = 3;
 const FIELD_TYPE_STRING: u8 = 0;
 const FIELD_TYPE_INT: u8 = 1;
 
-fn stable_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
+fn stable_entity_id(value: &str) -> u64 {
+    common_entity::stable_string_entity_id(value)
 }
 
 fn string_field(name: &str, value: &str) -> ReplayFieldChange {

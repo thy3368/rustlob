@@ -62,10 +62,8 @@ status: filled             event_id: 2
 
 ```rust
 pub trait Entity {
-    type Id;
-
     // 获取实体的唯一标识符
-    fn entity_id(&self) -> Self::Id;
+    fn entity_id(&self) -> u64;
 
     // 获取实体类型（作为表名）
     fn entity_type() -> &'static str;

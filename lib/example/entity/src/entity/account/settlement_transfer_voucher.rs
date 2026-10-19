@@ -193,10 +193,8 @@ impl FieldDiff for SettlementTransferLeg {
 }
 
 impl Entity for SettlementTransferLeg {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.leg_id.clone()
+    fn entity_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(&self.leg_id)
     }
 
     fn entity_type() -> u8 {
@@ -218,9 +216,6 @@ impl Entity for SettlementTransferLeg {
         if field_name == "amount" { 1 } else { 0 }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_entity_id(&self.leg_id))
-    }
 }
 
 /// 一条面向 use case 暴露的稳定转账结论。
@@ -590,10 +585,8 @@ impl FieldDiff for SettlementTransferVoucher {
 }
 
 impl Entity for SettlementTransferVoucher {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.voucher_id.clone()
+    fn entity_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(&self.voucher_id)
     }
 
     fn entity_type() -> u8 {
@@ -633,18 +626,8 @@ impl Entity for SettlementTransferVoucher {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_entity_id(&self.voucher_id))
-    }
 }
 
-fn stable_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
-}
 
 #[cfg(test)]
 mod tests {

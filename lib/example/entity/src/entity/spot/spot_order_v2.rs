@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use super::spot_order_primitives::{
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderTriggerRole,
-    SpotOrderType, option_status_reason_value, push_change, stable_order_entity_id,
+    SpotOrderType, option_status_reason_value, push_change,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -1701,9 +1701,7 @@ impl FieldDiff for SpotOrderV2 {
 }
 
 impl Entity for SpotOrderV2 {
-    type Id = u64;
-
-    fn entity_id(&self) -> Self::Id {
+    fn entity_id(&self) -> u64 {
         self.order_id
     }
 
@@ -1784,9 +1782,6 @@ impl Entity for SpotOrderV2 {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_order_entity_id(self.order_id))
-    }
 
     fn partition(&self) -> u8 {
         self.asset as u8

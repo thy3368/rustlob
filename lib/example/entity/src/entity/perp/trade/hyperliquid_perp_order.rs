@@ -636,9 +636,7 @@ impl FieldDiff for HyperliquidPerpOrder {
 }
 
 impl Entity for HyperliquidPerpOrder {
-    type Id = u64;
-
-    fn entity_id(&self) -> Self::Id {
+    fn entity_id(&self) -> u64 {
         self.order_id
     }
 
@@ -701,9 +699,6 @@ impl Entity for HyperliquidPerpOrder {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_entity_id(self.order_id))
-    }
 }
 
 fn option_u64_value(value: Option<u64>) -> String {
@@ -731,9 +726,6 @@ fn reservation_amount(
     reservation.as_ref().map(field).map(|value| value.to_string()).unwrap_or_default()
 }
 
-fn stable_entity_id(value: u64) -> i64 {
-    (value & i64::MAX as u64) as i64
-}
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

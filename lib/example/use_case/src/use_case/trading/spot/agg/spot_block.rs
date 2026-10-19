@@ -326,7 +326,7 @@ impl WorkingSpotBlockState {
         }
 
         for (index, balance) in self.balances.iter().enumerate() {
-            if self.balance_by_entity_id.insert(balance.entity_id(), index).is_some() {
+            if self.balance_by_entity_id.insert(balance.business_entity_id(), index).is_some() {
                 return Err(SpotBlockError::DuplicateBalanceEntityId);
             }
         }
@@ -387,7 +387,7 @@ impl WorkingSpotBlockState {
 
     fn replace_balances(&mut self, balances: &[Balance]) -> Result<(), SpotBlockError> {
         for balance in balances {
-            let balance_id = balance.entity_id();
+            let balance_id = balance.business_entity_id();
             let index = *self
                 .balance_by_entity_id
                 .get(&balance_id)

@@ -39,7 +39,7 @@ impl fmt::Display for StubError {
 impl std::error::Error for StubError {}
 
 fn stub_event(sequence: u64) -> EntityReplayableEvent {
-    EntityReplayableEvent::new_created(0, sequence as i64 + 1, 1)
+    EntityReplayableEvent::new_created(0, sequence + 1, 1)
 }
 
 #[derive(Debug, Clone, Copy, Default)]

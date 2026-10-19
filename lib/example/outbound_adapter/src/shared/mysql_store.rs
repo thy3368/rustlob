@@ -70,7 +70,7 @@ impl MySqlStore {
                 id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
                 entity_type TINYINT UNSIGNED NOT NULL,
                 change_type TINYINT UNSIGNED NOT NULL,
-                entity_id BIGINT NOT NULL,
+                entity_id BIGINT UNSIGNED NOT NULL,
                 previous_lsn BIGINT UNSIGNED NOT NULL,
                 lsn BIGINT UNSIGNED NOT NULL,
                 logical_ts BIGINT UNSIGNED NOT NULL,

@@ -119,7 +119,7 @@ pub struct EntityReplayableEvent {
     /// 全局单调递增的序列号 来自command
     /// 这是"全序"的唯一依据
     pub lsn: u64,
-    pub entity_id: i64,
+    pub entity_id: u64,
     pub entity_type: u8,
 
     pub previous_lsn: u64,
@@ -152,14 +152,14 @@ impl EntityReplayableEvent {
         timestamp: u64,
         previous_lsn: u64,
         lsn: u64,
-        entity_id: i64,
+        entity_id: u64,
         entity_type: u8,
         change_type: u8,
     ) -> Self {
         Self::new_with_topic(0, 0, timestamp, previous_lsn, lsn, entity_id, entity_type, change_type)
     }
 
-    pub fn new_with_topic(t: u8, p: u8, timestamp: u64, previous_lsn: u64, lsn: u64, entity_id: i64, entity_type: u8, change_type: u8) -> Self {
+    pub fn new_with_topic(t: u8, p: u8, timestamp: u64, previous_lsn: u64, lsn: u64, entity_id: u64, entity_type: u8, change_type: u8) -> Self {
         Self {
             t,
             p,
@@ -174,7 +174,7 @@ impl EntityReplayableEvent {
     }
 
     #[inline]
-    pub fn new_created(timestamp: u64, entity_id: i64, entity_type: u8) -> Self {
+    pub fn new_created(timestamp: u64, entity_id: u64, entity_type: u8) -> Self {
         Self::new(timestamp, 0, 0, entity_id, entity_type, EntityChangeType::Created.as_tag())
     }
 
@@ -183,7 +183,7 @@ impl EntityReplayableEvent {
         timestamp: u64,
         previous_lsn: u64,
         lsn: u64,
-        entity_id: i64,
+        entity_id: u64,
         entity_type: u8,
     ) -> Self {
         Self::new(
@@ -201,7 +201,7 @@ impl EntityReplayableEvent {
         timestamp: u64,
         previous_lsn: u64,
         lsn: u64,
-        entity_id: i64,
+        entity_id: u64,
         entity_type: u8,
     ) -> Self {
         Self::new(
@@ -388,5 +388,14 @@ mod tests {
             ));
         }
         event
+    }
+
+    #[test]
+    fn max_entity_id_survives_serialization() {
+        let event = EntityReplayableEvent::new_created(1, u64::MAX, 7);
+        let encoded = bincode::serialize(&event).unwrap();
+        let decoded: EntityReplayableEvent = bincode::deserialize(&encoded).unwrap();
+        assert_eq!(decoded.entity_id, u64::MAX);
+        assert_eq!(decoded, event);
     }
 }

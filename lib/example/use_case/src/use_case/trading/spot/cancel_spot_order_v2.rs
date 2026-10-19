@@ -203,7 +203,7 @@ impl BalanceMap {
             balances: balances
                 .iter()
                 .cloned()
-                .map(|balance| (balance.entity_id(), balance))
+                .map(|balance| (balance.business_entity_id(), balance))
                 .collect(),
         }
     }
@@ -240,7 +240,7 @@ fn balance_entity_id_for_account_asset(
     balances
         .iter()
         .find(|balance| balance.account_id == account_id && balance.asset_id == asset_id)
-        .map(Entity::entity_id)
+        .map(Balance::business_entity_id)
         .ok_or(CancelSpotOrderV2Error::BalanceNotFound)
 }
 
@@ -411,7 +411,7 @@ fn apply_balance_ledger_entry(
 ) -> Result<BalanceLedgerEntryV2, BalanceLedgerEntryV2Error> {
     let account_id = balance.account_id.clone();
     let asset_id = balance.asset_id.clone();
-    let balance_entity_id = balance.entity_id();
+    let balance_entity_id = balance.business_entity_id();
     let mut entry = match operation {
         BalanceLedgerOperation::Unfreeze => BalanceLedgerEntryV2::unfreeze(
             entry_id,
@@ -459,11 +459,11 @@ fn merge_balance_pairs(
     after: Vec<Balance>,
 ) -> Result<Vec<UpdatedEntityPair<Balance>>, CancelSpotOrderV2Error> {
     let before_map =
-        before.into_iter().map(|balance| (balance.entity_id(), balance)).collect::<HashMap<_, _>>();
+        before.into_iter().map(|balance| (balance.business_entity_id(), balance)).collect::<HashMap<_, _>>();
     let mut seen = HashSet::new();
     let mut pairs = Vec::with_capacity(after.len());
     for balance in after {
-        let balance_id = balance.entity_id();
+        let balance_id = balance.business_entity_id();
         let before_balance =
             before_map.get(&balance_id).cloned().ok_or(CancelSpotOrderV2Error::BalanceNotFound)?;
         if !seen.insert(balance_id) {
@@ -480,7 +480,7 @@ fn balance_replay_events_from_ledger_entries(
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {
-        let balance_id = balance.before.entity_id();
+        let balance_id = balance.before.business_entity_id();
         current_balances.insert(balance_id, balance.before.clone());
     }
 
@@ -528,7 +528,7 @@ fn balance_replay_events_from_ledger_entries(
     }
 
     for balance in updated_balances {
-        let balance_id = balance.after.entity_id();
+        let balance_id = balance.after.business_entity_id();
         if current_balances.get(&balance_id) != Some(&balance.after) {
             return Err(common_entity::EntityError::Custom(
                 "balance replay chain does not reach case-level balance after state".to_string(),

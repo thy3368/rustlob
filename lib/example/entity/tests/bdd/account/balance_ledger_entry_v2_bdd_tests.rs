@@ -14,7 +14,7 @@ fn balance() -> Balance {
 }
 
 fn balance_identity(balance: &Balance) -> (String, String, String) {
-    (balance.account_id.clone(), balance.asset_id.clone(), balance.entity_id())
+    (balance.account_id.clone(), balance.asset_id.clone(), balance.business_entity_id())
 }
 
 fn assert_balance_update_matches_entry(

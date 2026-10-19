@@ -110,10 +110,8 @@ impl FieldDiff for SpotKline {
 }
 
 impl Entity for SpotKline {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.kline_key()
+    fn entity_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(&self.kline_key())
     }
 
     fn partition(&self) -> u8 {
@@ -152,22 +150,12 @@ impl Entity for SpotKline {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_entity_id(self.entity_id().as_str()))
-    }
 }
 
 fn kline_key(symbol: &str, interval_ms: u64, open_time_ms: u64) -> String {
     format!("spot-kline:{symbol}:{interval_ms}:{open_time_ms}")
 }
 
-fn stable_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
-}
 
 #[cfg(test)]
 mod tests {
@@ -198,8 +186,8 @@ mod tests {
     fn identity_is_deterministic_from_symbol_interval_and_open_time() {
         let kline = kline();
 
-        assert_eq!(kline.entity_id(), "spot-kline:BTCUSDT:60000:1717171680000");
-        assert_eq!(kline.kline_key(), kline.entity_id());
+        assert_eq!(kline.kline_key(), "spot-kline:BTCUSDT:60000:1717171680000");
+        assert_eq!(kline.entity_id(), common_entity::stable_string_entity_id(&kline.kline_key()));
     }
 
     #[test]

@@ -67,7 +67,7 @@
 //!
 //! #[derive(Debug, Clone, PartialEq, Eq)]
 //! struct Order {
-//!     id: i64,
+//!     id: u64,
 //!     status: OrderStatus,
 //!     quote_locked: i64,
 //!     version: u64,
@@ -106,9 +106,8 @@
 //! }
 //!
 //! impl Entity for Order {
-//!     type Id = i64;
 //!
-//!     fn entity_id(&self) -> Self::Id {
+//!     fn entity_id(&self) -> u64 {
 //!         self.id
 //!     }
 //!
@@ -131,7 +130,7 @@
 //!
 //! #[derive(Debug, Clone, PartialEq, Eq)]
 //! struct CashBalance {
-//!     id: i64,
+//!     id: u64,
 //!     available: i64,
 //!     version: u64,
 //! }
@@ -165,9 +164,8 @@
 //! }
 //!
 //! impl Entity for CashBalance {
-//!     type Id = i64;
 //!
-//!     fn entity_id(&self) -> Self::Id {
+//!     fn entity_id(&self) -> u64 {
 //!         self.id
 //!     }
 //!
@@ -189,7 +187,7 @@
 //!
 //! #[derive(Debug, Clone, PartialEq, Eq)]
 //! struct BalanceHold {
-//!     id: i64,
+//!     id: u64,
 //!     reserved: i64,
 //!     active: bool,
 //!     version: u64,
@@ -228,9 +226,8 @@
 //! }
 //!
 //! impl Entity for BalanceHold {
-//!     type Id = i64;
 //!
-//!     fn entity_id(&self) -> Self::Id {
+//!     fn entity_id(&self) -> u64 {
 //!         self.id
 //!     }
 //!

@@ -153,10 +153,8 @@ impl FieldDiff for HyperliquidPerpAdlExecution {
 }
 
 impl Entity for HyperliquidPerpAdlExecution {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.adl_execution_id.clone()
+    fn entity_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(&self.adl_execution_id)
     }
 
     fn entity_type() -> u8 {
@@ -185,18 +183,8 @@ impl Entity for HyperliquidPerpAdlExecution {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_entity_id(&self.adl_execution_id))
-    }
 }
 
-fn stable_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
-}
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

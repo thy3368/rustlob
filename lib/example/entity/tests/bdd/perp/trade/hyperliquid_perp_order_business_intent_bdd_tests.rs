@@ -163,7 +163,7 @@ fn given_unmatched_perp_order_when_margin_is_reserved_then_clearinghouse_withdra
     let mut input = place_input();
     input.intent = PlaceHyperliquidPerpOrderIntent::OpenPosition {
         margin_asset_id: "USDC".to_string(),
-        margin_balance_entity_id: balance.entity_id(),
+        margin_balance_entity_id: balance.business_entity_id(),
         margin_amount: 30,
     };
     let mut outcome = HyperliquidPerpOrder::place(input).unwrap();

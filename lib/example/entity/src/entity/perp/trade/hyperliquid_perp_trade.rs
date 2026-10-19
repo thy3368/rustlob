@@ -431,10 +431,8 @@ impl FieldDiff for HyperliquidPerpTrade {
 }
 
 impl Entity for HyperliquidPerpTrade {
-    type Id = String;
-
-    fn entity_id(&self) -> Self::Id {
-        self.trade_id.clone()
+    fn entity_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(&self.trade_id)
     }
 
     fn entity_type() -> u8 {
@@ -453,18 +451,8 @@ impl Entity for HyperliquidPerpTrade {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_entity_id(&self.trade_id))
-    }
 }
 
-fn stable_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
-}
 
 fn abs_i64_to_u64(value: i64) -> Option<u64> {
     value.checked_abs().and_then(|abs| u64::try_from(abs).ok())

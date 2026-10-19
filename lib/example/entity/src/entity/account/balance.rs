@@ -89,6 +89,10 @@ impl Balance {
         self.asset_id == asset_id
     }
 
+    pub fn business_entity_id(&self) -> String {
+        concat3(self.account_id.as_str(), ":", self.asset_id.as_str())
+    }
+
     /// 返回余额总额，即 `available + frozen`；若溢出则返回 `None`。
     pub fn total(&self) -> Option<u64> {
         self.available.checked_add(self.frozen)
@@ -244,7 +248,7 @@ impl Entity for Balance {
 
 
     fn entity_id(&self) -> u64 {
-        concat3(self.account_id.as_str(), ":", self.asset_id.as_str())
+        common_entity::stable_string_entity_id(&self.business_entity_id())
     }
 
     fn entity_type() -> u8 {
@@ -262,18 +266,8 @@ impl Entity for Balance {
         }
     }
 
-    fn replay_entity_id(&self) -> Result<i64, EntityError> {
-        Ok(stable_balance_entity_id(&self.entity_id()))
-    }
 }
 
-fn stable_balance_entity_id(value: &str) -> i64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    value.hash(&mut hasher);
-    (hasher.finish() & i64::MAX as u64) as i64
-}
 
 fn option_u64_value(value: Option<u64>) -> String {
     value.map(|value| value.to_string()).unwrap_or_default()
