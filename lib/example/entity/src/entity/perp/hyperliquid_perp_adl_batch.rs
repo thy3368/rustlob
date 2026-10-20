@@ -133,7 +133,11 @@ impl FieldDiff for HyperliquidPerpAdlBatch {
     }
 }
 
-impl common_entity::Shard for HyperliquidPerpAdlBatch {}
+impl common_entity::Shard for HyperliquidPerpAdlBatch {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for HyperliquidPerpAdlBatch {
     fn entity_id(&self) -> u64 {

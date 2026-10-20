@@ -152,7 +152,11 @@ impl FieldDiff for HyperliquidPerpAdlExecution {
     }
 }
 
-impl common_entity::Shard for HyperliquidPerpAdlExecution {}
+impl common_entity::Shard for HyperliquidPerpAdlExecution {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for HyperliquidPerpAdlExecution {
     fn entity_id(&self) -> u64 {

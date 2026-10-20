@@ -191,7 +191,11 @@ impl FieldDiff for HyperliquidPerpShortfall {
     }
 }
 
-impl common_entity::Shard for HyperliquidPerpShortfall {}
+impl common_entity::Shard for HyperliquidPerpShortfall {
+    fn partition(&self) -> u8 {
+        todo!()
+    }
+}
 
 impl Entity for HyperliquidPerpShortfall {
     fn entity_id(&self) -> u64 {
