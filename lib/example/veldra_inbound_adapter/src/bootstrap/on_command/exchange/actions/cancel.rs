@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{ExecutionError, MiFamilyExecutionSpec};
+use cmd_handler::command_use_case_def2::{ExecutionError, ExecutionCommandSpec};
 use common_entity::LogEntry;
 pub use example_core_use_case::CancelSpotOrderV2Lookup;
 use example_core_use_case::{CancelSpotOrderV2Cmd, CancelSpotOrderV2UseCase};
@@ -85,7 +85,7 @@ impl CancelSpotOrderV2Request {
 
 pub struct SpotOrderV2CancelExecutionSpec;
 
-impl MiFamilyExecutionSpec<CancelSpotOrderV2UseCase> for SpotOrderV2CancelExecutionSpec {
+impl ExecutionCommandSpec<CancelSpotOrderV2UseCase> for SpotOrderV2CancelExecutionSpec {
     type Request = CancelSpotOrderV2Request;
 
     fn command(

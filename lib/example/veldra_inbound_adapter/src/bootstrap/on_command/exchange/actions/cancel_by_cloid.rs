@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::MiFamilyExecutionSpec;
+use cmd_handler::command_use_case_def2::ExecutionCommandSpec;
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use use_case_executor::trading::spot::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2_with_outbound;

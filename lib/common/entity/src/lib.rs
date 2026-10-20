@@ -23,7 +23,7 @@ pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::executor::{
-    ExecutionError, ExecutionResult, MiFamilyExecutionSpec, StateMachineExecutor, StateSink,
+    ExecutionError, ExecutionResult, ExecutionCommandSpec, StateMachineExecutor, StateSink,
     StateSource,
 };
 pub use use_case::log_entry::LogEntry;

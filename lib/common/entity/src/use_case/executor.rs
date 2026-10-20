@@ -31,7 +31,7 @@ pub enum ExecutionError<BE, OE> {
 /// adapter-side request 到 family on_command 的映射约定。
 ///
 /// executor 不直接依赖该 trait；adapter 可用它把 request 转成 on_command 后再执行。
-pub trait MiFamilyExecutionSpec<F>
+pub trait ExecutionCommandSpec<F>
 where
     F: StateMachineV2Diff,
 {

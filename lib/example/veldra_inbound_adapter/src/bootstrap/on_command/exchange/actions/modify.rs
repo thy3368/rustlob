@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{ExecutionError, MiFamilyExecutionSpec};
+use cmd_handler::command_use_case_def2::{ExecutionError, ExecutionCommandSpec};
 use common_entity::LogEntry;
 use example_core_use_case::{
     ModifySpotOrderV2Cmd, ModifySpotOrderV2OrderType, ModifySpotOrderV2UseCase, OrderId,
@@ -137,7 +137,7 @@ impl ModifySpotOrderV2Request {
 
 pub struct SpotOrderV2ModifyExecutionSpec;
 
-impl MiFamilyExecutionSpec<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecutionSpec {
+impl ExecutionCommandSpec<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecutionSpec {
     type Request = ModifySpotOrderV2Request;
 
     fn command(
