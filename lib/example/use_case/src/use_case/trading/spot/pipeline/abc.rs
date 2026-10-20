@@ -1,4 +1,4 @@
-use common_entity::{StateMachineOwnedV2Diff, StateMachineV2Unchecked};
+use common_entity::{StateMachineV2Diff, StateMachineV2};
 
 use crate::SpotTrade;
 use crate::use_case::trading::spot::{MatchSpotOrderV3Changes, MatchSpotOrderV3UseCase};
@@ -50,11 +50,11 @@ impl<O> MatchSpotOrderWithNplV3UseCase<O> {
     }
 }
 
-impl<O: SpotTradeObserver> StateMachineV2Unchecked for MatchSpotOrderWithNplV3UseCase<O> {
-    type Command = <MatchSpotOrderV3UseCase as StateMachineV2Unchecked>::Command;
-    type StateGiven = <MatchSpotOrderV3UseCase as StateMachineV2Unchecked>::StateGiven;
-    type Error = <MatchSpotOrderV3UseCase as StateMachineV2Unchecked>::Error;
-    type StateChanged = <MatchSpotOrderV3UseCase as StateMachineV2Unchecked>::StateChanged;
+impl<O: SpotTradeObserver> StateMachineV2 for MatchSpotOrderWithNplV3UseCase<O> {
+    type Command = <MatchSpotOrderV3UseCase as StateMachineV2>::Command;
+    type StateGiven = <MatchSpotOrderV3UseCase as StateMachineV2>::StateGiven;
+    type Error = <MatchSpotOrderV3UseCase as StateMachineV2>::Error;
+    type StateChanged = <MatchSpotOrderV3UseCase as StateMachineV2>::StateChanged;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         self.inner.check_command(cmd)
@@ -81,13 +81,13 @@ impl<O: SpotTradeObserver> StateMachineV2Unchecked for MatchSpotOrderWithNplV3Us
     }
 }
 
-impl<O: SpotTradeObserver> StateMachineOwnedV2Diff for MatchSpotOrderWithNplV3UseCase<O> {
+impl<O: SpotTradeObserver> StateMachineV2Diff for MatchSpotOrderWithNplV3UseCase<O> {
     type StateDiff = MatchSpotOrderV3Changes;
 
     fn do_compute_state_diff(
         state: Self::StateGiven,
         after: Self::StateChanged,
     ) -> Result<Self::StateDiff, Self::Error> {
-        <MatchSpotOrderV3UseCase as StateMachineOwnedV2Diff>::do_compute_state_diff(state, after)
+        <MatchSpotOrderV3UseCase as StateMachineV2Diff>::do_compute_state_diff(state, after)
     }
 }

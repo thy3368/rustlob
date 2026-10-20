@@ -479,12 +479,12 @@ fn release_to_balance(
         ledger_entries.len().checked_add(1).ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
     let entry = apply_balance_ledger_entry(
         BalanceLedgerOperation::Unfreeze,
-        concat4(
+        common_entity::stable_string_entity_id(&concat4(
             "balance-ledger:",
             order.order_id().to_string().as_str(),
             ":release:",
             next_release_index.to_string().as_str(),
-        ),
+        )),
         balance,
         amount,
         reason,
@@ -495,7 +495,7 @@ fn release_to_balance(
 
 fn apply_balance_ledger_entry(
     operation: BalanceLedgerOperation,
-    entry_id: String,
+    entry_id: u64,
     balance: &mut Balance,
     amount: u64,
     reason: BalanceLedgerReason,
@@ -538,7 +538,7 @@ fn apply_balance_ledger_entry(
 
 struct BalanceLedgerDraft {
     operation: BalanceLedgerOperation,
-    entry_id: String,
+    entry_id: u64,
     account_id: String,
     asset_id: String,
     amount: u64,

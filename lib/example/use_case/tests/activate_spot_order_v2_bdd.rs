@@ -1,5 +1,5 @@
 use common_entity::{
-    LogEntry, ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
 };
 use example_core_entity::{
     ActivatePendingSpotOrderV2Input, Balance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,

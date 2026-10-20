@@ -1,7 +1,7 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
-    StateMachineV2Unchecked,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2Diff,
+    StateMachineV2,
 };
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::SpotOrderV2;
@@ -116,7 +116,7 @@ pub struct SettleMatchedSpotTradesV4State {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SettleMatchedSpotTradesV4UseCase;
 
-impl StateMachineV2Unchecked for SettleMatchedSpotTradesV4UseCase {
+impl StateMachineV2 for SettleMatchedSpotTradesV4UseCase {
     type Command = LogEntry<SettleMatchedSpotTradesV4Cmd>;
     type StateGiven = SettleMatchedSpotTradesV4State;
     type Error = MatchSpotOrderV4Error;
@@ -164,7 +164,7 @@ impl StateMachineV2Unchecked for SettleMatchedSpotTradesV4UseCase {
     }
 }
 
-impl StateMachineOwnedV2Diff for SettleMatchedSpotTradesV4UseCase {
+impl StateMachineV2Diff for SettleMatchedSpotTradesV4UseCase {
     type StateDiff = SettleMatchedSpotTradesV4Changes;
 
     fn do_compute_state_diff(

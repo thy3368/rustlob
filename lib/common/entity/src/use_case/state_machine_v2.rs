@@ -441,7 +441,7 @@ use crate::{ReplayableChanges, action_type};
 /// 也可以是一组相关动作的命令族。
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
 /// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
-pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {
+pub trait StateMachineV2: Clone + Debug + Send + Sync {
     type Command: LogEntryMetadata;
 
     type StateGiven;
@@ -502,7 +502,7 @@ pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {
 /// 只有当当前 family 需要稳定 replay、持久化、diff 或审计真相时，才需要实现该 trait。
 /// 默认链路仍然保持单一真相路径：先复用 family 的 after 计算，再从 `GivenState`
 /// 提取 case 级 before 并合并成 replayable changes。
-pub trait StateMachineOwnedV2Diff: StateMachineV2Unchecked {
+pub trait StateMachineV2Diff: StateMachineV2 {
     /// 最终可 replay 的 before/after changes。
     type StateDiff: ReplayableChanges;
 
@@ -511,17 +511,17 @@ pub trait StateMachineOwnedV2Diff: StateMachineV2Unchecked {
     /// 这里的 `GivenState` 仍然只是运输形状；实现者可以直接使用其全部内容，也可以只提取
     /// 必要子集，或重组为异构 before truth 后再与 after 稳定配对。
     fn do_compute_state_diff(
-        given_state: Self::StateGiven,
-        after: Self::StateChanged,
+        state_given: Self::StateGiven,
+        state_changed: Self::StateChanged,
     ) -> Result<Self::StateDiff, Self::Error>;
 
     /// 基于 `Command + GivenState` 计算稳定的 replayable before/after changes。
     fn compute_state_diff(
         &self,
         cmd: &Self::Command,
-        given_state: Self::StateGiven,
+        state_given: Self::StateGiven,
     ) -> Result<Self::StateDiff, Self::Error> {
-        let after = self.compute_state_changed(cmd, &given_state)?;
-        Self::do_compute_state_diff(given_state, after)
+        let state_changed = self.compute_state_changed(cmd, &state_given)?;
+        Self::do_compute_state_diff(state_given, state_changed)
     }
 }

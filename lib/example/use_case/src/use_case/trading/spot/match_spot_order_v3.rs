@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2Diff,
     StateMachineV2Unchecked,
 };
 use example_core_entity::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
@@ -686,12 +686,12 @@ fn release_to_balance(
         ledger_entries.len().checked_add(1).ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
     let entry = apply_balance_ledger_entry(
         BalanceLedgerOperation::Unfreeze,
-        concat4(
+        common_entity::stable_string_entity_id(&concat4(
             "balance-ledger:",
             order.order_id().to_string().as_str(),
             ":release:",
             next_release_index.to_string().as_str(),
-        ),
+        )),
         balance,
         amount,
         reason,
@@ -702,7 +702,7 @@ fn release_to_balance(
 
 fn apply_balance_ledger_entry(
     operation: BalanceLedgerOperation,
-    entry_id: String,
+    entry_id: u64,
     balance: &mut Balance,
     amount: u64,
     reason: BalanceLedgerReason,
@@ -745,7 +745,7 @@ fn apply_balance_ledger_entry(
 
 struct BalanceLedgerDraft {
     operation: BalanceLedgerOperation,
-    entry_id: String,
+    entry_id: u64,
     account_id: String,
     asset_id: String,
     amount: u64,
@@ -1160,7 +1160,7 @@ impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
     }
 }
 
-impl StateMachineOwnedV2Diff for MatchSpotOrderV3UseCase {
+impl StateMachineV2Diff for MatchSpotOrderV3UseCase {
     type StateDiff = MatchSpotOrderV3Changes;
 
     fn do_compute_state_diff(

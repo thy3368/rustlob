@@ -9,8 +9,7 @@ pub mod pending_trigger_spot_order_source;
 
 pub mod pipeline;
 
-pub mod observer;
-pub use observer::{MatchSpotOrderWithNplV3UseCase, SpotTradeObserver, StdoutSpotTradeObserver};
+pub use pipeline::abc::{MatchSpotOrderWithNplV3UseCase, SpotTradeObserver, StdoutSpotTradeObserver};
 pub mod generate_spot_klines_from_historical_trades;
 
 pub use activate_spot_order_v2::{

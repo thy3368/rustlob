@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
-use common_entity::{LogEntry, ReplayableChanges, StateMachineOwnedV2Diff};
+use common_entity::{LogEntry, ReplayableChanges, StateMachineV2Diff};
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,
     PlaceOnlySpotOrderV2UseCase,

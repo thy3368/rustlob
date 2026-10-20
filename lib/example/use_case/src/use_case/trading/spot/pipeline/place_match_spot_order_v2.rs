@@ -1,6 +1,6 @@
 use common_entity::{
     Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges,
-    StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    StateMachineV2Diff, StateMachineV2,
 };
 use thiserror::Error;
 
@@ -110,7 +110,7 @@ impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
     }
 }
 
-impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
+impl StateMachineV2 for PlaceMatchSpotOrderV2UseCase {
     type Command = LogEntry<PlaceOnlySpotOrderV2Cmd>;
     type StateGiven = PlaceMatchSpotOrderV2State;
     type Error = PlaceMatchSpotOrderV2Error;
@@ -188,7 +188,7 @@ impl StateMachineV2Unchecked for PlaceMatchSpotOrderV2UseCase {
     }
 }
 
-impl StateMachineOwnedV2Diff for PlaceMatchSpotOrderV2UseCase {
+impl StateMachineV2Diff for PlaceMatchSpotOrderV2UseCase {
     type StateDiff = PlaceMatchSpotOrderV2Changes;
 
     fn do_compute_state_diff(

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use common_entity::{
     Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
-    StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    StateMachineV2Diff, StateMachineV2,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -136,7 +136,7 @@ impl ReplayableChanges for PlaceOnlySpotOrderV2Changes {
     }
 }
 
-impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
+impl StateMachineV2 for PlaceOnlySpotOrderV2UseCase {
     type Command = LogEntry<PlaceOnlySpotOrderV2Cmd>;
     type StateGiven = PlaceOnlySpotOrderV2State;
     type Error = PlaceOnlySpotOrderV2Error;
@@ -203,7 +203,7 @@ impl StateMachineV2Unchecked for PlaceOnlySpotOrderV2UseCase {
     }
 }
 
-impl StateMachineOwnedV2Diff for PlaceOnlySpotOrderV2UseCase {
+impl StateMachineV2Diff for PlaceOnlySpotOrderV2UseCase {
     type StateDiff = PlaceOnlySpotOrderV2Changes;
 
     fn do_compute_state_diff(

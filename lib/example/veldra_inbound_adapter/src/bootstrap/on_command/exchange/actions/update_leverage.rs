@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{EventProjectError, ReplayableChanges};
-use common_entity::StateMachineV2Unchecked;
+use common_entity::StateMachineV2;
 use example_core_use_case::entity::{HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode};
 use example_core_use_case::{
     UpdateHyperliquidPerpLeverageChanges, UpdateHyperliquidPerpLeverageCmd,

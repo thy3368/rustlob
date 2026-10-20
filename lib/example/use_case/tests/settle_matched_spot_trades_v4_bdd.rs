@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use common_entity::{
-    Entity, LogEntry, ReplayableChanges, StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    Entity, LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
 };
 use example_core_entity::{
     Balance, BalanceLedgerEntryV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,

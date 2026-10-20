@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use common_entity::{
     Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
-    StateMachineOwnedV2Diff, StateMachineV2Unchecked,
+    StateMachineV2Diff, StateMachineV2,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -142,7 +142,7 @@ impl ReplayableChanges for SpotBlockChanges {
     }
 }
 
-impl StateMachineV2Unchecked for SpotBlockUseCase {
+impl StateMachineV2 for SpotBlockUseCase {
     type Command = LogEntry<SpotBlockCmd>;
     type StateGiven = SpotBlockState;
     type Error = SpotBlockError;
@@ -268,7 +268,7 @@ impl StateMachineV2Unchecked for SpotBlockUseCase {
     }
 }
 
-impl StateMachineOwnedV2Diff for SpotBlockUseCase {
+impl StateMachineV2Diff for SpotBlockUseCase {
     type StateDiff = SpotBlockChanges;
 
     fn do_compute_state_diff(

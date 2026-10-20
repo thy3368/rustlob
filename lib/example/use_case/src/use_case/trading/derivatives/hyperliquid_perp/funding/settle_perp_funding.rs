@@ -816,7 +816,12 @@ mod tests {
         assert_eq!(result.changed_margin_balances.len(), 1);
         assert_eq!(result.created_balance_ledger_entries.len(), 1);
         let entry = &result.created_balance_ledger_entries[0];
-        assert_eq!(entry.entry_id, "balance-ledger:funding:funding-2026-06-10T08:trader-1:USDC");
+        assert_eq!(
+            entry.entry_id,
+            common_entity::stable_string_entity_id(
+                "balance-ledger:funding:funding-2026-06-10T08:trader-1:USDC",
+            )
+        );
         assert_eq!(entry.before_available, Some(1_000));
         assert_eq!(entry.after_available, Some(985));
         assert!(entry.matches_balance_update(&result.changed_margin_balances[0]));
