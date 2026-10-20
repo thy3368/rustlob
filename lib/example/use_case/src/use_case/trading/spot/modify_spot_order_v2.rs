@@ -474,8 +474,10 @@ fn merge_balance_pairs(
     before: Vec<Balance>,
     after: Vec<Balance>,
 ) -> Result<Vec<UpdatedEntityPair<Balance>>, ModifySpotOrderV2Error> {
-    let before_map =
-        before.into_iter().map(|balance| (balance.business_entity_id(), balance)).collect::<HashMap<_, _>>();
+    let before_map = before
+        .into_iter()
+        .map(|balance| (balance.business_entity_id(), balance))
+        .collect::<HashMap<_, _>>();
     let mut seen = HashSet::new();
     let mut pairs = Vec::new();
     for after_balance in after {

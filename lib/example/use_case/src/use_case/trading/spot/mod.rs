@@ -7,23 +7,26 @@ pub mod place_only_spot_order_v2;
 pub mod modify_spot_order_v2;
 pub mod pending_trigger_spot_order_source;
 
-pub mod agg;
+pub mod pipeline;
+
+pub mod observer;
+pub use observer::{MatchSpotOrderWithNplV3UseCase, SpotTradeObserver, StdoutSpotTradeObserver};
 pub mod generate_spot_klines_from_historical_trades;
 
 pub use activate_spot_order_v2::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
 };
-pub use agg::activate_match_spot_order_v2::{
+pub use pipeline::activate_match_spot_order_v2::{
     ActivateMatchSpotOrderV2AfterChanges, ActivateMatchSpotOrderV2Changes,
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error, ActivateMatchSpotOrderV2State,
     ActivateMatchSpotOrderV2UseCase,
 };
-pub use agg::place_match_spot_order_v2::{
+pub use pipeline::place_match_spot_order_v2::{
     PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
     PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
 };
-pub use agg::{
+pub use pipeline::{
     SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError,
     SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotBlockUseCase,
 };

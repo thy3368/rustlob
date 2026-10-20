@@ -458,8 +458,10 @@ fn merge_balance_pairs(
     before: Vec<Balance>,
     after: Vec<Balance>,
 ) -> Result<Vec<UpdatedEntityPair<Balance>>, CancelSpotOrderV2Error> {
-    let before_map =
-        before.into_iter().map(|balance| (balance.business_entity_id(), balance)).collect::<HashMap<_, _>>();
+    let before_map = before
+        .into_iter()
+        .map(|balance| (balance.business_entity_id(), balance))
+        .collect::<HashMap<_, _>>();
     let mut seen = HashSet::new();
     let mut pairs = Vec::with_capacity(after.len());
     for balance in after {
