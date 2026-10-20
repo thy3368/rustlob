@@ -78,7 +78,6 @@ impl From<BalanceError> for BalanceLedgerEntryV2Error {
 pub struct BalanceLedgerV2 {
     /// 流水记录 ID。
     pub entry_id: u64,
-
     /// 用户 ID 或业务主体 ID。
     pub party_id: u64,
     /// 账户 ID。
@@ -124,19 +123,16 @@ impl BalanceLedgerEntryIdInput for &str {
 
 impl BalanceLedgerV2 {
     /// 构造一条冻结可用余额的流水事实。
-    pub fn freeze<I: BalanceLedgerEntryIdInput>(
-        entry_id: I,
-        account_id: String,
-        asset_id: String,
-        balance_entity_id: String,
+    pub fn freeze<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
+        entry_id: I, account_id: A, asset_id: T, party_id: P,
         amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id,
-            asset_id,
-            balance_entity_id,
+            account_id.into_entry_id(),
+            asset_id.into_entry_id(),
+            party_id.into_entry_id(),
             amount,
             reason,
             BalanceLedgerOperation::Freeze,
@@ -144,19 +140,15 @@ impl BalanceLedgerV2 {
     }
 
     /// 构造一条解冻冻结余额的流水事实。
-    pub fn unfreeze<I: BalanceLedgerEntryIdInput>(
+    pub fn unfreeze<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
         entry_id: I,
-        account_id: String,
-        asset_id: String,
-        balance_entity_id: String,
+        account_id: A, asset_id: T, party_id: P,
         amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id,
-            asset_id,
-            balance_entity_id,
+            account_id.into_entry_id(), asset_id.into_entry_id(), party_id.into_entry_id(),
             amount,
             reason,
             BalanceLedgerOperation::Unfreeze,
@@ -164,39 +156,30 @@ impl BalanceLedgerV2 {
     }
 
     /// 构造一条增加可用余额的流水事实。
-    pub fn credit_available<I: BalanceLedgerEntryIdInput>(
+    pub fn credit_available<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
         entry_id: I,
-        account_id: String,
-        asset_id: String,
-        balance_entity_id: String,
-        amount: u64,
+        account_id: A, asset_id: T, party_id: P, amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id,
-            asset_id,
-            balance_entity_id,
-            amount,
+            account_id.into_entry_id(), asset_id.into_entry_id(),
+            party_id.into_entry_id(), amount,
             reason,
             BalanceLedgerOperation::CreditAvailable,
         )
     }
 
     /// 构造一条扣减可用余额的流水事实。
-    pub fn debit_available<I: BalanceLedgerEntryIdInput>(
+    pub fn debit_available<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
         entry_id: I,
-        account_id: String,
-        asset_id: String,
-        balance_entity_id: String,
+        account_id: A, asset_id: T, party_id: P,
         amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id,
-            asset_id,
-            balance_entity_id,
+            account_id.into_entry_id(), asset_id.into_entry_id(), party_id.into_entry_id(),
             amount,
             reason,
             BalanceLedgerOperation::DebitAvailable,
@@ -204,19 +187,15 @@ impl BalanceLedgerV2 {
     }
 
     /// 构造一条扣减冻结余额的流水事实。
-    pub fn debit_frozen<I: BalanceLedgerEntryIdInput>(
+    pub fn debit_frozen<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
         entry_id: I,
-        account_id: String,
-        asset_id: String,
-        balance_entity_id: String,
+        account_id: A, asset_id: T, party_id: P,
         amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id,
-            asset_id,
-            balance_entity_id,
+            account_id.into_entry_id(), asset_id.into_entry_id(), party_id.into_entry_id(),
             amount,
             reason,
             BalanceLedgerOperation::DebitFrozen,
@@ -225,9 +204,9 @@ impl BalanceLedgerV2 {
 
     fn new_operation(
         entry_id: u64,
-        account_id: String,
-        asset_id: String,
-        balance_entity_id: String,
+        account_id: u64,
+        asset_id: u64,
+        party_id: u64,
         amount: u64,
         reason: BalanceLedgerReason,
         operation: BalanceLedgerOperation,
@@ -238,9 +217,9 @@ impl BalanceLedgerV2 {
 
         Ok(Self {
             entry_id,
+            party_id,
             account_id,
             asset_id,
-            balance_entity_id,
             operation,
             amount,
             before_available: None,
@@ -258,7 +237,7 @@ impl BalanceLedgerV2 {
         }
         if self.account_id != balance.account_id
             || self.asset_id != balance.asset_id
-            || self.balance_entity_id != balance.business_entity_id()
+            || self.party_id != balance.party_id
         {
             return Err(BalanceLedgerEntryV2Error::BalanceIdentityMismatch);
         }
@@ -302,7 +281,7 @@ impl BalanceLedgerV2 {
         self.is_applied()
             && self.account_id == updated_balance.after.account_id
             && self.asset_id == updated_balance.after.asset_id
-            && self.balance_entity_id == updated_balance.after.business_entity_id()
+            && self.party_id == updated_balance.after.party_id
             && self.before_available == Some(updated_balance.before.available)
             && self.before_frozen == Some(updated_balance.before.frozen)
             && self.after_available == Some(updated_balance.after.available)
@@ -346,9 +325,9 @@ impl FieldDiff for BalanceLedgerV2 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("entry_id", "", self.entry_id.to_string()),
-            EntityFieldChange::new("account_id", "", self.account_id.clone()),
-            EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
-            EntityFieldChange::new("balance_entity_id", "", self.balance_entity_id.clone()),
+            EntityFieldChange::new("party_id", "", self.party_id.to_string()),
+            EntityFieldChange::new("account_id", "", self.account_id.to_string()),
+            EntityFieldChange::new("asset_id", "", self.asset_id.to_string()),
             EntityFieldChange::new("operation", "", self.operation.as_str()),
             EntityFieldChange::new("amount", "", self.amount.to_string()),
             EntityFieldChange::new(
@@ -437,9 +416,7 @@ impl Entity for BalanceLedgerV2 {
     }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "account_id"
-            | "asset_id"
-            | "balance_entity_id"
+            "party_id" | "account_id" | "asset_id"
             | "operation"
             | "on_command"
             | "reason"
