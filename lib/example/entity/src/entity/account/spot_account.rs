@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FourColorArchetype,
-    ObjectType, function,
+    function, AggregateRole, Entity, EntityFieldChange, FieldDiff,
+    FourColorArchetype, ObjectType,
 };
 use serde::{Deserialize, Serialize};
 
@@ -151,6 +151,10 @@ impl common_entity::Shard for SpotAccount {
 impl Entity for SpotAccount {
     fn entity_id(&self) -> u64 {
         self.account_id
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 
     fn entity_type() -> u8 {

@@ -271,6 +271,9 @@ pub trait EntityLifecycle {
 pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
     fn entity_id(&self) -> u64;
 
+    ///true/derive
+    fn is_derived() -> bool;
+
     fn entity_type() -> u8
     where
         Self: Sized;

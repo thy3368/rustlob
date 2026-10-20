@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff, FourColorArchetype};
+use common_entity::{Entity, EntityFieldChange, FieldDiff, FourColorArchetype};
 
 const CEX_OPTION_INSTRUMENT_ENTITY_TYPE: u8 = 40;
 
@@ -162,6 +162,10 @@ impl common_entity::Shard for CexOptionInstrument {
 impl Entity for CexOptionInstrument {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.instrument_id)
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 
     fn entity_type() -> u8 {

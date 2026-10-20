@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
+use common_entity::{Entity, EntityFieldChange, FieldDiff};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -281,6 +281,10 @@ impl common_entity::Shard for SpotBalance {
 impl Entity for SpotBalance {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.business_entity_id())
+    }
+
+    fn is_derived() -> bool {
+        true
     }
 
     fn entity_type() -> u8 {

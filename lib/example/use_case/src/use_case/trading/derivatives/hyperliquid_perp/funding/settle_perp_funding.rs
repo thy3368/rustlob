@@ -198,14 +198,14 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
         let mut changed_margin_balances = Vec::with_capacity(0);
         let mut created_balance_ledger_entries = Vec::with_capacity(0);
         for mut balance in state.margin_balances {
-            let key = balance_key(balance.account_id.as_str(), balance.asset_id.as_str());
+            let key = balance.business_entity_id();
             let Some(delta) = outcome.balance_deltas.get(&key) else {
                 continue;
             };
             if delta.available_delta == 0 {
                 continue;
             }
-            let balance_id = balance_key(balance.account_id.as_str(), balance.asset_id.as_str());
+            let balance_id = balance.business_entity_id();
             let reason = balance_ledger_reasons
                 .get(&balance_id)
                 .cloned()
@@ -343,7 +343,7 @@ fn derive_cross_outcome(
         outcome.settlements.push(settlement);
         let delta = outcome
             .balance_deltas
-            .entry(balance_key(account_id.as_str(), state.margin_asset_id.as_str()))
+            .entry(balance_key(&account_id, state.margin_asset_id.as_str()))
             .or_default();
         delta.available_delta = delta
             .available_delta
@@ -377,10 +377,10 @@ fn balance_map<'a>(
 ) -> Result<BTreeMap<String, &'a SpotBalance>, SettleHyperliquidPerpFundingError> {
     let mut map = BTreeMap::new();
     for balance in balances {
-        if !balance.is_asset(margin_asset_id) {
+        if !balance.is_asset(common_entity::stable_string_entity_id(margin_asset_id)) {
             return Err(SettleHyperliquidPerpFundingError::InvalidMarginBalance);
         }
-        map.insert(balance_key(balance.account_id.as_str(), balance.asset_id.as_str()), balance);
+        map.insert(balance.business_entity_id(), balance);
     }
     Ok(map)
 }
@@ -482,8 +482,8 @@ mod tests {
                 position("position-short", "trader-2", -2, 5),
             ],
             margin_balances: vec![
-                SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 0, 7),
-                SpotBalance::new("trader-2".to_string(), "USDC".to_string(), 1_000, 0, 11),
+                SpotBalance::new(common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("USDC"), 1_000, 0, 7),
+                SpotBalance::new(common_entity::stable_string_entity_id("trader-2"), common_entity::stable_string_entity_id("trader-2"), common_entity::stable_string_entity_id("USDC"), 1_000, 0, 11),
             ],
             margin_asset_id: "USDC".to_string(),
             settled_position_ids: Vec::with_capacity(0),
@@ -515,8 +515,9 @@ mod tests {
                 position("position-long-2", "trader-1", 1, 4),
             ],
             margin_balances: vec![SpotBalance::new(
-                "trader-1".to_string(),
-                "USDC".to_string(),
+                common_entity::stable_string_entity_id("trader-1"),
+                common_entity::stable_string_entity_id("trader-1"),
+                common_entity::stable_string_entity_id("USDC"),
                 1_000,
                 0,
                 7,
@@ -558,7 +559,7 @@ mod tests {
         let state = cross_state();
         let mut isolated_state = state;
         isolated_state.margin_balances =
-            vec![SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 0, 7)];
+            vec![SpotBalance::new(common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("USDC"), 1_000, 0, 7)];
         isolated_state.margin_mode = HyperliquidPerpMarginMode::Isolated;
         assert_eq!(
             use_case.validate_against_state(&cmd, &isolated_state),
@@ -577,14 +578,14 @@ mod tests {
         assert_eq!(result.changed_margin_balances.len(), 2);
         assert_eq!(result.created_balance_ledger_entries.len(), 2);
         assert!(result.changed_margin_balances.iter().any(|pair| {
-            pair.before.account_id == "trader-1"
+            pair.before.account_id == common_entity::stable_string_entity_id("trader-1")
                 && pair.before.available == 1_000
                 && pair.after.available == 990
                 && pair.before.frozen == 0
                 && pair.after.frozen == 0
         }));
         assert!(result.changed_margin_balances.iter().any(|pair| {
-            pair.before.account_id == "trader-2"
+            pair.before.account_id == common_entity::stable_string_entity_id("trader-2")
                 && pair.before.available == 1_000
                 && pair.after.available == 1_010
                 && pair.before.frozen == 0
@@ -667,13 +668,13 @@ mod tests {
             result
                 .created_settlements
                 .iter()
-                .any(|settlement| settlement.account_id == pair.before.account_id)
+                .any(|settlement| common_entity::stable_string_entity_id(&settlement.account_id) == pair.before.account_id)
         }));
         assert!(result.created_balance_ledger_entries.iter().all(|entry| {
             result
                 .created_settlements
                 .iter()
-                .any(|settlement| settlement.account_id == entry.account_id)
+                .any(|settlement| common_entity::stable_string_entity_id(&settlement.account_id) == entry.account_id)
         }));
     }
 
@@ -723,12 +724,12 @@ mod tests {
                 && settlement.funding_rate_e8 == -10_000
         }));
         assert!(result.changed_margin_balances.iter().any(|pair| {
-            pair.before.account_id == "trader-1"
+            pair.before.account_id == common_entity::stable_string_entity_id("trader-1")
                 && pair.before.available == 1_000
                 && pair.after.available == 1_010
         }));
         assert!(result.changed_margin_balances.iter().any(|pair| {
-            pair.before.account_id == "trader-2"
+            pair.before.account_id == common_entity::stable_string_entity_id("trader-2")
                 && pair.before.available == 1_000
                 && pair.after.available == 990
         }));
@@ -748,7 +749,7 @@ mod tests {
 
         for entry in &result.created_balance_ledger_entries {
             let expected_settlements =
-                settlements_by_account.get(entry.account_id.as_str()).unwrap();
+                settlements_by_account.get(entry.account_id.to_string().as_str()).unwrap();
             match &entry.reason {
                 BalanceLedgerReason::SettlePerpFunding {
                     funding_batch_id,
@@ -782,7 +783,7 @@ mod tests {
         let mut state = cross_state();
         state.positions.truncate(1);
         state.margin_balances =
-            vec![SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 1, 0, 7)];
+            vec![SpotBalance::new(common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("USDC"), 1, 0, 7)];
         let cmd = SettleHyperliquidPerpFundingCmd {
             party_id: "trader-1".to_string(),
             position_ids: vec!["position-long".to_string()],
@@ -846,7 +847,7 @@ mod tests {
         let mut accounts = result
             .created_balance_ledger_entries
             .iter()
-            .map(|entry| entry.account_id.as_str())
+            .map(|entry| entry.account_id.to_string())
             .collect::<Vec<_>>();
         accounts.sort_unstable();
 

@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FinancialClassification,
+    AggregateRole, Entity, EntityFieldChange, FieldDiff, FinancialClassification,
     FourColorArchetype,
 };
 use thiserror::Error;
@@ -611,6 +611,10 @@ impl Entity for CexOptionOrder {
             "price" | "quantity" | "filled_quantity" => 1,
             _ => 0,
         }
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 }
 

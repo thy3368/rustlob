@@ -216,7 +216,7 @@ pub(super) fn balance_replay_events_from_ledger_entries(
 
     let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
-        let Some(before) = current_balances.get(&entry.balance_entity_id).cloned() else {
+        let Some(before) = current_balances.get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string())).cloned() else {
             return Err(common_entity::EntityError::Custom(
                 "balance ledger entry does not belong to updated balances".to_string(),
             ));
@@ -247,14 +247,15 @@ pub(super) fn balance_replay_events_from_ledger_entries(
             .checked_add(1)
             .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
         let after = SpotBalance::new(
-            before.account_id.clone(),
-            before.asset_id.clone(),
+            before.party_id,
+            before.account_id,
+            before.asset_id,
             entry_after_available,
             entry_after_frozen,
             next_version,
         );
         events.push(after.track_update_event_from(&before)?);
-        current_balances.insert(entry.balance_entity_id.clone(), after);
+        current_balances.insert(concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(), after);
     }
 
     for balance in updated_balances {

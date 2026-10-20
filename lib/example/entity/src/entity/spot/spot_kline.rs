@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
+    Entity, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
@@ -114,6 +114,10 @@ impl FieldDiff for SpotKline {
 impl Entity for SpotKline {
     fn entity_id(&self) -> u64 {
         self.id
+    }
+
+    fn is_derived() -> bool {
+        true
     }
 
     fn entity_type() -> u8 {

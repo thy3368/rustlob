@@ -111,7 +111,7 @@ pub struct Reservation {
     pub reservation_kind: ReservationKind,
     /// 被冻结的资产或保证金资产 ID。
     pub asset_id: String,
-    /// 创建冻结时的原始冻结数量，必须大于 0。
+    /// 创建冻结时的原始冻结数量，必须大于 0。 todo 按理只记他就行了
     pub original_amount: u64,
     /// 已因成交、开仓或结算等业务消耗的冻结数量。
     pub consumed_amount: u64,
@@ -460,6 +460,10 @@ impl Entity for Reservation {
             "original_amount" | "consumed_amount" | "released_amount" | "remaining_amount" => 1,
             _ => 0,
         }
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 }
 

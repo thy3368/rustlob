@@ -125,8 +125,9 @@ mod tests {
     fn sample_state() -> DepositQuoteState {
         DepositQuoteState {
             quote_balance: SpotBalance {
-                account_id: "trader-1".to_string(),
-                asset_id: "USDT".to_string(),
+                party_id: common_entity::stable_string_entity_id("trader-1"),
+                account_id: common_entity::stable_string_entity_id("trader-1"),
+                asset_id: common_entity::stable_string_entity_id("USDT"),
                 available: 1_000,
                 frozen: 50,
                 entry_notional: None,

@@ -1,6 +1,6 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FieldDiff,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff,
     FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
@@ -476,6 +476,10 @@ impl Entity for BalanceLedgerV2 {
             | "before_available" | "before_frozen" | "after_available" | "after_frozen" => 1,
             _ => 0,
         }
+    }
+
+    fn is_derived() -> bool {
+        true
     }
 }
 

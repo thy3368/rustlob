@@ -198,7 +198,7 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
             .collect::<Vec<_>>();
         let mut changed_margin_balances = Vec::with_capacity(0);
         for balance in &state.margin_balances {
-            let key = balance_key(&balance.account_id, &balance.asset_id);
+            let key = balance.business_entity_id();
             let Some(delta) = outcome.balance_deltas.get(&key) else {
                 continue;
             };
@@ -209,8 +209,9 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
                 .checked_add(1)
                 .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
             let next_balance = SpotBalance::new_with_snapshot_facts(
-                balance.account_id.clone(),
-                balance.asset_id.clone(),
+                balance.party_id,
+                balance.account_id,
+                balance.asset_id,
                 next_available,
                 next_frozen,
                 balance.entry_notional(),
@@ -396,7 +397,7 @@ fn validate_balances_can_apply(
     for (key, delta) in deltas {
         let balance =
             balances.get(key).ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
-        if !balance.is_asset(state.margin_asset_id.as_str()) {
+        if !balance.is_asset(common_entity::stable_string_entity_id(&state.margin_asset_id)) {
             return Err(SettleHyperliquidPerpTradeError::InvalidMarginBalance);
         }
         if apply_signed_delta(balance.available, delta.available_delta).is_err() {
@@ -472,7 +473,7 @@ fn position_map(positions: impl Iterator<Item = PerpPosition>) -> BTreeMap<Strin
 fn balance_map(balances: &[SpotBalance]) -> HashMap<String, &SpotBalance> {
     balances
         .iter()
-        .map(|balance| (balance_key(&balance.account_id, &balance.asset_id), balance))
+        .map(|balance| (balance.business_entity_id(), balance))
         .collect()
 }
 
@@ -565,7 +566,7 @@ mod tests {
     }
 
     fn balance(account_id: &str, available: u64, frozen: u64) -> SpotBalance {
-        SpotBalance::new(account_id.to_string(), "USDC".to_string(), available, frozen, 7)
+        SpotBalance::new(common_entity::stable_string_entity_id(account_id), common_entity::stable_string_entity_id(account_id), common_entity::stable_string_entity_id("USDC"), available, frozen, 7)
     }
 
     fn state(

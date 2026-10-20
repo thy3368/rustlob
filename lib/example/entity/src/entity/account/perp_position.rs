@@ -1,7 +1,7 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
+use common_entity::{Entity, EntityFieldChange, FieldDiff};
 use thiserror::Error;
 
-use crate::entity::perp::fund::hyperliquid_perp_funding_settlement::HyperliquidPerpFundingSettlement;
+use crate::entity::perp::fund::perp_funding_settlement::HyperliquidPerpFundingSettlement;
 use crate::support::concat2;
 
 const HYPERLIQUID_PERP_POSITION_ENTITY_TYPE: u8 = 11;
@@ -671,6 +671,11 @@ impl common_entity::Shard for PerpPosition {
 impl Entity for PerpPosition {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.position_key)
+    }
+
+    fn is_derived() -> bool {
+        true
+
     }
 
     fn entity_type() -> u8 {

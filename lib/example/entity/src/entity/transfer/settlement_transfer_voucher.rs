@@ -1,12 +1,12 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel,
     EntityUseCaseApiSurface, FieldDiff, FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::BalanceLedgerReason;
 use crate::account::balance_ledger_v2::{BalanceLedgerEntryV2Error, BalanceLedgerV2};
 use crate::support::{concat2, derived_entity_id};
+use crate::BalanceLedgerReason;
 
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;
 const SETTLEMENT_TRANSFER_LEG_ENTITY_TYPE: u8 = 22;
@@ -264,6 +264,10 @@ impl Entity for SettlementTransferLeg {
     }
     fn replay_field_type(field_name: &str) -> u8 {
         if field_name == "amount" { 1 } else { 0 }
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 }
 
@@ -689,5 +693,9 @@ impl Entity for SettlementTransferVoucher {
         } else {
             0
         }
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 }

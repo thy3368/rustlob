@@ -1,12 +1,12 @@
 use std::cmp::Ordering;
 
-use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
+use common_entity::{Entity, EntityFieldChange, FieldDiff};
 
-use crate::HyperliquidPerpOrderSide;
 use crate::entity::{
     HyperliquidPerpPositionError, HyperliquidPerpPositionTradeOutcome, PerpPosition,
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
 };
+use crate::HyperliquidPerpOrderSide;
 
 const HYPERLIQUID_PERP_TRADE_ENTITY_TYPE: u8 = 10;
 
@@ -433,6 +433,10 @@ impl common_entity::Shard for HyperliquidPerpTrade {
 impl Entity for HyperliquidPerpTrade {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.trade_id)
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 
     fn entity_type() -> u8 {

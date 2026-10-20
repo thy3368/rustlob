@@ -1,1 +1,1 @@
-pub mod hyperliquid_perp_funding_settlement;
+pub mod perp_funding_settlement;

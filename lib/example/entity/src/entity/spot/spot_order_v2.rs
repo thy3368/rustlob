@@ -1,13 +1,13 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityLifecycle, FieldDiff,
-    FinancialClassification, FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityLifecycle, FieldDiff, FinancialClassification,
+    FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::spot_order_primitives::{
-    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderTriggerRole,
-    SpotOrderType, option_status_reason_value, push_change,
+    option_status_reason_value, push_change, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotOrderTif, SpotOrderTriggerRole, SpotOrderType,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -345,21 +345,17 @@ pub struct SpotOrderV2 {
     /// 买卖方向。
     pub side: SpotOrderSide,
     /// Hyperliquid `p` 字段；market 意图同样保存其激进限价。
-    #[serde(default)]
     pub limit_price: u64,
-    /// 是否仅允许减少既有敞口。实体保存意图，不在订单内模拟仓位。
-    #[serde(default)]
-    pub reduce_only: bool,
-    /// 统一的 Hyperliquid 订单类型事实。
-    #[serde(default = "SpotOrderV2::serde_default_order_type")]
-    pub order_type: SpotOrderType,
-    /// `normalTpsl` 父子关系；历史订单反序列化时默认为独立订单。
-    #[serde(default)]
-    pub group_relation: SpotOrderGroupRelation,
     /// 以 base asset 计价的下单数量。
     pub qty: u64,
     /// 已成交数量。
     pub filled_qty: u64,
+    /// 是否仅允许减少既有敞口。实体保存意图，不在订单内模拟仓位。
+    pub reduce_only: bool,
+    /// 统一的 Hyperliquid 订单类型事实。
+    pub order_type: SpotOrderType,
+    /// `normalTpsl` 父子关系；历史订单反序列化时默认为独立订单。
+    pub group_relation: SpotOrderGroupRelation,
     /// 本地生命周期状态。
     pub status: SpotOrderStatus,
     /// Hyperliquid 细分状态原因。
@@ -1783,6 +1779,10 @@ impl Entity for SpotOrderV2 {
             | "fee_reservation_remaining_amount" => 1,
             _ => 0,
         }
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 }
 

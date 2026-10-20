@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
+use common_entity::{Entity, EntityFieldChange, FieldDiff};
 use thiserror::Error;
 
 use crate::entity::HyperliquidPerpMarginMode;
@@ -146,6 +146,10 @@ impl common_entity::Shard for HyperliquidPerpLeverageSetting {
 impl Entity for HyperliquidPerpLeverageSetting {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.setting_id)
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 
     fn entity_type() -> u8 {

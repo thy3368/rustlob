@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FieldDiff,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff,
     FinancialClassification, FourColorArchetype,
 };
 
@@ -217,6 +217,10 @@ impl Entity for HyperliquidPerpFundingSettlement {
             | "signed_usdc_delta" | "n_samples" => 1,
             _ => 0,
         }
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 }
 

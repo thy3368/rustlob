@@ -470,6 +470,10 @@ impl Entity for SpotTrade {
             _ => 0,
         }
     }
+
+    fn is_derived() -> bool {
+        false
+    }
 }
 
 impl common_entity::Shard for SpotTrade {

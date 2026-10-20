@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FinancialClassification,
+    AggregateRole, Entity, EntityFieldChange, FieldDiff, FinancialClassification,
     FourColorArchetype,
 };
 use thiserror::Error;
@@ -706,6 +706,10 @@ impl Entity for HyperliquidPerpOrder {
             | "reservation_remaining_amount" => 1,
             _ => 0,
         }
+    }
+
+    fn is_derived() -> bool {
+        false
     }
 }
 
