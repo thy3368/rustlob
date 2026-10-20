@@ -75,14 +75,17 @@ impl From<BalanceError> for BalanceLedgerEntryV2Error {
 /// 该实体先记录某条 `Balance` 的身份、业务操作与金额，成功应用到余额后再补齐 before/after 快照。
 /// 在聚合边界上，它自身作为一条独立的审计事实聚合根存在。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BalanceLedgerEntryV2 {
+pub struct BalanceLedgerV2 {
     /// 流水记录 ID。
     pub entry_id: u64,
+
+    // /// 用户 ID 或业务主体 ID。
+    // pub party_id: u64,
     /// 账户 ID。
     pub account_id: String,
     /// 资产 ID。
     pub asset_id: String,
-    /// 对应余额快照实体 ID。
+    /// 对应余额快照实体 ID。好象可以不要
     pub balance_entity_id: String,
     /// 本条流水表达的余额操作。
     pub operation: BalanceLedgerOperation,
@@ -120,7 +123,7 @@ impl BalanceLedgerEntryIdInput for &str {
     }
 }
 
-impl BalanceLedgerEntryV2 {
+impl BalanceLedgerV2 {
     /// 构造一条冻结可用余额的流水事实。
     pub fn freeze<I: BalanceLedgerEntryIdInput>(
         entry_id: I,
@@ -340,7 +343,7 @@ impl BalanceLedgerEntryV2 {
     }
 }
 
-impl FieldDiff for BalanceLedgerEntryV2 {
+impl FieldDiff for BalanceLedgerV2 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("entry_id", "", self.entry_id.to_string()),
@@ -399,13 +402,13 @@ impl FieldDiff for BalanceLedgerEntryV2 {
     }
 }
 
-impl common_entity::Shard for BalanceLedgerEntryV2 {
+impl common_entity::Shard for BalanceLedgerV2 {
     fn partition(&self) -> u8 {
         todo!()
     }
 }
 
-impl Entity for BalanceLedgerEntryV2 {
+impl Entity for BalanceLedgerV2 {
     fn entity_id(&self) -> u64 {
         self.entry_id
     }

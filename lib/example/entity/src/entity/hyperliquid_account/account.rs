@@ -8,9 +8,9 @@ use super::{PerpClearinghouseState, SpotClearinghouseState};
 ///
 /// 该值对象不承载 wire 层编号格式，只表达核心领域里的稳定身份。
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct AccountId(String);
+pub struct u64(String);
 
-impl AccountId {
+impl u64 {
     /// 基于已知业务事实构造账户标识。
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
@@ -22,19 +22,19 @@ impl AccountId {
     }
 }
 
-impl From<&str> for AccountId {
+impl From<&str> for u64 {
     fn from(value: &str) -> Self {
         Self::new(value)
     }
 }
 
-impl From<String> for AccountId {
+impl From<String> for u64 {
     fn from(value: String) -> Self {
         Self::new(value)
     }
 }
 
-impl fmt::Display for AccountId {
+impl fmt::Display for u64 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
@@ -117,28 +117,28 @@ impl fmt::Display for PerpAssetId {
 /// 该对象属于 `Party/Place/Thing`，主要承载所有权和归属查询语义。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MasterAccount {
-    account_id: AccountId,
-    sub_account_ids: Vec<AccountId>,
+    account_id: u64,
+    sub_account_ids: Vec<u64>,
 }
 
 impl MasterAccount {
     /// 从已校验事实装配主账户主档。
-    pub fn new(account_id: AccountId, sub_account_ids: Vec<AccountId>) -> Self {
+    pub fn new(account_id: u64, sub_account_ids: Vec<u64>) -> Self {
         Self { account_id, sub_account_ids }
     }
 
     /// 返回主账户标识。
-    pub fn account_id(&self) -> &AccountId {
+    pub fn account_id(&self) -> &u64 {
         &self.account_id
     }
 
     /// 返回主账户当前拥有的子账户列表。
-    pub fn sub_account_ids(&self) -> &[AccountId] {
+    pub fn sub_account_ids(&self) -> &[u64] {
         &self.sub_account_ids
     }
 
     /// 返回指定子账户是否归属于该主账户。
-    pub fn owns(&self, account_id: &AccountId) -> bool {
+    pub fn owns(&self, account_id: &u64) -> bool {
         self.sub_account_ids.iter().any(|candidate| candidate == account_id)
     }
 }
@@ -148,28 +148,28 @@ impl MasterAccount {
 /// 该对象属于 `Party/Place/Thing`，主要承载归属与展示层需要的稳定业务事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubAccountProfile {
-    account_id: AccountId,
-    master_account_id: AccountId,
+    account_id: u64,
+    master_account_id: u64,
     display_name: String,
 }
 
 impl SubAccountProfile {
     /// 从已校验事实装配子账户主档。
     pub fn new(
-        account_id: AccountId,
-        master_account_id: AccountId,
+        account_id: u64,
+        master_account_id: u64,
         display_name: impl Into<String>,
     ) -> Self {
         Self { account_id, master_account_id, display_name: display_name.into() }
     }
 
     /// 返回子账户标识。
-    pub fn account_id(&self) -> &AccountId {
+    pub fn account_id(&self) -> &u64 {
         &self.account_id
     }
 
     /// 返回归属的主账户标识。
-    pub fn master_account_id(&self) -> &AccountId {
+    pub fn master_account_id(&self) -> &u64 {
         &self.master_account_id
     }
 
@@ -237,7 +237,7 @@ impl SubAccountSnapshot {
     }
 
     /// 返回当前聚合快照对应的子账户标识。
-    pub fn account_id(&self) -> &AccountId {
+    pub fn account_id(&self) -> &u64 {
         self.profile.account_id()
     }
 }
@@ -249,12 +249,12 @@ pub enum SubAccountSnapshotError {
     #[error(
         "spot clearinghouse state account_id mismatch: profile={profile_account_id}, spot={spot_account_id}"
     )]
-    SpotAccountMismatch { profile_account_id: AccountId, spot_account_id: AccountId },
+    SpotAccountMismatch { profile_account_id: u64, spot_account_id: u64 },
     /// perp 清算状态不属于该子账户。
     #[error(
         "perp clearinghouse state account_id mismatch: profile={profile_account_id}, perp={perp_account_id}"
     )]
-    PerpAccountMismatch { profile_account_id: AccountId, perp_account_id: AccountId },
+    PerpAccountMismatch { profile_account_id: u64, perp_account_id: u64 },
 }
 
 #[cfg(test)]
@@ -274,7 +274,7 @@ mod tests {
 
     fn sample_spot(account_id: &str) -> SpotClearinghouseState {
         SpotClearinghouseState::new(
-            AccountId::from(account_id),
+            u64::from(account_id),
             vec![Balance::new_with_snapshot_facts(
                 account_id.to_string(),
                 "USDC".to_string(),
@@ -301,7 +301,7 @@ mod tests {
             1,
         );
         PerpClearinghouseState::new(
-            AccountId::from(account_id),
+            u64::from(account_id),
             vec![PerpPositionRiskSnapshot {
                 position,
                 mark_price: dec(100_000),
@@ -336,34 +336,34 @@ mod tests {
     #[test]
     fn master_account_and_profile_form_ownership_relation() {
         let master = MasterAccount::new(
-            AccountId::from("master-1"),
-            vec![AccountId::from("sub-1"), AccountId::from("sub-2")],
+            u64::from("master-1"),
+            vec![u64::from("sub-1"), u64::from("sub-2")],
         );
         let profile =
-            SubAccountProfile::new(AccountId::from("sub-1"), AccountId::from("master-1"), "alpha");
+            SubAccountProfile::new(u64::from("sub-1"), u64::from("master-1"), "alpha");
 
-        assert!(master.owns(&AccountId::from("sub-1")));
-        assert!(!master.owns(&AccountId::from("sub-9")));
+        assert!(master.owns(&u64::from("sub-1")));
+        assert!(!master.owns(&u64::from("sub-9")));
         assert!(profile.belongs_to(&master));
     }
 
     #[test]
     fn sub_account_snapshot_try_new_accepts_consistent_account_ids() {
         let profile =
-            SubAccountProfile::new(AccountId::from("sub-1"), AccountId::from("master-1"), "alpha");
+            SubAccountProfile::new(u64::from("sub-1"), u64::from("master-1"), "alpha");
 
         let snapshot =
             SubAccountSnapshot::try_new(profile, sample_spot("sub-1"), sample_perp("sub-1"))
                 .expect("consistent account ids should assemble");
 
-        assert_eq!(snapshot.account_id(), &AccountId::from("sub-1"));
+        assert_eq!(snapshot.account_id(), &u64::from("sub-1"));
         assert_eq!(snapshot.spot().available_balance_of(&AssetId::from("USDC")), 10);
     }
 
     #[test]
     fn sub_account_snapshot_try_new_rejects_spot_account_mismatch() {
         let profile =
-            SubAccountProfile::new(AccountId::from("sub-1"), AccountId::from("master-1"), "alpha");
+            SubAccountProfile::new(u64::from("sub-1"), u64::from("master-1"), "alpha");
 
         let error =
             SubAccountSnapshot::try_new(profile, sample_spot("sub-2"), sample_perp("sub-1"))
@@ -372,8 +372,8 @@ mod tests {
         assert_eq!(
             error,
             SubAccountSnapshotError::SpotAccountMismatch {
-                profile_account_id: AccountId::from("sub-1"),
-                spot_account_id: AccountId::from("sub-2"),
+                profile_account_id: u64::from("sub-1"),
+                spot_account_id: u64::from("sub-2"),
             }
         );
     }
@@ -381,7 +381,7 @@ mod tests {
     #[test]
     fn sub_account_snapshot_try_new_rejects_perp_account_mismatch() {
         let profile =
-            SubAccountProfile::new(AccountId::from("sub-1"), AccountId::from("master-1"), "alpha");
+            SubAccountProfile::new(u64::from("sub-1"), u64::from("master-1"), "alpha");
 
         let error =
             SubAccountSnapshot::try_new(profile, sample_spot("sub-1"), sample_perp("sub-2"))
@@ -390,8 +390,8 @@ mod tests {
         assert_eq!(
             error,
             SubAccountSnapshotError::PerpAccountMismatch {
-                profile_account_id: AccountId::from("sub-1"),
-                perp_account_id: AccountId::from("sub-2"),
+                profile_account_id: u64::from("sub-1"),
+                perp_account_id: u64::from("sub-2"),
             }
         );
     }

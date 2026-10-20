@@ -80,7 +80,7 @@ fn assert_no_margin_ledger_or_balance_pair(changes: &PlaceHyperliquidPerpOrderCh
 
 fn assert_balance_ledger_created_event(event: &cmd_handler::EntityReplayableEvent) {
     assert_eq!(event.change_type, 0);
-    assert_eq!(event.entity_type, <crate::entity::BalanceLedgerEntryV2 as Entity>::entity_type());
+    assert_eq!(event.entity_type, <crate::entity::BalanceLedgerV2 as Entity>::entity_type());
 }
 
 fn use_case() -> PlaceHyperliquidPerpOrderUseCase {

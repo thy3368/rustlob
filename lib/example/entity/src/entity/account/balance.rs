@@ -28,10 +28,12 @@ pub enum BalanceError {
 /// 一个账户可以拥有多条 `Balance`：例如 BTC、USDT、USDC 各一条。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Balance {
+    // /// 用户 ID 或业务主体 ID。
+    // pub party_id: u64,
     /// 账户 ID。
-    pub account_id: String,
+    pub account_id: u64,
     /// 资产 ID，例如 `BTC`、`USDT` 或 Hyperliquid token id 字符串。
-    pub asset_id: String,
+    pub asset_id: u64,
     /// 可用余额。
     pub available: u64,
     /// 冻结或占用余额。
@@ -49,13 +51,15 @@ pub struct Balance {
 impl Balance {
     /// 从已经校验过的业务事实或回放事件构造资产余额。
     pub fn new(
-        account_id: String,
-        asset_id: String,
+        party_id: u64,
+        account_id: u64,
+        asset_id: u64,
         available: u64,
         frozen: u64,
         version: u64,
     ) -> Self {
         Self {
+            party_id,
             account_id,
             asset_id,
             available,
@@ -68,29 +72,30 @@ impl Balance {
 
     /// 从快照事实装配资产余额，并保留上游附带的补充信息。
     pub fn new_with_snapshot_facts(
-        account_id: String,
-        asset_id: String,
+        party_id: u64,
+        account_id: u64,
+        asset_id: u64,
         available: u64,
         frozen: u64,
         entry_notional: Option<u64>,
         identifier: Option<String>,
         version: u64,
     ) -> Self {
-        Self { account_id, asset_id, available, frozen, entry_notional, identifier, version }
+        Self { party_id, account_id, asset_id, available, frozen, entry_notional, identifier, version }
     }
 
     /// 返回余额是否属于指定账户。
-    pub fn belongs_to_account(&self, account_id: &str) -> bool {
+    pub fn belongs_to_account(&self, account_id: u64) -> bool {
         self.account_id == account_id
     }
 
     /// 返回余额是否对应指定资产。
-    pub fn is_asset(&self, asset_id: &str) -> bool {
+    pub fn is_asset(&self, asset_id: u64) -> bool {
         self.asset_id == asset_id
     }
 
     pub fn business_entity_id(&self) -> String {
-        concat3(self.account_id.as_str(), ":", self.asset_id.as_str())
+        concat3(&self.account_id.to_string(), ":", &self.asset_id.to_string())
     }
 
     /// 返回余额总额，即 `available + frozen`；若溢出则返回 `None`。

@@ -3,7 +3,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use thiserror::Error;
 
-use super::AccountId;
+use super::u64;
 use crate::entity::{
     HyperliquidPerpMarginMode, HyperliquidPerpPosition, MarginReservation, ReservationKind,
     ReservationMarketKind,
@@ -15,7 +15,7 @@ use crate::entity::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpClearinghouseStateCalcInput {
     /// 子账户标识。
-    pub account_id: AccountId,
+    pub account_id: u64,
     /// 当前 perp 仓位事实。
     pub positions: Vec<HyperliquidPerpPosition>,
     /// 当前 collateral 事实。
@@ -194,7 +194,7 @@ impl MarginSummary {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpClearinghouseState {
     /// 子账户标识。
-    account_id: AccountId,
+    account_id: u64,
     /// 当前 perp 仓位风险快照集合。
     position_risks: Vec<PerpPositionRiskSnapshot>,
     /// 账户整体保证金汇总。
@@ -215,7 +215,7 @@ impl DomainReadSnapshot for PerpClearinghouseState {}
 impl PerpClearinghouseState {
     /// 从已校验事实装配子账户 perp 清算状态。
     pub fn new(
-        account_id: AccountId,
+        account_id: u64,
         position_risks: Vec<PerpPositionRiskSnapshot>,
         margin_summary: MarginSummary,
         cross_margin_summary: MarginSummary,
@@ -387,7 +387,7 @@ impl PerpClearinghouseState {
     }
 
     /// 返回子账户标识。
-    pub fn account_id(&self) -> &AccountId {
+    pub fn account_id(&self) -> &u64 {
         &self.account_id
     }
 
@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn perp_state_detects_open_positions_and_queries_by_symbol() {
         let state = PerpClearinghouseState::new(
-            AccountId::from("sub-1"),
+            u64::from("sub-1"),
             vec![sample_position_risk(0, "BTC-PERP", 0), sample_position_risk(1, "ETH-PERP", 3)],
             MarginSummary::new(
                 dec(20_000),
@@ -608,7 +608,7 @@ mod tests {
     #[test]
     fn perp_state_without_open_positions_returns_false() {
         let state = PerpClearinghouseState::new(
-            AccountId::from("sub-1"),
+            u64::from("sub-1"),
             vec![sample_position_risk(0, "BTC-PERP", 0)],
             MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0), dec(0), dec(0)),
             MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0), dec(0), dec(0)),

@@ -12,7 +12,7 @@ use super::support::{
     settle_matched_trades, validate_all_reservations_for_order, zip_pairs,
 };
 use crate::SpotTrade;
-use crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2;
+use crate::entity::account::balance_ledger_v2::BalanceLedgerV2;
 use crate::entity::{Balance, SettlementTransferVoucher, spot as spot_entity};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ pub enum SettleMatchedSpotTradesV4AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<Balance>,
         created_vouchers: Vec<SettlementTransferVoucher>,
-        created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }
 
@@ -51,7 +51,7 @@ pub enum SettleMatchedSpotTradesV4Changes {
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
         updated_balances: Vec<UpdatedEntityPair<Balance>>,
         created_vouchers: Vec<SettlementTransferVoucher>,
-        created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }
 

@@ -8,8 +8,8 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
+use crate::entity::account::balance_ledger_v2::{
+    BalanceLedgerV2, BalanceLedgerEntryV2Error,
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::{
@@ -38,14 +38,14 @@ pub struct ActivateSpotOrderV2State {
 pub struct ActivateSpotOrderV2AfterChanges {
     pub activated_order_after: SpotOrderV2,
     pub balances_after: Vec<Balance>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivateSpotOrderV2Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV2>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -326,8 +326,8 @@ fn apply_freeze_for_reservation(
     reservation: &Reservation,
     entry_id: String,
     balance_book: &mut BalanceMap,
-) -> Result<BalanceLedgerEntryV2, ActivateSpotOrderV2Error> {
-    let mut entry = BalanceLedgerEntryV2::freeze(
+) -> Result<BalanceLedgerV2, ActivateSpotOrderV2Error> {
+    let mut entry = BalanceLedgerV2::freeze(
         entry_id,
         order.account_id().to_string(),
         reservation.asset_id.clone(),
@@ -367,7 +367,7 @@ fn merge_balance_pairs(
 
 fn balance_replay_events_from_ledger_entries(
     updated_balances: &[UpdatedEntityPair<Balance>],
-    ledger_entries: &[BalanceLedgerEntryV2],
+    ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {

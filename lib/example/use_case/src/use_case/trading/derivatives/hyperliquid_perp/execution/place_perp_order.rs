@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::MarketRules;
 use crate::entity::{
-    Balance, BalanceLedgerEntryV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
+    Balance, BalanceLedgerV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
     HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
     PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent, required_position_margin,
 };
@@ -183,7 +183,7 @@ pub struct PlaceHyperliquidPerpOrderChanges {
     /// 本次新创建的订单事实。
     pub created_order: HyperliquidPerpOrder,
     /// 本次新创建并已补齐 before/after 快照的余额冻结流水；无需冻结保证金时为空。
-    pub created_balance_ledger_entry: Option<BalanceLedgerEntryV2>,
+    pub created_balance_ledger_entry: Option<BalanceLedgerV2>,
     /// 本次实际受影响的保证金余额 before/after；reduce-only 或无需新增保证金时为空。
     pub updated_margin_balances: Vec<UpdatedEntityPair<Balance>>,
 }

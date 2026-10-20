@@ -11,7 +11,7 @@ use super::spot_order_primitives::{
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
-    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
+    BalanceLedgerV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
     ReservationCloseReason, ReservationError, ReservationKind, ReservationMarketKind,
     ReservationStatus,
 };
@@ -204,7 +204,7 @@ pub struct CancelSpotOrderV2Input {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderV2Outcome {
     /// 本次撤单直接派生的解冻流水；未触发条件单撤销时没有冻结可释放。
-    pub unfreeze_ledger_entry: Option<BalanceLedgerEntryV2>,
+    pub unfreeze_ledger_entry: Option<BalanceLedgerV2>,
 }
 
 /// `SpotOrderV2` 三个聚合行为入口的业务错误。
@@ -1216,7 +1216,7 @@ impl SpotOrderV2 {
 
         let mut released_reservation = self.reservation.clone();
         released_reservation.release(release_amount, Some(ReservationCloseReason::Canceled))?;
-        let unfreeze_ledger_entry = BalanceLedgerEntryV2::unfreeze(
+        let unfreeze_ledger_entry = BalanceLedgerV2::unfreeze(
             common_entity::stable_string_entity_id(&concat2(
                 "balance-ledger:unfreeze:",
                 self.order_id.to_string().as_str(),

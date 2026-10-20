@@ -4,7 +4,7 @@ use common_entity::{
     Entity, LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
 };
 use example_core_entity::{
-    Balance, BalanceLedgerEntryV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
+    Balance, BalanceLedgerV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
     SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
 };
 use example_core_use_case::{
@@ -212,7 +212,7 @@ fn settle_parts(
     &[cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotOrderV2>],
     &[cmd_handler::command_use_case_def2::UpdatedEntityPair<Balance>],
     &[SettlementTransferVoucher],
-    &[BalanceLedgerEntryV2],
+    &[BalanceLedgerV2],
 ) {
     match changes {
         SettleMatchedSpotTradesV4Changes::Unchanged => (None, &[], &[], &[], &[]),
@@ -241,7 +241,7 @@ fn v3_parts(
     &[cmd_handler::command_use_case_def2::UpdatedEntityPair<Balance>],
     &[SpotTrade],
     &[SettlementTransferVoucher],
-    &[BalanceLedgerEntryV2],
+    &[BalanceLedgerV2],
 ) {
     match changes {
         MatchSpotOrderV3Changes::Resting => {
@@ -417,7 +417,7 @@ fn given_settlement_changes_when_replayed_then_order_vouchers_balance_and_ledger
             .expect("voucher event should exist")
             < events
                 .iter()
-                .position(|event| event.entity_type == BalanceLedgerEntryV2::entity_type())
+                .position(|event| event.entity_type == BalanceLedgerV2::entity_type())
                 .expect("ledger event should exist")
     );
     assert!(events.iter().all(|event| event.is_updated() || event.is_created()));

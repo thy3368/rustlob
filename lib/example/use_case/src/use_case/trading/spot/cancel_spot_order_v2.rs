@@ -8,8 +8,8 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
+use crate::entity::account::balance_ledger_v2::{
+    BalanceLedgerV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::spot::spot_order_v2::{
@@ -50,14 +50,14 @@ pub struct CancelSpotOrderV2State {
 pub struct CancelSpotOrderV2AfterChanges {
     pub order_after: SpotOrderV2,
     pub balances_after: Vec<Balance>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV2>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -326,7 +326,7 @@ enum OrderReservationSlot {
 fn release_remaining_for_cancel(
     order: &mut SpotOrderV2,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV2>,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), CancelSpotOrderV2Error> {
@@ -349,7 +349,7 @@ fn release_order_reservation(
     max_amount: u64,
     close_reason: ReservationCloseReason,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), CancelSpotOrderV2Error> {
     let (asset_id, release_amount) = {
         let reservation = match slot {
@@ -373,7 +373,7 @@ fn release_to_balance(
     asset_id: &str,
     amount: u64,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), CancelSpotOrderV2Error> {
     let reason = match order.side() {
         SpotOrderSide::Buy => {
@@ -408,12 +408,12 @@ fn apply_balance_ledger_entry(
     balance: &mut Balance,
     amount: u64,
     reason: BalanceLedgerReason,
-) -> Result<BalanceLedgerEntryV2, BalanceLedgerEntryV2Error> {
+) -> Result<BalanceLedgerV2, BalanceLedgerEntryV2Error> {
     let account_id = balance.account_id.clone();
     let asset_id = balance.asset_id.clone();
     let balance_entity_id = balance.business_entity_id();
     let mut entry = match operation {
-        BalanceLedgerOperation::Unfreeze => BalanceLedgerEntryV2::unfreeze(
+        BalanceLedgerOperation::Unfreeze => BalanceLedgerV2::unfreeze(
             entry_id,
             account_id,
             asset_id,
@@ -421,7 +421,7 @@ fn apply_balance_ledger_entry(
             amount,
             reason,
         ),
-        BalanceLedgerOperation::CreditAvailable => BalanceLedgerEntryV2::credit_available(
+        BalanceLedgerOperation::CreditAvailable => BalanceLedgerV2::credit_available(
             entry_id,
             account_id,
             asset_id,
@@ -429,7 +429,7 @@ fn apply_balance_ledger_entry(
             amount,
             reason,
         ),
-        BalanceLedgerOperation::DebitFrozen => BalanceLedgerEntryV2::debit_frozen(
+        BalanceLedgerOperation::DebitFrozen => BalanceLedgerV2::debit_frozen(
             entry_id,
             account_id,
             asset_id,
@@ -446,9 +446,9 @@ fn apply_balance_ledger_entry(
 }
 
 fn apply_behavior_ledger_entry(
-    mut entry: BalanceLedgerEntryV2,
+    mut entry: BalanceLedgerV2,
     balance_book: &mut BalanceMap,
-) -> Result<BalanceLedgerEntryV2, CancelSpotOrderV2Error> {
+) -> Result<BalanceLedgerV2, CancelSpotOrderV2Error> {
     let balance = balance_book.get_by_entity_id_mut(&entry.balance_entity_id)?;
     entry.apply_to(balance)?;
     Ok(entry)
@@ -478,7 +478,7 @@ fn merge_balance_pairs(
 
 fn balance_replay_events_from_ledger_entries(
     updated_balances: &[UpdatedEntityPair<Balance>],
-    ledger_entries: &[BalanceLedgerEntryV2],
+    ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {

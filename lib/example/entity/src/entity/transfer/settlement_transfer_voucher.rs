@@ -5,7 +5,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 
 use crate::BalanceLedgerReason;
-use crate::account::balance_ledger_entry_v2::{BalanceLedgerEntryV2, BalanceLedgerEntryV2Error};
+use crate::account::balance_ledger_v2::{BalanceLedgerV2, BalanceLedgerEntryV2Error};
 use crate::support::{concat2, derived_entity_id};
 
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;
@@ -408,7 +408,7 @@ impl SettlementTransferVoucher {
     pub fn derive_balance_ledger_entries(
         &self,
         balance_entity_id_for: impl Fn(&str, &str) -> String,
-    ) -> Result<Vec<BalanceLedgerEntryV2>, BalanceLedgerEntryV2Error> {
+    ) -> Result<Vec<BalanceLedgerV2>, BalanceLedgerEntryV2Error> {
         let mut entries = Vec::with_capacity(self.legs.len().saturating_mul(2));
 
         for leg in &self.legs {
@@ -419,7 +419,7 @@ impl SettlementTransferVoucher {
                 balance_entity_id_for(leg.to_account_id(), leg.asset_id());
 
             let debit = match self.debit_operation_for(leg.purpose()) {
-                SettlementDebitOperation::DebitFrozen => BalanceLedgerEntryV2::debit_frozen(
+                SettlementDebitOperation::DebitFrozen => BalanceLedgerV2::debit_frozen(
                     leg.debit_entry_id(),
                     leg.from_account_id().to_string(),
                     leg.asset_id().to_string(),
@@ -427,7 +427,7 @@ impl SettlementTransferVoucher {
                     leg.amount(),
                     reason.clone(),
                 ),
-                SettlementDebitOperation::DebitAvailable => BalanceLedgerEntryV2::debit_available(
+                SettlementDebitOperation::DebitAvailable => BalanceLedgerV2::debit_available(
                     leg.debit_entry_id(),
                     leg.from_account_id().to_string(),
                     leg.asset_id().to_string(),
@@ -436,7 +436,7 @@ impl SettlementTransferVoucher {
                     reason.clone(),
                 ),
             }?;
-            let credit = BalanceLedgerEntryV2::credit_available(
+            let credit = BalanceLedgerV2::credit_available(
                 leg.credit_entry_id(),
                 leg.to_account_id().to_string(),
                 leg.asset_id().to_string(),

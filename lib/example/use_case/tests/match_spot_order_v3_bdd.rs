@@ -159,7 +159,7 @@ fn changes_parts(
     &[cmd_handler::command_use_case_def2::UpdatedEntityPair<Balance>],
     &[example_core_entity::SpotTrade],
     &[example_core_entity::SettlementTransferVoucher],
-    &[example_core_entity::BalanceLedgerEntryV2],
+    &[example_core_entity::BalanceLedgerV2],
 ) {
     match changes {
         MatchSpotOrderV3Changes::Resting => {
@@ -271,7 +271,7 @@ fn assert_replay_chain(state: &MatchSpotOrderV3State, changes: &MatchSpotOrderV3
         events
             .iter()
             .filter(|event| event.is_created()
-                && event.entity_type == example_core_entity::BalanceLedgerEntryV2::entity_type())
+                && event.entity_type == example_core_entity::BalanceLedgerV2::entity_type())
             .count(),
         ledger_entries.len()
     );

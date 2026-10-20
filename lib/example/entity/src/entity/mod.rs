@@ -18,8 +18,8 @@ pub mod account;
 pub mod market_data;
 
 pub use account::balance::{Balance, BalanceError};
-pub use account::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2 as BalanceLedgerEntry, BalanceLedgerEntryV2, BalanceLedgerEntryV2Error,
+pub use account::balance_ledger_v2::{
+    BalanceLedgerV2 as BalanceLedgerEntry, BalanceLedgerV2, BalanceLedgerEntryV2Error,
     BalanceLedgerOperation,
 };
 pub use account::balance_ledger_reason::BalanceLedgerReason;
@@ -29,7 +29,7 @@ pub use transfer::settlement_transfer_voucher::{
 };
 pub use account::{Account, AccountStatus};
 pub use hyperliquid_account::{
-    AccountId, AssetId, MarginSummary, MasterAccount, PerpAssetId, PerpAssetRiskRule,
+    u64, AssetId, MarginSummary, MasterAccount, PerpAssetId, PerpAssetRiskRule,
     PerpClearinghouseState, PerpClearinghouseStateCalcError, PerpClearinghouseStateCalcInput,
     PerpCollateralSnapshot, PerpMarketMark, PerpPositionRiskSnapshot, PerpRiskPolicy, RiskState,
     SpotClearinghouseState, SubAccountProfile, SubAccountSnapshot, SubAccountSnapshotError,

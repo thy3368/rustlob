@@ -3,7 +3,7 @@ use common_entity::{
     StateMachineV2,
 };
 use example_core_entity::{
-    ActivatePendingSpotOrderV2Input, Balance, BalanceLedgerEntryV2, SpotOrderSide, SpotOrderStatus,
+    ActivatePendingSpotOrderV2Input, Balance, BalanceLedgerV2, SpotOrderSide, SpotOrderStatus,
     SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use example_core_use_case::{
@@ -253,7 +253,7 @@ fn gtc_without_liquidity_rests_after_activation_and_keeps_activation_events() {
     let events = changes.to_replayable_events().expect("combined events should project");
     assert_eq!(event_signatures(&events), event_signatures(&activation_events));
     assert!(events.iter().any(|event| {
-        event.is_created() && event.entity_type == BalanceLedgerEntryV2::entity_type()
+        event.is_created() && event.entity_type == BalanceLedgerV2::entity_type()
     }));
 }
 

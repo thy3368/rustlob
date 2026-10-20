@@ -1,4 +1,4 @@
-use super::{AccountId, AssetId};
+use super::{u64, AssetId};
 use crate::entity::Balance;
 
 /// 子账户在现货清算域上的余额状态快照。
@@ -6,18 +6,19 @@ use crate::entity::Balance;
 /// 该对象属于 `Snapshot` 语义，主要支持余额查询与可用资金计算。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotClearinghouseState {
-    account_id: AccountId,
+    party_id: u64,
+    account_id: u64,
     balances: Vec<Balance>,
 }
 
 impl SpotClearinghouseState {
     /// 从已校验事实装配子账户现货清算状态。
-    pub fn new(account_id: AccountId, balances: Vec<Balance>) -> Self {
+    pub fn new(account_id: u64, balances: Vec<Balance>) -> Self {
         Self { account_id, balances }
     }
 
     /// 返回子账户标识。
-    pub fn account_id(&self) -> &AccountId {
+    pub fn account_id(&self) -> &u64 {
         &self.account_id
     }
 
@@ -49,7 +50,7 @@ mod tests {
     #[test]
     fn total_and_available_balance_follow_balance_fields() {
         let state = SpotClearinghouseState::new(
-            AccountId::from("sub-1"),
+            u64::from("sub-1"),
             vec![Balance::new_with_snapshot_facts(
                 "sub-1".to_string(),
                 "USDC".to_string(),
@@ -68,7 +69,7 @@ mod tests {
     #[test]
     fn missing_asset_balance_returns_zero() {
         let state = SpotClearinghouseState::new(
-            AccountId::from("sub-1"),
+            u64::from("sub-1"),
             vec![Balance::new_with_snapshot_facts(
                 "sub-1".to_string(),
                 "USDC".to_string(),

@@ -3,7 +3,7 @@ pub mod perp;
 pub mod spot;
 
 pub use account::{
-    AccountId, AssetId, MasterAccount, PerpAssetId, SubAccountProfile, SubAccountSnapshot,
+    u64, AssetId, MasterAccount, PerpAssetId, SubAccountProfile, SubAccountSnapshot,
     SubAccountSnapshotError,
 };
 pub use perp::{

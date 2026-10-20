@@ -432,17 +432,17 @@ fn balance_key(account_id: &str, asset_id: &str) -> String {
 }
 
 fn map_funding_balance_ledger_error(
-    error: crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error,
+    error: crate::entity::account::balance_ledger_v2::BalanceLedgerEntryV2Error,
 ) -> SettleHyperliquidPerpFundingError {
     match error {
-        crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
+        crate::entity::account::balance_ledger_v2::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
             SettleHyperliquidPerpFundingError::InsufficientAvailableMargin
         }
-        crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InvalidAmount
-        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
-        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow
-        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
-        | crate::entity::account::balance_ledger_entry_v2::BalanceLedgerEntryV2Error::AlreadyApplied => {
+        crate::entity::account::balance_ledger_v2::BalanceLedgerEntryV2Error::InvalidAmount
+        | crate::entity::account::balance_ledger_v2::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
+        | crate::entity::account::balance_ledger_v2::BalanceLedgerEntryV2Error::ArithmeticOverflow
+        | crate::entity::account::balance_ledger_v2::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
+        | crate::entity::account::balance_ledger_v2::BalanceLedgerEntryV2Error::AlreadyApplied => {
             SettleHyperliquidPerpFundingError::ArithmeticOverflow
         }
     }

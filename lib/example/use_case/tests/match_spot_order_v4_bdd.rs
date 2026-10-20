@@ -2,7 +2,7 @@ use common_entity::{
     Entity, LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
 };
 use example_core_entity::{
-    BalanceLedgerEntryV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
+    BalanceLedgerV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
     SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
 };
 use example_core_use_case::{
@@ -188,7 +188,7 @@ fn assert_match_replay_contains_only_order_and_trade_events(changes: &MatchSpotO
     }));
     assert!(events.iter().all(|event| {
         event.entity_type != SettlementTransferVoucher::entity_type()
-            && event.entity_type != BalanceLedgerEntryV2::entity_type()
+            && event.entity_type != BalanceLedgerV2::entity_type()
     }));
 }
 
@@ -226,7 +226,7 @@ fn given_gtc_full_liquidity_when_matched_then_order_is_filled_without_balance_ev
     assert_eq!(order.status(), SpotOrderStatus::Filled);
     assert_eq!(order.status_reason(), None);
     assert_eq!(order.filled_qty(), 1);
-    assert!(events.iter().all(|event| event.entity_type != BalanceLedgerEntryV2::entity_type()));
+    assert!(events.iter().all(|event| event.entity_type != BalanceLedgerV2::entity_type()));
 }
 
 #[test]

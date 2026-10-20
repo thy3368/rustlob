@@ -8,8 +8,8 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
+use crate::entity::account::balance_ledger_v2::{
+    BalanceLedgerV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError};
@@ -84,7 +84,7 @@ pub struct ModifySpotOrderV2State {
 pub struct ModifySpotOrderV2AfterChanges {
     pub order_after: SpotOrderV2,
     pub balances_after: Vec<Balance>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
 }
 
 /// 现货改单的 before/after 变化。
@@ -95,7 +95,7 @@ pub struct ModifySpotOrderV2AfterChanges {
 pub struct ModifySpotOrderV2Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV2>,
     pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
 }
 
 /// 现货限价订单改单业务错误。
@@ -380,7 +380,7 @@ fn adjust_reservation_balance(
     order_after: &SpotOrderV2,
     slot: ReservationSlot,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), ModifySpotOrderV2Error> {
     let (old_reservation, new_reservation, label) = match slot {
         ReservationSlot::Principal => {
@@ -428,12 +428,12 @@ fn apply_balance_ledger_entry(
     balance: &mut Balance,
     amount: u64,
     reason: BalanceLedgerReason,
-) -> Result<BalanceLedgerEntryV2, ModifySpotOrderV2Error> {
+) -> Result<BalanceLedgerV2, ModifySpotOrderV2Error> {
     let account_id = balance.account_id.clone();
     let asset_id = balance.asset_id.clone();
     let balance_entity_id = balance.business_entity_id();
     let mut entry = match operation {
-        BalanceLedgerOperation::Freeze => BalanceLedgerEntryV2::freeze(
+        BalanceLedgerOperation::Freeze => BalanceLedgerV2::freeze(
             entry_id,
             account_id,
             asset_id,
@@ -441,7 +441,7 @@ fn apply_balance_ledger_entry(
             amount,
             reason,
         ),
-        BalanceLedgerOperation::Unfreeze => BalanceLedgerEntryV2::unfreeze(
+        BalanceLedgerOperation::Unfreeze => BalanceLedgerV2::unfreeze(
             entry_id,
             account_id,
             asset_id,
@@ -496,7 +496,7 @@ fn merge_balance_pairs(
 
 fn balance_replay_events_from_ledger_entries(
     updated_balances: &[UpdatedEntityPair<Balance>],
-    ledger_entries: &[BalanceLedgerEntryV2],
+    ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, EntityError> {
     let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {

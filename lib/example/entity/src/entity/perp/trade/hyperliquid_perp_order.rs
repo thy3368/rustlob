@@ -5,7 +5,7 @@ use common_entity::{
 use thiserror::Error;
 
 use crate::entity::{
-    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
+    BalanceLedgerV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
     ReservationError, ReservationKind, ReservationMarketKind,
 };
 use crate::support::concat2;
@@ -178,7 +178,7 @@ pub struct PlaceHyperliquidPerpOrderOutcome {
     /// 已创建的订单聚合根。
     pub order: HyperliquidPerpOrder,
     /// 由订单创建直接派生的冻结余额流水。
-    pub freeze_ledger_entry: Option<BalanceLedgerEntryV2>,
+    pub freeze_ledger_entry: Option<BalanceLedgerV2>,
 }
 
 /// Hyperliquid perp 订单行为错误。
@@ -322,7 +322,7 @@ impl HyperliquidPerpOrder {
                     margin_amount,
                 )?;
 
-                let freeze_ledger_entry = BalanceLedgerEntryV2::freeze(
+                let freeze_ledger_entry = BalanceLedgerV2::freeze(
                     common_entity::stable_string_entity_id(&concat2(
                         "balance-ledger:freeze:",
                         input.order_id.to_string().as_str(),

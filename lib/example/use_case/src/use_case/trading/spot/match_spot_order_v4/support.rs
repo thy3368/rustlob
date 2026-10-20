@@ -7,8 +7,8 @@ use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrde
 use thiserror::Error;
 
 use crate::SpotTrade;
-use crate::entity::account::balance_ledger_entry_v2::{
-    BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
+use crate::entity::account::balance_ledger_v2::{
+    BalanceLedgerV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
 };
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::{
@@ -205,7 +205,7 @@ impl BalanceMap {
 
 pub(super) fn balance_replay_events_from_ledger_entries(
     updated_balances: &[UpdatedEntityPair<Balance>],
-    ledger_entries: &[BalanceLedgerEntryV2],
+    ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {
@@ -273,7 +273,7 @@ pub(super) struct MatchedTradeSettlementContext<'a> {
     pub(super) quote_asset_id: &'a str,
     pub(super) fee_account_id: &'a str,
     pub(super) balance_book: &'a mut BalanceMap,
-    pub(super) ledger_entries: &'a mut Vec<BalanceLedgerEntryV2>,
+    pub(super) ledger_entries: &'a mut Vec<BalanceLedgerV2>,
 }
 
 pub(super) struct MatchedTradeSettlementEffects {
@@ -391,7 +391,7 @@ enum OrderReservationSlot {
 pub(super) fn release_remaining_for_terminal(
     order_after: &mut SpotOrderV2,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV2>,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), MatchSpotOrderV4Error> {
@@ -439,7 +439,7 @@ fn release_order_reservation(
     max_amount: u64,
     close_reason: ReservationCloseReason,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), MatchSpotOrderV4Error> {
     let (asset_id, release_amount) = {
         let reservation = match slot {
@@ -464,7 +464,7 @@ fn release_to_balance(
     asset_id: &str,
     amount: u64,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), MatchSpotOrderV4Error> {
     let reason = match order.side() {
         SpotOrderSide::Buy => {
@@ -499,12 +499,12 @@ fn apply_balance_ledger_entry(
     balance: &mut Balance,
     amount: u64,
     reason: BalanceLedgerReason,
-) -> Result<BalanceLedgerEntryV2, BalanceLedgerEntryV2Error> {
+) -> Result<BalanceLedgerV2, BalanceLedgerEntryV2Error> {
     let account_id = balance.account_id.clone();
     let asset_id = balance.asset_id.clone();
     let balance_entity_id = balance.business_entity_id();
     let mut entry = match operation {
-        BalanceLedgerOperation::Unfreeze => BalanceLedgerEntryV2::unfreeze(
+        BalanceLedgerOperation::Unfreeze => BalanceLedgerV2::unfreeze(
             entry_id,
             account_id,
             asset_id,
@@ -512,7 +512,7 @@ fn apply_balance_ledger_entry(
             amount,
             reason,
         ),
-        BalanceLedgerOperation::CreditAvailable => BalanceLedgerEntryV2::credit_available(
+        BalanceLedgerOperation::CreditAvailable => BalanceLedgerV2::credit_available(
             entry_id,
             account_id,
             asset_id,
@@ -520,7 +520,7 @@ fn apply_balance_ledger_entry(
             amount,
             reason,
         ),
-        BalanceLedgerOperation::DebitFrozen => BalanceLedgerEntryV2::debit_frozen(
+        BalanceLedgerOperation::DebitFrozen => BalanceLedgerV2::debit_frozen(
             entry_id,
             account_id,
             asset_id,
@@ -547,7 +547,7 @@ struct BalanceLedgerDraft {
 
 fn push_applied_balance_ledger_entry(
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV2>,
     draft: BalanceLedgerDraft,
 ) -> Result<(), MatchSpotOrderV4Error> {
     let balance = balance_book.get_mut(&draft.account_id, &draft.asset_id)?;
@@ -568,7 +568,7 @@ struct TradeBalanceEffectsContext<'a> {
     quote_asset_id: &'a str,
     fee_account_id: &'a str,
     balance_book: &'a mut BalanceMap,
-    ledger_entries: &'a mut Vec<BalanceLedgerEntryV2>,
+    ledger_entries: &'a mut Vec<BalanceLedgerV2>,
 }
 
 fn apply_trade_balance_effects(
