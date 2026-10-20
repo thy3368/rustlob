@@ -22,9 +22,9 @@ pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer
 pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::event_handler::EntityReplayableEventHandler;
+pub use use_case::execution_command_spec::ExecutionCommandSpec;
 pub use use_case::executor::{
-    ExecutionError, ExecutionResult, ExecutionCommandSpec, StateMachineExecutor, StateSink,
-    StateSource,
+    ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 pub use use_case::log_entry::LogEntry;
 pub use use_case::shard::Shard;
