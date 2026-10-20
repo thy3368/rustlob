@@ -27,7 +27,7 @@ pub use transfer::settlement_transfer_voucher::{
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferSummary,
     SettlementTransferVoucher,
 };
-pub use account::{Account, AccountStatus};
+pub use account::{SpotAccount, AccountStatus};
 pub use hyperliquid_account::{
     u64, AssetId, MarginSummary, MasterAccount, PerpAssetId, PerpAssetRiskRule,
     PerpClearinghouseState, PerpClearinghouseStateCalcError, PerpClearinghouseStateCalcInput,

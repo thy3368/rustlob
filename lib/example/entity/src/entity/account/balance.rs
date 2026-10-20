@@ -28,8 +28,8 @@ pub enum BalanceError {
 /// 一个账户可以拥有多条 `Balance`：例如 BTC、USDT、USDC 各一条。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Balance {
-    // /// 用户 ID 或业务主体 ID。
-    // pub party_id: u64,
+    /// 用户 ID 或业务主体 ID。
+    pub party_id: u64,
     /// 账户 ID。
     pub account_id: u64,
     /// 资产 ID，例如 `BTC`、`USDT` 或 Hyperliquid token id 字符串。
@@ -203,8 +203,9 @@ impl Balance {
 impl FieldDiff for Balance {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            EntityFieldChange::new("account_id", "", self.account_id.clone()),
-            EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
+            EntityFieldChange::new("party_id", "", self.party_id.to_string()),
+            EntityFieldChange::new("account_id", "", self.account_id.to_string()),
+            EntityFieldChange::new("asset_id", "", self.asset_id.to_string()),
             EntityFieldChange::new("available", "", self.available.to_string()),
             EntityFieldChange::new("frozen", "", self.frozen.to_string()),
             EntityFieldChange::new("entry_notional", "", option_u64_value(self.entry_notional)),
@@ -214,8 +215,9 @@ impl FieldDiff for Balance {
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = vec![
-            EntityFieldChange::new("account_id", self.account_id.clone(), other.account_id.clone()),
-            EntityFieldChange::new("asset_id", self.asset_id.clone(), other.asset_id.clone()),
+            EntityFieldChange::new("party_id", self.party_id.to_string(), other.party_id.to_string()),
+            EntityFieldChange::new("account_id", self.account_id.to_string(), other.account_id.to_string()),
+            EntityFieldChange::new("asset_id", self.asset_id.to_string(), other.asset_id.to_string()),
         ];
         if self.available != other.available {
             changes.push(EntityFieldChange::new(

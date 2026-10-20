@@ -79,8 +79,8 @@ pub struct BalanceLedgerV2 {
     /// 流水记录 ID。
     pub entry_id: u64,
 
-    // /// 用户 ID 或业务主体 ID。
-    // pub party_id: u64,
+    /// 用户 ID 或业务主体 ID。
+    pub party_id: u64,
     /// 账户 ID。
     pub account_id: String,
     /// 资产 ID。

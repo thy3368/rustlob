@@ -35,7 +35,7 @@ impl AccountStatus {
 /// `Account` 属于 `Party/Place/Thing`，表达用户与账户生命周期，不承载某个币种的余额。
 #[ObjectType(four_color = "party_place_thing", aggregate_role = "aggregate_root")]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Account {
+pub struct SpotAccount {
     /// 账户 ID。
     pub account_id: u64,
     /// 用户 ID 或业务主体 ID。
@@ -46,7 +46,7 @@ pub struct Account {
     pub version: u64,
 }
 
-impl Account {
+impl SpotAccount {
     /// 从已经校验过的业务事实或回放事件装配账户主档。
     ///
     /// 该构造器只装配事实，不承担业务校验；风控冻结/解冻应通过业务方法完成。
@@ -113,7 +113,7 @@ impl Account {
     }
 }
 
-impl FieldDiff for Account {
+impl FieldDiff for SpotAccount {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("account_id", "", self.account_id.to_string()),
@@ -142,13 +142,13 @@ impl FieldDiff for Account {
     }
 }
 
-impl common_entity::Shard for Account {
+impl common_entity::Shard for SpotAccount {
     fn partition(&self) -> u8 {
         (self.party_id % 256) as u8
     }
 }
 
-impl Entity for Account {
+impl Entity for SpotAccount {
     fn entity_id(&self) -> u64 {
         self.account_id
     }
@@ -189,8 +189,8 @@ mod tests {
 
     use super::*;
 
-    fn sample_account(status: AccountStatus, version: u64) -> Account {
-        Account::new(1001, 513, status, version)
+    fn sample_account(status: AccountStatus, version: u64) -> SpotAccount {
+        SpotAccount::new(1001, 513, status, version)
     }
 
     #[test]
@@ -217,8 +217,8 @@ mod tests {
         assert!(closed.is_closed());
         assert!(!closed.allows_trading_and_funding());
 
-        assert_eq!(Account::four_color_archetype(), FourColorArchetype::PartyPlaceThing);
-        assert_eq!(Account::aggregate_role(), AggregateRole::AggregateRoot);
+        assert_eq!(SpotAccount::four_color_archetype(), FourColorArchetype::PartyPlaceThing);
+        assert_eq!(SpotAccount::aggregate_role(), AggregateRole::AggregateRoot);
     }
 
     #[test]
@@ -288,11 +288,11 @@ mod tests {
             active.diff(&frozen),
             vec![EntityFieldChange::new("status", "active", "frozen")]
         );
-        assert_eq!(Account::replay_field_type("status"), 0);
-        assert_eq!(Account::replay_field_type("account_id"), 1);
-        assert_eq!(Account::replay_field_type("party_id"), 1);
+        assert_eq!(SpotAccount::replay_field_type("status"), 0);
+        assert_eq!(SpotAccount::replay_field_type("account_id"), 1);
+        assert_eq!(SpotAccount::replay_field_type("party_id"), 1);
         assert_eq!(
-            active.diff(&Account::new(1001, 514, AccountStatus::Active, 2)),
+            active.diff(&SpotAccount::new(1001, 514, AccountStatus::Active, 2)),
             vec![EntityFieldChange::new("party_id", "513", "514")]
         );
     }
@@ -307,6 +307,6 @@ mod tests {
         assert_eq!(account.entity_id(), 1001);
         assert_eq!(account.topic(), 0);
         assert_eq!(account.partition(), 1);
-        assert_eq!(Account::new(9999, 255, AccountStatus::Active, 1).partition(), 255);
+        assert_eq!(SpotAccount::new(9999, 255, AccountStatus::Active, 1).partition(), 255);
     }
 }
