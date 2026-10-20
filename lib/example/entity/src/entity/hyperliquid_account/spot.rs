@@ -1,5 +1,5 @@
 use super::{u64, AssetId};
-use crate::entity::Balance;
+use crate::entity::SpotBalance;
 
 /// 子账户在现货清算域上的余额状态快照。
 ///
@@ -8,12 +8,12 @@ use crate::entity::Balance;
 pub struct SpotClearinghouseState {
     party_id: u64,
     account_id: u64,
-    balances: Vec<Balance>,
+    balances: Vec<SpotBalance>,
 }
 
 impl SpotClearinghouseState {
     /// 从已校验事实装配子账户现货清算状态。
-    pub fn new(account_id: u64, balances: Vec<Balance>) -> Self {
+    pub fn new(account_id: u64, balances: Vec<SpotBalance>) -> Self {
         Self { account_id, balances }
     }
 
@@ -23,18 +23,18 @@ impl SpotClearinghouseState {
     }
 
     /// 返回当前余额快照集合。
-    pub fn balances(&self) -> &[Balance] {
+    pub fn balances(&self) -> &[SpotBalance] {
         &self.balances
     }
 
     /// 按资产查找余额快照。
-    pub fn balance_of(&self, asset_id: &AssetId) -> Option<&Balance> {
+    pub fn balance_of(&self, asset_id: &AssetId) -> Option<&SpotBalance> {
         self.balances.iter().find(|balance| balance.is_asset(asset_id.as_str()))
     }
 
     /// 返回指定资产的总余额；若不存在该资产则返回零。
     pub fn total_balance_of(&self, asset_id: &AssetId) -> u64 {
-        self.balance_of(asset_id).and_then(Balance::total).unwrap_or_default()
+        self.balance_of(asset_id).and_then(SpotBalance::total).unwrap_or_default()
     }
 
     /// 返回指定资产的可用余额；若不存在该资产则返回零。
@@ -51,7 +51,7 @@ mod tests {
     fn total_and_available_balance_follow_balance_fields() {
         let state = SpotClearinghouseState::new(
             u64::from("sub-1"),
-            vec![Balance::new_with_snapshot_facts(
+            vec![SpotBalance::new_with_snapshot_facts(
                 "sub-1".to_string(),
                 "USDC".to_string(),
                 7,
@@ -70,7 +70,7 @@ mod tests {
     fn missing_asset_balance_returns_zero() {
         let state = SpotClearinghouseState::new(
             u64::from("sub-1"),
-            vec![Balance::new_with_snapshot_facts(
+            vec![SpotBalance::new_with_snapshot_facts(
                 "sub-1".to_string(),
                 "USDC".to_string(),
                 7,
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn balance_preserves_optional_snapshot_facts() {
-        let balance = Balance::new_with_snapshot_facts(
+        let balance = SpotBalance::new_with_snapshot_facts(
             "sub-1".to_string(),
             "HYPE".to_string(),
             4,

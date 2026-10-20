@@ -4,7 +4,7 @@ use common_entity::{
     Entity, LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
 };
 use example_core_entity::{
-    Balance, BalanceLedgerV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
+    SpotBalance, BalanceLedgerV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
     SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
 };
 use example_core_use_case::{
@@ -33,7 +33,7 @@ struct Scenario {
     v3_command: MatchSpotOrderV3Cmd,
     v4_state: MatchSpotOrderV4State,
     v4_command: MatchSpotOrderV4Cmd,
-    settlement_balances: Vec<Balance>,
+    settlement_balances: Vec<SpotBalance>,
     fee_account_id: String,
 }
 
@@ -101,11 +101,11 @@ fn scenario(taker_qty: u64, taker_tif: SpotOrderTif, maker_qty: Option<u64>) -> 
         .unwrap_or((0, 0));
     let maker_orders = maker.into_iter().collect::<Vec<_>>();
     let balances = vec![
-        Balance::new("buyer".to_owned(), "BTC".to_owned(), 0, 0, 1),
-        Balance::new("buyer".to_owned(), "USDT".to_owned(), 1_000, taker_principal + taker_fee, 1),
-        Balance::new("seller".to_owned(), "BTC".to_owned(), 0, maker_base, 1),
-        Balance::new("seller".to_owned(), "USDT".to_owned(), 0, maker_fee, 1),
-        Balance::new("fee".to_owned(), "USDT".to_owned(), 0, 0, 1),
+        SpotBalance::new("buyer".to_owned(), "BTC".to_owned(), 0, 0, 1),
+        SpotBalance::new("buyer".to_owned(), "USDT".to_owned(), 1_000, taker_principal + taker_fee, 1),
+        SpotBalance::new("seller".to_owned(), "BTC".to_owned(), 0, maker_base, 1),
+        SpotBalance::new("seller".to_owned(), "USDT".to_owned(), 0, maker_fee, 1),
+        SpotBalance::new("fee".to_owned(), "USDT".to_owned(), 0, 0, 1),
     ];
 
     Scenario {
@@ -210,7 +210,7 @@ fn settle_parts(
 ) -> (
     Option<&cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotOrderV2>>,
     &[cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotOrderV2>],
-    &[cmd_handler::command_use_case_def2::UpdatedEntityPair<Balance>],
+    &[cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotBalance>],
     &[SettlementTransferVoucher],
     &[BalanceLedgerV2],
 ) {
@@ -238,7 +238,7 @@ fn v3_parts(
     ExpectedOutcome,
     Option<&cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotOrderV2>>,
     &[cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotOrderV2>],
-    &[cmd_handler::command_use_case_def2::UpdatedEntityPair<Balance>],
+    &[cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotBalance>],
     &[SpotTrade],
     &[SettlementTransferVoucher],
     &[BalanceLedgerV2],
@@ -320,8 +320,8 @@ fn run_v3(scenario: &Scenario) -> MatchSpotOrderV3Changes {
 }
 
 fn assert_balance_conservation(
-    before_balances: &[Balance],
-    updated_balances: &[cmd_handler::command_use_case_def2::UpdatedEntityPair<Balance>],
+    before_balances: &[SpotBalance],
+    updated_balances: &[cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotBalance>],
 ) {
     let mut before = HashMap::<String, u64>::new();
     let mut after = HashMap::<String, u64>::new();

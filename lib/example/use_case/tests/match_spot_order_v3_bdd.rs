@@ -4,7 +4,7 @@ use common_entity::{
     Entity, LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
 };
 use example_core_entity::{
-    Balance, ReservationStatus, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    SpotBalance, ReservationStatus, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
     SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use example_core_use_case::{
@@ -99,17 +99,17 @@ fn scenario(taker_qty: u64, taker_tif: SpotOrderTif, maker_qty: Option<u64>) -> 
             taker_order: taker,
             maker_orders: maker.into_iter().collect(),
             settlement_balances: vec![
-                Balance::new("buyer".to_owned(), "BTC".to_owned(), 0, 0, 1),
-                Balance::new(
+                SpotBalance::new("buyer".to_owned(), "BTC".to_owned(), 0, 0, 1),
+                SpotBalance::new(
                     "buyer".to_owned(),
                     "USDT".to_owned(),
                     1_000,
                     taker_principal + taker_fee,
                     1,
                 ),
-                Balance::new("seller".to_owned(), "BTC".to_owned(), 0, maker_base, 1),
-                Balance::new("seller".to_owned(), "USDT".to_owned(), 0, maker_fee, 1),
-                Balance::new("fee".to_owned(), "USDT".to_owned(), 0, 0, 1),
+                SpotBalance::new("seller".to_owned(), "BTC".to_owned(), 0, maker_base, 1),
+                SpotBalance::new("seller".to_owned(), "USDT".to_owned(), 0, maker_fee, 1),
+                SpotBalance::new("fee".to_owned(), "USDT".to_owned(), 0, 0, 1),
             ],
             base_asset_id: "BTC".to_owned(),
             quote_asset_id: "USDT".to_owned(),
@@ -156,7 +156,7 @@ fn changes_parts(
     ExpectedOutcome,
     Option<&cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotOrderV2>>,
     &[cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotOrderV2>],
-    &[cmd_handler::command_use_case_def2::UpdatedEntityPair<Balance>],
+    &[cmd_handler::command_use_case_def2::UpdatedEntityPair<SpotBalance>],
     &[example_core_entity::SpotTrade],
     &[example_core_entity::SettlementTransferVoucher],
     &[example_core_entity::BalanceLedgerV2],

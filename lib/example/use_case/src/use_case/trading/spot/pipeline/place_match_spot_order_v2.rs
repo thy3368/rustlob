@@ -4,7 +4,7 @@ use common_entity::{
 };
 use thiserror::Error;
 
-use crate::entity::{Balance, SpotOrderV2};
+use crate::entity::{SpotBalance, SpotOrderV2};
 use crate::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
@@ -17,7 +17,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceMatchSpotOrderV2State {
     pub maker_orders: Vec<SpotOrderV2>,
-    pub settlement_balances: Vec<Balance>,
+    pub settlement_balances: Vec<SpotBalance>,
     pub fee_account_id: String,
 }
 

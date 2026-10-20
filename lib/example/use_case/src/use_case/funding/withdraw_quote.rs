@@ -5,7 +5,7 @@ use common_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{Balance, BalanceError};
+use crate::entity::{SpotBalance, BalanceError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WithdrawQuoteCmd {
@@ -21,7 +21,7 @@ impl IssuedByParty for WithdrawQuoteCmd {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WithdrawQuoteState {
-    pub quote_balance: Balance,
+    pub quote_balance: SpotBalance,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -36,7 +36,7 @@ pub enum WithdrawQuoteError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WithdrawQuoteChanges {
-    pub updated_quote_balance: UpdatedEntityPair<Balance>,
+    pub updated_quote_balance: UpdatedEntityPair<SpotBalance>,
 }
 
 impl ReplayableChanges for WithdrawQuoteChanges {
@@ -131,7 +131,7 @@ mod tests {
 
     fn sample_state() -> WithdrawQuoteState {
         WithdrawQuoteState {
-            quote_balance: Balance {
+            quote_balance: SpotBalance {
                 account_id: "trader-1".to_string(),
                 asset_id: "USDT".to_string(),
                 available: 1_000,

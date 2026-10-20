@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use cmd_handler::EntityReplayableEvent;
-use example_core_use_case::{Balance, MarketRules, Reservation, SpotOrderV2, SpotTrade};
+use example_core_use_case::{SpotBalance, MarketRules, Reservation, SpotOrderV2, SpotTrade};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 use super::StoreSnapshot;
@@ -10,7 +10,7 @@ use crate::shared::StoreError;
 
 #[derive(Debug, Clone)]
 pub(crate) struct StoreState {
-    pub(crate) balances: HashMap<String, Balance>,
+    pub(crate) balances: HashMap<String, SpotBalance>,
     pub(crate) market_rules_by_symbol: HashMap<String, MarketRules>,
     pub(crate) orders: HashMap<u64, SpotOrderV2>,
     pub(crate) trades: HashMap<String, SpotTrade>,
@@ -54,8 +54,8 @@ impl InMemoryStore {
     }
 
     pub fn seed_balances(
-        base_balance: Balance,
-        quote_balance: Balance,
+        base_balance: SpotBalance,
+        quote_balance: SpotBalance,
         market_rules: MarketRules,
     ) -> Result<Self, StoreError> {
         let store = Self::new(1);
@@ -65,7 +65,7 @@ impl InMemoryStore {
         Ok(store)
     }
 
-    pub fn seed_balance(&self, balance: Balance) -> Result<(), StoreError> {
+    pub fn seed_balance(&self, balance: SpotBalance) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
         state.balances.insert(balance_key(&balance.account_id, &balance.asset_id), balance);
         Ok(())

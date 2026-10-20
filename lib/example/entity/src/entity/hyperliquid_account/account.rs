@@ -266,7 +266,7 @@ mod tests {
         MarginSummary, PerpClearinghouseState, PerpPositionRiskSnapshot, RiskState,
         SpotClearinghouseState,
     };
-    use crate::entity::{Balance, HyperliquidPerpMarginMode, HyperliquidPerpPosition};
+    use crate::entity::{SpotBalance, HyperliquidPerpMarginMode, HyperliquidPerpPosition};
 
     fn dec(units: i64) -> Decimal {
         Decimal::from(units)
@@ -275,7 +275,7 @@ mod tests {
     fn sample_spot(account_id: &str) -> SpotClearinghouseState {
         SpotClearinghouseState::new(
             u64::from(account_id),
-            vec![Balance::new_with_snapshot_facts(
+            vec![SpotBalance::new_with_snapshot_facts(
                 account_id.to_string(),
                 "USDC".to_string(),
                 10,

@@ -3,7 +3,7 @@ use common_entity::{
     StateMachineV2,
 };
 use example_core_entity::{
-    ActivatePendingSpotOrderV2Input, Balance, BalanceLedgerV2, SpotOrderSide, SpotOrderStatus,
+    ActivatePendingSpotOrderV2Input, SpotBalance, BalanceLedgerV2, SpotOrderSide, SpotOrderStatus,
     SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use example_core_use_case::{
@@ -104,11 +104,11 @@ fn scenario(
         pending_order: pending_taker,
         maker_orders: maker.into_iter().collect(),
         settlement_balances: vec![
-            Balance::new("buyer".to_owned(), "BTC".to_owned(), 0, 0, 1),
-            Balance::new("buyer".to_owned(), "USDT".to_owned(), 1_000, 0, 1),
-            Balance::new("seller".to_owned(), "BTC".to_owned(), 0, maker_base, 1),
-            Balance::new("seller".to_owned(), "USDT".to_owned(), 0, maker_fee, 1),
-            Balance::new("fee".to_owned(), "USDT".to_owned(), 0, 0, 1),
+            SpotBalance::new("buyer".to_owned(), "BTC".to_owned(), 0, 0, 1),
+            SpotBalance::new("buyer".to_owned(), "USDT".to_owned(), 1_000, 0, 1),
+            SpotBalance::new("seller".to_owned(), "BTC".to_owned(), 0, maker_base, 1),
+            SpotBalance::new("seller".to_owned(), "USDT".to_owned(), 0, maker_fee, 1),
+            SpotBalance::new("fee".to_owned(), "USDT".to_owned(), 0, 0, 1),
         ],
         base_asset_id: "BTC".to_owned(),
         quote_asset_id: "USDT".to_owned(),

@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
-use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState};
+use example_core_use_case::{SpotBalance, DepositQuoteCmd, DepositQuoteState};
 
 use crate::shared::{
     DepositQuoteOutboundError, InMemoryStore, balance_key, event_string_field, event_u64_field,
@@ -52,7 +52,7 @@ impl CommandUseCaseOutbound for InMemoryDepositQuoteOutbound {
                 let balance = state
                     .balances
                     .entry(key)
-                    .or_insert_with(|| Balance::new(account_id.clone(), asset_id.clone(), 0, 0, 0));
+                    .or_insert_with(|| SpotBalance::new(account_id.clone(), asset_id.clone(), 0, 0, 0));
                 if let Some(available) = event_u64_field(event, "available") {
                     balance.available = available;
                 }

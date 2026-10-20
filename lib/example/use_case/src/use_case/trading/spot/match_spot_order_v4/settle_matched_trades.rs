@@ -13,7 +13,7 @@ use super::support::{
 };
 use crate::SpotTrade;
 use crate::entity::account::balance_ledger_v2::BalanceLedgerV2;
-use crate::entity::{Balance, SettlementTransferVoucher, spot as spot_entity};
+use crate::entity::{SpotBalance, SettlementTransferVoucher, spot as spot_entity};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettleMatchedSpotTradesV4Cmd {
@@ -33,7 +33,7 @@ pub enum SettleMatchedSpotTradesV4AfterChanges {
     Settled {
         taker_order_after: SpotOrderV2,
         maker_orders_after: Vec<SpotOrderV2>,
-        balances_after: Vec<Balance>,
+        balances_after: Vec<SpotBalance>,
         created_vouchers: Vec<SettlementTransferVoucher>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
@@ -49,7 +49,7 @@ pub enum SettleMatchedSpotTradesV4Changes {
     Settled {
         updated_taker_order: UpdatedEntityPair<SpotOrderV2>,
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
-        updated_balances: Vec<UpdatedEntityPair<Balance>>,
+        updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
         created_vouchers: Vec<SettlementTransferVoucher>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
@@ -105,7 +105,7 @@ pub struct SettleMatchedSpotTradesV4State {
     /// MatchV4 产出的 maker 订单 after 列表，顺序必须与成交 maker 优先级一致。
     pub maker_orders: Vec<SpotOrderV2>,
     pub created_trades: Vec<SpotTrade>,
-    pub settlement_balances: Vec<Balance>,
+    pub settlement_balances: Vec<SpotBalance>,
     pub base_asset_id: String,
     pub quote_asset_id: String,
     pub fee_account_id: String,

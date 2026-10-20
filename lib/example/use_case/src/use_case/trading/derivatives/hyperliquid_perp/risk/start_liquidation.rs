@@ -5,7 +5,7 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    Balance, HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
+    SpotBalance, HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
     HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
 };
 use crate::support::concat3;
@@ -34,7 +34,7 @@ pub struct StartHyperliquidPerpLiquidationState {
     /// 被检查的仓位快照。
     pub position: HyperliquidPerpPosition,
     /// 对应账户在保证金币种上的余额快照。
-    pub margin_balance: Balance,
+    pub margin_balance: SpotBalance,
     /// 保证金币种，例如 `USDC`。
     pub margin_asset_id: String,
     /// 当前仓位保证金模式。
@@ -229,8 +229,8 @@ mod tests {
         )
     }
 
-    fn balance() -> Balance {
-        Balance::new("trader-1".to_string(), "USDC".to_string(), 100_000, 0, 5)
+    fn balance() -> SpotBalance {
+        SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 100_000, 0, 5)
     }
 
     fn state() -> StartHyperliquidPerpLiquidationState {
@@ -380,7 +380,7 @@ mod tests {
         state.mark_price = 48_500;
         state.bankruptcy_price = 50_000;
         state.trigger_reason = HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk;
-        state.margin_balance = Balance::new("trader-1".to_string(), "USDC".to_string(), 0, 0, 5);
+        state.margin_balance = SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 0, 0, 5);
 
         StartHyperliquidPerpLiquidationUseCase.validate_against_state(&cmd(), &state).unwrap();
         let changes =

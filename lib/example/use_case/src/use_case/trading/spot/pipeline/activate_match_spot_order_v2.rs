@@ -5,7 +5,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{Balance, SpotOrderV2};
+use crate::entity::{SpotBalance, SpotOrderV2};
 use crate::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
@@ -24,7 +24,7 @@ pub struct ActivateMatchSpotOrderV2Cmd {
 pub struct ActivateMatchSpotOrderV2State {
     pub pending_order: SpotOrderV2,
     pub maker_orders: Vec<SpotOrderV2>,
-    pub settlement_balances: Vec<Balance>,
+    pub settlement_balances: Vec<SpotBalance>,
     pub base_asset_id: String,
     pub quote_asset_id: String,
     pub fee_account_id: String,

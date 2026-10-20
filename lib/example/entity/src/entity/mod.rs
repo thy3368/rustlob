@@ -17,7 +17,7 @@ pub mod account;
 
 pub mod market_data;
 
-pub use account::balance::{Balance, BalanceError};
+pub use account::spot_balance::{SpotBalance, BalanceError};
 pub use account::balance_ledger_v2::{
     BalanceLedgerV2 as BalanceLedgerEntry, BalanceLedgerV2, BalanceLedgerEntryV2Error,
     BalanceLedgerOperation,

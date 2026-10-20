@@ -43,7 +43,7 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
+        ActivatePendingSpotOrderV2Input, SpotBalance, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
         MatchSpotOrderV3UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
         SpotOrderV2,
     };
@@ -79,11 +79,11 @@ mod tests {
                 taker_order: buy_order(1, "buyer", 100, 2, SpotOrderTif::Ioc)?,
                 maker_orders: vec![sell_order(2, "seller", 100, 1)?],
                 settlement_balances: vec![
-                    Balance::new("buyer".to_string(), "USDT".to_string(), 1000, 201, 1),
-                    Balance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
-                    Balance::new("seller".to_string(), "BTC".to_string(), 0, 1, 1),
-                    Balance::new("seller".to_string(), "USDT".to_string(), 0, 1, 1),
-                    Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+                    SpotBalance::new("buyer".to_string(), "USDT".to_string(), 1000, 201, 1),
+                    SpotBalance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
+                    SpotBalance::new("seller".to_string(), "BTC".to_string(), 0, 1, 1),
+                    SpotBalance::new("seller".to_string(), "USDT".to_string(), 0, 1, 1),
+                    SpotBalance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
                 ],
                 base_asset_id: "BTC".to_string(),
                 quote_asset_id: "USDT".to_string(),

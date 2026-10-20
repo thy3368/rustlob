@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    Balance, MarketRules, PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason,
+    SpotBalance, MarketRules, PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason,
     ReservationKind, ReservationMarketKind, ReservationStatus, SpotOrderGroupRelation,
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
     SpotOrderV2, SpotTrade,
@@ -37,8 +37,8 @@ impl InMemoryPlaceOrderOutbound {
     }
 
     pub fn seeded(
-        base_balance: Balance,
-        quote_balance: Balance,
+        base_balance: SpotBalance,
+        quote_balance: SpotBalance,
         market_rules: MarketRules,
     ) -> Result<Self, crate::StoreError> {
         Ok(Self::from_store(InMemoryStore::seed_balances(
@@ -48,7 +48,7 @@ impl InMemoryPlaceOrderOutbound {
         )?))
     }
 
-    pub fn seed_balance(&self, balance: Balance) -> Result<(), crate::StoreError> {
+    pub fn seed_balance(&self, balance: SpotBalance) -> Result<(), crate::StoreError> {
         self.store.seed_balance(balance)
     }
 
@@ -114,7 +114,7 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound
             .balances
             .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
         {
-            settlement_balances.push(Balance::new(
+            settlement_balances.push(SpotBalance::new(
                 DEFAULT_FEE_ACCOUNT_ID.to_string(),
                 quote_asset_id.clone(),
                 0,

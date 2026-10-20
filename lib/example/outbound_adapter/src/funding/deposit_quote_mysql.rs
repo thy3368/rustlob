@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
-use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState};
+use example_core_use_case::{SpotBalance, DepositQuoteCmd, DepositQuoteState};
 use mysql::prelude::Queryable;
 
 use crate::shared::{
@@ -42,7 +42,7 @@ impl CommandUseCaseOutbound for MySqlDepositQuoteOutbound {
             account_row.ok_or(DepositQuoteOutboundError::BalanceNotFound)?;
 
         Ok(DepositQuoteState {
-            quote_balance: Balance {
+            quote_balance: SpotBalance {
                 account_id,
                 asset_id: "USDT".to_string(),
                 available: available_quote,

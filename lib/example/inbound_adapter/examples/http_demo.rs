@@ -6,7 +6,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use example_core_use_case::Balance;
+use example_core_use_case::SpotBalance;
 use example_inbound_adapter::{
     DepositQuoteOutboundAccess, PlaceOrderOutboundAccess, WithdrawQuoteOutboundAccess,
     build_deposit_http_router, build_orders_http_router, build_withdraw_http_router,
@@ -91,8 +91,8 @@ struct InMemoryDemoApp {
 impl InMemoryDemoApp {
     fn new() -> Result<Self, StoreError> {
         let store = InMemoryStore::seed_balances(
-            Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 2),
-            Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 2),
+            SpotBalance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 2),
+            SpotBalance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 2),
             example_core_use_case::MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
         )?;
         let place_order_outbound = InMemoryPlaceOrderOutbound::from_store(store.clone());

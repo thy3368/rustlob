@@ -39,7 +39,7 @@ mod tests {
 
     use cmd_handler::EntityReplayableEvent;
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
+        ActivatePendingSpotOrderV2Input, SpotBalance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
         ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderId,
         SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError, SpotBlockItemResult,
         SpotBlockState, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
@@ -114,7 +114,7 @@ mod tests {
 
             Ok(SpotBlockState {
                 orders: vec![order],
-                balances: vec![Balance::new(
+                balances: vec![SpotBalance::new(
                     "buyer".to_owned(),
                     "USDT".to_owned(),
                     100_000,

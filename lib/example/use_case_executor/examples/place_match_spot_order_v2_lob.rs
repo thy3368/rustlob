@@ -1,7 +1,7 @@
 //! 运行：cargo run -p use_case_executor --example place_match_spot_order_v2_lob
 
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, Balance, MarketRules, PlaceMatchSpotOrderV2Changes,
+    ActivatePendingSpotOrderV2Input, SpotBalance, MarketRules, PlaceMatchSpotOrderV2Changes,
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
     SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
@@ -15,10 +15,10 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
     let store = InMemoryStore::new(ASSET);
     store.seed_market_rules(MarketRules { symbol: "BTCUSDT".into(), min_qty: 1 })?;
     for balance in [
-        Balance::new("buyer".into(), "BTC".into(), 0, 0, 1),
-        Balance::new("buyer".into(), "USDT".into(), 101, 0, 1),
-        Balance::new("seller".into(), "BTC".into(), 0, 1, 1),
-        Balance::new("seller".into(), "USDT".into(), 0, 1, 1),
+        SpotBalance::new("buyer".into(), "BTC".into(), 0, 0, 1),
+        SpotBalance::new("buyer".into(), "USDT".into(), 101, 0, 1),
+        SpotBalance::new("seller".into(), "BTC".into(), 0, 1, 1),
+        SpotBalance::new("seller".into(), "USDT".into(), 0, 1, 1),
     ] {
         store.seed_balance(balance)?;
     }

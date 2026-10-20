@@ -138,7 +138,7 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use common_entity::{Entity, ReplayFieldChange};
     use example_core_use_case::{
-        Balance, MarketRules, SpotOrderSide, SpotOrderStatus, SpotOrderTriggerRole, SpotOrderType,
+        SpotBalance, MarketRules, SpotOrderSide, SpotOrderStatus, SpotOrderTriggerRole, SpotOrderType,
         SpotOrderV2,
     };
     use example_outbound_adapter::InMemoryPlaceOrderOutbound;
@@ -173,10 +173,10 @@ mod tests {
             .seed_market_rules(MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 })
             .expect("market rules should seed");
         outbound
-            .seed_balance(Balance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1))
+            .seed_balance(SpotBalance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1))
             .expect("base balance should seed");
         outbound
-            .seed_balance(Balance::new("buyer".to_string(), "USDT".to_string(), 1_000, 0, 1))
+            .seed_balance(SpotBalance::new("buyer".to_string(), "USDT".to_string(), 1_000, 0, 1))
             .expect("quote balance should seed");
         outbound
             .seed_order(SpotOrderV2::new_pending_trigger(

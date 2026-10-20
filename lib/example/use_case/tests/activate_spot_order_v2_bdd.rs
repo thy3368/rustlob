@@ -2,7 +2,7 @@ use common_entity::{
     LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
 };
 use example_core_entity::{
-    ActivatePendingSpotOrderV2Input, Balance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
+    ActivatePendingSpotOrderV2Input, SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
     SpotOrderTriggerRole, SpotOrderType, SpotOrderV2,
 };
 use example_core_use_case::{
@@ -58,8 +58,8 @@ fn state(order: SpotOrderV2, maker_fee_bps: u64, taker_fee_bps: u64) -> Activate
     ActivateSpotOrderV2State {
         pending_order: order,
         balances: vec![
-            Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
-            Balance::new("trader-1".to_string(), "BTC".to_string(), 10, 0, 1),
+            SpotBalance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 1),
+            SpotBalance::new("trader-1".to_string(), "BTC".to_string(), 10, 0, 1),
         ],
         base_asset_id: "BTC".to_string(),
         quote_asset_id: "USDT".to_string(),

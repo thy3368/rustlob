@@ -6,7 +6,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::balance::{Balance, BalanceError};
+use super::spot_balance::{SpotBalance, BalanceError};
 use super::balance_ledger_reason::BalanceLedgerReason;
 use crate::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 
@@ -253,7 +253,7 @@ impl BalanceLedgerV2 {
     }
 
     /// 可 BDD 规格化的聚合根行为：把流水操作应用到对应余额并补齐审计快照。
-    pub fn apply_to(&mut self, balance: &mut Balance) -> Result<(), BalanceLedgerEntryV2Error> {
+    pub fn apply_to(&mut self, balance: &mut SpotBalance) -> Result<(), BalanceLedgerEntryV2Error> {
         if self.has_any_snapshot() {
             return Err(BalanceLedgerEntryV2Error::AlreadyApplied);
         }
@@ -299,7 +299,7 @@ impl BalanceLedgerV2 {
     }
 
     /// 返回这条流水是否对应给定的余额 before/after 变化。
-    pub fn matches_balance_update(&self, updated_balance: &UpdatedEntityPair<Balance>) -> bool {
+    pub fn matches_balance_update(&self, updated_balance: &UpdatedEntityPair<SpotBalance>) -> bool {
         self.is_applied()
             && self.account_id == updated_balance.after.account_id
             && self.asset_id == updated_balance.after.asset_id

@@ -1,11 +1,11 @@
 pub mod spot_account;
-pub mod balance;
+pub mod spot_balance;
 pub mod balance_ledger_v2;
 pub mod balance_ledger_reason;
 pub mod hyperliquid_perp_position;
 
 pub use spot_account::{SpotAccount, AccountStatus};
-pub use balance::BalanceError;
+pub use spot_balance::BalanceError;
 pub use balance_ledger_v2::{
     BalanceLedgerV2 as BalanceLedgerEntry, BalanceLedgerV2, BalanceLedgerOperation,
 };

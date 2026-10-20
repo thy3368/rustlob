@@ -8,7 +8,7 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    Balance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingSettlement,
+    SpotBalance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingSettlement,
     HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionError,
 };
 use crate::support::{concat3, concat4};
@@ -46,7 +46,7 @@ pub struct SettleHyperliquidPerpFundingState {
     /// 当前批次涉及的仓位快照。
     pub positions: Vec<HyperliquidPerpPosition>,
     /// 当前批次涉及账户的 Cross 保证金币种余额。
-    pub margin_balances: Vec<Balance>,
+    pub margin_balances: Vec<SpotBalance>,
     /// 保证金币种，例如 `USDC`。
     pub margin_asset_id: String,
     /// 当前资金费批次已经结算过的仓位 ID。
@@ -115,7 +115,7 @@ pub struct SettleHyperliquidPerpFundingChanges {
     /// 本批次新创建的资金费事实。
     pub created_settlements: Vec<HyperliquidPerpFundingSettlement>,
     /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。
-    pub changed_margin_balances: Vec<UpdatedEntityPair<Balance>>,
+    pub changed_margin_balances: Vec<UpdatedEntityPair<SpotBalance>>,
     /// 本批次新创建的余额流水。
     pub created_balance_ledger_entries: Vec<BalanceLedgerEntry>,
 }
@@ -372,9 +372,9 @@ fn map_position_funding_error(
 }
 
 fn balance_map<'a>(
-    balances: &'a [Balance],
+    balances: &'a [SpotBalance],
     margin_asset_id: &str,
-) -> Result<BTreeMap<String, &'a Balance>, SettleHyperliquidPerpFundingError> {
+) -> Result<BTreeMap<String, &'a SpotBalance>, SettleHyperliquidPerpFundingError> {
     let mut map = BTreeMap::new();
     for balance in balances {
         if !balance.is_asset(margin_asset_id) {
@@ -482,8 +482,8 @@ mod tests {
                 position("position-short", "trader-2", -2, 5),
             ],
             margin_balances: vec![
-                Balance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 0, 7),
-                Balance::new("trader-2".to_string(), "USDC".to_string(), 1_000, 0, 11),
+                SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 0, 7),
+                SpotBalance::new("trader-2".to_string(), "USDC".to_string(), 1_000, 0, 11),
             ],
             margin_asset_id: "USDC".to_string(),
             settled_position_ids: Vec::with_capacity(0),
@@ -514,7 +514,7 @@ mod tests {
                 position("position-long-1", "trader-1", 2, 3),
                 position("position-long-2", "trader-1", 1, 4),
             ],
-            margin_balances: vec![Balance::new(
+            margin_balances: vec![SpotBalance::new(
                 "trader-1".to_string(),
                 "USDC".to_string(),
                 1_000,
@@ -558,7 +558,7 @@ mod tests {
         let state = cross_state();
         let mut isolated_state = state;
         isolated_state.margin_balances =
-            vec![Balance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 0, 7)];
+            vec![SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 0, 7)];
         isolated_state.margin_mode = HyperliquidPerpMarginMode::Isolated;
         assert_eq!(
             use_case.validate_against_state(&cmd, &isolated_state),
@@ -782,7 +782,7 @@ mod tests {
         let mut state = cross_state();
         state.positions.truncate(1);
         state.margin_balances =
-            vec![Balance::new("trader-1".to_string(), "USDC".to_string(), 1, 0, 7)];
+            vec![SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 1, 0, 7)];
         let cmd = SettleHyperliquidPerpFundingCmd {
             party_id: "trader-1".to_string(),
             position_ids: vec!["position-long".to_string()],

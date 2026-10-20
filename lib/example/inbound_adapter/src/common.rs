@@ -269,7 +269,7 @@ pub(crate) mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, StateSink, StateSource};
     use common_entity::LogEntry;
     use example_core_use_case::{
-        Balance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
+        SpotBalance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
         PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, WithdrawQuoteCmd,
         WithdrawQuoteState,
     };
@@ -369,9 +369,9 @@ pub(crate) mod tests {
             _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
         ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
             let settlement_balances = vec![
-                Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
-                Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 5),
-                Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+                SpotBalance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
+                SpotBalance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 5),
+                SpotBalance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
             ];
             Ok(PlaceMatchSpotOrderV2State {
                 maker_orders: Vec::new(),
@@ -404,7 +404,7 @@ pub(crate) mod tests {
 
         fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
             Ok(DepositQuoteState {
-                quote_balance: Balance::new(
+                quote_balance: SpotBalance::new(
                     "trader-1".to_string(),
                     "USDT".to_string(),
                     1_000,
@@ -434,7 +434,7 @@ pub(crate) mod tests {
 
         fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
             Ok(WithdrawQuoteState {
-                quote_balance: Balance::new(
+                quote_balance: SpotBalance::new(
                     "trader-1".to_string(),
                     "USDT".to_string(),
                     1_000,

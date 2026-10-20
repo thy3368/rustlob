@@ -7,7 +7,7 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::LogEntry;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
+    ActivatePendingSpotOrderV2Input, SpotBalance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, SpotBlockAppliedChanges,
     SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult, SpotBlockState,
     SpotBlockUseCase, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
@@ -299,11 +299,11 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
         Ok(SpotBlockState {
             orders: vec![demo_sell_order(2, "seller", 100, 1)?, cancel_order],
             balances: vec![
-                Balance::new("buyer".to_string(), "USDT".to_string(), 100_000, buyer_frozen, 1),
-                Balance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
-                Balance::new("seller".to_string(), "BTC".to_string(), 0, 1, 1),
-                Balance::new("seller".to_string(), "USDT".to_string(), 0, 1, 1),
-                Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+                SpotBalance::new("buyer".to_string(), "USDT".to_string(), 100_000, buyer_frozen, 1),
+                SpotBalance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
+                SpotBalance::new("seller".to_string(), "BTC".to_string(), 0, 1, 1),
+                SpotBalance::new("seller".to_string(), "USDT".to_string(), 0, 1, 1),
+                SpotBalance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
             ],
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),

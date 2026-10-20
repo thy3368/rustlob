@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, Balance, MarketRules, PlaceOnlySpotOrderV2Cmd,
+    ActivatePendingSpotOrderV2Input, SpotBalance, MarketRules, PlaceOnlySpotOrderV2Cmd,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, SpotOrderSide, SpotOrderTif,
     SpotOrderType, SpotOrderV2,
 };
@@ -39,12 +39,12 @@ fn sell_order(id: u64) -> Result<SpotOrderV2, Box<dyn std::error::Error>> {
 
 fn outbound() -> Result<InMemoryPlaceOrderOutbound, Box<dyn std::error::Error>> {
     let out = InMemoryPlaceOrderOutbound::seeded(
-        Balance::new("buyer".into(), "BTC".into(), 0, 0, 1),
-        Balance::new("buyer".into(), "USDT".into(), 200_000, 0, 1),
+        SpotBalance::new("buyer".into(), "BTC".into(), 0, 0, 1),
+        SpotBalance::new("buyer".into(), "USDT".into(), 200_000, 0, 1),
         MarketRules { symbol: "BTCUSDT".into(), min_qty: 1 },
     )?;
-    out.seed_balance(Balance::new("seller".into(), "BTC".into(), 0, N, 1))?;
-    out.seed_balance(Balance::new("seller".into(), "USDT".into(), N * 100, 0, 1))?;
+    out.seed_balance(SpotBalance::new("seller".into(), "BTC".into(), 0, N, 1))?;
+    out.seed_balance(SpotBalance::new("seller".into(), "USDT".into(), N * 100, 0, 1))?;
     for id in 9_000..9_000 + N {
         out.seed_order(sell_order(id)?)?;
     }
