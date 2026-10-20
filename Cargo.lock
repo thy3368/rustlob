@@ -2934,8 +2934,10 @@ dependencies = [
 name = "entity"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "entity_derive",
  "minstant",
+ "rewal",
  "serde",
  "serde-big-array",
  "serde_json",
@@ -8123,6 +8125,12 @@ dependencies = [
  "hex",
  "serde",
 ]
+
+[[package]]
+name = "rewal"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4489f3ba48342fc2712a0c7c09d53d42a3b2914a426d7fd00313db6d66f48d9d"
 
 [[package]]
 name = "rfc6979"
