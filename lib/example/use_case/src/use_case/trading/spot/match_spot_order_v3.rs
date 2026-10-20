@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2Diff,
-    StateMachineV2Unchecked,
+    StateMachineV2,
 };
 use example_core_entity::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 use serde::{Deserialize, Serialize};
@@ -66,6 +66,17 @@ pub enum MatchSpotOrderV3AfterChanges {
         balances_after: Vec<Balance>,
         created_balance_ledger_entries: Vec<BalanceLedgerEntryV2>,
     },
+}
+
+impl MatchSpotOrderV3AfterChanges {
+    pub fn created_trades(&self) -> &[SpotTrade] {
+        match self {
+            Self::Resting | Self::Rejected { .. } => &[],
+            Self::PartiallyFilled { created_trades, .. }
+            | Self::Filled { created_trades, .. }
+            | Self::CanceledAfterPartialFill { created_trades, .. } => created_trades,
+        }
+    }
 }
 
 /// 撮合后的 before/after 业务变化。
@@ -1095,7 +1106,7 @@ pub struct MatchSpotOrderV3State {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchSpotOrderV3UseCase;
 
-impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
+impl StateMachineV2 for MatchSpotOrderV3UseCase {
     type Command = LogEntry<MatchSpotOrderV3Cmd>;
     type StateGiven = MatchSpotOrderV3State;
     type Error = MatchSpotOrderV3Error;
