@@ -21,6 +21,11 @@ pub use pipeline::activate_match_spot_order_v2::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error, ActivateMatchSpotOrderV2State,
     ActivateMatchSpotOrderV2UseCase,
 };
+pub use pipeline::place_activate_pipeline::{
+    PlaceActivateV2ActivatedOrderAfterChanges, PlaceActivateV2AfterChanges,
+    PlaceActivateV2Changes, PlaceActivateV2Cmd, PlaceActivateV2Error, PlaceActivateV2State,
+    PlaceActivateV2UseCase,
+};
 pub use pipeline::place_match_spot_order_v2::{
     PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
     PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
