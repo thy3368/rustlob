@@ -126,7 +126,7 @@ fn state() -> PlaceHyperliquidPerpOrderState {
         margin_balance: SpotBalance::new("acct-1".to_string(), "USDC".to_string(), 10_000, 500, 4),
         margin_asset_id: "USDC".to_string(),
         market_rules: MarketRules { symbol: "BTC-PERP".to_string(), min_qty: 1 },
-        position: HyperliquidPerpPosition::empty_slot(
+        position: PerpPosition::empty_slot(
             "position-1".to_string(),
             "acct-1".to_string(),
             0,
@@ -136,8 +136,8 @@ fn state() -> PlaceHyperliquidPerpOrderState {
     }
 }
 
-fn non_flat_position(signed_size: i64) -> HyperliquidPerpPosition {
-    HyperliquidPerpPosition::new(
+fn non_flat_position(signed_size: i64) -> PerpPosition {
+    PerpPosition::new(
         "position-1".to_string(),
         "acct-1".to_string(),
         0,

@@ -97,7 +97,7 @@ pub struct HyperliquidPerpPositionLeverageOutcome {
 ///
 /// `version == 0` 可表示 adapter 装载到的空仓位槽位；构造器只装配已校验事实或回放事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HyperliquidPerpPosition {
+pub struct PerpPosition {
     /// 本系统稳定仓位主键，建议由 account + asset/symbol 生成。
     pub position_key: String,
     /// 仓位所属账户 ID。
@@ -120,7 +120,7 @@ pub struct HyperliquidPerpPosition {
     pub version: u64,
 }
 
-impl HyperliquidPerpPosition {
+impl PerpPosition {
     /// 从已经校验过的持久化业务事实或回放事件构造 Hyperliquid perp 仓位。
     ///
     /// 该构造器只装配已知事实，不校验仓位自洽性，不接收或持久化风险快照派生字段。
@@ -388,7 +388,7 @@ impl HyperliquidPerpPosition {
         leverage_value: u64,
         margin_mode: HyperliquidPerpMarginMode,
     ) -> Result<
-        (HyperliquidPerpPosition, HyperliquidPerpPositionTradeOutcome),
+        (PerpPosition, HyperliquidPerpPositionTradeOutcome),
         HyperliquidPerpPositionError,
     > {
         validate_trade_input(signed_size_delta, trade_price)?;
@@ -599,7 +599,7 @@ impl HyperliquidPerpPosition {
     }
 }
 
-impl FieldDiff for HyperliquidPerpPosition {
+impl FieldDiff for PerpPosition {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("position_key", "", self.position_key.clone()),
@@ -664,13 +664,13 @@ impl FieldDiff for HyperliquidPerpPosition {
     }
 }
 
-impl common_entity::Shard for HyperliquidPerpPosition {
+impl common_entity::Shard for PerpPosition {
     fn partition(&self) -> u8 {
         todo!()
     }
 }
 
-impl Entity for HyperliquidPerpPosition {
+impl Entity for PerpPosition {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.position_key)
     }
@@ -769,7 +769,7 @@ fn validate_trade_input(
 }
 
 fn validate_existing_trade_transition(
-    position: &HyperliquidPerpPosition,
+    position: &PerpPosition,
     signed_size_delta: i64,
     trade_price: u64,
 ) -> Result<(), HyperliquidPerpPositionError> {
@@ -806,7 +806,7 @@ mod tests {
 
     #[test]
     fn empty_slot_carries_leverage_for_future_position_creation() {
-        let position = HyperliquidPerpPosition::empty_slot(
+        let position = PerpPosition::empty_slot(
             "buyer:BTC-PERP".to_string(),
             "buyer".to_string(),
             0,
@@ -829,7 +829,7 @@ mod tests {
 
     #[test]
     fn new_assembles_only_persisted_position_facts() {
-        let position = HyperliquidPerpPosition::new(
+        let position = PerpPosition::new(
             "position-1".to_string(),
             "trader-1".to_string(),
             7,
@@ -856,7 +856,7 @@ mod tests {
         assert_eq!(position.version, 4);
     }
 
-    fn open_position(signed_size: i64, entry_price: u64, leverage: u64) -> HyperliquidPerpPosition {
+    fn open_position(signed_size: i64, entry_price: u64, leverage: u64) -> PerpPosition {
         position_with_facts(
             "position-1",
             "trader-1",
@@ -883,8 +883,8 @@ mod tests {
         margin_mode: HyperliquidPerpMarginMode,
         cumulative_realized_pnl: i64,
         version: u64,
-    ) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::new(
+    ) -> PerpPosition {
+        PerpPosition::new(
             position_key.to_string(),
             account_id.to_string(),
             perp_asset_id,
@@ -995,7 +995,7 @@ mod tests {
             None
         );
 
-        let flat = HyperliquidPerpPosition::empty_slot(
+        let flat = PerpPosition::empty_slot(
             "position-flat".to_string(),
             "trader-1".to_string(),
             7,
@@ -1112,7 +1112,7 @@ mod tests {
 
     #[test]
     fn open_position_creates_position_without_mutating_empty_slot() {
-        let slot = HyperliquidPerpPosition::empty_slot(
+        let slot = PerpPosition::empty_slot(
             "position-1".to_string(),
             "trader-1".to_string(),
             7,
@@ -1120,7 +1120,7 @@ mod tests {
             10,
         );
 
-        let (position, outcome) = HyperliquidPerpPosition::open_position(
+        let (position, outcome) = PerpPosition::open_position(
             slot.position_key.clone(),
             slot.account_id.clone(),
             slot.perp_asset_id,
@@ -1222,7 +1222,7 @@ mod tests {
 
     #[test]
     fn apply_leverage_setting_keeps_empty_and_closed_margin_zero() {
-        let mut empty = HyperliquidPerpPosition::empty_slot(
+        let mut empty = PerpPosition::empty_slot(
             "position-1".to_string(),
             "trader-1".to_string(),
             7,

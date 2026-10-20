@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::entity::{
     SpotBalance, HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
-    HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
+    HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, PerpPosition,
 };
 use crate::support::concat3;
 use crate::use_case::trading::derivatives::hyperliquid_perp::liquidation_trigger_reason::derive_hyperliquid_perp_liquidation_trigger_reason;
@@ -32,7 +32,7 @@ impl IssuedByParty for StartHyperliquidPerpLiquidationCmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartHyperliquidPerpLiquidationState {
     /// 被检查的仓位快照。
-    pub position: HyperliquidPerpPosition,
+    pub position: PerpPosition,
     /// 对应账户在保证金币种上的余额快照。
     pub margin_balance: SpotBalance,
     /// 保证金币种，例如 `USDC`。
@@ -214,8 +214,8 @@ mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCase4, ReplayableChanges};
 
     use super::*;
-    fn position() -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::new(
+    fn position() -> PerpPosition {
+        PerpPosition::new(
             "position-1".to_string(),
             "trader-1".to_string(),
             7,

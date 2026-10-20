@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::entity::{
     HyperliquidPerpLeverageSetting, HyperliquidPerpLeverageSettingError, HyperliquidPerpMarginMode,
-    HyperliquidPerpPosition, HyperliquidPerpPositionError,
+    PerpPosition, HyperliquidPerpPositionError,
 };
 
 /// 更新 Hyperliquid perp 杠杆配置的命令。
@@ -39,7 +39,7 @@ pub struct UpdateHyperliquidPerpLeverageState {
     /// 当前 asset + margin_mode 对应的杠杆配置快照。
     pub leverage_setting: HyperliquidPerpLeverageSetting,
     /// 若 adapter 已加载同账户同 asset 的仓位快照，本用例会同步应用杠杆配置变化。
-    pub position: Option<HyperliquidPerpPosition>,
+    pub position: Option<PerpPosition>,
 }
 
 /// 更新 Hyperliquid perp 杠杆配置可能产生的业务拒绝原因。
@@ -77,7 +77,7 @@ pub struct UpdateHyperliquidPerpLeverageChanges {
     /// 权威杠杆配置的 before/after。
     pub changed_leverage_setting: UpdatedEntityPair<HyperliquidPerpLeverageSetting>,
     /// 可选仓位快照的 before/after；只有 state 已加载对应仓位时产生。
-    pub changed_position: Option<UpdatedEntityPair<HyperliquidPerpPosition>>,
+    pub changed_position: Option<UpdatedEntityPair<PerpPosition>>,
 }
 
 impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
@@ -238,8 +238,8 @@ mod tests {
         HyperliquidPerpLeverageSetting::new("trader-1".to_string(), 7, margin_mode, 5, 3)
     }
 
-    fn open_position(margin_mode: HyperliquidPerpMarginMode) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::new(
+    fn open_position(margin_mode: HyperliquidPerpMarginMode) -> PerpPosition {
+        PerpPosition::new(
             "trader-1:BTC-PERP".to_string(),
             "trader-1".to_string(),
             7,
@@ -255,7 +255,7 @@ mod tests {
 
     fn state(
         margin_mode: HyperliquidPerpMarginMode,
-        position: Option<HyperliquidPerpPosition>,
+        position: Option<PerpPosition>,
     ) -> UpdateHyperliquidPerpLeverageState {
         UpdateHyperliquidPerpLeverageState {
             account_id: "trader-1".to_string(),

@@ -3,7 +3,7 @@ use cmd_handler::query_use_case_def::QueryUseCase;
 use thiserror::Error;
 
 use crate::entity::{
-    HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
+    HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, PerpPosition,
 };
 use crate::use_case::trading::derivatives::hyperliquid_perp::liquidation_trigger_reason::derive_hyperliquid_perp_liquidation_trigger_reason;
 
@@ -26,7 +26,7 @@ impl IssuedByParty for QueryHyperliquidPerpLiquidationCandidates {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpRiskSnapshot {
     /// 被扫描仓位。
-    pub position: HyperliquidPerpPosition,
+    pub position: PerpPosition,
     /// 当前仓位保证金模式。
     pub margin_mode: HyperliquidPerpMarginMode,
     /// Cross 或 Isolated 可用于判定的保证金额度。
@@ -158,8 +158,8 @@ impl QueryUseCase for QueryHyperliquidPerpLiquidationCandidatesUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn position(position_id: &str, account_id: &str, signed_size: i64) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::new(
+    fn position(position_id: &str, account_id: &str, signed_size: i64) -> PerpPosition {
+        PerpPosition::new(
             position_id.to_string(),
             account_id.to_string(),
             7,

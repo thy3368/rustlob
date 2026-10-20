@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::entity::{
     SpotBalance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingSettlement,
-    HyperliquidPerpMarginMode, HyperliquidPerpPosition, HyperliquidPerpPositionError,
+    HyperliquidPerpMarginMode, PerpPosition, HyperliquidPerpPositionError,
 };
 use crate::support::{concat3, concat4};
 
@@ -44,7 +44,7 @@ impl IssuedByParty for SettleHyperliquidPerpFundingCmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpFundingState {
     /// 当前批次涉及的仓位快照。
-    pub positions: Vec<HyperliquidPerpPosition>,
+    pub positions: Vec<PerpPosition>,
     /// 当前批次涉及账户的 Cross 保证金币种余额。
     pub margin_balances: Vec<SpotBalance>,
     /// 保证金币种，例如 `USDC`。
@@ -386,7 +386,7 @@ fn balance_map<'a>(
 }
 
 fn settlement_balance_ledger_reasons(
-    positions: &[HyperliquidPerpPosition],
+    positions: &[PerpPosition],
     settlements: &[HyperliquidPerpFundingSettlement],
     margin_asset_id: &str,
 ) -> BTreeMap<String, BalanceLedgerReason> {
@@ -397,7 +397,7 @@ fn settlement_balance_ledger_reasons(
         funding_batch_id: String,
     }
 
-    let positions_by_id: BTreeMap<&str, &HyperliquidPerpPosition> =
+    let positions_by_id: BTreeMap<&str, &PerpPosition> =
         positions.iter().map(|position| (position.position_key.as_str(), position)).collect();
 
     let mut refs_by_balance: BTreeMap<String, FundingLedgerRefs> = BTreeMap::new();
@@ -460,8 +460,8 @@ mod tests {
         account_id: &str,
         signed_size: i64,
         version: u64,
-    ) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::new(
+    ) -> PerpPosition {
+        PerpPosition::new(
             position_key.to_string(),
             account_id.to_string(),
             0,

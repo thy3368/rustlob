@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use super::u64;
 use crate::entity::{
-    HyperliquidPerpMarginMode, HyperliquidPerpPosition, MarginReservation, ReservationKind,
+    HyperliquidPerpMarginMode, PerpPosition, MarginReservation, ReservationKind,
     ReservationMarketKind,
 };
 
@@ -17,7 +17,7 @@ pub struct PerpClearinghouseStateCalcInput {
     /// 子账户标识。
     pub account_id: u64,
     /// 当前 perp 仓位事实。
-    pub positions: Vec<HyperliquidPerpPosition>,
+    pub positions: Vec<PerpPosition>,
     /// 当前 collateral 事实。
     pub collateral: PerpCollateralSnapshot,
     /// 当前市场标记价格事实。
@@ -70,7 +70,7 @@ pub struct PerpRiskPolicy {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpPositionRiskSnapshot {
     /// 仓位核心事实。
-    pub position: HyperliquidPerpPosition,
+    pub position: PerpPosition,
     /// 当前 mark price。
     pub mark_price: Decimal,
     /// 当前仓位名义价值。
@@ -427,7 +427,7 @@ impl PerpClearinghouseState {
     }
 
     /// 按展示合约符号查找仓位。
-    pub fn position_of(&self, symbol: &str) -> Option<&HyperliquidPerpPosition> {
+    pub fn position_of(&self, symbol: &str) -> Option<&PerpPosition> {
         self.position_risks
             .iter()
             .find(|risk| risk.position.trades_symbol(symbol))
@@ -517,15 +517,15 @@ mod tests {
     use rust_decimal::Decimal;
 
     use super::*;
-    use crate::entity::{HyperliquidPerpMarginMode, HyperliquidPerpPosition};
+    use crate::entity::{HyperliquidPerpMarginMode, PerpPosition};
 
     fn dec(units: i64) -> Decimal {
         Decimal::from(units)
     }
 
-    fn sample_position(asset: u32, symbol: &str, quantity: u64) -> HyperliquidPerpPosition {
+    fn sample_position(asset: u32, symbol: &str, quantity: u64) -> PerpPosition {
         let entry_price = if quantity == 0 { 0 } else { 100_000 };
-        HyperliquidPerpPosition::new(
+        PerpPosition::new(
             format!("sub-1-{symbol}"),
             "sub-1".to_owned(),
             asset,

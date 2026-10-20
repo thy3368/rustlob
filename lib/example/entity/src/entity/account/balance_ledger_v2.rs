@@ -82,11 +82,10 @@ pub struct BalanceLedgerV2 {
     /// 用户 ID 或业务主体 ID。
     pub party_id: u64,
     /// 账户 ID。
-    pub account_id: String,
+    pub account_id: u64,
     /// 资产 ID。
-    pub asset_id: String,
+    pub asset_id: u64,
     /// 对应余额快照实体 ID。好象可以不要
-    pub balance_entity_id: String,
     /// 本条流水表达的余额操作。
     pub operation: BalanceLedgerOperation,
     /// 本条流水表达的金额。

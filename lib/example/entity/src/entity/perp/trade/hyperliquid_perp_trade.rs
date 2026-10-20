@@ -4,7 +4,7 @@ use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 use crate::HyperliquidPerpOrderSide;
 use crate::entity::{
-    HyperliquidPerpPosition, HyperliquidPerpPositionError, HyperliquidPerpPositionTradeOutcome,
+    PerpPosition, HyperliquidPerpPositionError, HyperliquidPerpPositionTradeOutcome,
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
 };
 
@@ -46,9 +46,9 @@ pub struct HyperliquidPerpTrade {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpTradePositionSettlement {
     /// taker 账户结算后的仓位事实。
-    pub taker_position_after: HyperliquidPerpPosition,
+    pub taker_position_after: PerpPosition,
     /// maker 账户结算后的仓位事实。
-    pub maker_position_after: HyperliquidPerpPosition,
+    pub maker_position_after: PerpPosition,
     /// taker 账户本次成交的 PnL 与保证金变化。
     pub taker_outcome: HyperliquidPerpPositionTradeOutcome,
     /// maker 账户本次成交的 PnL 与保证金变化。
@@ -123,8 +123,8 @@ impl HyperliquidPerpTrade {
     /// 该方法只派生成交后的仓位事实和单边 outcome；余额、手续费、凭证和持久化仍由清结算 use case 编排。
     pub fn settle_into_positions(
         &self,
-        taker_position: &HyperliquidPerpPosition,
-        maker_position: &HyperliquidPerpPosition,
+        taker_position: &PerpPosition,
+        maker_position: &PerpPosition,
     ) -> Result<HyperliquidPerpTradePositionSettlement, HyperliquidPerpPositionError> {
         if !taker_position.belongs_to_account(self.taker_account_id.as_str())
             || !maker_position.belongs_to_account(self.maker_account_id.as_str())
@@ -147,9 +147,9 @@ impl HyperliquidPerpTrade {
 
     fn settle_one_account_position(
         &self,
-        position: &HyperliquidPerpPosition,
+        position: &PerpPosition,
     ) -> Result<
-        (HyperliquidPerpPosition, HyperliquidPerpPositionTradeOutcome),
+        (PerpPosition, HyperliquidPerpPositionTradeOutcome),
         HyperliquidPerpPositionError,
     > {
         let signed_size_delta = self.signed_size_delta_for_account(&position.account_id)?;
@@ -160,7 +160,7 @@ impl HyperliquidPerpTrade {
             return Err(HyperliquidPerpPositionError::InconsistentState);
         }
         if position.is_flat() {
-            return HyperliquidPerpPosition::open_position(
+            return PerpPosition::open_position(
                 position.position_key.clone(),
                 position.account_id.clone(),
                 position.perp_asset_id,
@@ -193,10 +193,10 @@ impl HyperliquidPerpTrade {
 
     fn flip_position(
         &self,
-        position: &HyperliquidPerpPosition,
+        position: &PerpPosition,
         signed_size_delta: i64,
     ) -> Result<
-        (HyperliquidPerpPosition, HyperliquidPerpPositionTradeOutcome),
+        (PerpPosition, HyperliquidPerpPositionTradeOutcome),
         HyperliquidPerpPositionError,
     > {
         let close_delta = signed_trade_qty(position.qty(), signed_size_delta.signum())?;
@@ -205,7 +205,7 @@ impl HyperliquidPerpTrade {
             .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
         let mut next_position = position.clone();
         let close_outcome = next_position.close_position(close_delta, self.price)?;
-        let (opened_position, open_outcome) = HyperliquidPerpPosition::open_position(
+        let (opened_position, open_outcome) = PerpPosition::open_position(
             next_position.position_key.clone(),
             next_position.account_id.clone(),
             next_position.perp_asset_id,
@@ -498,8 +498,8 @@ mod tests {
         trade
     }
 
-    fn empty_position(account_id: &str) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::empty_slot(
+    fn empty_position(account_id: &str) -> PerpPosition {
+        PerpPosition::empty_slot(
             format!("{account_id}:0:BTC-PERP"),
             account_id.to_string(),
             0,
@@ -508,8 +508,8 @@ mod tests {
         )
     }
 
-    fn position(account_id: &str, signed_size: i64, entry_price: u64) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::new(
+    fn position(account_id: &str, signed_size: i64, entry_price: u64) -> PerpPosition {
+        PerpPosition::new(
             format!("{account_id}:0:BTC-PERP"),
             account_id.to_string(),
             0,
@@ -523,8 +523,8 @@ mod tests {
         )
     }
 
-    fn bad_market_position(account_id: &str) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::empty_slot(
+    fn bad_market_position(account_id: &str) -> PerpPosition {
+        PerpPosition::empty_slot(
             format!("{account_id}:1:ETH-PERP"),
             account_id.to_string(),
             1,

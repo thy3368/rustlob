@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::MarketRules;
 use crate::entity::{
     SpotBalance, BalanceLedgerV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
-    HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, HyperliquidPerpPosition,
+    HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, PerpPosition,
     PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent, required_position_margin,
 };
 
@@ -170,7 +170,7 @@ pub struct PlaceHyperliquidPerpOrderState {
     /// 当前合约市场规则快照。
     pub market_rules: MarketRules,
     /// 当前账户在该 Hyperliquid perp asset 上的净仓位快照。
-    pub position: HyperliquidPerpPosition,
+    pub position: PerpPosition,
 }
 
 /// 接受 Hyperliquid perp 订单，并在非 reduce-only 时冻结 Cross 保证金。
@@ -397,7 +397,7 @@ enum DerivedPerpOrderIntent {
 fn derive_place_intent(
     order_side: HyperliquidPerpOrderSide,
     size: u64,
-    position: &HyperliquidPerpPosition,
+    position: &PerpPosition,
 ) -> Result<DerivedPerpOrderIntent, PlaceHyperliquidPerpOrderError> {
     if position.is_flat() {
         return Ok(DerivedPerpOrderIntent::Open);
@@ -423,7 +423,7 @@ fn derive_place_intent(
 
 fn validate_reduce_only(
     cmd: &PlaceHyperliquidPerpOrderCmd,
-    position: &HyperliquidPerpPosition,
+    position: &PerpPosition,
 ) -> Result<(), PlaceHyperliquidPerpOrderError> {
     let reduces_position = (cmd.side() == HyperliquidPerpOrderSide::Buy && position.is_short())
         || (cmd.side() == HyperliquidPerpOrderSide::Sell && position.is_long());

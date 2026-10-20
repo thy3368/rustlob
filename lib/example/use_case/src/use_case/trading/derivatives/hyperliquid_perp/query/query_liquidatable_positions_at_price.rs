@@ -3,7 +3,7 @@ use cmd_handler::query_use_case_def::QueryUseCase;
 use thiserror::Error;
 
 use crate::entity::{
-    HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, HyperliquidPerpPosition,
+    HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, PerpPosition,
 };
 use crate::use_case::trading::derivatives::hyperliquid_perp::liquidation_trigger_reason::derive_hyperliquid_perp_liquidation_trigger_reason;
 
@@ -26,7 +26,7 @@ impl IssuedByParty for QueryHyperliquidPerpLiquidatablePositionsAtPrice {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
     /// 被扫描的仓位。
-    pub position: HyperliquidPerpPosition,
+    pub position: PerpPosition,
     /// 当前仓位的保证金模式。
     pub margin_mode: HyperliquidPerpMarginMode,
     /// 当前仓位可用于判定的保证金额度。
@@ -198,9 +198,9 @@ mod tests {
         account_id: &str,
         signed_size: i64,
         required_margin: u64,
-    ) -> HyperliquidPerpPosition {
+    ) -> PerpPosition {
         let _snapshot_required_margin = required_margin;
-        HyperliquidPerpPosition::new(
+        PerpPosition::new(
             position_id.to_string(),
             account_id.to_string(),
             7,
@@ -256,7 +256,7 @@ mod tests {
     fn validate_rejects_inconsistent_position_state() {
         let read_model = QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
             snapshots: vec![HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                position: HyperliquidPerpPosition::new(
+                position: PerpPosition::new(
                     "position-1".to_string(),
                     "trader-1".to_string(),
                     7,
@@ -376,7 +376,7 @@ mod tests {
         let read_model = QueryHyperliquidPerpLiquidatablePositionsAtPriceReadModel {
             snapshots: vec![
                 HyperliquidPerpLiquidatablePositionAtPriceSnapshot {
-                    position: HyperliquidPerpPosition::empty_slot(
+                    position: PerpPosition::empty_slot(
                         "position-1".to_string(),
                         "trader-1".to_string(),
                         7,

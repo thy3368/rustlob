@@ -8,7 +8,7 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    SpotBalance, HyperliquidPerpPosition, HyperliquidPerpPositionError, HyperliquidPerpTrade,
+    SpotBalance, PerpPosition, HyperliquidPerpPositionError, HyperliquidPerpTrade,
     SettlementTransferVoucher,
 };
 use crate::support::concat3;
@@ -85,7 +85,7 @@ pub struct SettleHyperliquidPerpTradeState {
     /// 要清结算的成交事实。
     pub trades: Vec<HyperliquidPerpTrade>,
     /// 本批次涉及账户在成交合约上的仓位槽位；空仓但可创建仓位时传 `version == 0` 的 flat 槽位。
-    pub positions: Vec<HyperliquidPerpPosition>,
+    pub positions: Vec<PerpPosition>,
     /// 本批次涉及账户的 Cross 保证金币种余额。
     pub margin_balances: Vec<SpotBalance>,
     /// Cross 保证金币种，例如 `USDC`。
@@ -113,7 +113,7 @@ pub struct SettleHyperliquidPerpTradeChanges {
     /// 本批次新创建的 perp 清结算转账凭证。
     pub created_vouchers: Vec<SettlementTransferVoucher>,
     /// 本批次仓位槽位的 before/after，顺序与输入状态稳定对齐。
-    pub changed_positions: Vec<UpdatedEntityPair<HyperliquidPerpPosition>>,
+    pub changed_positions: Vec<UpdatedEntityPair<PerpPosition>>,
     /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。
     pub changed_margin_balances: Vec<UpdatedEntityPair<SpotBalance>>,
 }
@@ -238,7 +238,7 @@ struct BalanceDelta {
 #[derive(Debug, Clone)]
 struct SettlementOutcome {
     vouchers: Vec<SettlementTransferVoucher>,
-    positions: BTreeMap<String, HyperliquidPerpPosition>,
+    positions: BTreeMap<String, PerpPosition>,
     balance_deltas: BTreeMap<String, BalanceDelta>,
 }
 
@@ -352,7 +352,7 @@ fn derive_settlement_outcome(
 }
 
 fn validate_position_for_trade(
-    position: &HyperliquidPerpPosition,
+    position: &PerpPosition,
     account_id: &str,
     trade: &HyperliquidPerpTrade,
 ) -> Result<(), SettleHyperliquidPerpTradeError> {
@@ -459,8 +459,8 @@ fn apply_signed_delta(value: u64, delta: i128) -> Result<u64, SettleHyperliquidP
 }
 
 fn position_map(
-    positions: impl Iterator<Item = HyperliquidPerpPosition>,
-) -> BTreeMap<String, HyperliquidPerpPosition> {
+    positions: impl Iterator<Item =PerpPosition>,
+) -> BTreeMap<String, PerpPosition> {
     positions
         .map(|position| {
             (
@@ -535,8 +535,8 @@ mod tests {
         )
     }
 
-    fn empty_position(account_id: &str, leverage: u64) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::empty_slot(
+    fn empty_position(account_id: &str, leverage: u64) -> PerpPosition {
+        PerpPosition::empty_slot(
             format!("{account_id}:BTC-PERP"),
             account_id.to_string(),
             0,
@@ -551,8 +551,8 @@ mod tests {
         entry_price: u64,
         leverage: u64,
         realized_pnl: i64,
-    ) -> HyperliquidPerpPosition {
-        HyperliquidPerpPosition::new(
+    ) -> PerpPosition {
+        PerpPosition::new(
             format!("{account_id}:BTC-PERP"),
             account_id.to_string(),
             0,
@@ -572,7 +572,7 @@ mod tests {
 
     fn state(
         trades: Vec<HyperliquidPerpTrade>,
-        positions: Vec<HyperliquidPerpPosition>,
+        positions: Vec<PerpPosition>,
         balances: Vec<SpotBalance>,
     ) -> SettleHyperliquidPerpTradeState {
         SettleHyperliquidPerpTradeState {

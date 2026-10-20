@@ -1,8 +1,8 @@
-use crate::entity::{HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpPosition};
+use crate::entity::{HyperliquidPerpLiquidationTriggerReason, PerpPosition};
 
 /// 统一根据风险快照推导强平触发原因。
 pub(crate) fn derive_hyperliquid_perp_liquidation_trigger_reason(
-    position: &HyperliquidPerpPosition,
+    position: &PerpPosition,
     available_margin: u64,
     mark_price: u64,
     bankruptcy_price: u64,
