@@ -3,6 +3,7 @@ pub mod funding;
 pub mod query;
 pub mod risk;
 
+pub mod pipeline;
 mod liquidation_trigger_reason;
 
 pub use execution::{
