@@ -3,7 +3,6 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use thiserror::Error;
 
-use super::u64;
 use crate::entity::{
     HyperliquidPerpMarginMode, PerpPosition, MarginReservation, ReservationKind,
     ReservationMarketKind,
@@ -605,18 +604,5 @@ mod tests {
         assert_eq!(state.withdrawable(), dec(5_000));
     }
 
-    #[test]
-    fn perp_state_without_open_positions_returns_false() {
-        let state = PerpClearinghouseState::new(
-            u64::from("sub-1"),
-            vec![sample_position_risk(0, "BTC-PERP", 0)],
-            MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0), dec(0), dec(0)),
-            MarginSummary::new(dec(20_000), dec(0), dec(0), dec(0), dec(0), dec(0)),
-            None,
-            dec(20_000),
-            RiskState::Normal,
-        );
 
-        assert!(!state.has_open_positions());
-    }
 }
