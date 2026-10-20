@@ -480,7 +480,7 @@ pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {
     /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
     /// 的统一链路。
     #[action_type(kind = "compute_after_changes_unchecked")]
-    fn compute_state_changed_unchecked(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
@@ -493,7 +493,7 @@ pub trait StateMachineV2Unchecked: Clone + Debug + Send + Sync {
     ) -> Result<Self::StateChanged, Self::Error> {
         self.check_command(cmd)?;
         self.validate_state_given(cmd, given_state)?;
-        self.compute_state_changed_unchecked(cmd, given_state)
+        self.compute_state_changed_only(cmd, given_state)
     }
 }
 

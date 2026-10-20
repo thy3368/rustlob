@@ -1151,7 +1151,7 @@ impl StateMachineV2Unchecked for MatchSpotOrderV3UseCase {
         Ok(())
     }
 
-    fn compute_state_changed_unchecked(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,

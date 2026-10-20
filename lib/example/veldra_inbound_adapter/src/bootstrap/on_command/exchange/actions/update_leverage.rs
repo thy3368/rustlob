@@ -204,7 +204,7 @@ where
         .map_err(UpdateLeverageExecutionError::LoadState)?;
     use_case.validate_state_given(&cmd, &state).map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
-        .compute_state_changed_unchecked(&cmd, &state)
+        .compute_state_changed_only(&cmd, &state)
         .map_err(UpdateLeverageExecutionError::Business)?;
     let mut events =
         changes.to_replayable_events().map_err(UpdateLeverageExecutionError::ProjectEvents)?;

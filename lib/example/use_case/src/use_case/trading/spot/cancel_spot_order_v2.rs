@@ -134,7 +134,7 @@ impl StateMachineV2Unchecked for CancelSpotOrderV2UseCase {
         Ok(())
     }
 
-    fn compute_state_changed_unchecked(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
         given_state: &Self::StateGiven,

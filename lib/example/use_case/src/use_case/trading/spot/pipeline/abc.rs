@@ -68,12 +68,12 @@ impl<O: SpotTradeObserver> StateMachineV2Unchecked for MatchSpotOrderWithNplV3Us
         self.inner.validate_state_given(cmd, state)
     }
 
-    fn compute_state_changed_unchecked(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let after = self.inner.compute_state_changed_unchecked(cmd, state)?;
+        let after = self.inner.compute_state_changed_only(cmd, state)?;
         for trade in after.created_trades() {
             self.observer.observe(trade);
         }

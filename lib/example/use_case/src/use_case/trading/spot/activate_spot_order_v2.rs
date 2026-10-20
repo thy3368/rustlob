@@ -139,7 +139,7 @@ impl StateMachineV2Unchecked for ActivateSpotOrderV2UseCase {
         validate_activation_state(cmd, state)
     }
 
-    fn compute_state_changed_unchecked(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
         state: &Self::StateGiven,
