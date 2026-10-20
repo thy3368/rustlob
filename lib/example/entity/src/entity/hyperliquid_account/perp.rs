@@ -1,6 +1,6 @@
 use common_entity::{DomainReadModel, DomainReadSnapshot};
-use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use thiserror::Error;
 
 use crate::entity::{
