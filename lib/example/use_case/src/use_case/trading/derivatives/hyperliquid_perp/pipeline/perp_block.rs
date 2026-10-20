@@ -1,7 +1,3 @@
-
-
-
-
 // 业务指令
 
 // parse & sort actions
@@ -13,7 +9,6 @@
 // if logical_time crosses funding boundary:
 // settle funding
 // → commit new state
-
 
 // action-driven : place / cancel / modify
 // state-driven  : liquidation / ADL

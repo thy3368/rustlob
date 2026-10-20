@@ -3,9 +3,9 @@
 use std::time::{Duration, Instant};
 
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, SpotBalance, MarketRules, PlaceOnlySpotOrderV2Cmd,
-    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, SpotOrderSide, SpotOrderTif,
-    SpotOrderType, SpotOrderV2,
+    ActivatePendingSpotOrderV2Input, MarketRules, PlaceOnlySpotOrderV2Cmd,
+    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, SpotBalance, SpotOrderSide,
+    SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use example_outbound_adapter::InMemoryPlaceOrderOutbound;
 use use_case_executor::trading::spot::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2_with_outbound;

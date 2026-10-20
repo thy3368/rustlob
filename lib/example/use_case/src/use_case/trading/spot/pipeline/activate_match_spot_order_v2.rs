@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2Diff,
-    StateMachineV2,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

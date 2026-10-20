@@ -49,10 +49,9 @@ impl CommandUseCaseOutbound for InMemoryWithdrawQuoteOutbound {
                 let asset_id = event_string_field(event, "asset_id")
                     .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?;
                 let key = balance_key(account_id.as_str(), asset_id.as_str());
-                let balance = state
-                    .balances
-                    .entry(key)
-                    .or_insert_with(|| SpotBalance::new(account_id.clone(), asset_id.clone(), 0, 0, 0));
+                let balance = state.balances.entry(key).or_insert_with(|| {
+                    SpotBalance::new(account_id.clone(), asset_id.clone(), 0, 0, 0)
+                });
                 if let Some(available) = event_u64_field(event, "available") {
                     balance.available = available;
                 }

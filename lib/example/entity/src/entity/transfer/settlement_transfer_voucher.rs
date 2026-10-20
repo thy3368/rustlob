@@ -5,7 +5,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 
 use crate::BalanceLedgerReason;
-use crate::account::balance_ledger_v2::{BalanceLedgerV2, BalanceLedgerEntryV2Error};
+use crate::account::balance_ledger_v2::{BalanceLedgerEntryV2Error, BalanceLedgerV2};
 use crate::support::{concat2, derived_entity_id};
 
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;

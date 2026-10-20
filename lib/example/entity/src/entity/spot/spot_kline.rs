@@ -150,7 +150,9 @@ impl Entity for SpotKline {
 }
 
 impl common_entity::Shard for SpotKline {
-    fn partition(&self) -> u8 { self.asset as u8 }
+    fn partition(&self) -> u8 {
+        self.asset as u8
+    }
 }
 
 #[cfg(test)]

@@ -57,14 +57,23 @@ impl LogEntrySequencer {
         LogEntry::new(lsn, logical_ts, client_id, request_id, payload)
     }
 
-    pub fn from_metadata_with_topic<P>(t: u8, p: u8, lsn: u64, logical_ts: u64, client_id: u64, request_id: u64, payload: P) -> LogEntry<P> {
+    pub fn from_metadata_with_topic<P>(
+        t: u8,
+        p: u8,
+        lsn: u64,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+        payload: P,
+    ) -> LogEntry<P> {
         LogEntry::new_with_topic(t, p, lsn, logical_ts, client_id, request_id, payload)
     }
 
     /// 为子命令复用父日志的元数据，不分配新的序号。
     pub fn derive<P, Q>(parent: &LogEntry<P>, payload: Q) -> LogEntry<Q> {
         Self::from_metadata_with_topic(
-            parent.topic(), parent.partition(),
+            parent.topic(),
+            parent.partition(),
             parent.lsn(),
             parent.logical_ts(),
             parent.client_id(),
@@ -87,8 +96,12 @@ impl LogEntrySequencer {
         if self.next_lsn == 0 { None } else { Some((self.next_lsn, self.last_logical_ts)) }
     }
 
-    pub const fn topic(&self) -> u8 { self.t }
-    pub const fn partition(&self) -> u8 { self.p }
+    pub const fn topic(&self) -> u8 {
+        self.t
+    }
+    pub const fn partition(&self) -> u8 {
+        self.p
+    }
 
     /// 分配一个新的日志条目。
     pub fn sequence<P>(

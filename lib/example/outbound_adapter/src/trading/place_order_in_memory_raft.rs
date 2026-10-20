@@ -5,9 +5,9 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::Entity;
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    SpotBalance, MarketRules, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
+    MarketRules, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
     PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason,
-    ReservationKind, ReservationMarketKind, ReservationStatus, SpotOrderGroupRelation,
+    ReservationKind, ReservationMarketKind, ReservationStatus, SpotBalance, SpotOrderGroupRelation,
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
     SpotOrderV2, SpotTrade,
 };
@@ -224,10 +224,9 @@ impl InMemoryPlaceOrderRaftOutbound {
                 let asset_id = event_string_field(event, "asset_id")
                     .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
                 let key = balance_key(account_id.as_str(), asset_id.as_str());
-                let balance = state
-                    .balances
-                    .entry(key)
-                    .or_insert_with(|| SpotBalance::new(account_id.clone(), asset_id.clone(), 0, 0, 0));
+                let balance = state.balances.entry(key).or_insert_with(|| {
+                    SpotBalance::new(account_id.clone(), asset_id.clone(), 0, 0, 0)
+                });
                 if let Some(available) = event_u64_field(event, "available") {
                     balance.available = available;
                 }

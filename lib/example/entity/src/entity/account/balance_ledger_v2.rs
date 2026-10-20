@@ -6,8 +6,8 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::spot_balance::{SpotBalance, BalanceError};
 use super::balance_ledger_reason::BalanceLedgerReason;
+use super::spot_balance::{BalanceError, SpotBalance};
 use crate::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 
 const BALANCE_LEDGER_ENTRY_ENTITY_TYPE: u8 = 8;
@@ -123,8 +123,16 @@ impl BalanceLedgerEntryIdInput for &str {
 
 impl BalanceLedgerV2 {
     /// 构造一条冻结可用余额的流水事实。
-    pub fn freeze<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
-        entry_id: I, account_id: A, asset_id: T, party_id: P,
+    pub fn freeze<
+        I: BalanceLedgerEntryIdInput,
+        A: BalanceLedgerEntryIdInput,
+        T: BalanceLedgerEntryIdInput,
+        P: BalanceLedgerEntryIdInput,
+    >(
+        entry_id: I,
+        account_id: A,
+        asset_id: T,
+        party_id: P,
         amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
@@ -140,15 +148,24 @@ impl BalanceLedgerV2 {
     }
 
     /// 构造一条解冻冻结余额的流水事实。
-    pub fn unfreeze<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
+    pub fn unfreeze<
+        I: BalanceLedgerEntryIdInput,
+        A: BalanceLedgerEntryIdInput,
+        T: BalanceLedgerEntryIdInput,
+        P: BalanceLedgerEntryIdInput,
+    >(
         entry_id: I,
-        account_id: A, asset_id: T, party_id: P,
+        account_id: A,
+        asset_id: T,
+        party_id: P,
         amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id.into_entry_id(), asset_id.into_entry_id(), party_id.into_entry_id(),
+            account_id.into_entry_id(),
+            asset_id.into_entry_id(),
+            party_id.into_entry_id(),
             amount,
             reason,
             BalanceLedgerOperation::Unfreeze,
@@ -156,30 +173,49 @@ impl BalanceLedgerV2 {
     }
 
     /// 构造一条增加可用余额的流水事实。
-    pub fn credit_available<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
+    pub fn credit_available<
+        I: BalanceLedgerEntryIdInput,
+        A: BalanceLedgerEntryIdInput,
+        T: BalanceLedgerEntryIdInput,
+        P: BalanceLedgerEntryIdInput,
+    >(
         entry_id: I,
-        account_id: A, asset_id: T, party_id: P, amount: u64,
+        account_id: A,
+        asset_id: T,
+        party_id: P,
+        amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id.into_entry_id(), asset_id.into_entry_id(),
-            party_id.into_entry_id(), amount,
+            account_id.into_entry_id(),
+            asset_id.into_entry_id(),
+            party_id.into_entry_id(),
+            amount,
             reason,
             BalanceLedgerOperation::CreditAvailable,
         )
     }
 
     /// 构造一条扣减可用余额的流水事实。
-    pub fn debit_available<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
+    pub fn debit_available<
+        I: BalanceLedgerEntryIdInput,
+        A: BalanceLedgerEntryIdInput,
+        T: BalanceLedgerEntryIdInput,
+        P: BalanceLedgerEntryIdInput,
+    >(
         entry_id: I,
-        account_id: A, asset_id: T, party_id: P,
+        account_id: A,
+        asset_id: T,
+        party_id: P,
         amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id.into_entry_id(), asset_id.into_entry_id(), party_id.into_entry_id(),
+            account_id.into_entry_id(),
+            asset_id.into_entry_id(),
+            party_id.into_entry_id(),
             amount,
             reason,
             BalanceLedgerOperation::DebitAvailable,
@@ -187,15 +223,24 @@ impl BalanceLedgerV2 {
     }
 
     /// 构造一条扣减冻结余额的流水事实。
-    pub fn debit_frozen<I: BalanceLedgerEntryIdInput, A: BalanceLedgerEntryIdInput, T: BalanceLedgerEntryIdInput, P: BalanceLedgerEntryIdInput>(
+    pub fn debit_frozen<
+        I: BalanceLedgerEntryIdInput,
+        A: BalanceLedgerEntryIdInput,
+        T: BalanceLedgerEntryIdInput,
+        P: BalanceLedgerEntryIdInput,
+    >(
         entry_id: I,
-        account_id: A, asset_id: T, party_id: P,
+        account_id: A,
+        asset_id: T,
+        party_id: P,
         amount: u64,
         reason: BalanceLedgerReason,
     ) -> Result<Self, BalanceLedgerEntryV2Error> {
         Self::new_operation(
             entry_id.into_entry_id(),
-            account_id.into_entry_id(), asset_id.into_entry_id(), party_id.into_entry_id(),
+            account_id.into_entry_id(),
+            asset_id.into_entry_id(),
+            party_id.into_entry_id(),
             amount,
             reason,
             BalanceLedgerOperation::DebitFrozen,
@@ -416,8 +461,7 @@ impl Entity for BalanceLedgerV2 {
     }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "party_id" | "account_id" | "asset_id"
-            | "operation"
+            "operation"
             | "on_command"
             | "reason"
             | "reason_order_id"
@@ -427,7 +471,7 @@ impl Entity for BalanceLedgerV2 {
             | "reason_settlement_batch_id"
             | "reason_settlement_leg"
             | "reason_position_ids" => 0,
-            "entry_id" => 1,
+            "entry_id" | "party_id" | "account_id" | "asset_id" => 1,
             "amount" | "command_amount" | "available_delta" | "frozen_delta"
             | "before_available" | "before_frozen" | "after_available" | "after_frozen" => 1,
             _ => 0,

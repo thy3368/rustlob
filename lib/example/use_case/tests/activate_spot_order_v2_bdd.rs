@@ -1,6 +1,4 @@
-use common_entity::{
-    LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
-};
+use common_entity::{LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff};
 use example_core_entity::{
     ActivatePendingSpotOrderV2Input, SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
     SpotOrderTriggerRole, SpotOrderType, SpotOrderV2,

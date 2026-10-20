@@ -156,10 +156,28 @@ impl EntityReplayableEvent {
         entity_type: u8,
         change_type: u8,
     ) -> Self {
-        Self::new_with_topic(0, 0, timestamp, previous_lsn, lsn, entity_id, entity_type, change_type)
+        Self::new_with_topic(
+            0,
+            0,
+            timestamp,
+            previous_lsn,
+            lsn,
+            entity_id,
+            entity_type,
+            change_type,
+        )
     }
 
-    pub fn new_with_topic(t: u8, p: u8, timestamp: u64, previous_lsn: u64, lsn: u64, entity_id: u64, entity_type: u8, change_type: u8) -> Self {
+    pub fn new_with_topic(
+        t: u8,
+        p: u8,
+        timestamp: u64,
+        previous_lsn: u64,
+        lsn: u64,
+        entity_id: u64,
+        entity_type: u8,
+        change_type: u8,
+    ) -> Self {
         Self {
             t,
             p,
@@ -291,8 +309,12 @@ impl EntityReplayableEvent {
 }
 
 impl crate::use_case::shard::Shard for EntityReplayableEvent {
-    fn topic(&self) -> u8 { self.t }
-    fn partition(&self) -> u8 { self.p }
+    fn topic(&self) -> u8 {
+        self.t
+    }
+    fn partition(&self) -> u8 {
+        self.p
+    }
 }
 
 static START_INSTANT: LazyLock<Instant> = LazyLock::new(Instant::now);

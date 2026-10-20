@@ -35,8 +35,12 @@ impl<P> LogEntryMetadata for LogEntry<P> {
 }
 
 impl<P> Shard for LogEntry<P> {
-    fn topic(&self) -> u8 { self.t }
-    fn partition(&self) -> u8 { self.p }
+    fn topic(&self) -> u8 {
+        self.t
+    }
+    fn partition(&self) -> u8 {
+        self.p
+    }
 }
 
 impl<P> std::ops::Deref for LogEntry<P> {
@@ -48,7 +52,15 @@ impl<P> std::ops::Deref for LogEntry<P> {
 }
 
 impl<P> LogEntry<P> {
-    pub(crate) fn new_with_topic(t: u8, p: u8, lsn: u64, logical_ts: u64, client_id: u64, request_id: u64, payload: P) -> Self {
+    pub(crate) fn new_with_topic(
+        t: u8,
+        p: u8,
+        lsn: u64,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+        payload: P,
+    ) -> Self {
         Self { t, p, lsn, logical_ts, client_id, request_id, payload }
     }
     pub(crate) fn new(
@@ -73,8 +85,12 @@ impl<P> LogEntry<P> {
     pub const fn request_id(&self) -> u64 {
         self.request_id
     }
-    pub const fn topic(&self) -> u8 { self.t }
-    pub const fn partition(&self) -> u8 { self.p }
+    pub const fn topic(&self) -> u8 {
+        self.t
+    }
+    pub const fn partition(&self) -> u8 {
+        self.p
+    }
     pub const fn payload(&self) -> &P {
         &self.payload
     }

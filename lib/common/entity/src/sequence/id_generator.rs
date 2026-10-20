@@ -11,4 +11,3 @@ pub trait EntityIdGenerator {
     /// [`SequenceExhausted`]。
     fn next_id(&mut self) -> Result<u64, SequenceExhausted>;
 }
-

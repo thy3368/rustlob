@@ -162,9 +162,7 @@ impl Entity for HyperliquidPerpLeverageSetting {
             _ => 0,
         }
     }
-
 }
-
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

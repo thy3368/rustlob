@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{ExecutionError, ExecutionCommandSpec};
+use cmd_handler::command_use_case_def2::{ExecutionCommandSpec, ExecutionError};
 use common_entity::LogEntry;
 pub use example_core_use_case::CancelSpotOrderV2Lookup;
 use example_core_use_case::{CancelSpotOrderV2Cmd, CancelSpotOrderV2UseCase};

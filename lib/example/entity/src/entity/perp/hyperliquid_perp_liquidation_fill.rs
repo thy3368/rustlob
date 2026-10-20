@@ -111,9 +111,7 @@ impl Entity for HyperliquidPerpLiquidationFill {
             _ => 0,
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {

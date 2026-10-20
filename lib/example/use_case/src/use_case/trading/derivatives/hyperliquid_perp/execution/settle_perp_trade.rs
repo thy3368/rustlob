@@ -8,8 +8,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    SpotBalance, PerpPosition, HyperliquidPerpPositionError, HyperliquidPerpTrade,
-    SettlementTransferVoucher,
+    HyperliquidPerpPositionError, HyperliquidPerpTrade, PerpPosition, SettlementTransferVoucher,
+    SpotBalance,
 };
 use crate::support::concat3;
 
@@ -458,9 +458,7 @@ fn apply_signed_delta(value: u64, delta: i128) -> Result<u64, SettleHyperliquidP
     Ok(next as u64)
 }
 
-fn position_map(
-    positions: impl Iterator<Item =PerpPosition>,
-) -> BTreeMap<String, PerpPosition> {
+fn position_map(positions: impl Iterator<Item = PerpPosition>) -> BTreeMap<String, PerpPosition> {
     positions
         .map(|position| {
             (

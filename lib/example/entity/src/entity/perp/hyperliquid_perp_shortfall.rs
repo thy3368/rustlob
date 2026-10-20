@@ -224,9 +224,7 @@ impl Entity for HyperliquidPerpShortfall {
             _ => 0,
         }
     }
-
 }
-
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

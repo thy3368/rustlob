@@ -27,18 +27,18 @@ pub use use_case::executor::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 pub use use_case::log_entry::LogEntry;
-pub use use_case::shard::Shard;
 pub use use_case::log_entry_repo::LogEntryRepo;
 pub use use_case::rewal_log_entry_repo::{RewalLogEntryRepo, RewalLogEntryRepoError};
-/// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
-///
-/// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
-pub use use_case::state_machine_v2::StateMachineV2Diff as MultiAggregateUseCaseBeforeAfter;
+pub use use_case::shard::Shard;
 /// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
 pub use use_case::state_machine_v2::StateMachineV2 as MultiAggregateUseCaseUnchecked;
-pub use use_case::state_machine_v2::{StateMachineV2Diff, StateMachineV2};
+/// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
+///
+/// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
+pub use use_case::state_machine_v2::StateMachineV2Diff as MultiAggregateUseCaseBeforeAfter;
+pub use use_case::state_machine_v2::{StateMachineV2, StateMachineV2Diff};
 pub use use_case::support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair};
 
 /// Error raised while tracking entity state into replayable events.

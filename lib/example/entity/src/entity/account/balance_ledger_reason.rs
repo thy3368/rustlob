@@ -10,6 +10,7 @@ pub enum BalanceLedgerReason {
         /// 触发本次余额冻结的订单 ID。
         order_id: u64,
     },
+
     /// 撤单释放冻结余额。
     UnfreezeForCancel {
         /// 被撤销订单 ID。

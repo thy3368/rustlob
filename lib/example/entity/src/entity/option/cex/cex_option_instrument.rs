@@ -185,9 +185,7 @@ impl Entity for CexOptionInstrument {
             _ => 0,
         }
     }
-
 }
-
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

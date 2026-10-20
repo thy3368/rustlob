@@ -1,9 +1,7 @@
-use common_entity::{
-    Entity, LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
-};
+use common_entity::{Entity, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff};
 use example_core_entity::{
-    BalanceLedgerV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
-    SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
+    BalanceLedgerV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide, SpotOrderStatus,
+    SpotOrderStatusReason, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
 };
 use example_core_use_case::{
     MatchSpotOrderV4AfterChanges, MatchSpotOrderV4Changes, MatchSpotOrderV4Cmd,

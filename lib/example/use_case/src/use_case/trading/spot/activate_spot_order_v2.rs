@@ -2,18 +2,16 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2Diff,
-    StateMachineV2,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_v2::{
-    BalanceLedgerV2, BalanceLedgerEntryV2Error,
-};
 use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
+use crate::entity::account::balance_ledger_v2::{BalanceLedgerEntryV2Error, BalanceLedgerV2};
 use crate::entity::{
-    ActivatePendingSpotOrderV2Input, SpotBalance, Reservation, SpotOrderV2, SpotOrderV2BehaviorError,
+    ActivatePendingSpotOrderV2Input, Reservation, SpotBalance, SpotOrderV2,
+    SpotOrderV2BehaviorError,
 };
 use crate::support::{concat2, concat3};
 
@@ -369,7 +367,8 @@ fn balance_replay_events_from_ledger_entries(
     updated_balances: &[UpdatedEntityPair<SpotBalance>],
     ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-    let mut current_balances = HashMap::<String, SpotBalance>::with_capacity(updated_balances.len());
+    let mut current_balances =
+        HashMap::<String, SpotBalance>::with_capacity(updated_balances.len());
     for balance in updated_balances {
         let balance_id = balance.before.business_entity_id();
         current_balances.insert(balance_id, balance.before.clone());

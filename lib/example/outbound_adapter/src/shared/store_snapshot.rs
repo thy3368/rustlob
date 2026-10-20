@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use example_core_use_case::{SpotBalance, Reservation, SpotOrderV2, SpotTrade};
+use example_core_use_case::{Reservation, SpotBalance, SpotOrderV2, SpotTrade};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoreSnapshot {

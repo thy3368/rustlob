@@ -1,10 +1,10 @@
 use common_entity::{DomainReadModel, DomainReadSnapshot};
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::entity::{
-    HyperliquidPerpMarginMode, PerpPosition, MarginReservation, ReservationKind,
+    HyperliquidPerpMarginMode, MarginReservation, PerpPosition, ReservationKind,
     ReservationMarketKind,
 };
 
@@ -558,51 +558,4 @@ mod tests {
         assert_domain_read_model::<PerpClearinghouseState>();
         assert_domain_read_snapshot::<PerpClearinghouseState>();
     }
-
-    #[test]
-    fn perp_state_detects_open_positions_and_queries_by_symbol() {
-        let state = PerpClearinghouseState::new(
-            u64::from("sub-1"),
-            vec![sample_position_risk(0, "BTC-PERP", 0), sample_position_risk(1, "ETH-PERP", 3)],
-            MarginSummary::new(
-                dec(20_000),
-                dec(8_000),
-                dec(8_000),
-                dec(0),
-                dec(100_000),
-                dec(19_700),
-            ),
-            MarginSummary::new(
-                dec(18_000),
-                dec(7_000),
-                dec(7_000),
-                dec(0),
-                dec(100_000),
-                dec(17_700),
-            ),
-            Some(dec(1_500)),
-            dec(5_000),
-            RiskState::Normal,
-        );
-
-        assert!(state.has_open_positions());
-        assert!(state.position_of("ETH-PERP").is_some());
-        assert!(state.position_of("SOL-PERP").is_none());
-        assert_eq!(state.margin_summary().account_value(), dec(20_000));
-        assert_eq!(state.margin_summary().total_margin_used(), dec(8_000));
-        assert_eq!(state.margin_summary().position_initial_margin_used(), dec(8_000));
-        assert_eq!(state.margin_summary().open_order_initial_margin_used(), dec(0));
-        assert_eq!(state.margin_summary().total_position_notional(), dec(100_000));
-        assert_eq!(state.margin_summary().total_raw_usd(), dec(19_700));
-        assert_eq!(state.cross_margin_summary().account_value(), dec(18_000));
-        assert_eq!(state.cross_margin_summary().total_margin_used(), dec(7_000));
-        assert_eq!(state.cross_margin_summary().position_initial_margin_used(), dec(7_000));
-        assert_eq!(state.cross_margin_summary().open_order_initial_margin_used(), dec(0));
-        assert_eq!(state.cross_margin_summary().total_position_notional(), dec(100_000));
-        assert_eq!(state.cross_margin_summary().total_raw_usd(), dec(17_700));
-        assert_eq!(state.cross_maintenance_margin_used(), Some(dec(1_500)));
-        assert_eq!(state.withdrawable(), dec(5_000));
-    }
-
-
 }

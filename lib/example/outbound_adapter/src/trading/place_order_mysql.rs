@@ -2,8 +2,8 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    SpotBalance, MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource,
-    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotOrderV2,
+    MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
+    PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotBalance, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 

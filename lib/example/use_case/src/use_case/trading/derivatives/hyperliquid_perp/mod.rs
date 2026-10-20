@@ -3,8 +3,8 @@ pub mod funding;
 pub mod query;
 pub mod risk;
 
-pub mod pipeline;
 mod liquidation_trigger_reason;
+pub mod pipeline;
 
 pub use execution::{
     MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError,

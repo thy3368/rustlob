@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::Entity;
 use example_core_use_case::{
-    SpotBalance, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
+    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotBalance,
     SpotOrderSide, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;

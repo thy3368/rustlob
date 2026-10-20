@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use common_entity::{
-    Entity, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
-    StateMachineV2Diff, StateMachineV2,
+    Entity, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff,
 };
 use thiserror::Error;
 

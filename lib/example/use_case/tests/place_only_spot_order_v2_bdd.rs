@@ -1,6 +1,5 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2Diff,
-    StateMachineV2,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
 };
 use example_core_entity::{
     ReservationStatus, SpotOrderGroupRelation, SpotOrderSide, SpotOrderStatus, SpotOrderTif,

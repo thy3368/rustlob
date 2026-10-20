@@ -94,9 +94,7 @@ impl Entity for HyperliquidPerpInsuranceFundAllocation {
             _ => 0,
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {

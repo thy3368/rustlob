@@ -387,10 +387,8 @@ impl PerpPosition {
         trade_price: u64,
         leverage_value: u64,
         margin_mode: HyperliquidPerpMarginMode,
-    ) -> Result<
-        (PerpPosition, HyperliquidPerpPositionTradeOutcome),
-        HyperliquidPerpPositionError,
-    > {
+    ) -> Result<(PerpPosition, HyperliquidPerpPositionTradeOutcome), HyperliquidPerpPositionError>
+    {
         validate_trade_input(signed_size_delta, trade_price)?;
         if leverage_value == 0 {
             return Err(HyperliquidPerpPositionError::InvalidLeverage);
@@ -693,7 +691,6 @@ impl Entity for PerpPosition {
             _ => 0,
         }
     }
-
 }
 
 /// 返回 `ceil(qty * price / leverage)`，任一算术步骤溢出或杠杆为零时返回 `None`。
@@ -785,7 +782,6 @@ fn validate_existing_trade_transition(
     }
     Ok(())
 }
-
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

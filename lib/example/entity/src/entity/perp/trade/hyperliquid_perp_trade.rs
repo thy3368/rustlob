@@ -4,7 +4,7 @@ use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff};
 
 use crate::HyperliquidPerpOrderSide;
 use crate::entity::{
-    PerpPosition, HyperliquidPerpPositionError, HyperliquidPerpPositionTradeOutcome,
+    HyperliquidPerpPositionError, HyperliquidPerpPositionTradeOutcome, PerpPosition,
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
 };
 
@@ -148,10 +148,8 @@ impl HyperliquidPerpTrade {
     fn settle_one_account_position(
         &self,
         position: &PerpPosition,
-    ) -> Result<
-        (PerpPosition, HyperliquidPerpPositionTradeOutcome),
-        HyperliquidPerpPositionError,
-    > {
+    ) -> Result<(PerpPosition, HyperliquidPerpPositionTradeOutcome), HyperliquidPerpPositionError>
+    {
         let signed_size_delta = self.signed_size_delta_for_account(&position.account_id)?;
         if !position.trades_asset(self.asset) || !position.trades_symbol(self.symbol.as_str()) {
             return Err(HyperliquidPerpPositionError::InconsistentState);
@@ -195,10 +193,8 @@ impl HyperliquidPerpTrade {
         &self,
         position: &PerpPosition,
         signed_size_delta: i64,
-    ) -> Result<
-        (PerpPosition, HyperliquidPerpPositionTradeOutcome),
-        HyperliquidPerpPositionError,
-    > {
+    ) -> Result<(PerpPosition, HyperliquidPerpPositionTradeOutcome), HyperliquidPerpPositionError>
+    {
         let close_delta = signed_trade_qty(position.qty(), signed_size_delta.signum())?;
         let remaining_delta = signed_size_delta
             .checked_sub(close_delta)

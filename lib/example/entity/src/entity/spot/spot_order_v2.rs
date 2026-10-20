@@ -11,7 +11,7 @@ use super::spot_order_primitives::{
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
-    BalanceLedgerV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
+    BalanceLedgerEntryV2Error, BalanceLedgerReason, BalanceLedgerV2, Reservation,
     ReservationCloseReason, ReservationError, ReservationKind, ReservationMarketKind,
     ReservationStatus,
 };

@@ -4,9 +4,6 @@ use thiserror::Error;
 
 use super::{PerpClearinghouseState, SpotClearinghouseState};
 
-
-
-
 /// 主账户主档，表达主账户身份与其拥有的一组子账户。
 ///
 /// 该对象属于 `Party/Place/Thing`，主要承载所有权和归属查询语义。
@@ -50,11 +47,7 @@ pub struct SubAccountProfile {
 
 impl SubAccountProfile {
     /// 从已校验事实装配子账户主档。
-    pub fn new(
-        account_id: u64,
-        master_account_id: u64,
-        display_name: impl Into<String>,
-    ) -> Self {
+    pub fn new(account_id: u64, master_account_id: u64, display_name: impl Into<String>) -> Self {
         Self { account_id, master_account_id, display_name: display_name.into() }
     }
 
@@ -151,4 +144,3 @@ pub enum SubAccountSnapshotError {
     )]
     PerpAccountMismatch { profile_account_id: u64, perp_account_id: u64 },
 }
-

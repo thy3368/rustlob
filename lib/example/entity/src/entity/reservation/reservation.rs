@@ -461,7 +461,6 @@ impl Entity for Reservation {
             _ => 0,
         }
     }
-
 }
 
 fn option_close_reason_value(reason: Option<ReservationCloseReason>) -> String {

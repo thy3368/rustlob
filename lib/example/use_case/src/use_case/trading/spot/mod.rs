@@ -9,30 +9,14 @@ pub mod pending_trigger_spot_order_source;
 
 pub mod pipeline;
 
-pub use pipeline::abc::{MatchSpotOrderWithNplV3UseCase, SpotTradeObserver, StdoutSpotTradeObserver};
+pub use pipeline::abc::{
+    MatchSpotOrderWithNplV3UseCase, SpotTradeObserver, StdoutSpotTradeObserver,
+};
 pub mod generate_spot_klines_from_historical_trades;
 
 pub use activate_spot_order_v2::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
-};
-pub use pipeline::activate_match_spot_order_v2::{
-    ActivateMatchSpotOrderV2AfterChanges, ActivateMatchSpotOrderV2Changes,
-    ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error, ActivateMatchSpotOrderV2State,
-    ActivateMatchSpotOrderV2UseCase,
-};
-pub use pipeline::place_activate_pipeline::{
-    PlaceActivateV2ActivatedOrderAfterChanges, PlaceActivateV2AfterChanges,
-    PlaceActivateV2Changes, PlaceActivateV2Cmd, PlaceActivateV2Error, PlaceActivateV2State,
-    PlaceActivateV2UseCase,
-};
-pub use pipeline::place_match_spot_order_v2::{
-    PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
-    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
-};
-pub use pipeline::{
-    SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError,
-    SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotBlockUseCase,
 };
 pub use cancel_spot_order_v2::{
     CancelSpotOrderV2AfterChanges, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
@@ -61,6 +45,23 @@ pub use modify_spot_order_v2::{
     ModifySpotOrderV2UseCase, OrderId,
 };
 pub use pending_trigger_spot_order_source::PendingTriggerSpotOrderSource;
+pub use pipeline::activate_match_spot_order_v2::{
+    ActivateMatchSpotOrderV2AfterChanges, ActivateMatchSpotOrderV2Changes,
+    ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error, ActivateMatchSpotOrderV2State,
+    ActivateMatchSpotOrderV2UseCase,
+};
+pub use pipeline::place_activate_pipeline::{
+    PlaceActivateV2ActivatedOrderAfterChanges, PlaceActivateV2AfterChanges, PlaceActivateV2Changes,
+    PlaceActivateV2Cmd, PlaceActivateV2Error, PlaceActivateV2State, PlaceActivateV2UseCase,
+};
+pub use pipeline::place_match_spot_order_v2::{
+    PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
+    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
+};
+pub use pipeline::{
+    SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError,
+    SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotBlockUseCase,
+};
 pub use place_only_spot_order_v2::{
     PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
     PlaceOnlySpotOrderV2Error, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,

@@ -8,8 +8,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    SpotBalance, BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingSettlement,
-    HyperliquidPerpMarginMode, PerpPosition, HyperliquidPerpPositionError,
+    BalanceLedgerEntry, BalanceLedgerReason, HyperliquidPerpFundingSettlement,
+    HyperliquidPerpMarginMode, HyperliquidPerpPositionError, PerpPosition, SpotBalance,
 };
 use crate::support::{concat3, concat4};
 

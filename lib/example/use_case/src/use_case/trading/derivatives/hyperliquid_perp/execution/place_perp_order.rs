@@ -7,9 +7,9 @@ use thiserror::Error;
 
 use crate::MarketRules;
 use crate::entity::{
-    SpotBalance, BalanceLedgerV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
-    HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, PerpPosition,
-    PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent, required_position_margin,
+    BalanceLedgerV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
+    HyperliquidPerpOrderTimeInForce, PerpPosition, PlaceHyperliquidPerpOrderInput,
+    PlaceHyperliquidPerpOrderIntent, SpotBalance, required_position_margin,
 };
 
 /// Hyperliquid perp 下单可能返回的业务错误。

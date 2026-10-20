@@ -234,7 +234,6 @@ impl SpotOrderStatusReason {
     }
 }
 
-
 pub(crate) fn push_change(
     changes: &mut Vec<EntityFieldChange>,
     field_name: &'static str,

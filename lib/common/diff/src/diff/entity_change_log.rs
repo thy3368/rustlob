@@ -139,10 +139,32 @@ impl FieldChange {
 }
 
 impl EntityReplayableEvent {
-    pub fn with_topic_partition(mut self, t: u8, p: u8) -> Self { self.t = t; self.p = p; self }
+    pub fn with_topic_partition(mut self, t: u8, p: u8) -> Self {
+        self.t = t;
+        self.p = p;
+        self
+    }
 
-    pub fn new_with_topic(t: u8, p: u8, timestamp: u64, sequence: u64, old_version: u64, new_version: u64, entity_id: i64, entity_type: u8, change_type: u8) -> Self {
-        let mut event = Self::new(timestamp, sequence, old_version, new_version, entity_id, entity_type, change_type);
+    pub fn new_with_topic(
+        t: u8,
+        p: u8,
+        timestamp: u64,
+        sequence: u64,
+        old_version: u64,
+        new_version: u64,
+        entity_id: i64,
+        entity_type: u8,
+        change_type: u8,
+    ) -> Self {
+        let mut event = Self::new(
+            timestamp,
+            sequence,
+            old_version,
+            new_version,
+            entity_id,
+            entity_type,
+            change_type,
+        );
         event.t = t;
         event.p = p;
         event

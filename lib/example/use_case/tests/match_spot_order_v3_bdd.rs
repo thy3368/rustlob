@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use common_entity::{
-    Entity, LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
-};
+use common_entity::{Entity, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff};
 use example_core_entity::{
-    SpotBalance, ReservationStatus, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
+    ReservationStatus, SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
     SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use example_core_use_case::{

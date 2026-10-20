@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use common_entity::{
     Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
-    StateMachineV2Diff, StateMachineV2,
+    StateMachineV2, StateMachineV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

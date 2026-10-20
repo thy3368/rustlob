@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use example_core_use_case::{
-    SpotBalance, MarketRules, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    MarketRules, SpotBalance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 

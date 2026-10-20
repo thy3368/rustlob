@@ -5,8 +5,8 @@ use common_entity::{
 use thiserror::Error;
 
 use crate::entity::{
-    BalanceLedgerV2, BalanceLedgerEntryV2Error, BalanceLedgerReason, Reservation,
-    ReservationError, ReservationKind, ReservationMarketKind,
+    BalanceLedgerEntryV2Error, BalanceLedgerReason, BalanceLedgerV2, Reservation, ReservationError,
+    ReservationKind, ReservationMarketKind,
 };
 use crate::support::concat2;
 

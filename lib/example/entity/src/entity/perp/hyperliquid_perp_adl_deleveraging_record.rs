@@ -119,9 +119,7 @@ impl Entity for HyperliquidPerpAdlDeleveragingRecord {
             _ => 0,
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {

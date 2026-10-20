@@ -43,9 +43,9 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, SpotBalance, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
-        MatchSpotOrderV3UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
-        SpotOrderV2,
+        ActivatePendingSpotOrderV2Input, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
+        MatchSpotOrderV3UseCase, SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
+        SpotOrderType, SpotOrderV2,
     };
 
     use super::*;

@@ -2,8 +2,8 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    SpotBalance, MarketRules, PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason,
-    ReservationKind, ReservationMarketKind, ReservationStatus, SpotOrderGroupRelation,
+    MarketRules, PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason,
+    ReservationKind, ReservationMarketKind, ReservationStatus, SpotBalance, SpotOrderGroupRelation,
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
     SpotOrderV2, SpotTrade,
 };

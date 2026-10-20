@@ -5,8 +5,8 @@ use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
-    SpotBalance, HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
-    HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, PerpPosition,
+    HyperliquidPerpLiquidation, HyperliquidPerpLiquidationStatus,
+    HyperliquidPerpLiquidationTriggerReason, HyperliquidPerpMarginMode, PerpPosition, SpotBalance,
 };
 use crate::support::concat3;
 use crate::use_case::trading::derivatives::hyperliquid_perp::liquidation_trigger_reason::derive_hyperliquid_perp_liquidation_trigger_reason;
@@ -380,7 +380,8 @@ mod tests {
         state.mark_price = 48_500;
         state.bankruptcy_price = 50_000;
         state.trigger_reason = HyperliquidPerpLiquidationTriggerReason::BankruptcyRisk;
-        state.margin_balance = SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 0, 0, 5);
+        state.margin_balance =
+            SpotBalance::new("trader-1".to_string(), "USDC".to_string(), 0, 0, 5);
 
         StartHyperliquidPerpLiquidationUseCase.validate_against_state(&cmd(), &state).unwrap();
         let changes =

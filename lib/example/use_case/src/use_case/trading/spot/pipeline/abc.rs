@@ -1,4 +1,4 @@
-use common_entity::{StateMachineV2Diff, StateMachineV2};
+use common_entity::{StateMachineV2, StateMachineV2Diff};
 
 use crate::SpotTrade;
 use crate::use_case::trading::spot::{MatchSpotOrderV3Changes, MatchSpotOrderV3UseCase};

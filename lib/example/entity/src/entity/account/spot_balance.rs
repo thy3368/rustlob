@@ -81,7 +81,16 @@ impl SpotBalance {
         identifier: Option<String>,
         version: u64,
     ) -> Self {
-        Self { party_id, account_id, asset_id, available, frozen, entry_notional, identifier, version }
+        Self {
+            party_id,
+            account_id,
+            asset_id,
+            available,
+            frozen,
+            entry_notional,
+            identifier,
+            version,
+        }
     }
 
     /// 返回余额是否属于指定账户。
@@ -215,9 +224,21 @@ impl FieldDiff for SpotBalance {
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = vec![
-            EntityFieldChange::new("party_id", self.party_id.to_string(), other.party_id.to_string()),
-            EntityFieldChange::new("account_id", self.account_id.to_string(), other.account_id.to_string()),
-            EntityFieldChange::new("asset_id", self.asset_id.to_string(), other.asset_id.to_string()),
+            EntityFieldChange::new(
+                "party_id",
+                self.party_id.to_string(),
+                other.party_id.to_string(),
+            ),
+            EntityFieldChange::new(
+                "account_id",
+                self.account_id.to_string(),
+                other.account_id.to_string(),
+            ),
+            EntityFieldChange::new(
+                "asset_id",
+                self.asset_id.to_string(),
+                other.asset_id.to_string(),
+            ),
         ];
         if self.available != other.available {
             changes.push(EntityFieldChange::new(
@@ -258,8 +279,6 @@ impl common_entity::Shard for SpotBalance {
 }
 
 impl Entity for SpotBalance {
-
-
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.business_entity_id())
     }
@@ -278,9 +297,7 @@ impl Entity for SpotBalance {
             _ => 0,
         }
     }
-
 }
-
 
 fn option_u64_value(value: Option<u64>) -> String {
     value.map(|value| value.to_string()).unwrap_or_default()

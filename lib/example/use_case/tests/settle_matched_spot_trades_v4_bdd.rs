@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use common_entity::{
-    Entity, LogEntry, ReplayableChanges, StateMachineV2Diff, StateMachineV2,
-};
+use common_entity::{Entity, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff};
 use example_core_entity::{
-    SpotBalance, BalanceLedgerV2, ReservationStatus, SettlementTransferVoucher, SpotOrderSide,
+    BalanceLedgerV2, ReservationStatus, SettlementTransferVoucher, SpotBalance, SpotOrderSide,
     SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType, SpotOrderV2, SpotTrade,
 };
 use example_core_use_case::{
@@ -102,7 +100,13 @@ fn scenario(taker_qty: u64, taker_tif: SpotOrderTif, maker_qty: Option<u64>) -> 
     let maker_orders = maker.into_iter().collect::<Vec<_>>();
     let balances = vec![
         SpotBalance::new("buyer".to_owned(), "BTC".to_owned(), 0, 0, 1),
-        SpotBalance::new("buyer".to_owned(), "USDT".to_owned(), 1_000, taker_principal + taker_fee, 1),
+        SpotBalance::new(
+            "buyer".to_owned(),
+            "USDT".to_owned(),
+            1_000,
+            taker_principal + taker_fee,
+            1,
+        ),
         SpotBalance::new("seller".to_owned(), "BTC".to_owned(), 0, maker_base, 1),
         SpotBalance::new("seller".to_owned(), "USDT".to_owned(), 0, maker_fee, 1),
         SpotBalance::new("fee".to_owned(), "USDT".to_owned(), 0, 0, 1),

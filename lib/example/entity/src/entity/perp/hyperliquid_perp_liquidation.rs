@@ -380,9 +380,7 @@ impl Entity for HyperliquidPerpLiquidation {
             _ => 0,
         }
     }
-
 }
-
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

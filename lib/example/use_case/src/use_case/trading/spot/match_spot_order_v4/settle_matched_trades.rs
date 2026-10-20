@@ -1,7 +1,6 @@
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2Diff,
-    StateMachineV2,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::SpotOrderV2;
@@ -13,7 +12,7 @@ use super::support::{
 };
 use crate::SpotTrade;
 use crate::entity::account::balance_ledger_v2::BalanceLedgerV2;
-use crate::entity::{SpotBalance, SettlementTransferVoucher, spot as spot_entity};
+use crate::entity::{SettlementTransferVoucher, SpotBalance, spot as spot_entity};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettleMatchedSpotTradesV4Cmd {

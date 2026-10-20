@@ -612,9 +612,7 @@ impl Entity for CexOptionOrder {
             _ => 0,
         }
     }
-
 }
-
 
 fn push_change(
     changes: &mut Vec<EntityFieldChange>,

@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::entity::{
     HyperliquidPerpLeverageSetting, HyperliquidPerpLeverageSettingError, HyperliquidPerpMarginMode,
-    PerpPosition, HyperliquidPerpPositionError,
+    HyperliquidPerpPositionError, PerpPosition,
 };
 
 /// 更新 Hyperliquid perp 杠杆配置的命令。

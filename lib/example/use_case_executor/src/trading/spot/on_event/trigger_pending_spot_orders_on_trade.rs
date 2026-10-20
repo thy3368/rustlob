@@ -138,8 +138,8 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use common_entity::{Entity, ReplayFieldChange};
     use example_core_use_case::{
-        SpotBalance, MarketRules, SpotOrderSide, SpotOrderStatus, SpotOrderTriggerRole, SpotOrderType,
-        SpotOrderV2,
+        MarketRules, SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderTriggerRole,
+        SpotOrderType, SpotOrderV2,
     };
     use example_outbound_adapter::InMemoryPlaceOrderOutbound;
 

@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
 use crate::entity_v2::entity_field_change::current_timestamp;
+use crate::use_case::shard::Shard;
 use crate::{
     EntityChangeType, EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
-    use_case::shard::Shard,
 };
 
 /// 四色建模中的实体原型分类。
@@ -526,4 +526,3 @@ where
         Err(EntityError::EntityIdMismatch { expected, actual })
     }
 }
-
