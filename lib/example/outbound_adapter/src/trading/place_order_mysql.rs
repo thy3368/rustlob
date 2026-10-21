@@ -1,5 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
@@ -144,20 +145,29 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
         let quote_asset_id = quote_asset_id_for(symbol.as_str()).to_string();
         let settlement_balances = vec![
             SpotBalance::new(
-                account_id.clone(),
-                base_asset_id.clone(),
+                stable_string_entity_id(account_id.as_str()),
+                stable_string_entity_id(account_id.as_str()),
+                stable_string_entity_id(base_asset_id.as_str()),
                 available_base,
                 frozen_base,
                 version,
             ),
             SpotBalance::new(
-                account_id,
-                quote_asset_id.clone(),
+                stable_string_entity_id(account_id.as_str()),
+                stable_string_entity_id(account_id.as_str()),
+                stable_string_entity_id(quote_asset_id.as_str()),
                 available_quote,
                 frozen_quote,
                 version,
             ),
-            SpotBalance::new(DEFAULT_FEE_ACCOUNT_ID.to_string(), quote_asset_id.clone(), 0, 0, 1),
+            SpotBalance::new(
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(quote_asset_id.as_str()),
+                0,
+                0,
+                1,
+            ),
         ];
         Ok(PlaceMatchSpotOrderV2State {
             maker_orders: Vec::new(),

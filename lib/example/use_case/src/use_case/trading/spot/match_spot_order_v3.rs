@@ -39,7 +39,7 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<SpotBalance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,
+        created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// 成交数量达到订单总数量，订单终止为 Filled。
@@ -48,7 +48,7 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<SpotBalance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,
+        created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// IOC 部分成交后，剩余数量被取消并释放冻结。
@@ -57,7 +57,7 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<SpotBalance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,
+        created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// ALO crossing maker 或 IOC 无流动性导致拒单。

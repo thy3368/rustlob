@@ -28,9 +28,9 @@ pub struct HyperliquidPerpTrade {
     pub taker_order_id: u64,
     /// 被动挂单订单 Hyperliquid perp `oid`。
     pub maker_order_id: u64,
-    /// taker 所属账户 ID。
+    /// taker 所属账户 ID。//todo delete
     pub taker_account_id: String,
-    /// maker 所属账户 ID。
+    /// maker 所属账户 ID。//todo delete
     pub maker_account_id: String,
     /// taker 买卖方向。
     pub taker_side: HyperliquidPerpOrderSide,
@@ -38,8 +38,12 @@ pub struct HyperliquidPerpTrade {
     pub price: u64,
     /// 成交数量。
     pub qty: u64,
+    // /// 订单创建时间，单位为 Unix 纳秒。
+    // pub created_at: u64,
+    // /// 订单最后更新时间，单位为 Unix 纳秒。
+    // pub updated_at: u64,
     /// 成交发生时间，单位毫秒。
-    pub executed_at_ms: u64,
+    pub created_at: u64,
 }
 
 /// 一笔 Hyperliquid perp 成交同时落到 taker / maker 两边仓位后的业务结果。
@@ -84,7 +88,7 @@ impl HyperliquidPerpTrade {
             taker_side,
             price,
             qty,
-            executed_at_ms,
+            created_at: executed_at_ms,
         }
     }
 
@@ -415,7 +419,7 @@ impl FieldDiff for HyperliquidPerpTrade {
             EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
             EntityFieldChange::new("price", "", self.price.to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
-            EntityFieldChange::new("executed_at_ms", "", self.executed_at_ms.to_string()),
+            EntityFieldChange::new("executed_at_ms", "", self.created_at.to_string()),
         ]
     }
 

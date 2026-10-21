@@ -31,9 +31,9 @@ pub struct SpotTrade {
     pub taker_order_id: u64,
     /// 被动挂单订单 Hyperliquid spot `oid`。
     pub maker_order_id: u64,
-    /// taker 所属账户 ID。
+    /// taker 所属账户 ID。//todo delete
     pub taker_account_id: String,
-    /// maker 所属账户 ID。
+    /// maker 所属账户 ID。//todo delete
     pub maker_account_id: String,
     /// taker 买卖方向。
     pub taker_side: SpotOrderSide,
@@ -42,7 +42,7 @@ pub struct SpotTrade {
     /// 成交数量，以 base asset 计价。
     pub qty: u64,
     /// 业务成交时间，单位为 Unix epoch 毫秒。
-    pub executed_at_ms: u64,
+    pub created_at: u64,
     /// taker 为本笔成交支付的 quote 手续费金额。
     pub taker_fee: u64,
     /// maker 为本笔成交支付的 quote 手续费金额。
@@ -82,7 +82,7 @@ impl SpotTrade {
             qty,
             taker_fee,
             maker_fee,
-            executed_at_ms,
+            created_at: executed_at_ms,
         }
     }
 
@@ -393,7 +393,7 @@ impl FieldDiff for SpotTrade {
             EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
             EntityFieldChange::new("price", "", self.price.to_string()),
             EntityFieldChange::new("qty", "", self.qty.to_string()),
-            EntityFieldChange::new("executed_at_ms", "", self.executed_at_ms.to_string()),
+            EntityFieldChange::new("executed_at_ms", "", self.created_at.to_string()),
             EntityFieldChange::new("taker_fee", "", self.taker_fee.to_string()),
             EntityFieldChange::new("maker_fee", "", self.maker_fee.to_string()),
         ]

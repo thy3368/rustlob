@@ -13,7 +13,7 @@ pub use broker::{
 pub use errors::{
     DepositQuoteOutboundError, PlaceOrderOutboundError, StoreError, WithdrawQuoteOutboundError,
 };
-pub(crate) use event_decode::{event_string_field, event_u64_field};
+pub(crate) use event_decode::{event_identity_field, event_string_field, event_u64_field};
 pub use in_memory_store::InMemoryStore;
 pub(crate) use in_memory_store::balance_key;
 pub(crate) use mysql_params::{named_params, optional_string_param, optional_u64_param};

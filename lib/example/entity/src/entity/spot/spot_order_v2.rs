@@ -338,7 +338,7 @@ pub struct SpotOrderV2 {
     pub order_id: u64,
     /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
     pub asset: u32,
-    /// 拥有该订单的交易账户 ID。
+    /// 拥有该订单的交易账户 ID。//todo delete
     pub account_id: String,
     /// 交易对展示名，例如 `BTCUSDT`。业务身份以 `asset` 为准。
     pub symbol: String,
@@ -360,13 +360,13 @@ pub struct SpotOrderV2 {
     pub status: SpotOrderStatus,
     /// Hyperliquid 细分状态原因。
     pub status_reason: Option<SpotOrderStatusReason>,
-    /// 订单 principal 冻结凭证。
+    /// 订单 principal 冻结凭证。//todo delete
     pub reservation: Reservation,
     /// 订单 fee 冻结凭证。
     ///
     /// v3 下单/撤单用例以订单聚合内的 fee reservation 为权威状态；余额流水仍负责
     /// 表达冻结资金的审计变化。
-    pub fee_reservation: Reservation,
+    pub fee_reservation: Reservation,//todo delete
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
     /// 订单创建时间，单位为 Unix 纳秒。

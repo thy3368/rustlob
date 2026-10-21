@@ -123,10 +123,10 @@ impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
                     trade_id: trade.trade_id.clone(),
                 });
             }
-            if !(cmd.range_start_ms..cmd.range_end_ms).contains(&trade.executed_at_ms) {
+            if !(cmd.range_start_ms..cmd.range_end_ms).contains(&trade.created_at) {
                 return Err(GenerateSpotKlinesFromHistoricalTradesError::TradeOutsideRange {
                     trade_id: trade.trade_id.clone(),
-                    executed_at_ms: trade.executed_at_ms,
+                    executed_at_ms: trade.created_at,
                 });
             }
         }
@@ -140,14 +140,14 @@ impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut trades = state.trades.clone();
         trades.sort_by(|left, right| {
-            left.executed_at_ms
-                .cmp(&right.executed_at_ms)
+            left.created_at
+                .cmp(&right.created_at)
                 .then_with(|| left.trade_id.cmp(&right.trade_id))
         });
 
         let mut buckets = BTreeMap::<u64, KlineAccumulator>::new();
         for trade in trades {
-            let bucket_index = trade.executed_at_ms / cmd.interval_ms;
+            let bucket_index = trade.created_at / cmd.interval_ms;
             let open_time_ms = bucket_index
                 .checked_mul(cmd.interval_ms)
                 .ok_or(GenerateSpotKlinesFromHistoricalTradesError::ArithmeticOverflow)?;

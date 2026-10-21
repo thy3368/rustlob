@@ -1,5 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     MarketRules, PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason,
@@ -10,8 +11,8 @@ use example_core_use_case::{
 use lob_repo_v2::lob::AssetLobV2;
 
 use crate::shared::{
-    InMemorySpotPipelineBroker, InMemoryStore, PlaceOrderOutboundError, SpotPipelineBroker,
-    balance_key, event_string_field, event_u64_field,
+    InMemorySpotPipelineBroker, InMemoryStore, PlaceOrderOutboundError, balance_key,
+    event_string_field, event_u64_field,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -115,8 +116,9 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound
             .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
         {
             settlement_balances.push(SpotBalance::new(
-                DEFAULT_FEE_ACCOUNT_ID.to_string(),
-                quote_asset_id.clone(),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(quote_asset_id.as_str()),
                 0,
                 0,
                 1,

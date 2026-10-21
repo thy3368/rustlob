@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
-use common_entity::Entity;
+use common_entity::{Entity, stable_string_entity_id};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     MarketRules, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
@@ -225,7 +225,14 @@ impl InMemoryPlaceOrderRaftOutbound {
                     .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
                 let key = balance_key(account_id.as_str(), asset_id.as_str());
                 let balance = state.balances.entry(key).or_insert_with(|| {
-                    SpotBalance::new(account_id.clone(), asset_id.clone(), 0, 0, 0)
+                    SpotBalance::new(
+                        stable_string_entity_id(account_id.as_str()),
+                        stable_string_entity_id(account_id.as_str()),
+                        stable_string_entity_id(asset_id.as_str()),
+                        0,
+                        0,
+                        0,
+                    )
                 });
                 if let Some(available) = event_u64_field(event, "available") {
                     balance.available = available;
@@ -291,8 +298,9 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutb
             .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
         {
             settlement_balances.push(SpotBalance::new(
-                DEFAULT_FEE_ACCOUNT_ID.to_string(),
-                quote_asset_id.clone(),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(quote_asset_id.as_str()),
                 0,
                 0,
                 1,
@@ -366,8 +374,9 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutboun
             .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
         {
             settlement_balances.push(SpotBalance::new(
-                DEFAULT_FEE_ACCOUNT_ID.to_string(),
-                quote_asset_id.clone(),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(quote_asset_id.as_str()),
                 0,
                 0,
                 1,

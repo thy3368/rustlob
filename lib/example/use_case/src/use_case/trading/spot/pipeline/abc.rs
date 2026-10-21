@@ -24,7 +24,7 @@ impl SpotTradeObserver for StdoutSpotTradeObserver {
             trade.taker_side,
             trade.price,
             trade.qty,
-            trade.executed_at_ms,
+            trade.created_at,
             trade.taker_fee,
             trade.maker_fee,
         );

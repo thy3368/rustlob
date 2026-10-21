@@ -624,8 +624,8 @@ mod tests {
         // assert
         assert_eq!(events.len(), 5);
         assert_eq!(changes.created_trades.len(), 2);
-        assert_eq!(changes.created_trades[0].executed_at_ms, 1_717_171_717_000);
-        assert_eq!(changes.created_trades[1].executed_at_ms, 1_717_171_717_000);
+        assert_eq!(changes.created_trades[0].created_at, 1_717_171_717_000);
+        assert_eq!(changes.created_trades[1].created_at, 1_717_171_717_000);
         assert_eq!(changes.updated_taker_order.after.filled_qty, 3);
         assert_trade_event(
             &events[0],
@@ -1075,7 +1075,7 @@ mod tests {
 
         assert_eq!(changes.created_trades.len(), 2);
         assert!(
-            changes.created_trades.iter().all(|trade| trade.executed_at_ms == 1_717_171_717_000)
+            changes.created_trades.iter().all(|trade| trade.created_at == 1_717_171_717_000)
         );
         assert_eq!(changes.updated_taker_order.after.order_id, TAKER_ORDER_ID);
         assert_eq!(changes.updated_taker_order.after.filled_qty, 3);

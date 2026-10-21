@@ -1,5 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
+use common_entity::stable_string_entity_id;
 use example_core_use_case::{SpotBalance, WithdrawQuoteCmd, WithdrawQuoteState};
 use mysql::prelude::Queryable;
 
@@ -43,8 +44,9 @@ impl CommandUseCaseOutbound for MySqlWithdrawQuoteOutbound {
 
         Ok(WithdrawQuoteState {
             quote_balance: SpotBalance {
-                account_id,
-                asset_id: "USDT".to_string(),
+                party_id: stable_string_entity_id(account_id.as_str()),
+                account_id: stable_string_entity_id(account_id.as_str()),
+                asset_id: stable_string_entity_id("USDT"),
                 available: available_quote,
                 frozen: 0,
                 entry_notional: None,

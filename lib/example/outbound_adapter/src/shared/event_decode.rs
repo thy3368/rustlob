@@ -23,6 +23,13 @@ pub(crate) fn event_u64_field(event: &EntityReplayableEvent, field_name: &str) -
     })
 }
 
+pub(crate) fn event_identity_field(event: &EntityReplayableEvent, field_name: &str) -> Option<u64> {
+    event_u64_field(event, field_name).or_else(|| {
+        event_string_field(event, field_name)
+            .map(|value| common_entity::stable_string_entity_id(value.as_str()))
+    })
+}
+
 #[cfg(test)]
 fn event_order_sequence(event: &EntityReplayableEvent) -> Option<u64> {
     event_u64_field(event, "order_sequence").or_else(|| {

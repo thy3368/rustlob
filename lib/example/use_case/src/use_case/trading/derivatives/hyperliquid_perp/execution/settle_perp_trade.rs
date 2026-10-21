@@ -111,7 +111,7 @@ pub struct SettleHyperliquidPerpTradeUseCase;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpTradeChanges {
     /// 本批次新创建的 perp 清结算转账凭证。
-    pub created_vouchers: Vec<SettlementTransferVoucher>,
+    pub created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
     /// 本批次仓位槽位的 before/after，顺序与输入状态稳定对齐。
     pub changed_positions: Vec<UpdatedEntityPair<PerpPosition>>,
     /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。

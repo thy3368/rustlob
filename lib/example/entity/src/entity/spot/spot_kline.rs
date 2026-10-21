@@ -41,6 +41,7 @@ pub struct SpotKline {
     pub first_trade_id: String,
     /// 按成交时间和成交 ID 排序后的末笔成交 ID。
     pub last_trade_id: String,
+    // todo 应该还要加一个该k线是否已完成
 }
 
 impl SpotKline {

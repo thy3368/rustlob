@@ -116,6 +116,10 @@ pub struct PerpPosition {
     pub margin_mode: HyperliquidPerpMarginMode,
     /// 当前仓位生命周期内累计已实现 PnL，允许为负；手续费和资金费不进入该字段。
     pub cumulative_realized_pnl: i64,
+    // /// 订单创建时间，单位为 Unix 纳秒。
+    // pub created_at: u64,
+    // /// 订单最后更新时间，单位为 Unix 纳秒。
+    // pub updated_at: u64,
     /// 当前仓位实体版本。
     pub version: u64,
 }

@@ -3,7 +3,7 @@ use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
 use example_core_use_case::{DepositQuoteCmd, DepositQuoteState, SpotBalance};
 
 use crate::shared::{
-    DepositQuoteOutboundError, InMemoryStore, balance_key, event_string_field, event_u64_field,
+    DepositQuoteOutboundError, InMemoryStore, balance_key, event_identity_field, event_u64_field,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -44,14 +44,15 @@ impl CommandUseCaseOutbound for InMemoryDepositQuoteOutbound {
 
         for event in events {
             if event.is_updated() {
-                let account_id = event_string_field(event, "account_id")
+                let account_id = event_identity_field(event, "account_id")
                     .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?;
-                let asset_id = event_string_field(event, "asset_id")
+                let asset_id = event_identity_field(event, "asset_id")
                     .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?;
-                let key = balance_key(account_id.as_str(), asset_id.as_str());
-                let balance = state.balances.entry(key).or_insert_with(|| {
-                    SpotBalance::new(account_id.clone(), asset_id.clone(), 0, 0, 0)
-                });
+                let key = balance_key(account_id, asset_id);
+                let balance = state
+                    .balances
+                    .entry(key)
+                    .or_insert_with(|| SpotBalance::new(account_id, account_id, asset_id, 0, 0, 0));
                 if let Some(available) = event_u64_field(event, "available") {
                     balance.available = available;
                 }

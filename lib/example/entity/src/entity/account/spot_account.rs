@@ -42,6 +42,10 @@ pub struct SpotAccount {
     pub party_id: u64,
     /// 账户生命周期状态。
     pub status: AccountStatus,
+    // /// 订单创建时间，单位为 Unix 纳秒。
+    // pub created_at: u64,
+    // /// 订单最后更新时间，单位为 Unix 纳秒。
+    // pub updated_at: u64,
     /// 当前账户实体版本。
     pub version: u64,
 }

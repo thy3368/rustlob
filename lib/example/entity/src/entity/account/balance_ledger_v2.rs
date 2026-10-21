@@ -99,6 +99,8 @@ pub struct BalanceLedgerV2 {
     pub after_frozen: Option<u64>,
     /// 余额变更原因。
     pub reason: BalanceLedgerReason,
+    // /// 业务成交时间，单位为 Unix epoch 毫秒。
+    // pub created_at: u64,
 }
 
 /// 接受迁移期间的旧字符串调用方，并在边界处转换为数值 ID。

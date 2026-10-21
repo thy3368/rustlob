@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
-use common_entity::Entity;
+use common_entity::{Entity, stable_string_entity_id};
 use example_core_use_case::{
     PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotBalance,
     SpotOrderSide, SpotOrderV2, SpotTrade,
@@ -16,7 +16,7 @@ pub use super::in_memory_place_order::{
 };
 use crate::shared::{
     PlaceOrderOutboundError, SpotOrderPlacedMessage, SpotPipelineBroker, SpotPipelineMessage,
-    balance_key, event_string_field, event_u64_field,
+    balance_key, event_identity_field, event_string_field, event_u64_field,
 };
 
 impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
@@ -41,8 +41,9 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         let mut settlement_balances = state.balances.values().cloned().collect::<Vec<_>>();
         if !state.balances.contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, &quote_asset_id)) {
             settlement_balances.push(example_core_use_case::SpotBalance::new(
-                DEFAULT_FEE_ACCOUNT_ID.to_string(),
-                quote_asset_id.clone(),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
+                stable_string_entity_id(quote_asset_id.as_str()),
                 0,
                 0,
                 1,
@@ -164,15 +165,18 @@ pub(crate) fn replay_events(
                 .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
             continue;
         }
-        if event.is_updated() && event_string_field(event, "asset_id").is_some() {
-            let account_id = event_string_field(event, "account_id")
+        if event.is_updated()
+            && (event_u64_field(event, "asset_id").is_some()
+                || event_string_field(event, "asset_id").is_some())
+        {
+            let account_id = event_identity_field(event, "account_id")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-            let asset_id = event_string_field(event, "asset_id")
+            let asset_id = event_identity_field(event, "asset_id")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
             let balance = state
                 .balances
-                .entry(balance_key(&account_id, &asset_id))
-                .or_insert_with(|| SpotBalance::new(account_id.clone(), asset_id.clone(), 0, 0, 0));
+                .entry(balance_key(account_id, asset_id))
+                .or_insert_with(|| SpotBalance::new(account_id, account_id, asset_id, 0, 0, 0));
             if let Some(value) = event_u64_field(event, "available") {
                 balance.available = value;
             }

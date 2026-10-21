@@ -67,7 +67,7 @@ impl InMemoryStore {
 
     pub fn seed_balance(&self, balance: SpotBalance) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state.balances.insert(balance_key(&balance.account_id, &balance.asset_id), balance);
+        state.balances.insert(balance_key(balance.account_id, balance.asset_id), balance);
         Ok(())
     }
 
@@ -117,6 +117,34 @@ impl InMemoryStore {
     }
 }
 
-pub(crate) fn balance_key(account_id: &str, asset_id: &str) -> String {
-    format!("{account_id}:{asset_id}")
+pub(crate) fn balance_key(
+    account_id: impl BalanceKeyPart,
+    asset_id: impl BalanceKeyPart,
+) -> String {
+    format!("{}:{}", account_id.as_id(), asset_id.as_id())
+}
+
+pub(crate) trait BalanceKeyPart {
+    fn as_id(&self) -> u64;
+}
+
+impl BalanceKeyPart for u64 {
+    fn as_id(&self) -> u64 {
+        *self
+    }
+}
+impl BalanceKeyPart for &str {
+    fn as_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(self)
+    }
+}
+impl BalanceKeyPart for String {
+    fn as_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(self)
+    }
+}
+impl BalanceKeyPart for &String {
+    fn as_id(&self) -> u64 {
+        common_entity::stable_string_entity_id(self)
+    }
 }

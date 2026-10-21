@@ -33,6 +33,10 @@ pub struct HyperliquidPerpLeverageSetting {
     pub margin_mode: HyperliquidPerpMarginMode,
     /// 当前生效杠杆。
     pub leverage: u64,
+    // /// 订单创建时间，单位为 Unix 纳秒。
+    // pub created_at: u64,
+    // /// 订单最后更新时间，单位为 Unix 纳秒。
+    // pub updated_at: u64,
     /// 当前配置实体版本。
     pub version: u64,
 }

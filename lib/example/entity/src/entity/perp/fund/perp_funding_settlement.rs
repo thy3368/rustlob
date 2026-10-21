@@ -43,6 +43,14 @@ pub struct HyperliquidPerpFundingSettlement {
     pub source_hash: Option<String>,
     /// Hyperliquid `userFunding.delta.nSamples`，从官方账本导入时用于对账。
     pub n_samples: Option<u32>,
+
+    // /// 订单创建时间，单位为 Unix 纳秒。
+    // pub created_at: u64,
+    // /// 订单最后更新时间，单位为 Unix 纳秒。
+    // pub updated_at: u64,
+    // /// 当前订单实体版本。
+    // pub version: u64,
+
 }
 
 impl HyperliquidPerpFundingSettlement {

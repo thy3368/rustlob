@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
+use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     MarketRules, SpotBalance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 
-use super::StoreSnapshot;
+use super::{StoreSnapshot, balance_key};
 use crate::shared::{StoreError, named_params};
 
 pub(crate) const ACCOUNT_TABLE: &str = "example_place_order_accounts";
@@ -31,7 +32,8 @@ impl MySqlStore {
 
         conn.query_drop(format!(
             "CREATE TABLE IF NOT EXISTS {ACCOUNT_TABLE} (
-                account_id VARCHAR(191) PRIMARY KEY,
+                account_numeric_id BIGINT UNSIGNED PRIMARY KEY,
+                account_id VARCHAR(191) NOT NULL UNIQUE,
                 available_base BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 frozen_base BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 available_quote BIGINT UNSIGNED NOT NULL,
@@ -111,12 +113,13 @@ impl MySqlStore {
         conn.exec_drop(
             format!(
                 "INSERT INTO {ACCOUNT_TABLE} (
-                    account_id, available_base, frozen_base, available_quote, frozen_quote, version
+                    account_numeric_id, account_id, available_base, frozen_base, available_quote, frozen_quote, version
                  )
                  VALUES (
-                    :account_id, :available_base, :frozen_base, :available_quote, :frozen_quote, :version
+                    :account_numeric_id, :account_id, :available_base, :frozen_base, :available_quote, :frozen_quote, :version
                  )
                  ON DUPLICATE KEY UPDATE
+                   account_id = VALUES(account_id),
                    available_base = VALUES(available_base),
                    frozen_base = VALUES(frozen_base),
                    available_quote = VALUES(available_quote),
@@ -124,6 +127,7 @@ impl MySqlStore {
                    version = VALUES(version)"
             ),
             named_params([
+                ("account_numeric_id", mysql::Value::from(stable_string_entity_id(account_id))),
                 ("account_id", mysql::Value::from(account_id)),
                 ("available_base", mysql::Value::from(available_base)),
                 ("frozen_base", mysql::Value::from(frozen_base)),
@@ -158,30 +162,39 @@ impl MySqlStore {
     pub fn snapshot(&self) -> Result<StoreSnapshot, StoreError> {
         let mut conn = self.pool.get_conn().map_err(map_mysql_error)?;
 
-        let account_rows: Vec<(String, u64, u64, u64, u64, u64)> = conn
+        let account_rows: Vec<(u64, String, u64, u64, u64, u64, u64)> = conn
             .query(format!(
-                "SELECT account_id, available_base, frozen_base, available_quote, frozen_quote, version FROM {ACCOUNT_TABLE}"
+                "SELECT account_numeric_id, account_id, available_base, frozen_base, available_quote, frozen_quote, version FROM {ACCOUNT_TABLE}"
             ))
             .map_err(map_mysql_error)?;
         let mut balances = HashMap::new();
-        for (account_id, available_base, frozen_base, available_quote, frozen_quote, version) in
-            account_rows
+        for (
+            account_numeric_id,
+            _account_id,
+            available_base,
+            frozen_base,
+            available_quote,
+            frozen_quote,
+            version,
+        ) in account_rows
         {
             balances.insert(
-                format!("{account_id}:BTC"),
+                balance_key(account_numeric_id, stable_string_entity_id("BTC")),
                 SpotBalance::new(
-                    account_id.clone(),
-                    "BTC".to_string(),
+                    account_numeric_id,
+                    account_numeric_id,
+                    stable_string_entity_id("BTC"),
                     available_base,
                     frozen_base,
                     version,
                 ),
             );
             balances.insert(
-                format!("{account_id}:USDT"),
+                balance_key(account_numeric_id, stable_string_entity_id("USDT")),
                 SpotBalance::new(
-                    account_id.clone(),
-                    "USDT".to_string(),
+                    account_numeric_id,
+                    account_numeric_id,
+                    stable_string_entity_id("USDT"),
                     available_quote,
                     frozen_quote,
                     version,

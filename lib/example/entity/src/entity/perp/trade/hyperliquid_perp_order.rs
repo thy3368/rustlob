@@ -210,11 +210,11 @@ pub enum HyperliquidPerpOrderBehaviorError {
 pub struct HyperliquidPerpOrder {
     /// 本系统生成的稳定订单 ID。
     pub order_id: u64,
-    /// Hyperliquid 返回的 numeric `oid`；尚未确认时可以为空。
+    /// Hyperliquid 返回的 numeric `oid`；尚未确认时可以为空。//todo delete
     pub exchange_oid: Option<u64>,
     /// Hyperliquid perp asset 编号。
     pub asset: u32,
-    /// 订单所属账户 ID。
+    /// 订单所属账户 ID。//todo delete
     pub account_id: String,
     /// 合约展示名，例如 `BTC-PERP`。
     pub symbol: String,
@@ -226,7 +226,7 @@ pub struct HyperliquidPerpOrder {
     pub time_in_force: HyperliquidPerpOrderTimeInForce,
     /// 合约数量。
     pub qty: u64,
-    /// 订单内保存的保证金冻结 MI 事实；不新增净敞口的订单没有新冻结。
+    /// 订单内保存的保证金冻结 MI 事实；不新增净敞口的订单没有新冻结。//todo delete
     pub reservation: Option<Reservation>,
     /// 已成交数量。
     pub filled_qty: u64,
@@ -236,10 +236,14 @@ pub struct HyperliquidPerpOrder {
     pub reduce_only: bool,
     /// 是否是强平流程发出的风险订单。
     pub is_liquidation: bool,
-    /// 若是强平订单，则记录来源 liquidation id。
+    /// 若是强平订单，则记录来源 liquidation id。//todo delete
     pub liquidation_id: Option<String>,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
+    // /// 订单创建时间，单位为 Unix 纳秒。
+    // pub created_at: u64,
+    // /// 订单最后更新时间，单位为 Unix 纳秒。
+    // pub updated_at: u64,
     /// 当前订单实体版本。
     pub version: u64,
 }
