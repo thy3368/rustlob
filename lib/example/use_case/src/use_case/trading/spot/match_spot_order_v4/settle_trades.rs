@@ -15,11 +15,11 @@ use crate::entity::account::balance_ledger_v2::BalanceLedgerV2;
 use crate::entity::{SettlementTransferVoucher, SpotBalance, spot as spot_entity};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SettleMatchedSpotTradesV4Cmd {
+pub struct SettleSpotTradesV4Cmd {
     pub settlement_id_prefix: String,
 }
 
-impl Default for SettleMatchedSpotTradesV4Cmd {
+impl Default for SettleSpotTradesV4Cmd {
     fn default() -> Self {
         Self { settlement_id_prefix: "spot-settlement".to_owned() }
     }
@@ -30,8 +30,8 @@ impl Default for SettleMatchedSpotTradesV4Cmd {
 pub enum SettleMatchedSpotTradesV4AfterChanges {
     Unchanged,
     Settled {
-        taker_order_after: SpotOrderV2,
-        maker_orders_after: Vec<SpotOrderV2>,
+        taker_order_after: SpotOrderV2,//todo delete
+        maker_orders_after: Vec<SpotOrderV2>,//todo delete
         balances_after: Vec<SpotBalance>,
         created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
@@ -43,18 +43,18 @@ pub enum SettleMatchedSpotTradesV4AfterChanges {
 /// 撮合产生的 `SpotTrade` 不在这里重复创建；本 use case 只表达成交后的 reservation、
 /// voucher、balance ledger 与 balance 更新事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SettleMatchedSpotTradesV4Changes {
+pub enum SettleSpotTradesV4Changes {
     Unchanged,
     Settled {
-        updated_taker_order: UpdatedEntityPair<SpotOrderV2>,
-        updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
+        updated_taker_order: UpdatedEntityPair<SpotOrderV2>,//todo delete
+        updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,//todo delete
         updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
         created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }
 
-impl ReplayableChanges for SettleMatchedSpotTradesV4Changes {
+impl ReplayableChanges for SettleSpotTradesV4Changes {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
@@ -98,12 +98,12 @@ impl ReplayableChanges for SettleMatchedSpotTradesV4Changes {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SettleMatchedSpotTradesV4State {
+pub struct SettleSpotTradesV4State {
     /// MatchV4 产出的 taker 订单 after；settlement 会在此基础上消费/释放 reservation。
-    pub taker_order: SpotOrderV2,
+    pub taker_order: SpotOrderV2,//todo delete
     /// MatchV4 产出的 maker 订单 after 列表，顺序必须与成交 maker 优先级一致。
-    pub maker_orders: Vec<SpotOrderV2>,
-    pub created_trades: Vec<SpotTrade>,
+    pub maker_orders: Vec<SpotOrderV2>,//todo delete
+    pub created_trades: Vec<SpotTrade>,//todo 可能改成单trade
     pub settlement_balances: Vec<SpotBalance>,
     pub base_asset_id: String,
     pub quote_asset_id: String,
@@ -113,11 +113,11 @@ pub struct SettleMatchedSpotTradesV4State {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct SettleMatchedSpotTradesV4UseCase;
+pub struct SettleSpotTradesV4UseCase;
 
-impl StateMachineV2 for SettleMatchedSpotTradesV4UseCase {
-    type Command = LogEntry<SettleMatchedSpotTradesV4Cmd>;
-    type StateGiven = SettleMatchedSpotTradesV4State;
+impl StateMachineV2 for SettleSpotTradesV4UseCase {
+    type Command = LogEntry<SettleSpotTradesV4Cmd>;
+    type StateGiven = SettleSpotTradesV4State;
     type Error = MatchSpotOrderV4Error;
     type StateChanged = SettleMatchedSpotTradesV4AfterChanges;
 
@@ -163,16 +163,16 @@ impl StateMachineV2 for SettleMatchedSpotTradesV4UseCase {
     }
 }
 
-impl StateMachineV2Diff for SettleMatchedSpotTradesV4UseCase {
-    type StateDiff = SettleMatchedSpotTradesV4Changes;
+impl StateMachineV2Diff for SettleSpotTradesV4UseCase {
+    type StateDiff = SettleSpotTradesV4Changes;
 
     fn do_compute_state_diff(
-        state: SettleMatchedSpotTradesV4State,
+        state: SettleSpotTradesV4State,
         after: Self::StateChanged,
     ) -> Result<Self::StateDiff, Self::Error> {
         match after {
             SettleMatchedSpotTradesV4AfterChanges::Unchanged => {
-                Ok(SettleMatchedSpotTradesV4Changes::Unchanged)
+                Ok(SettleSpotTradesV4Changes::Unchanged)
             }
             SettleMatchedSpotTradesV4AfterChanges::Settled {
                 taker_order_after,
@@ -186,7 +186,7 @@ impl StateMachineV2Diff for SettleMatchedSpotTradesV4UseCase {
                 let updated_maker_orders = zip_pairs(state.maker_orders, maker_orders_after)?;
                 let updated_balances =
                     merge_balance_pairs(state.settlement_balances, balances_after)?;
-                Ok(SettleMatchedSpotTradesV4Changes::Settled {
+                Ok(SettleSpotTradesV4Changes::Settled {
                     updated_taker_order,
                     updated_maker_orders,
                     updated_balances,
@@ -199,8 +199,8 @@ impl StateMachineV2Diff for SettleMatchedSpotTradesV4UseCase {
 }
 
 fn compute_settlement_after(
-    cmd: &SettleMatchedSpotTradesV4Cmd,
-    state: &SettleMatchedSpotTradesV4State,
+    cmd: &SettleSpotTradesV4Cmd,
+    state: &SettleSpotTradesV4State,
     logical_ts: u64,
     version: u64,
 ) -> Result<SettleMatchedSpotTradesV4AfterChanges, MatchSpotOrderV4Error> {
@@ -280,7 +280,7 @@ fn bump_order_version_if_changed(
     Ok(())
 }
 
-impl SettleMatchedSpotTradesV4Changes {
+impl SettleSpotTradesV4Changes {
     pub fn taker_order_after(&self) -> Option<&SpotOrderV2> {
         match self {
             Self::Unchanged => None,
