@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase, SpotBalance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
@@ -74,8 +75,9 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
 
         Ok(CancelSpotOrderV2State {
             balances: vec![SpotBalance::new(
-                request.party_id.clone(),
-                "USDT".to_string(),
+                stable_string_entity_id(request.party_id.as_str()),
+                stable_string_entity_id(request.party_id.as_str()),
+                stable_string_entity_id("USDT"),
                 1000,
                 201,
                 1,

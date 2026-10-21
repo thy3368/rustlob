@@ -366,7 +366,11 @@ pub struct SpotOrderV2 {
     ///
     /// v3 下单/撤单用例以订单聚合内的 fee reservation 为权威状态；余额流水仍负责
     /// 表达冻结资金的审计变化。
-    pub fee_reservation: Reservation,//todo delete
+    pub fee_reservation: Reservation, //todo delete
+
+    // /// 冻结费
+    // pub taker_max_fee: u64,
+
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
     /// 订单创建时间，单位为 Unix 纳秒。
