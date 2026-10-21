@@ -42,6 +42,7 @@ where
 mod tests {
     use cmd_handler::EntityReplayableEvent;
     use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+    use common_entity::stable_string_entity_id;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
         MatchSpotOrderV3UseCase, SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
@@ -79,11 +80,46 @@ mod tests {
                 taker_order: buy_order(1, "buyer", 100, 2, SpotOrderTif::Ioc)?,
                 maker_orders: vec![sell_order(2, "seller", 100, 1)?],
                 settlement_balances: vec![
-                    SpotBalance::new("buyer".to_string(), "USDT".to_string(), 1000, 201, 1),
-                    SpotBalance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
-                    SpotBalance::new("seller".to_string(), "BTC".to_string(), 0, 1, 1),
-                    SpotBalance::new("seller".to_string(), "USDT".to_string(), 0, 1, 1),
-                    SpotBalance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+                    SpotBalance::new(
+                        stable_string_entity_id("buyer"),
+                        stable_string_entity_id("buyer"),
+                        stable_string_entity_id("USDT"),
+                        1000,
+                        201,
+                        1,
+                    ),
+                    SpotBalance::new(
+                        stable_string_entity_id("buyer"),
+                        stable_string_entity_id("buyer"),
+                        stable_string_entity_id("BTC"),
+                        0,
+                        0,
+                        1,
+                    ),
+                    SpotBalance::new(
+                        stable_string_entity_id("seller"),
+                        stable_string_entity_id("seller"),
+                        stable_string_entity_id("BTC"),
+                        0,
+                        1,
+                        1,
+                    ),
+                    SpotBalance::new(
+                        stable_string_entity_id("seller"),
+                        stable_string_entity_id("seller"),
+                        stable_string_entity_id("USDT"),
+                        0,
+                        1,
+                        1,
+                    ),
+                    SpotBalance::new(
+                        stable_string_entity_id("fee"),
+                        stable_string_entity_id("fee"),
+                        stable_string_entity_id("USDT"),
+                        0,
+                        0,
+                        1,
+                    ),
                 ],
                 base_asset_id: "BTC".to_string(),
                 quote_asset_id: "USDT".to_string(),

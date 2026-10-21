@@ -136,7 +136,7 @@ pub enum TriggerPendingSpotOrdersOnTradeError<OutboundError> {
 #[cfg(test)]
 mod tests {
     use cmd_handler::EntityReplayableEvent;
-    use common_entity::{Entity, ReplayFieldChange};
+    use common_entity::{Entity, ReplayFieldChange, stable_string_entity_id};
     use example_core_use_case::{
         MarketRules, SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderTriggerRole,
         SpotOrderType, SpotOrderV2,
@@ -173,10 +173,24 @@ mod tests {
             .seed_market_rules(MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 })
             .expect("market rules should seed");
         outbound
-            .seed_balance(SpotBalance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1))
+            .seed_balance(SpotBalance::new(
+                stable_string_entity_id("buyer"),
+                stable_string_entity_id("buyer"),
+                stable_string_entity_id("BTC"),
+                0,
+                0,
+                1,
+            ))
             .expect("base balance should seed");
         outbound
-            .seed_balance(SpotBalance::new("buyer".to_string(), "USDT".to_string(), 1_000, 0, 1))
+            .seed_balance(SpotBalance::new(
+                stable_string_entity_id("buyer"),
+                stable_string_entity_id("buyer"),
+                stable_string_entity_id("USDT"),
+                1_000,
+                0,
+                1,
+            ))
             .expect("quote balance should seed");
         outbound
             .seed_order(SpotOrderV2::new_pending_trigger(

@@ -482,8 +482,22 @@ mod tests {
                 position("position-short", "trader-2", -2, 5),
             ],
             margin_balances: vec![
-                SpotBalance::new(common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("USDC"), 1_000, 0, 7),
-                SpotBalance::new(common_entity::stable_string_entity_id("trader-2"), common_entity::stable_string_entity_id("trader-2"), common_entity::stable_string_entity_id("USDC"), 1_000, 0, 11),
+                SpotBalance::new(
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("USDC"),
+                    1_000,
+                    0,
+                    7,
+                ),
+                SpotBalance::new(
+                    common_entity::stable_string_entity_id("trader-2"),
+                    common_entity::stable_string_entity_id("trader-2"),
+                    common_entity::stable_string_entity_id("USDC"),
+                    1_000,
+                    0,
+                    11,
+                ),
             ],
             margin_asset_id: "USDC".to_string(),
             settled_position_ids: Vec::with_capacity(0),
@@ -558,8 +572,14 @@ mod tests {
         let cmd = cross_cmd();
         let state = cross_state();
         let mut isolated_state = state;
-        isolated_state.margin_balances =
-            vec![SpotBalance::new(common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("USDC"), 1_000, 0, 7)];
+        isolated_state.margin_balances = vec![SpotBalance::new(
+            common_entity::stable_string_entity_id("trader-1"),
+            common_entity::stable_string_entity_id("trader-1"),
+            common_entity::stable_string_entity_id("USDC"),
+            1_000,
+            0,
+            7,
+        )];
         isolated_state.margin_mode = HyperliquidPerpMarginMode::Isolated;
         assert_eq!(
             use_case.validate_against_state(&cmd, &isolated_state),
@@ -665,16 +685,15 @@ mod tests {
                 .all(|settlement| settlement.funding_time == cmd.funding_time)
         );
         assert!(result.changed_margin_balances.iter().all(|pair| {
-            result
-                .created_settlements
-                .iter()
-                .any(|settlement| common_entity::stable_string_entity_id(&settlement.account_id) == pair.before.account_id)
+            result.created_settlements.iter().any(|settlement| {
+                common_entity::stable_string_entity_id(&settlement.account_id)
+                    == pair.before.account_id
+            })
         }));
         assert!(result.created_balance_ledger_entries.iter().all(|entry| {
-            result
-                .created_settlements
-                .iter()
-                .any(|settlement| common_entity::stable_string_entity_id(&settlement.account_id) == entry.account_id)
+            result.created_settlements.iter().any(|settlement| {
+                common_entity::stable_string_entity_id(&settlement.account_id) == entry.account_id
+            })
         }));
     }
 
@@ -782,8 +801,14 @@ mod tests {
         let use_case = SettleHyperliquidPerpFundingUseCase;
         let mut state = cross_state();
         state.positions.truncate(1);
-        state.margin_balances =
-            vec![SpotBalance::new(common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("trader-1"), common_entity::stable_string_entity_id("USDC"), 1, 0, 7)];
+        state.margin_balances = vec![SpotBalance::new(
+            common_entity::stable_string_entity_id("trader-1"),
+            common_entity::stable_string_entity_id("trader-1"),
+            common_entity::stable_string_entity_id("USDC"),
+            1,
+            0,
+            7,
+        )];
         let cmd = SettleHyperliquidPerpFundingCmd {
             party_id: "trader-1".to_string(),
             position_ids: vec!["position-long".to_string()],

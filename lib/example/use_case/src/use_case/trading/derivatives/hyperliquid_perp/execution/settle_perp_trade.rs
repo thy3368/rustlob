@@ -111,7 +111,7 @@ pub struct SettleHyperliquidPerpTradeUseCase;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpTradeChanges {
     /// 本批次新创建的 perp 清结算转账凭证。
-    pub created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
+    pub created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
     /// 本批次仓位槽位的 before/after，顺序与输入状态稳定对齐。
     pub changed_positions: Vec<UpdatedEntityPair<PerpPosition>>,
     /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。
@@ -471,10 +471,7 @@ fn position_map(positions: impl Iterator<Item = PerpPosition>) -> BTreeMap<Strin
 }
 
 fn balance_map(balances: &[SpotBalance]) -> HashMap<String, &SpotBalance> {
-    balances
-        .iter()
-        .map(|balance| (balance.business_entity_id(), balance))
-        .collect()
+    balances.iter().map(|balance| (balance.business_entity_id(), balance)).collect()
 }
 
 fn position_key(account_id: &str, asset: u32, symbol: &str) -> String {
@@ -566,7 +563,14 @@ mod tests {
     }
 
     fn balance(account_id: &str, available: u64, frozen: u64) -> SpotBalance {
-        SpotBalance::new(common_entity::stable_string_entity_id(account_id), common_entity::stable_string_entity_id(account_id), common_entity::stable_string_entity_id("USDC"), available, frozen, 7)
+        SpotBalance::new(
+            common_entity::stable_string_entity_id(account_id),
+            common_entity::stable_string_entity_id(account_id),
+            common_entity::stable_string_entity_id("USDC"),
+            available,
+            frozen,
+            7,
+        )
     }
 
     fn state(

@@ -45,6 +45,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use cmd_handler::EntityReplayableEvent;
+    use common_entity::stable_string_entity_id;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
         OrderId, SpotBalance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
@@ -129,8 +130,9 @@ mod tests {
             Ok(ModifySpotOrderV2State {
                 order,
                 balances: vec![SpotBalance::new(
-                    "buyer".to_owned(),
-                    "USDT".to_owned(),
+                    stable_string_entity_id("buyer"),
+                    stable_string_entity_id("buyer"),
+                    stable_string_entity_id("USDT"),
                     100_000,
                     frozen,
                     1,

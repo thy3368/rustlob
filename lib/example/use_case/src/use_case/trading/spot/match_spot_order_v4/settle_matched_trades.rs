@@ -33,7 +33,7 @@ pub enum SettleMatchedSpotTradesV4AfterChanges {
         taker_order_after: SpotOrderV2,
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<SpotBalance>,
-        created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
+        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }
@@ -49,7 +49,7 @@ pub enum SettleMatchedSpotTradesV4Changes {
         updated_taker_order: UpdatedEntityPair<SpotOrderV2>,
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
         updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
-        created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
+        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }

@@ -1,6 +1,5 @@
 use common_entity::{
-    function, AggregateRole, Entity, EntityFieldChange, FieldDiff,
-    FourColorArchetype, ObjectType,
+    AggregateRole, Entity, EntityFieldChange, FieldDiff, FourColorArchetype, ObjectType, function,
 };
 use serde::{Deserialize, Serialize};
 

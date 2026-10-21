@@ -13,3 +13,5 @@
 // action-driven : place / cancel / modify
 // state-driven  : liquidation / ADL
 // logical-time-driven : funding / (可能还有 hourly settlement)
+
+// 处理action，处理条件单，处理risk，处理funding

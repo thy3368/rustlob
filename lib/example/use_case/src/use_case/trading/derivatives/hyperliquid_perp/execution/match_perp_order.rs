@@ -1074,9 +1074,7 @@ mod tests {
         let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
 
         assert_eq!(changes.created_trades.len(), 2);
-        assert!(
-            changes.created_trades.iter().all(|trade| trade.created_at == 1_717_171_717_000)
-        );
+        assert!(changes.created_trades.iter().all(|trade| trade.created_at == 1_717_171_717_000));
         assert_eq!(changes.updated_taker_order.after.order_id, TAKER_ORDER_ID);
         assert_eq!(changes.updated_taker_order.after.filled_qty, 3);
         assert_eq!(

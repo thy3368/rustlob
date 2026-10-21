@@ -140,9 +140,7 @@ impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut trades = state.trades.clone();
         trades.sort_by(|left, right| {
-            left.created_at
-                .cmp(&right.created_at)
-                .then_with(|| left.trade_id.cmp(&right.trade_id))
+            left.created_at.cmp(&right.created_at).then_with(|| left.trade_id.cmp(&right.trade_id))
         });
 
         let mut buckets = BTreeMap::<u64, KlineAccumulator>::new();

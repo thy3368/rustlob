@@ -238,7 +238,10 @@ fn balance_entity_id_for_account_asset(
 ) -> Result<String, CancelSpotOrderV2Error> {
     balances
         .iter()
-        .find(|balance| balance.account_id == common_entity::stable_string_entity_id(account_id) && balance.asset_id == common_entity::stable_string_entity_id(asset_id))
+        .find(|balance| {
+            balance.account_id == common_entity::stable_string_entity_id(account_id)
+                && balance.asset_id == common_entity::stable_string_entity_id(asset_id)
+        })
         .map(SpotBalance::business_entity_id)
         .ok_or(CancelSpotOrderV2Error::BalanceNotFound)
 }
@@ -448,7 +451,11 @@ fn apply_behavior_ledger_entry(
     mut entry: BalanceLedgerV2,
     balance_book: &mut BalanceMap,
 ) -> Result<BalanceLedgerV2, CancelSpotOrderV2Error> {
-    let balance = balance_book.get_by_entity_id_mut(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))?;
+    let balance = balance_book.get_by_entity_id_mut(&concat3(
+        &entry.account_id.to_string(),
+        ":",
+        &entry.asset_id.to_string(),
+    ))?;
     entry.apply_to(balance)?;
     Ok(entry)
 }
@@ -488,7 +495,10 @@ fn balance_replay_events_from_ledger_entries(
 
     let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
-        let Some(before) = current_balances.get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string())).cloned() else {
+        let Some(before) = current_balances
+            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
+            .cloned()
+        else {
             return Err(common_entity::EntityError::Custom(
                 "balance ledger entry does not belong to updated balances".to_string(),
             ));
@@ -527,7 +537,10 @@ fn balance_replay_events_from_ledger_entries(
             next_version,
         );
         events.push(after.track_update_event_from(&before)?);
-        current_balances.insert(concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(), after);
+        current_balances.insert(
+            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
+            after,
+        );
     }
 
     for balance in updated_balances {

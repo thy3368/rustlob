@@ -507,7 +507,10 @@ fn balance_replay_events_from_ledger_entries(
 
     let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
-        let Some(before) = current_balances.get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string())).cloned() else {
+        let Some(before) = current_balances
+            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
+            .cloned()
+        else {
             return Err(EntityError::Custom(
                 "balance ledger entry does not belong to updated balances".to_string(),
             ));
@@ -548,7 +551,10 @@ fn balance_replay_events_from_ledger_entries(
             next_version,
         );
         events.push(after.track_update_event_from(&before)?);
-        current_balances.insert(concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(), after);
+        current_balances.insert(
+            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
+            after,
+        );
     }
 
     for balance in updated_balances {

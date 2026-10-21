@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::spot_order_primitives::{
-    option_status_reason_value, push_change, SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason,
-    SpotOrderTif, SpotOrderTriggerRole, SpotOrderType,
+    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderTriggerRole,
+    SpotOrderType, option_status_reason_value, push_change,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -370,7 +370,6 @@ pub struct SpotOrderV2 {
 
     // /// 冻结费
     // pub taker_max_fee: u64,
-
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub client_order_id: Option<String>,
     /// 订单创建时间，单位为 Unix 纳秒。

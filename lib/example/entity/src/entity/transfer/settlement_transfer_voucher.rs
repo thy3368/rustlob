@@ -1,12 +1,12 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel,
-    EntityUseCaseApiSurface, FieldDiff, FinancialClassification, FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, EntityUseCaseApiSurface,
+    FieldDiff, FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
+use crate::BalanceLedgerReason;
 use crate::account::balance_ledger_v2::{BalanceLedgerEntryV2Error, BalanceLedgerV2};
 use crate::support::{concat2, derived_entity_id};
-use crate::BalanceLedgerReason;
 
 const SETTLEMENT_TRANSFER_VOUCHER_ENTITY_TYPE: u8 = 21;
 const SETTLEMENT_TRANSFER_LEG_ENTITY_TYPE: u8 = 22;

@@ -679,7 +679,6 @@ impl Entity for PerpPosition {
 
     fn is_derived() -> bool {
         true
-
     }
 
     fn entity_type() -> u8 {

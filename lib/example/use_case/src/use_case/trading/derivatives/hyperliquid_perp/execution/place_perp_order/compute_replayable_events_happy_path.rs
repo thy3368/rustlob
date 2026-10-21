@@ -123,7 +123,14 @@ fn state() -> PlaceHyperliquidPerpOrderState {
         trading_enabled: true,
         next_order_sequence: 42,
         account_id: "acct-1".to_string(),
-        margin_balance: SpotBalance::new(common_entity::stable_string_entity_id("acct-1"), common_entity::stable_string_entity_id("acct-1"), common_entity::stable_string_entity_id("USDC"), 10_000, 500, 4),
+        margin_balance: SpotBalance::new(
+            common_entity::stable_string_entity_id("acct-1"),
+            common_entity::stable_string_entity_id("acct-1"),
+            common_entity::stable_string_entity_id("USDC"),
+            10_000,
+            500,
+            4,
+        ),
         margin_asset_id: "USDC".to_string(),
         market_rules: MarketRules { symbol: "BTC-PERP".to_string(), min_qty: 1 },
         position: PerpPosition::empty_slot(

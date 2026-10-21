@@ -1,5 +1,6 @@
 //! 运行：cargo run -p use_case_executor --example place_match_spot_order_v2_lob
 
+use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, MarketRules, PlaceMatchSpotOrderV2Changes,
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
@@ -15,10 +16,38 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
     let store = InMemoryStore::new(ASSET);
     store.seed_market_rules(MarketRules { symbol: "BTCUSDT".into(), min_qty: 1 })?;
     for balance in [
-        SpotBalance::new("buyer".into(), "BTC".into(), 0, 0, 1),
-        SpotBalance::new("buyer".into(), "USDT".into(), 101, 0, 1),
-        SpotBalance::new("seller".into(), "BTC".into(), 0, 1, 1),
-        SpotBalance::new("seller".into(), "USDT".into(), 0, 1, 1),
+        SpotBalance::new(
+            stable_string_entity_id("buyer"),
+            stable_string_entity_id("buyer"),
+            stable_string_entity_id("BTC"),
+            0,
+            0,
+            1,
+        ),
+        SpotBalance::new(
+            stable_string_entity_id("buyer"),
+            stable_string_entity_id("buyer"),
+            stable_string_entity_id("USDT"),
+            101,
+            0,
+            1,
+        ),
+        SpotBalance::new(
+            stable_string_entity_id("seller"),
+            stable_string_entity_id("seller"),
+            stable_string_entity_id("BTC"),
+            0,
+            1,
+            1,
+        ),
+        SpotBalance::new(
+            stable_string_entity_id("seller"),
+            stable_string_entity_id("seller"),
+            stable_string_entity_id("USDT"),
+            0,
+            1,
+            1,
+        ),
     ] {
         store.seed_balance(balance)?;
     }

@@ -178,29 +178,35 @@ impl StateMachineV2 for SpotBlockUseCase {
         let mut working = WorkingSpotBlockState::try_from_state(given_state)?;
         let mut item_results = Vec::with_capacity(cmd.commands.len());
 
+        self.compute_action_results(cmd, given_state, &mut working, &mut item_results);
+        self.compute_conditional_order_results(cmd, given_state, &mut working, &mut item_results);
+        item_results.sort_by_key(|item| match item {
+            SpotBlockItemResult::Applied { command_index, .. }
+            | SpotBlockItemResult::Rejected { command_index, .. } => *command_index,
+        });
+
+        Ok(SpotBlockChanges { item_results })
+    }
+}
+
+impl SpotBlockUseCase {
+    fn compute_action_results(
+        &self,
+        cmd: &LogEntry<SpotBlockCmd>,
+        given_state: &SpotBlockState,
+        working: &mut WorkingSpotBlockState,
+        item_results: &mut Vec<SpotBlockItemResult>,
+    ) {
         for (command_index, command) in cmd.commands.iter().cloned().enumerate() {
+            if matches!(&command, SpotBlockCommand::Activate(_)) {
+                continue;
+            }
             let item_result = match &command {
-                SpotBlockCommand::Activate(activate_cmd) => {
-                    match apply_activate(
-                        &common_entity::LogEntrySequencer::derive(cmd, activate_cmd.clone()),
-                        given_state,
-                        &mut working,
-                    ) {
-                        Ok(changes) => SpotBlockItemResult::Applied {
-                            command_index,
-                            command,
-                            changes: SpotBlockAppliedChanges::Activate(changes),
-                        },
-                        Err(error) => {
-                            SpotBlockItemResult::Rejected { command_index, command, error }
-                        }
-                    }
-                }
                 SpotBlockCommand::Cancel(cancel_cmd) => {
                     match apply_cancel(
                         &common_entity::LogEntrySequencer::derive(cmd, cancel_cmd.clone()),
                         given_state,
-                        &mut working,
+                        working,
                     ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
@@ -216,7 +222,7 @@ impl StateMachineV2 for SpotBlockUseCase {
                     match apply_modify(
                         &common_entity::LogEntrySequencer::derive(cmd, modify_cmd.clone()),
                         given_state,
-                        &mut working,
+                        working,
                     ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
@@ -232,7 +238,7 @@ impl StateMachineV2 for SpotBlockUseCase {
                     match apply_place_match(
                         &common_entity::LogEntrySequencer::derive(cmd, place_cmd.clone()),
                         given_state,
-                        &mut working,
+                        working,
                     ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
@@ -248,7 +254,7 @@ impl StateMachineV2 for SpotBlockUseCase {
                     match apply_match(
                         &common_entity::LogEntrySequencer::derive(cmd, match_cmd.clone()),
                         given_state,
-                        &mut working,
+                        working,
                     ) {
                         Ok(changes) => SpotBlockItemResult::Applied {
                             command_index,
@@ -260,11 +266,42 @@ impl StateMachineV2 for SpotBlockUseCase {
                         }
                     }
                 }
+                SpotBlockCommand::Activate(_) => continue,
             };
             item_results.push(item_result);
         }
+    }
 
-        Ok(SpotBlockChanges { item_results })
+    fn compute_conditional_order_results(
+        &self,
+        cmd: &LogEntry<SpotBlockCmd>,
+        given_state: &SpotBlockState,
+        working: &mut WorkingSpotBlockState,
+        item_results: &mut Vec<SpotBlockItemResult>,
+    ) {
+        for (command_index, command) in cmd.commands.iter().cloned().enumerate() {
+            let SpotBlockCommand::Activate(activate_cmd) = command else {
+                continue;
+            };
+            let item_result = match apply_activate(
+                &common_entity::LogEntrySequencer::derive(cmd, activate_cmd.clone()),
+                given_state,
+                working,
+            ) {
+                Ok(changes) => SpotBlockItemResult::Applied {
+                    command_index,
+                    command: SpotBlockCommand::Activate(activate_cmd),
+                    changes: SpotBlockAppliedChanges::Activate(changes),
+                },
+                Err(error) => SpotBlockItemResult::Rejected {
+                    command_index,
+                    command: SpotBlockCommand::Activate(activate_cmd),
+                    error,
+                },
+            };
+            item_results.push(item_result);
+        }
+        // TODO: 自动扫描并触发满足条件的条件单。
     }
 }
 

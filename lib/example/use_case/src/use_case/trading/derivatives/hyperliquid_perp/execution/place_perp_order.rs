@@ -247,8 +247,12 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
         if !state.market_rules.validate_qty(size) {
             return Err(PlaceHyperliquidPerpOrderError::SizeBelowMin);
         }
-        if !state.margin_balance.belongs_to_account(common_entity::stable_string_entity_id(&state.account_id))
-            || !state.margin_balance.is_asset(common_entity::stable_string_entity_id(&state.margin_asset_id))
+        if !state
+            .margin_balance
+            .belongs_to_account(common_entity::stable_string_entity_id(&state.account_id))
+            || !state
+                .margin_balance
+                .is_asset(common_entity::stable_string_entity_id(&state.margin_asset_id))
         {
             return Err(PlaceHyperliquidPerpOrderError::InvalidMarginBalance);
         }

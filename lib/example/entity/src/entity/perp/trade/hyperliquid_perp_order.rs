@@ -229,7 +229,6 @@ pub struct HyperliquidPerpOrder {
 
     // /// 冻结费
     // pub taker_max_fee: u64,
-
     /// 订单内保存的保证金冻结 MI 事实；不新增净敞口的订单没有新冻结。//todo delete
     pub reservation: Option<Reservation>,
     /// 已成交数量。

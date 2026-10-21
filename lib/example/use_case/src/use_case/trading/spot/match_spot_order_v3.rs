@@ -39,7 +39,7 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<SpotBalance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
+        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// 成交数量达到订单总数量，订单终止为 Filled。
@@ -48,7 +48,7 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<SpotBalance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
+        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// IOC 部分成交后，剩余数量被取消并释放冻结。
@@ -57,7 +57,7 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<SpotBalance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,//todo delete
+        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// ALO crossing maker 或 IOC 无流动性导致拒单。
@@ -1040,7 +1040,10 @@ pub(super) fn balance_replay_events_from_ledger_entries(
 
     let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
-        let Some(before) = current_balances.get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string())).cloned() else {
+        let Some(before) = current_balances
+            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
+            .cloned()
+        else {
             return Err(common_entity::EntityError::Custom(
                 "balance ledger entry does not belong to updated balances".to_string(),
             ));
@@ -1079,7 +1082,10 @@ pub(super) fn balance_replay_events_from_ledger_entries(
             next_version,
         );
         events.push(after.track_update_event_from(&before)?);
-        current_balances.insert(concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(), after);
+        current_balances.insert(
+            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
+            after,
+        );
     }
 
     for balance in updated_balances {

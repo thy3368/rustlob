@@ -49,7 +49,6 @@ pub struct SpotBalance {
     // pub created_at: u64,
     // /// 订单最后更新时间，单位为 Unix 纳秒。
     // pub updated_at: u64,
-
     /// 当前余额实体版本。
     pub version: u64,
 }
@@ -214,10 +213,7 @@ impl SpotBalance {
         Ok(())
     }
 
-
     // todo 增加的能力 冻结 （100）， 解冻支付（20，80）
-
-
 }
 
 impl FieldDiff for SpotBalance {
