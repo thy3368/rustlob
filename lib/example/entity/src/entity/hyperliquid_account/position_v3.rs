@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::hyperliquid_account::usdc::Usdc;
 
 struct Leverage {
-    leverage_type: MarginMode, // "cross" | "isolated"
+    pub(crate) leverage_type: MarginMode, // "cross" | "isolated"
     value: u8,
     raw_usd: Option<Decimal>, // isolated 才有
 }
@@ -33,10 +33,10 @@ struct FundingAccum {
 }
 
 pub struct PositionV3 {
-    coin: String,       // "BTC"
+    pub(crate) coin: String,       // "BTC"
     szi: Decimal,       // 带符号仓位，正多负空
     entry_px: Decimal,  // 加权开仓价
-    leverage: Leverage, // { type: Cross|Isolated, value, raw_usd? }
+    pub(crate) leverage: Leverage, // { type: Cross|Isolated, value, raw_usd? }
 
     // ↓ 全部派生
     position_value: Decimal, // szi * mark
