@@ -50,7 +50,7 @@ pub struct PositionV3 {
 }
 
 impl PositionV3 {
-    fn notional(&self, mark: Decimal) -> Decimal {
+    pub(crate) fn notional(&self, mark: Decimal) -> Decimal {
         self.szi.abs() * mark
     }
     fn mm_required(&self, mark: Decimal) -> Decimal {
