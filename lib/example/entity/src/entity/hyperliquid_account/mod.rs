@@ -1,9 +1,9 @@
 pub mod account;
 pub mod perp_clearinghouse_state;
 
-pub mod perp_clearinghouse_stateV2;
+pub mod perp_clearinghouse_state_v2;
 
-pub mod perp_clearinghouse_stateV3;
+pub mod perp_clearinghouse_state_v3;
 pub mod position_v3;
 pub mod spot_clearinghouse_state;
 
