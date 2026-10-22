@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use cmd_handler::EntityReplayableEvent;
-use example_core_use_case::{MarketRules, Reservation, Balance, SpotOrderV2, SpotTrade};
+use example_core_use_case::{Balance, MarketRules, Reservation, SpotOrderV2, SpotTrade};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 use super::StoreSnapshot;
@@ -18,7 +18,7 @@ pub(crate) struct StoreState {
     pub(crate) persisted_events: Vec<EntityReplayableEvent>,
     pub(crate) published_events: Vec<EntityReplayableEvent>,
     pub(crate) next_order_sequence: u64,
-    pub(crate) lob: LocalLobBtree,
+    pub(crate) lob: LocalLobBtree<SpotOrderV2>,
 }
 
 impl StoreState {

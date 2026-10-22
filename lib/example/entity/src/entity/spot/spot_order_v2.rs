@@ -2,6 +2,7 @@ use common_entity::{
     AggregateRole, Entity, EntityFieldChange, EntityLifecycle, FieldDiff, FinancialClassification,
     FourColorArchetype,
 };
+use lob_repo_v2::lob::LobOrder;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -1786,6 +1787,56 @@ impl Entity for SpotOrderV2 {
 
     fn is_derived() -> bool {
         false
+    }
+}
+
+impl LobOrder for SpotOrderV2 {
+    type Side = SpotOrderSide;
+    fn entity_type() -> u8 {
+        <Self as Entity>::entity_type()
+    }
+    fn entity_id(&self) -> u64 {
+        self.order_id
+    }
+    fn asset(&self) -> u32 {
+        self.asset
+    }
+    fn side(&self) -> Self::Side {
+        self.side
+    }
+    fn is_buy_side(side: Self::Side) -> bool {
+        side == SpotOrderSide::Buy
+    }
+    fn price(&self) -> u64 {
+        self.limit_price
+    }
+    fn qty(&self) -> u64 {
+        self.qty
+    }
+    fn filled_qty(&self) -> u64 {
+        self.filled_qty
+    }
+    fn created_at(&self) -> u64 {
+        self.created_at
+    }
+    fn is_active(&self) -> bool {
+        matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
+            && self.filled_qty < self.qty
+    }
+    fn from_replay_event(
+        _: &common_entity::EntityReplayableEvent,
+        _: u64,
+    ) -> Result<Self, lob_repo_v2::LobError> {
+        Err(lob_repo_v2::LobError::Event("SpotOrderV2 replay construction is not wired".into()))
+    }
+    fn apply_replay_event(
+        self,
+        _: &common_entity::EntityReplayableEvent,
+    ) -> Result<Self, lob_repo_v2::LobError> {
+        Err(lob_repo_v2::LobError::Event("SpotOrderV2 replay update is not wired".into()))
+    }
+    fn entity_version(&self) -> u64 {
+        self.version
     }
 }
 

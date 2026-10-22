@@ -8,10 +8,12 @@ pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
     fn entity_id(&self) -> u64;
     fn asset(&self) -> u32;
     fn side(&self) -> Self::Side;
+    fn is_buy_side(side: Self::Side) -> bool;
     fn price(&self) -> u64;
     fn qty(&self) -> u64;
     fn filled_qty(&self) -> u64;
     fn created_at(&self) -> u64;
+    fn entity_version(&self) -> u64;
     fn is_active(&self) -> bool;
     fn from_replay_event(event: &EntityReplayableEvent, id: u64) -> Result<Self, crate::LobError>;
     fn apply_replay_event(self, event: &EntityReplayableEvent) -> Result<Self, crate::LobError>;

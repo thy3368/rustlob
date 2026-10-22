@@ -3,20 +3,24 @@ use std::path::PathBuf;
 
 use super::lob_btree::LocalLobBtree;
 use crate::LobError;
+use crate::lob::LobOrder;
 use crate::lob_repo::LobRepo;
 
-pub struct LobBtreeRepository {
+pub struct LobBtreeRepository<O: LobOrder> {
     path: PathBuf,
+    marker: std::marker::PhantomData<O>,
 }
 
-impl LobBtreeRepository {
+impl<O: LobOrder> LobBtreeRepository<O> {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+        Self { path: path.into(), marker: std::marker::PhantomData }
     }
 }
 
-impl LobRepo for LobBtreeRepository {
-    type Lob = LocalLobBtree;
+impl<O: LobOrder + serde::Serialize + for<'de> serde::Deserialize<'de>> LobRepo
+    for LobBtreeRepository<O>
+{
+    type Lob = LocalLobBtree<O>;
 
     fn load_from_snapshot(&self, asset: u32) -> Result<Self::Lob, LobError> {
         match fs::read(&self.path) {
