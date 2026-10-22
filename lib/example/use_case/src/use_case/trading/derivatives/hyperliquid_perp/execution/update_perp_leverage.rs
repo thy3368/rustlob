@@ -307,7 +307,7 @@ mod tests {
         let events = changes.to_replayable_events().unwrap();
 
         assert_eq!(position.before.required_margin(), Some(60));
-        assert_eq!(position.after.leverage_value, 10);
+        assert_eq!(position.after.leverage, 10);
         assert_eq!(position.after.required_margin(), Some(30));
         assert_eq!(position.after.version, 3);
         assert_eq!(position.after.lifecycle_status(), HyperliquidPerpPositionStatus::Open);

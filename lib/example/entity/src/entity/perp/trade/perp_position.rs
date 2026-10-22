@@ -109,9 +109,9 @@ pub struct PerpPosition {
     /// 带符号的净仓位数量，正数表示多头，负数表示空头。
     pub signed_size: i64,
     /// 当前仓位均价；空仓时为 0。
-    pub entry_price: u64,
+    pub entry_px: u64,
     /// 当前仓位保证金计算使用的杠杆。
-    pub leverage_value: u64,
+    pub leverage: u64,
     /// 当前仓位保证金模式事实。
     pub margin_mode: HyperliquidPerpMarginMode,
     /// 当前仓位生命周期内累计已实现 PnL，允许为负；手续费和资金费不进入该字段。
@@ -147,13 +147,29 @@ impl PerpPosition {
             perp_asset_id,
             coin,
             signed_size,
-            entry_price,
-            leverage_value,
+            entry_px: entry_price,
+            leverage: leverage_value,
             margin_mode,
             cumulative_realized_pnl,
             version,
         }
     }
+
+    pub fn position_value(&self, mark_price: u64) -> i64 {
+        self.signed_size * mark_price
+    }
+
+    pub fn notional(&self, mark_price: u64) -> i64 {
+        self.signed_size.abs() * mark_price
+    }
+
+
+    pub fn unrealized_pnl(&self, mark_price: u64) -> i64 {
+        self.signed_size *( mark_price-self.entry_px)
+    }
+
+
+
 
     /// 返回尚未创建的空仓位槽位。
     pub fn empty_slot(
@@ -227,7 +243,7 @@ impl PerpPosition {
         match self.signed_size.cmp(&0) {
             std::cmp::Ordering::Equal => {
                 self.signed_size == 0
-                    && self.entry_price == 0
+                    && self.entry_px == 0
                     && self.local_initial_margin_required() == Some(0)
                     && matches!(
                         self.lifecycle_status(),
@@ -237,7 +253,7 @@ impl PerpPosition {
             }
             std::cmp::Ordering::Less | std::cmp::Ordering::Greater => {
                 self.signed_size != 0
-                    && self.entry_price > 0
+                    && self.entry_px > 0
                     && self.lifecycle_status() == HyperliquidPerpPositionStatus::Open
             }
         }
@@ -250,7 +266,7 @@ impl PerpPosition {
 
     /// 返回当前仓位的本地初始保证金要求。
     pub fn local_initial_margin_required(&self) -> Option<u64> {
-        required_position_margin(self.qty(), self.entry_price, self.leverage_value)
+        required_position_margin(self.qty(), self.entry_px, self.leverage)
     }
 
     /// 返回当前仓位是否应参与资金费结算。
@@ -363,7 +379,7 @@ impl PerpPosition {
     /// 返回当前仓位在指定 mark 价格下的未实现 PnL。
     pub fn unrealized_pnl_at(&self, mark_price: u64) -> Option<i64> {
         let signed_size = i128::from(self.signed_size);
-        let price_delta = i128::from(mark_price).checked_sub(i128::from(self.entry_price))?;
+        let price_delta = i128::from(mark_price).checked_sub(i128::from(self.entry_px))?;
         let pnl = signed_size.checked_mul(price_delta)?;
         checked_i128_to_i64(pnl).ok()
     }
@@ -442,7 +458,7 @@ impl PerpPosition {
             .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
         let old_notional = self
             .qty()
-            .checked_mul(self.entry_price)
+            .checked_mul(self.entry_px)
             .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
         let add_notional = trade_qty
             .checked_mul(trade_price)
@@ -482,7 +498,7 @@ impl PerpPosition {
             .checked_sub(signed_size_delta.unsigned_abs())
             .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
         let signed_size = signed_qty(next_qty, self.signed_size.signum())?;
-        self.apply_trade_state(signed_size, self.entry_price, realized_pnl_delta, before_margin)
+        self.apply_trade_state(signed_size, self.entry_px, realized_pnl_delta, before_margin)
     }
 
     /// 可 BDD 规格化的聚合根行为：反向全平，成交数量必须刚好等于当前仓位数量。
@@ -528,7 +544,7 @@ impl PerpPosition {
         }
 
         let before_margin = self.local_initial_margin_required().unwrap_or(0);
-        self.leverage_value = leverage;
+        self.leverage = leverage;
         let next_margin = match self.lifecycle_status() {
             HyperliquidPerpPositionStatus::Open => self
                 .local_initial_margin_required()
@@ -555,10 +571,10 @@ impl PerpPosition {
     ) -> Result<i64, HyperliquidPerpPositionError> {
         let pnl_per_unit = if self.is_long() {
             i128::from(trade_price)
-                .checked_sub(i128::from(self.entry_price))
+                .checked_sub(i128::from(self.entry_px))
                 .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?
         } else if self.is_short() {
-            i128::from(self.entry_price)
+            i128::from(self.entry_px)
                 .checked_sub(i128::from(trade_price))
                 .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?
         } else {
@@ -579,7 +595,7 @@ impl PerpPosition {
         before_margin: u64,
     ) -> Result<HyperliquidPerpPositionTradeOutcome, HyperliquidPerpPositionError> {
         let required_margin =
-            required_position_margin(signed_size.unsigned_abs(), entry_price, self.leverage_value)
+            required_position_margin(signed_size.unsigned_abs(), entry_price, self.leverage)
                 .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
         let cumulative_realized_pnl = self
             .cumulative_realized_pnl
@@ -588,7 +604,7 @@ impl PerpPosition {
         let version = next_entity_version(self.version)?;
 
         self.signed_size = signed_size;
-        self.entry_price = entry_price;
+        self.entry_px = entry_price;
         self.cumulative_realized_pnl = cumulative_realized_pnl;
         self.version = version;
 
@@ -609,8 +625,8 @@ impl FieldDiff for PerpPosition {
             EntityFieldChange::new("perp_asset_id", "", self.perp_asset_id.to_string()),
             EntityFieldChange::new("coin", "", self.coin.clone()),
             EntityFieldChange::new("signed_size", "", self.signed_size.to_string()),
-            EntityFieldChange::new("entry_price", "", self.entry_price.to_string()),
-            EntityFieldChange::new("leverage_value", "", self.leverage_value.to_string()),
+            EntityFieldChange::new("entry_price", "", self.entry_px.to_string()),
+            EntityFieldChange::new("leverage_value", "", self.leverage.to_string()),
             EntityFieldChange::new("margin_mode", "", self.margin_mode.as_str()),
             EntityFieldChange::new(
                 "cumulative_realized_pnl",
@@ -640,14 +656,14 @@ impl FieldDiff for PerpPosition {
         push_change(
             &mut changes,
             "entry_price",
-            self.entry_price.to_string(),
-            other.entry_price.to_string(),
+            self.entry_px.to_string(),
+            other.entry_px.to_string(),
         );
         push_change(
             &mut changes,
             "leverage_value",
-            self.leverage_value.to_string(),
-            other.leverage_value.to_string(),
+            self.leverage.to_string(),
+            other.leverage.to_string(),
         );
         push_change(
             &mut changes,
@@ -785,7 +801,7 @@ fn validate_existing_trade_transition(
     if !position.has_consistent_state() {
         return Err(HyperliquidPerpPositionError::InconsistentState);
     }
-    if position.leverage_value == 0 {
+    if position.leverage == 0 {
         return Err(HyperliquidPerpPositionError::InvalidLeverage);
     }
     Ok(())
@@ -853,8 +869,8 @@ mod tests {
         assert!(position.is_short());
         assert_eq!(position.side_label(), "short");
         assert_eq!(position.qty(), 3);
-        assert_eq!(position.entry_price, 50_000);
-        assert_eq!(position.leverage_value, 10);
+        assert_eq!(position.entry_px, 50_000);
+        assert_eq!(position.leverage, 10);
         assert_eq!(position.margin_mode, HyperliquidPerpMarginMode::Cross);
         assert_eq!(position.cumulative_realized_pnl, -25);
         assert_eq!(position.version, 4);
@@ -1131,14 +1147,14 @@ mod tests {
             slot.coin.clone(),
             3,
             100,
-            slot.leverage_value,
+            slot.leverage,
             slot.margin_mode,
         )
         .unwrap();
 
         assert!(position.is_long());
         assert_eq!(position.qty(), 3);
-        assert_eq!(position.entry_price, 100);
+        assert_eq!(position.entry_px, 100);
         assert_eq!(position.required_margin(), Some(30));
         assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
         assert_eq!(position.cumulative_realized_pnl, 0);
@@ -1155,7 +1171,7 @@ mod tests {
         let outcome = position.increase_position(2, 120).unwrap();
 
         assert_eq!(position.qty(), 4);
-        assert_eq!(position.entry_price, 110);
+        assert_eq!(position.entry_px, 110);
         assert_eq!(position.required_margin(), Some(44));
         assert_eq!(position.version, 3);
         assert_eq!(outcome.realized_pnl_delta, 0);
@@ -1168,7 +1184,7 @@ mod tests {
         let reduce = reduced.reduce_position(-1, 130).unwrap();
         assert!(reduced.is_long());
         assert_eq!(reduced.qty(), 2);
-        assert_eq!(reduced.entry_price, 100);
+        assert_eq!(reduced.entry_px, 100);
         assert_eq!(reduced.required_margin(), Some(20));
         assert_eq!(reduced.cumulative_realized_pnl, 30);
         assert_eq!(reduce.realized_pnl_delta, 30);
@@ -1178,7 +1194,7 @@ mod tests {
         let close = closed.close_position(-2, 90).unwrap();
         assert!(closed.is_flat());
         assert_eq!(closed.qty(), 0);
-        assert_eq!(closed.entry_price, 0);
+        assert_eq!(closed.entry_px, 0);
         assert_eq!(closed.required_margin(), Some(0));
         assert_eq!(closed.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
         assert_eq!(closed.cumulative_realized_pnl, -20);
@@ -1193,7 +1209,7 @@ mod tests {
             .apply_leverage_setting("trader-1", 7, HyperliquidPerpMarginMode::Cross, 10)
             .unwrap();
 
-        assert_eq!(position.leverage_value, 10);
+        assert_eq!(position.leverage, 10);
         assert_eq!(position.required_margin(), Some(30));
         assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
         assert_eq!(position.version, 3);
@@ -1286,7 +1302,7 @@ mod tests {
 
         let mut after = position.clone();
         after.signed_size = 0;
-        after.entry_price = 0;
+        after.entry_px = 0;
         after.cumulative_realized_pnl = 0;
 
         let diff = position.diff(&after);

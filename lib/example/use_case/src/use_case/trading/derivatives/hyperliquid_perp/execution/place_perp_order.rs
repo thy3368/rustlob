@@ -265,7 +265,7 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
         if !state.position.has_consistent_state() {
             return Err(PlaceHyperliquidPerpOrderError::InconsistentPositionState);
         }
-        if state.position.leverage_value == 0 {
+        if state.position.leverage == 0 {
             return Err(PlaceHyperliquidPerpOrderError::InvalidLeverage);
         }
         if cmd.reduce_only {
@@ -276,7 +276,7 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
         match derive_place_intent(cmd.side(), size, &state.position)? {
             DerivedPerpOrderIntent::Open | DerivedPerpOrderIntent::Increase => {
                 let required_margin =
-                    required_position_margin(size, price, state.position.leverage_value)
+                    required_position_margin(size, price, state.position.leverage)
                         .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
                 if !state.margin_balance.can_reserve(required_margin) {
                     return Err(PlaceHyperliquidPerpOrderError::InsufficientMarginBalance);
@@ -311,7 +311,7 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
                 DerivedPerpOrderIntent::Reduce => PlaceHyperliquidPerpOrderIntent::ReducePosition,
                 DerivedPerpOrderIntent::Open => {
                     let required_margin =
-                        required_position_margin(size, price, state.position.leverage_value)
+                        required_position_margin(size, price, state.position.leverage)
                             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
                     PlaceHyperliquidPerpOrderIntent::OpenPosition {
                         margin_asset_id: state.margin_asset_id.clone(),
@@ -321,7 +321,7 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
                 }
                 DerivedPerpOrderIntent::Increase => {
                     let required_margin =
-                        required_position_margin(size, price, state.position.leverage_value)
+                        required_position_margin(size, price, state.position.leverage)
                             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
                     PlaceHyperliquidPerpOrderIntent::IncreasePosition {
                         margin_asset_id: state.margin_asset_id.clone(),

@@ -404,7 +404,14 @@ impl HyperliquidPerpOrder {
         self.sz * mark_price
     }
 
-    
+    // 维持保证金 MM
+    // 当前权益
+
+    // mm_required  = tiered_mm(notional)                 // 维持保证金（按档位）
+    // equity       = margin_backing(position) + uPnL     // 支撑这个仓位的权益
+
+
+
 
     /// 返回订单当前是否可进入撮合。
     pub fn is_matchable(&self) -> bool {

@@ -363,7 +363,7 @@ fn validate_position_for_trade(
     {
         return Err(SettleHyperliquidPerpTradeError::PositionMismatch);
     }
-    if position.leverage_value == 0 {
+    if position.leverage == 0 {
         return Err(SettleHyperliquidPerpTradeError::InvalidLeverage);
     }
     if !position.has_consistent_state() {

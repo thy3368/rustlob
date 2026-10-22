@@ -1,6 +1,5 @@
 pub mod balance_ledger_reason;
 pub mod balance_ledger_v2;
-pub mod perp_position;
 pub mod spot_account;
 pub mod spot_balance;
 

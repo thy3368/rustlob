@@ -169,7 +169,7 @@ impl HyperliquidPerpTrade {
                 position.coin.clone(),
                 signed_size_delta,
                 self.price,
-                position.leverage_value,
+                position.leverage,
                 position.margin_mode,
             );
         }
@@ -212,12 +212,12 @@ impl HyperliquidPerpTrade {
             next_position.coin.clone(),
             remaining_delta,
             self.price,
-            next_position.leverage_value,
+            next_position.leverage,
             next_position.margin_mode,
         )?;
 
         next_position.signed_size = opened_position.signed_size;
-        next_position.entry_price = opened_position.entry_price;
+        next_position.entry_px = opened_position.entry_px;
         next_position.cumulative_realized_pnl = opened_position.cumulative_realized_pnl;
 
         let required_margin_delta = close_outcome
@@ -578,13 +578,13 @@ mod tests {
 
         assert!(settlement.taker_position_after.is_long());
         assert_eq!(settlement.taker_position_after.qty(), 2);
-        assert_eq!(settlement.taker_position_after.entry_price, 100);
+        assert_eq!(settlement.taker_position_after.entry_px, 100);
         assert_eq!(settlement.taker_position_after.version, 1);
         assert_eq!(settlement.taker_outcome.realized_pnl_delta, 0);
         assert_eq!(settlement.taker_outcome.required_margin_delta, 20);
         assert!(settlement.maker_position_after.is_short());
         assert_eq!(settlement.maker_position_after.qty(), 2);
-        assert_eq!(settlement.maker_position_after.entry_price, 100);
+        assert_eq!(settlement.maker_position_after.entry_px, 100);
         assert_eq!(settlement.maker_position_after.version, 1);
         assert_eq!(settlement.maker_outcome.realized_pnl_delta, 0);
         assert_eq!(settlement.maker_outcome.required_margin_delta, 20);
@@ -597,7 +597,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(settlement.taker_position_after.signed_size, 4);
-        assert_eq!(settlement.taker_position_after.entry_price, 90);
+        assert_eq!(settlement.taker_position_after.entry_px, 90);
         assert_eq!(settlement.taker_position_after.version, 4);
         assert_eq!(settlement.taker_outcome.realized_pnl_delta, 0);
         assert_eq!(settlement.taker_outcome.required_margin_delta, 20);
@@ -613,12 +613,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(settlement.taker_position_after.signed_size, 3);
-        assert_eq!(settlement.taker_position_after.entry_price, 80);
+        assert_eq!(settlement.taker_position_after.entry_px, 80);
         assert_eq!(settlement.taker_position_after.cumulative_realized_pnl, 40);
         assert_eq!(settlement.taker_outcome.realized_pnl_delta, 40);
         assert_eq!(settlement.taker_outcome.required_margin_delta, -16);
         assert_eq!(settlement.maker_position_after.signed_size, -3);
-        assert_eq!(settlement.maker_position_after.entry_price, 120);
+        assert_eq!(settlement.maker_position_after.entry_px, 120);
         assert_eq!(settlement.maker_position_after.cumulative_realized_pnl, 40);
         assert_eq!(settlement.maker_outcome.realized_pnl_delta, 40);
         assert_eq!(settlement.maker_outcome.required_margin_delta, -24);
@@ -631,7 +631,7 @@ mod tests {
             .unwrap();
 
         assert!(settlement.taker_position_after.is_flat());
-        assert_eq!(settlement.taker_position_after.entry_price, 0);
+        assert_eq!(settlement.taker_position_after.entry_px, 0);
         assert_eq!(settlement.taker_position_after.version, 4);
         assert_eq!(settlement.taker_position_after.cumulative_realized_pnl, 40);
         assert_eq!(settlement.taker_outcome.realized_pnl_delta, 40);
@@ -656,14 +656,14 @@ mod tests {
 
         assert!(settlement.taker_position_after.is_short());
         assert_eq!(settlement.taker_position_after.qty(), 3);
-        assert_eq!(settlement.taker_position_after.entry_price, 90);
+        assert_eq!(settlement.taker_position_after.entry_px, 90);
         assert_eq!(settlement.taker_position_after.version, 4);
         assert_eq!(settlement.taker_position_after.cumulative_realized_pnl, 0);
         assert_eq!(settlement.taker_outcome.realized_pnl_delta, -20);
         assert_eq!(settlement.taker_outcome.required_margin_delta, 7);
         assert!(settlement.maker_position_after.is_long());
         assert_eq!(settlement.maker_position_after.qty(), 3);
-        assert_eq!(settlement.maker_position_after.entry_price, 90);
+        assert_eq!(settlement.maker_position_after.entry_px, 90);
         assert_eq!(settlement.maker_position_after.cumulative_realized_pnl, 0);
         assert_eq!(settlement.maker_outcome.realized_pnl_delta, -20);
         assert_eq!(settlement.maker_outcome.required_margin_delta, 11);
@@ -688,7 +688,7 @@ mod tests {
     #[test]
     fn settle_into_positions_rejects_inconsistent_position_state() {
         let mut inconsistent = empty_position("winner");
-        inconsistent.entry_price = 100;
+        inconsistent.entry_px = 100;
 
         assert_eq!(
             trade().settle_into_positions(&inconsistent, &empty_position("loser")),

@@ -22,7 +22,7 @@ pub use account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2 as BalanceLedgerEntry,
     BalanceLedgerV2,
 };
-pub use account::perp_position::{
+pub use perp::trade::perp_position::{
     HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPositionError,
     HyperliquidPerpPositionLeverageOutcome, HyperliquidPerpPositionStatus,
     HyperliquidPerpPositionTradeOutcome, PerpPosition, required_position_margin,
