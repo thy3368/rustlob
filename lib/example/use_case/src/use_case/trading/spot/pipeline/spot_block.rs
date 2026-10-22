@@ -10,10 +10,10 @@ use thiserror::Error;
 use crate::entity::{SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderType, SpotOrderV2};
 use crate::{
     ActivateMatchSpotOrderV2Changes, ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error,
-    ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd, ActivateSpotOrderV2Error,
-    ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase, CancelSpotOrderV2Changes,
-    CancelSpotOrderV2Cmd, CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
+    ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase, ActivateSpotOrderV2Changes,
+    ActivateSpotOrderV2Cmd, ActivateSpotOrderV2Error, ActivateSpotOrderV2State,
+    ActivateSpotOrderV2UseCase, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
+    CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
     ModifySpotOrderV2Error, ModifySpotOrderV2State, ModifySpotOrderV2UseCase, OrderId,
     PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2State,
@@ -26,7 +26,6 @@ pub struct SpotBlockCmd {
 }
 
 // LogEntry<SpotBlockCommand>
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotBlockCommand {
@@ -256,7 +255,9 @@ impl SpotBlockUseCase {
                     }
                 }
 
-                _ => {}
+                SpotBlockCommand::Activate(_) => {
+                    unreachable!("activate commands are handled later")
+                }
             };
             item_results.push(item_result);
         }
@@ -291,7 +292,66 @@ impl SpotBlockUseCase {
             };
             item_results.push(item_result);
         }
-        // TODO: 自动扫描并触发满足条件的条件单。
+        let mut triggered = std::collections::HashSet::new();
+        for result in item_results.iter() {
+            if let SpotBlockItemResult::Applied {
+                command: SpotBlockCommand::Activate(command),
+                ..
+            } = result
+            {
+                triggered.insert(command.order_id);
+            }
+        }
+        let sources = item_results
+            .iter()
+            .filter_map(|result| match result {
+                SpotBlockItemResult::Applied {
+                    command_index,
+                    command: SpotBlockCommand::PlaceMatch(command),
+                    changes: SpotBlockAppliedChanges::PlaceMatch(changes),
+                } => Some((*command_index, command.clone(), changes.clone())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for (source_index, source_command, changes) in sources {
+            let trades = match &changes {
+                PlaceMatchSpotOrderV2Changes::SinglePlacedOnly { .. } => &[][..],
+                PlaceMatchSpotOrderV2Changes::SinglePlacedAndMatched { match_changes, .. }
+                | PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
+                    match_changes, ..
+                } => match_changes.created_trades(),
+            };
+            for trade in trades {
+                for pending in working.orders.clone() {
+                    if pending.status != SpotOrderStatus::Pending
+                        || !pending.trades_asset(trade.asset)
+                        || !pending.is_triggered_by_market_price(trade.price)
+                        || triggered.contains(&pending.order_id())
+                    {
+                        continue;
+                    }
+                    let activate_cmd = ActivateMatchSpotOrderV2Cmd {
+                        party_id: pending.account_id().to_string(),
+                        asset: trade.asset,
+                        order_id: pending.order_id(),
+                    };
+                    let entry = common_entity::LogEntrySequencer::derive(cmd, activate_cmd);
+                    match apply_activate_match(&entry, given_state, working) {
+                        Ok(changes) => item_results.push(SpotBlockItemResult::Applied {
+                            command_index: source_index,
+                            command: SpotBlockCommand::PlaceMatch(source_command.clone()),
+                            changes: SpotBlockAppliedChanges::ActivateMatch(changes),
+                        }),
+                        Err(error) => item_results.push(SpotBlockItemResult::Rejected {
+                            command_index: source_index,
+                            command: SpotBlockCommand::PlaceMatch(source_command.clone()),
+                            error,
+                        }),
+                    }
+                    triggered.insert(pending.order_id());
+                }
+            }
+        }
     }
 }
 
@@ -489,6 +549,68 @@ fn apply_activate(
     Ok(changes)
 }
 
+fn apply_activate_match(
+    cmd: &LogEntry<ActivateMatchSpotOrderV2Cmd>,
+    block_state: &SpotBlockState,
+    working: &mut WorkingSpotBlockState,
+) -> Result<ActivateMatchSpotOrderV2Changes, SpotBlockItemError> {
+    ActivateMatchSpotOrderV2UseCase
+        .check_command(cmd)
+        .map_err(SpotBlockItemError::ActivateMatch)?;
+    let pending_order = working.order_by_order_id(cmd.payload().order_id)?;
+    let state = ActivateMatchSpotOrderV2State {
+        pending_order: pending_order.clone(),
+        maker_orders: maker_candidates_for_open_match(&pending_order, &working.orders),
+        settlement_balances: working.balances.clone(),
+        base_asset_id: block_state.base_asset_id.clone(),
+        quote_asset_id: block_state.quote_asset_id.clone(),
+        fee_account_id: block_state.fee_account_id.clone(),
+        maker_fee_bps: block_state.maker_fee_bps,
+        taker_fee_bps: block_state.taker_fee_bps,
+    };
+    ActivateMatchSpotOrderV2UseCase
+        .validate_state_given(cmd, &state)
+        .map_err(SpotBlockItemError::ActivateMatch)?;
+    let changes = ActivateMatchSpotOrderV2UseCase
+        .compute_state_diff(cmd, state)
+        .map_err(SpotBlockItemError::ActivateMatch)?;
+    working
+        .replace_order(changes.activation_changes.updated_order.after.clone())
+        .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
+    for maker in changes.match_changes.updated_maker_orders() {
+        working
+            .replace_order(maker.after.clone())
+            .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
+    }
+    let balances = changes
+        .match_changes
+        .updated_balances()
+        .iter()
+        .map(|pair| pair.after.clone())
+        .collect::<Vec<_>>();
+    if !balances.is_empty() {
+        working
+            .replace_balances(&balances)
+            .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
+    } else {
+        let balances = changes
+            .activation_changes
+            .updated_balances
+            .iter()
+            .map(|pair| pair.after.clone())
+            .collect::<Vec<_>>();
+        working
+            .replace_balances(&balances)
+            .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
+    }
+    if let Some(taker) = changes.match_changes.taker_order_after() {
+        working
+            .replace_order(taker.clone())
+            .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
+    }
+    Ok(changes)
+}
+
 fn apply_modify(
     cmd: &LogEntry<ModifySpotOrderV2Cmd>,
     block_state: &SpotBlockState,
@@ -542,9 +664,6 @@ fn apply_place_match(
     apply_place_match_changes(&changes, working)?;
     Ok(changes)
 }
-
-
-
 
 fn apply_place_match_changes(
     changes: &PlaceMatchSpotOrderV2Changes,

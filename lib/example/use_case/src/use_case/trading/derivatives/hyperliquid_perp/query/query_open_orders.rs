@@ -155,8 +155,8 @@ impl QueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
                     side: order.side,
                     execution: order.execution,
                     time_in_force: order.time_in_force,
-                    qty: order.qty,
-                    filled_qty: order.filled_qty,
+                    qty: order.sz,
+                    filled_qty: order.filled_sz,
                     remaining_qty,
                     status: order.status,
                     reduce_only: order.reduce_only,
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn validate_rejects_inconsistent_order_state() {
         let mut order = open_order(1, "BTC-PERP");
-        order.filled_qty = 9;
+        order.filled_sz = 9;
 
         let result = QueryHyperliquidPerpOpenOrdersUseCase.validate_against_read_model(
             &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn compute_view_rejects_remaining_qty_overflow() {
         let mut order = open_order(1, "BTC-PERP");
-        order.filled_qty = 9;
+        order.filled_sz = 9;
 
         let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_view(
             &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },

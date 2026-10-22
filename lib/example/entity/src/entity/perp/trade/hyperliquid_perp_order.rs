@@ -225,14 +225,14 @@ pub struct HyperliquidPerpOrder {
     /// 限价订单有效方式。
     pub time_in_force: HyperliquidPerpOrderTimeInForce,
     /// 合约数量。
-    pub qty: u64,
+    pub sz: u64,
 
     // /// 冻结费
     // pub taker_max_fee: u64,
     /// 订单内保存的保证金冻结 MI 事实；不新增净敞口的订单没有新冻结。//todo delete
     pub reservation: Option<Reservation>,
     /// 已成交数量。
-    pub filled_qty: u64,
+    pub filled_sz: u64,
     /// 订单生命周期状态。
     pub status: HyperliquidPerpOrderStatus,
     /// 是否只减仓。
@@ -277,9 +277,9 @@ impl HyperliquidPerpOrder {
             side,
             execution,
             time_in_force,
-            qty,
+            sz: qty,
             reservation,
-            filled_qty: 0,
+            filled_sz: 0,
             status: HyperliquidPerpOrderStatus::Open,
             reduce_only,
             is_liquidation: false,
@@ -381,7 +381,7 @@ impl HyperliquidPerpOrder {
         filled_qty: u64,
     ) -> Self {
         self.status = status;
-        self.filled_qty = filled_qty;
+        self.filled_sz = filled_qty;
         self
     }
 
@@ -392,8 +392,19 @@ impl HyperliquidPerpOrder {
 
     /// 返回订单剩余可成交数量；已成交数量大于订单数量时返回 `None`。
     pub fn remaining_qty(&self) -> Option<u64> {
-        self.qty.checked_sub(self.filled_qty)
+        self.sz.checked_sub(self.filled_sz)
     }
+
+    /// 初始保证金，派出计算不存
+    pub fn order_im(&self, mark_price: u64, leverage: u64) -> u64 {
+        self.sz * mark_price / leverage
+    }
+
+    pub fn notional(&self, mark_price: u64) -> u64 {
+        self.sz * mark_price
+    }
+
+    
 
     /// 返回订单当前是否可进入撮合。
     pub fn is_matchable(&self) -> bool {
@@ -406,13 +417,13 @@ impl HyperliquidPerpOrder {
     /// 返回生命周期状态和成交数量是否一致。
     pub fn has_consistent_execution_state(&self) -> bool {
         match self.status {
-            HyperliquidPerpOrderStatus::Open => self.filled_qty == 0,
+            HyperliquidPerpOrderStatus::Open => self.filled_sz == 0,
             HyperliquidPerpOrderStatus::PartiallyFilled => {
-                0 < self.filled_qty && self.filled_qty < self.qty
+                0 < self.filled_sz && self.filled_sz < self.sz
             }
-            HyperliquidPerpOrderStatus::Filled => self.filled_qty == self.qty,
-            HyperliquidPerpOrderStatus::Canceled => self.filled_qty <= self.qty,
-            HyperliquidPerpOrderStatus::Rejected => self.filled_qty == 0,
+            HyperliquidPerpOrderStatus::Filled => self.filled_sz == self.sz,
+            HyperliquidPerpOrderStatus::Canceled => self.filled_sz <= self.sz,
+            HyperliquidPerpOrderStatus::Rejected => self.filled_sz == 0,
         }
     }
 
@@ -449,8 +460,8 @@ impl FieldDiff for HyperliquidPerpOrder {
             EntityFieldChange::new("execution", "", self.execution.as_str()),
             EntityFieldChange::new("time_in_force", "", self.time_in_force.as_str()),
             EntityFieldChange::new("price", "", self.order_price().to_string()),
-            EntityFieldChange::new("qty", "", self.qty.to_string()),
-            EntityFieldChange::new("filled_qty", "", self.filled_qty.to_string()),
+            EntityFieldChange::new("qty", "", self.sz.to_string()),
+            EntityFieldChange::new("filled_qty", "", self.filled_sz.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
             EntityFieldChange::new("reduce_only", "", self.reduce_only.to_string()),
             EntityFieldChange::new("is_liquidation", "", self.is_liquidation.to_string()),
@@ -531,7 +542,7 @@ impl FieldDiff for HyperliquidPerpOrder {
             self.order_price().to_string(),
             other.order_price().to_string(),
         );
-        push_change(&mut changes, "qty", self.qty.to_string(), other.qty.to_string());
+        push_change(&mut changes, "qty", self.sz.to_string(), other.sz.to_string());
         push_change(
             &mut changes,
             "reservation_id",
@@ -612,8 +623,8 @@ impl FieldDiff for HyperliquidPerpOrder {
         push_change(
             &mut changes,
             "filled_qty",
-            self.filled_qty.to_string(),
-            other.filled_qty.to_string(),
+            self.filled_sz.to_string(),
+            other.filled_sz.to_string(),
         );
         push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         push_change(

@@ -232,15 +232,15 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
 
             let mut next_maker_order = maker_order.clone();
             let next_maker_filled = next_maker_order
-                .filled_qty
+                .filled_sz
                 .checked_add(trade_qty)
                 .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-            let next_maker_status = matched_status(next_maker_order.qty, next_maker_filled);
+            let next_maker_status = matched_status(next_maker_order.sz, next_maker_filled);
             let next_maker_version = next_maker_order
                 .version
                 .checked_add(1)
                 .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-            next_maker_order.filled_qty = next_maker_filled;
+            next_maker_order.filled_sz = next_maker_filled;
             next_maker_order.status = next_maker_status;
             next_maker_order.version = next_maker_version;
             updated_maker_orders
@@ -259,15 +259,15 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
         }
 
         let next_taker_filled = taker_order_after
-            .filled_qty
+            .filled_sz
             .checked_add(total_taker_fill)
             .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-        let next_taker_status = matched_status(taker_order_after.qty, next_taker_filled);
+        let next_taker_status = matched_status(taker_order_after.sz, next_taker_filled);
         let next_taker_version = taker_order_after
             .version
             .checked_add(1)
             .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-        taker_order_after.filled_qty = next_taker_filled;
+        taker_order_after.filled_sz = next_taker_filled;
         taker_order_after.status = next_taker_status;
         taker_order_after.version = next_taker_version;
 
@@ -626,7 +626,7 @@ mod tests {
         assert_eq!(changes.created_trades.len(), 2);
         assert_eq!(changes.created_trades[0].created_at, 1_717_171_717_000);
         assert_eq!(changes.created_trades[1].created_at, 1_717_171_717_000);
-        assert_eq!(changes.updated_taker_order.after.filled_qty, 3);
+        assert_eq!(changes.updated_taker_order.after.filled_sz, 3);
         assert_trade_event(
             &events[0],
             "match-1-1",
@@ -1076,7 +1076,7 @@ mod tests {
         assert_eq!(changes.created_trades.len(), 2);
         assert!(changes.created_trades.iter().all(|trade| trade.created_at == 1_717_171_717_000));
         assert_eq!(changes.updated_taker_order.after.order_id, TAKER_ORDER_ID);
-        assert_eq!(changes.updated_taker_order.after.filled_qty, 3);
+        assert_eq!(changes.updated_taker_order.after.filled_sz, 3);
         assert_eq!(
             changes.updated_maker_orders.iter().map(|pair| pair.after.order_id).collect::<Vec<_>>(),
             vec![MAKER_1_ORDER_ID, MAKER_2_ORDER_ID]

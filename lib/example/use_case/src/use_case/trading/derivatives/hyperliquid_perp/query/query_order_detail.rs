@@ -140,8 +140,8 @@ impl QueryUseCase for QueryHyperliquidPerpOrderDetailUseCase {
             side: order.side,
             execution: order.execution,
             time_in_force: order.time_in_force,
-            qty: order.qty,
-            filled_qty: order.filled_qty,
+            qty: order.sz,
+            filled_qty: order.filled_sz,
             status: order.status,
             reduce_only: order.reduce_only,
             client_order_id: order.client_order_id,
@@ -255,7 +255,7 @@ mod tests {
     fn validate_rejects_inconsistent_order_state() {
         let mut order = sample_order();
         order.status = HyperliquidPerpOrderStatus::Filled;
-        order.filled_qty = 1;
+        order.filled_sz = 1;
 
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
             &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },

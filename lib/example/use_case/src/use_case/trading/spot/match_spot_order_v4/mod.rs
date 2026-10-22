@@ -7,7 +7,7 @@ pub use match_order::{
     MatchSpotOrderV4State, MatchSpotOrderV4UseCase,
 };
 pub use settle_trades::{
-    SettleMatchedSpotTradesV4AfterChanges, SettleSpotTradesV4Changes,
-    SettleSpotTradesV4Cmd, SettleSpotTradesV4State, SettleSpotTradesV4UseCase,
+    SettleMatchedSpotTradesV4AfterChanges, SettleSpotTradesV4Changes, SettleSpotTradesV4Cmd,
+    SettleSpotTradesV4State, SettleSpotTradesV4UseCase,
 };
 pub use support::{MatchSpotOrderV4Error, SettleMatchedSpotTradesV4Error};

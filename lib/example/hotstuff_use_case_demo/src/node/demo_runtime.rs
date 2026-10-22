@@ -175,9 +175,7 @@ impl SpotOrderApp {
                 SpotBlockCommand::Cancel(command) => {
                     updates.insert(cancel_result_key(command), value.clone());
                 }
-                SpotBlockCommand::Activate(_)
-                | SpotBlockCommand::Modify(_)
-                | SpotBlockCommand::Match(_) => {}
+                SpotBlockCommand::Activate(_) | SpotBlockCommand::Modify(_) => {}
             }
         }
 
@@ -238,15 +236,13 @@ impl SpotBlockExecutionSummary {
             SpotBlockCommand::PlaceMatch(command) => place_order_cmd(command),
             SpotBlockCommand::Cancel(_)
             | SpotBlockCommand::Activate(_)
-            | SpotBlockCommand::Modify(_)
-            | SpotBlockCommand::Match(_) => None,
+            | SpotBlockCommand::Modify(_) => None,
         });
         let first_cancel = requests.iter().find_map(|request| match request {
             SpotBlockCommand::Cancel(command) => Some(command),
             SpotBlockCommand::Activate(_)
             | SpotBlockCommand::PlaceMatch(_)
-            | SpotBlockCommand::Modify(_)
-            | SpotBlockCommand::Match(_) => None,
+            | SpotBlockCommand::Modify(_) => None,
         });
 
         Self {

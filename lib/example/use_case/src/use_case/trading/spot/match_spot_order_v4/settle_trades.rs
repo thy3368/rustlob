@@ -30,8 +30,8 @@ impl Default for SettleSpotTradesV4Cmd {
 pub enum SettleMatchedSpotTradesV4AfterChanges {
     Unchanged,
     Settled {
-        taker_order_after: SpotOrderV2,//todo delete
-        maker_orders_after: Vec<SpotOrderV2>,//todo delete
+        taker_order_after: SpotOrderV2,       //todo delete
+        maker_orders_after: Vec<SpotOrderV2>, //todo delete
         balances_after: Vec<SpotBalance>,
         created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
@@ -46,8 +46,8 @@ pub enum SettleMatchedSpotTradesV4AfterChanges {
 pub enum SettleSpotTradesV4Changes {
     Unchanged,
     Settled {
-        updated_taker_order: UpdatedEntityPair<SpotOrderV2>,//todo delete
-        updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,//todo delete
+        updated_taker_order: UpdatedEntityPair<SpotOrderV2>, //todo delete
+        updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>, //todo delete
         updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
         created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
@@ -100,10 +100,10 @@ impl ReplayableChanges for SettleSpotTradesV4Changes {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleSpotTradesV4State {
     /// MatchV4 产出的 taker 订单 after；settlement 会在此基础上消费/释放 reservation。
-    pub taker_order: SpotOrderV2,//todo delete
+    pub taker_order: SpotOrderV2, //todo delete
     /// MatchV4 产出的 maker 订单 after 列表，顺序必须与成交 maker 优先级一致。
-    pub maker_orders: Vec<SpotOrderV2>,//todo delete
-    pub created_trades: Vec<SpotTrade>,//todo 可能改成单trade
+    pub maker_orders: Vec<SpotOrderV2>, //todo delete
+    pub created_trades: Vec<SpotTrade>, //todo 可能改成单trade
     pub settlement_balances: Vec<SpotBalance>,
     pub base_asset_id: String,
     pub quote_asset_id: String,

@@ -35,8 +35,8 @@ pub use match_spot_order_v3::{
 pub use match_spot_order_v4::{
     MatchSpotOrderV4AfterChanges, MatchSpotOrderV4Changes, MatchSpotOrderV4Cmd,
     MatchSpotOrderV4Error, MatchSpotOrderV4State, MatchSpotOrderV4UseCase,
-    SettleMatchedSpotTradesV4AfterChanges, SettleSpotTradesV4Changes,
-    SettleSpotTradesV4Cmd, SettleMatchedSpotTradesV4Error, SettleSpotTradesV4State,
+    SettleMatchedSpotTradesV4AfterChanges, SettleMatchedSpotTradesV4Error,
+    SettleSpotTradesV4Changes, SettleSpotTradesV4Cmd, SettleSpotTradesV4State,
     SettleSpotTradesV4UseCase,
 };
 pub use modify_spot_order_v2::{

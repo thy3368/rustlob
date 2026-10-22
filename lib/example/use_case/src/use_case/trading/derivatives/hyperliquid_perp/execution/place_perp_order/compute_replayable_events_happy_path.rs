@@ -186,9 +186,9 @@ fn assert_order_snapshot(
     assert_eq!(order.side, expected_side);
     assert_eq!(order.execution, expected_execution);
     assert_eq!(order.time_in_force, expected_time_in_force);
-    assert_eq!(order.qty, expected_qty);
+    assert_eq!(order.sz, expected_qty);
     assert_eq!(order.reduce_only, expected_reduce_only);
-    assert_eq!(order.filled_qty, 0);
+    assert_eq!(order.filled_sz, 0);
     assert_eq!(order.version, 1);
     assert_eq!(order.reservation.is_some(), !expected_reduce_only);
 }

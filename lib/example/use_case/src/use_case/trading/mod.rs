@@ -39,8 +39,8 @@ pub use spot::{
     PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, PlaceOnlySpotOrderV2State,
     PlaceOnlySpotOrderV2UseCase, SettleMatchedSpotTradesV4AfterChanges,
-    SettleSpotTradesV4Changes, SettleSpotTradesV4Cmd, SettleMatchedSpotTradesV4Error,
-    SettleSpotTradesV4State, SettleSpotTradesV4UseCase, SpotBlockAppliedChanges,
-    SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError, SpotBlockItemError,
-    SpotBlockItemResult, SpotBlockState, SpotBlockUseCase,
+    SettleMatchedSpotTradesV4Error, SettleSpotTradesV4Changes, SettleSpotTradesV4Cmd,
+    SettleSpotTradesV4State, SettleSpotTradesV4UseCase, SpotBlockAppliedChanges, SpotBlockChanges,
+    SpotBlockCmd, SpotBlockCommand, SpotBlockError, SpotBlockItemError, SpotBlockItemResult,
+    SpotBlockState, SpotBlockUseCase,
 };
