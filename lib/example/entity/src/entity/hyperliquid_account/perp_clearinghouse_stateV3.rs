@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::hyperliquid_account::position_v3::{MarginMode, PositionV3};
-use crate::perp::trade::perp_position_v2::PerpPositionV2;
+use crate::perp::trade::perp_position_v2::{MarginModeV2, PerpPositionV2};
 
 struct PerpClearinghouseStateV3 {
     margin_summary: MarginSummary,       // 全账户（cross + isolated 合计）
@@ -84,8 +83,8 @@ impl PerpClearinghouseStateV3 {
     }
 
     /// 找某个币的仓位
-    fn position_of(&self, coin: &str) -> Option<&PositionV3> {
-        self.asset_positions.iter().find(|p| p.position.coin == coin).map(|p| &p.position)
+    fn position_of(&self, coin: &str) -> Option<&PerpPositionV2> {
+        self.asset_positions.iter().find(|p| p.position.coin() == coin).map(|p| &p.position)
     }
 }
 
@@ -103,13 +102,13 @@ impl PerpClearinghouseStateV3 {
     }
 
     /// 挑最该先平的 cross 仓位（按 notional 大/亏损大）
-    fn worst_cross_position(&self, marks: &HashMap<String, Decimal>) -> Option<&PositionV3> {
+    fn worst_cross_position(&self, marks: &HashMap<String, Decimal>) -> Option<&PerpPositionV2> {
         self.asset_positions
             .iter()
-            .filter(|ap| ap.position.leverage.leverage_type == MarginMode::Cross)
+            .filter(|ap| ap.position.margin_mode() == MarginModeV2::Cross)
             .max_by(|a, b| {
-                let na = a.position.notional(marks[&a.position.coin]);
-                let nb = b.position.notional(marks[&b.position.coin]);
+                let na = a.position.notional(marks[a.position.coin()]);
+                let nb = b.position.notional(marks[b.position.coin()]);
                 na.cmp(&nb)
             })
             .map(|ap| &ap.position)

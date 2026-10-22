@@ -11,7 +11,7 @@ common_entity = { package = "entity", path = "../../common/entity" }
 rust_decimal = { version = "1.41", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
-
+lob_repo_v2 = { path = "../../common/lob_repo_v2" }
 [dev-dependencies]
 proptest = "1"
 serde_json = "1"

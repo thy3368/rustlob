@@ -3,6 +3,22 @@ use std::collections::BTreeMap;
 use crate::perp::trade::perp_position_v2::PerpPositionV2;
 use crate::{Balance, SpotAccount};
 
+
+/// 三户模型
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AllMatchState {
+    /// 每owner一个state 三户模型
+    pub spot_lob: BTreeMap<u64, LocalLobBtree>,
+
+    /// 每owner一个state 三户模型
+    pub perp_lob: BTreeMap<u64, LocalLobBtree>,
+
+
+
+}
+
+
+
 /// 三户模型
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllClearinghouseState2 {

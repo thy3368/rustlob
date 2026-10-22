@@ -1,5 +1,5 @@
-use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -168,6 +168,17 @@ impl PerpPositionV2 {
     pub fn quantity(&self) -> Decimal {
         self.szi.abs()
     }
+
+    /// 现值
+    pub fn notional(&self, mark_price: Decimal) -> Decimal {
+        self.szi.abs() * mark_price
+    }
+
+    /// 浮盈
+    pub fn unrealized_pnl(&self, mark_price: Decimal) -> Decimal {
+        self.szi.abs() * (mark_price - self.entry_px)
+    }
+
     pub fn side_label(&self) -> &'static str {
         if self.is_long() {
             "long"
