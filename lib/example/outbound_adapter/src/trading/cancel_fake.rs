@@ -5,7 +5,7 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
-    CancelSpotOrderV2UseCase, SpotBalance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    CancelSpotOrderV2UseCase, Balance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -74,7 +74,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         order.updated_at = 1;
 
         Ok(CancelSpotOrderV2State {
-            balances: vec![SpotBalance::new(
+            balances: vec![Balance::new(
                 stable_string_entity_id(request.party_id.as_str()),
                 stable_string_entity_id(request.party_id.as_str()),
                 stable_string_entity_id("USDT"),

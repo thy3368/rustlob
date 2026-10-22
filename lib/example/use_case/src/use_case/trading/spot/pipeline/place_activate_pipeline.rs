@@ -4,7 +4,7 @@ use common_entity::{
 };
 use thiserror::Error;
 
-use crate::entity::{SpotBalance, SpotOrderV2};
+use crate::entity::{Balance, SpotOrderV2};
 use crate::{
     ActivateMatchSpotOrderV2AfterChanges, ActivateMatchSpotOrderV2Changes,
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error, ActivateMatchSpotOrderV2State,
@@ -19,7 +19,7 @@ use crate::{
 /// 的场景。调用方负责加载订单簿、结算余额和待触发订单；本用例不访问存储。
 pub struct PlaceActivateV2State {
     pub maker_orders: Vec<SpotOrderV2>,
-    pub settlement_balances: Vec<SpotBalance>,
+    pub settlement_balances: Vec<Balance>,
     pub fee_account_id: String,
     pub base_asset_id: String,
     pub quote_asset_id: String,
@@ -231,7 +231,7 @@ fn place_match_trades_after(
 
 fn update_working_state(
     makers: &mut Vec<SpotOrderV2>,
-    balances: &mut Vec<SpotBalance>,
+    balances: &mut Vec<Balance>,
     after: &ActivateMatchSpotOrderV2AfterChanges,
 ) {
     use crate::MatchSpotOrderV3AfterChanges;

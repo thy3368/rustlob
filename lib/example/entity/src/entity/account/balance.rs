@@ -27,7 +27,7 @@ pub enum BalanceError {
 ///
 /// 一个账户可以拥有多条 `Balance`：例如 BTC、USDT、USDC 各一条。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotBalance {
+pub struct Balance {
     /// 用户 ID 或业务主体 ID。
     pub party_id: u64,
     /// 账户 ID。
@@ -53,7 +53,7 @@ pub struct SpotBalance {
     pub version: u64,
 }
 
-impl SpotBalance {
+impl Balance {
     /// 从已经校验过的业务事实或回放事件构造资产余额。
     pub fn new(
         party_id: u64,
@@ -216,7 +216,7 @@ impl SpotBalance {
     // todo 增加的能力 冻结 （100）， 解冻支付（20，80）
 }
 
-impl FieldDiff for SpotBalance {
+impl FieldDiff for Balance {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("party_id", "", self.party_id.to_string()),
@@ -279,13 +279,13 @@ impl FieldDiff for SpotBalance {
     }
 }
 
-impl common_entity::Shard for SpotBalance {
+impl common_entity::Shard for Balance {
     fn partition(&self) -> u8 {
         todo!()
     }
 }
 
-impl Entity for SpotBalance {
+impl Entity for Balance {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.business_entity_id())
     }

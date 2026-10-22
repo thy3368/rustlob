@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::entity::{
     HyperliquidPerpPositionError, HyperliquidPerpTrade, PerpPosition, SettlementTransferVoucher,
-    SpotBalance,
+    Balance,
 };
 use crate::support::concat3;
 
@@ -87,7 +87,7 @@ pub struct SettleHyperliquidPerpTradeState {
     /// 本批次涉及账户在成交合约上的仓位槽位；空仓但可创建仓位时传 `version == 0` 的 flat 槽位。
     pub positions: Vec<PerpPosition>,
     /// 本批次涉及账户的 Cross 保证金币种余额。
-    pub margin_balances: Vec<SpotBalance>,
+    pub margin_balances: Vec<Balance>,
     /// Cross 保证金币种，例如 `USDC`。
     pub margin_asset_id: String,
     /// 平台手续费账户 ID，用于 perp settlement voucher fee legs。
@@ -115,7 +115,7 @@ pub struct SettleHyperliquidPerpTradeChanges {
     /// 本批次仓位槽位的 before/after，顺序与输入状态稳定对齐。
     pub changed_positions: Vec<UpdatedEntityPair<PerpPosition>>,
     /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。
-    pub changed_margin_balances: Vec<UpdatedEntityPair<SpotBalance>>,
+    pub changed_margin_balances: Vec<UpdatedEntityPair<Balance>>,
 }
 
 impl ReplayableChanges for SettleHyperliquidPerpTradeChanges {
@@ -208,7 +208,7 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
                 .version
                 .checked_add(1)
                 .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            let next_balance = SpotBalance::new_with_snapshot_facts(
+            let next_balance = Balance::new_with_snapshot_facts(
                 balance.party_id,
                 balance.account_id,
                 balance.asset_id,
@@ -470,7 +470,7 @@ fn position_map(positions: impl Iterator<Item = PerpPosition>) -> BTreeMap<Strin
         .collect()
 }
 
-fn balance_map(balances: &[SpotBalance]) -> HashMap<String, &SpotBalance> {
+fn balance_map(balances: &[Balance]) -> HashMap<String, &Balance> {
     balances.iter().map(|balance| (balance.business_entity_id(), balance)).collect()
 }
 
@@ -562,8 +562,8 @@ mod tests {
         )
     }
 
-    fn balance(account_id: &str, available: u64, frozen: u64) -> SpotBalance {
-        SpotBalance::new(
+    fn balance(account_id: &str, available: u64, frozen: u64) -> Balance {
+        Balance::new(
             common_entity::stable_string_entity_id(account_id),
             common_entity::stable_string_entity_id(account_id),
             common_entity::stable_string_entity_id("USDC"),
@@ -576,7 +576,7 @@ mod tests {
     fn state(
         trades: Vec<HyperliquidPerpTrade>,
         positions: Vec<PerpPosition>,
-        balances: Vec<SpotBalance>,
+        balances: Vec<Balance>,
     ) -> SettleHyperliquidPerpTradeState {
         SettleHyperliquidPerpTradeState {
             trades,

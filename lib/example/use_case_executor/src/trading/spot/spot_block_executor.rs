@@ -42,7 +42,7 @@ mod tests {
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
         ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderId,
-        SpotBalance, SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError,
+        Balance, SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError,
         SpotBlockItemResult, SpotBlockState, SpotOrderSide, SpotOrderTif, SpotOrderType,
         SpotOrderV2,
     };
@@ -116,7 +116,7 @@ mod tests {
 
             Ok(SpotBlockState {
                 orders: vec![order],
-                balances: vec![SpotBalance::new(
+                balances: vec![Balance::new(
                     stable_string_entity_id("buyer"),
                     stable_string_entity_id("buyer"),
                     stable_string_entity_id("USDT"),

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, MarketRules, PlaceOnlySpotOrderV2Cmd,
-    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, SpotBalance, SpotOrderSide,
+    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, Balance, SpotOrderSide,
     SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use example_outbound_adapter::InMemoryPlaceOrderOutbound;
@@ -40,7 +40,7 @@ fn sell_order(id: u64) -> Result<SpotOrderV2, Box<dyn std::error::Error>> {
 
 fn outbound() -> Result<InMemoryPlaceOrderOutbound, Box<dyn std::error::Error>> {
     let out = InMemoryPlaceOrderOutbound::seeded(
-        SpotBalance::new(
+        Balance::new(
             stable_string_entity_id("buyer"),
             stable_string_entity_id("buyer"),
             stable_string_entity_id("BTC"),
@@ -48,7 +48,7 @@ fn outbound() -> Result<InMemoryPlaceOrderOutbound, Box<dyn std::error::Error>> 
             0,
             1,
         ),
-        SpotBalance::new(
+        Balance::new(
             stable_string_entity_id("buyer"),
             stable_string_entity_id("buyer"),
             stable_string_entity_id("USDT"),
@@ -58,7 +58,7 @@ fn outbound() -> Result<InMemoryPlaceOrderOutbound, Box<dyn std::error::Error>> 
         ),
         MarketRules { symbol: "BTCUSDT".into(), min_qty: 1 },
     )?;
-    out.seed_balance(SpotBalance::new(
+    out.seed_balance(Balance::new(
         stable_string_entity_id("seller"),
         stable_string_entity_id("seller"),
         stable_string_entity_id("BTC"),
@@ -66,7 +66,7 @@ fn outbound() -> Result<InMemoryPlaceOrderOutbound, Box<dyn std::error::Error>> 
         N,
         1,
     ))?;
-    out.seed_balance(SpotBalance::new(
+    out.seed_balance(Balance::new(
         stable_string_entity_id("seller"),
         stable_string_entity_id("seller"),
         stable_string_entity_id("USDT"),

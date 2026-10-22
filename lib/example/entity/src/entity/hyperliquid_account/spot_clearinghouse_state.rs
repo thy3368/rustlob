@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::entity::SpotBalance;
+use crate::entity::Balance;
 
 /// 子账户在现货清算域上的余额状态快照。
 ///
@@ -8,12 +8,12 @@ use crate::entity::SpotBalance;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotClearinghouseState {
     account_id: u64,
-    balances: BTreeMap<u64, SpotBalance>,
+    balances: BTreeMap<u64, Balance>,
 }
 
 impl SpotClearinghouseState {
     /// 从已校验事实装配子账户现货清算状态，映射键为资产 ID。
-    pub fn new(account_id: u64, balances: BTreeMap<u64, SpotBalance>) -> Self {
+    pub fn new(account_id: u64, balances: BTreeMap<u64, Balance>) -> Self {
         Self { account_id, balances }
     }
 
@@ -23,18 +23,18 @@ impl SpotClearinghouseState {
     }
 
     /// 返回资产 ID 到余额快照的映射。
-    pub fn balances(&self) -> &BTreeMap<u64, SpotBalance> {
+    pub fn balances(&self) -> &BTreeMap<u64, Balance> {
         &self.balances
     }
 
     /// 按资产 ID 查找余额快照。
-    pub fn balance_of(&self, asset_id: u64) -> Option<&SpotBalance> {
+    pub fn balance_of(&self, asset_id: u64) -> Option<&Balance> {
         self.balances.get(&asset_id)
     }
 
     /// 返回指定资产的总余额；若不存在该资产则返回零。
     pub fn total_balance_of(&self, asset_id: u64) -> u64 {
-        self.balance_of(asset_id).and_then(SpotBalance::total).unwrap_or_default()
+        self.balance_of(asset_id).and_then(Balance::total).unwrap_or_default()
     }
 
     /// 返回指定资产的可用余额；若不存在该资产则返回零。
@@ -47,8 +47,8 @@ impl SpotClearinghouseState {
 mod tests {
     use super::*;
 
-    fn balance(asset_id: u64, available: u64, frozen: u64) -> SpotBalance {
-        SpotBalance::new(1, 7, asset_id, available, frozen, 1)
+    fn balance(asset_id: u64, available: u64, frozen: u64) -> Balance {
+        Balance::new(1, 7, asset_id, available, frozen, 1)
     }
 
     #[test]

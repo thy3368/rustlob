@@ -4,7 +4,7 @@ use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
-    PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotBalance, SpotOrderV2,
+    PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Balance, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 
@@ -144,7 +144,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
         let base_asset_id = base_asset_id_for(symbol.as_str()).to_string();
         let quote_asset_id = quote_asset_id_for(symbol.as_str()).to_string();
         let settlement_balances = vec![
-            SpotBalance::new(
+            Balance::new(
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id(base_asset_id.as_str()),
@@ -152,7 +152,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
                 frozen_base,
                 version,
             ),
-            SpotBalance::new(
+            Balance::new(
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id(quote_asset_id.as_str()),
@@ -160,7 +160,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
                 frozen_quote,
                 version,
             ),
-            SpotBalance::new(
+            Balance::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(quote_asset_id.as_str()),

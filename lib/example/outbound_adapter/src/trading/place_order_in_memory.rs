@@ -2,7 +2,7 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::{Entity, stable_string_entity_id};
 use example_core_use_case::{
-    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotBalance,
+    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Balance,
     SpotOrderSide, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
@@ -40,7 +40,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         let quote_asset_id = quote_asset_id_for(&market_rules.symbol).to_string();
         let mut settlement_balances = state.balances.values().cloned().collect::<Vec<_>>();
         if !state.balances.contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, &quote_asset_id)) {
-            settlement_balances.push(example_core_use_case::SpotBalance::new(
+            settlement_balances.push(example_core_use_case::Balance::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(quote_asset_id.as_str()),
@@ -176,7 +176,7 @@ pub(crate) fn replay_events(
             let balance = state
                 .balances
                 .entry(balance_key(account_id, asset_id))
-                .or_insert_with(|| SpotBalance::new(account_id, account_id, asset_id, 0, 0, 0));
+                .or_insert_with(|| Balance::new(account_id, account_id, asset_id, 0, 0, 0));
             if let Some(value) = event_u64_field(event, "available") {
                 balance.available = value;
             }

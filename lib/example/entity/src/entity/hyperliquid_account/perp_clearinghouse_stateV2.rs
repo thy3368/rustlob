@@ -1,5 +1,9 @@
+use std::collections::HashMap;
+
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+
+use crate::hyperliquid_account::position_v3::{MarginMode, PositionV3};
 
 struct PerpClearinghouseState {
     margin_summary: MarginSummary,       // 全账户（cross + isolated 合计）
@@ -19,30 +23,7 @@ struct MarginSummary {
 
 struct AssetPosition {
     position_type: PositionType, // OneWay（目前只有单向）
-    position: Position,
-}
-
-struct Position {
-    coin: String,       // "BTC"
-    szi: Decimal,       // 带符号仓位，正多负空
-    entry_px: Decimal,  // 加权开仓价
-    leverage: Leverage, // { type: Cross|Isolated, value, raw_usd? }
-
-    // ↓ 全部派生
-    position_value: Decimal, // szi * mark
-    unrealized_pnl: Decimal, // (mark - entry) * szi
-    return_on_equity: Decimal,
-    liquidation_px: Option<Decimal>, // 展示用，实时算
-    margin_used: Decimal,            // IM = |ntl| / leverage
-    max_leverage: u8,
-
-    cum_funding: FundingAccum, // { all_time, since_open, since_change }
-}
-
-struct Leverage {
-    leverage_type: MarginMode, // "cross" | "isolated"
-    value: u8,
-    raw_usd: Option<Decimal>, // isolated 才有
+    position: PositionV3,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,25 +36,102 @@ enum PositionType {
     // Split,    // 多空分开记账
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum MarginMode {
-    /// 全仓：所有 cross 仓位共用一个保证金池
-    Cross,
-    /// 逐仓：只用一个独立桶，亏光不影响别的
-    Isolated,
-    // 扩展位（HIP-3 / strict isolated / noCross 市场）：
-    // StrictIsolated,  // 不能抽保证金，只能加
-    // NoCross,         // HIP-3 市场禁止 cross
+impl PerpClearinghouseState {
+    /// 全账户权益（含浮盈）
+    fn equity(&self) -> Decimal {
+        self.margin_summary.account_value
+    }
+
+    /// cross 池权益
+    fn cross_equity(&self) -> Decimal {
+        self.cross_margin_summary.account_value
+    }
+
+    /// 已结算 USDC（不含浮盈）
+    fn settled_usdc(&self) -> Decimal {
+        self.margin_summary.total_raw_usd
+    }
+
+    /// 总名义仓位
+    fn total_notional(&self) -> Decimal {
+        self.margin_summary.total_ntl_pos
+    }
+
+    /// cross 强平红线
+    fn cross_mm_required(&self) -> Decimal {
+        self.cross_maintenance_margin_used
+    }
+
+    /// 当前 cross 保证金率（健康度指标）
+    fn cross_margin_ratio(&self) -> Option<Decimal> {
+        if self.cross_margin_summary.account_value.is_zero() {
+            return None;
+        }
+        Some(self.cross_maintenance_margin_used / self.cross_margin_summary.account_value)
+    }
+
+    /// 快照时间
+    fn snapshot_at(&self) -> u64 {
+        self.time
+    }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FundingAccum {
-    /// 该币种全历史累计资金费（跨多次开平仓）
-    all_time: Decimal,
-    /// 当前未平仓位自开仓以来累计
-    since_open: Decimal,
-    /// 自上次改变仓位结构（改杠杆/加减仓/调整保证金）以来累计
-    since_change: Decimal,
+impl PerpClearinghouseState {
+    /// 遍历所有仓位
+    fn positions(&self) -> &[AssetPosition] {
+        &self.asset_positions
+    }
+
+    /// 找某个币的仓位
+    fn position_of(&self, coin: &str) -> Option<&PositionV3> {
+        self.asset_positions.iter().find(|p| p.position.coin == coin).map(|p| &p.position)
+    }
+
+
+}
+
+impl PerpClearinghouseState {
+    /// cross 账户级是否可强平
+    fn cross_liquidatable(&self) -> bool {
+        self.cross_margin_summary.account_value < self.cross_maintenance_margin_used
+    }
+
+    /// 是否进入 backstop 区（equity < 2/3 MM）
+    fn cross_backstop_zone(&self) -> bool {
+        let threshold =
+            self.cross_maintenance_margin_used * Decimal::new(2, 0) / Decimal::new(3, 0);
+        self.cross_margin_summary.account_value < threshold
+    }
+
+    /// 挑最该先平的 cross 仓位（按 notional 大/亏损大）
+    fn worst_cross_position(&self, marks: &HashMap<String, Decimal>) -> Option<&PositionV3> {
+        self.asset_positions
+            .iter()
+            .filter(|ap| ap.position.leverage.leverage_type == MarginMode::Cross)
+            .max_by(|a, b| {
+                let na = a.position.notional(marks[&a.position.coin]);
+                let nb = b.position.notional(marks[&b.position.coin]);
+                na.cmp(&nb)
+            })
+            .map(|ap| &ap.position)
+    }
+
+    // /// 生成强平动作（不直接执行，返回事件）
+    // fn liquidation_plan(&self, marks: &HashMap<String, Decimal>) -> LiquidationPlan {
+    //     if !self.cross_liquidatable() {
+    //         return LiquidationPlan::None;
+    //     }
+    //     if self.cross_backstop_zone() {
+    //         return LiquidationPlan::BackstopAllCross;
+    //     }
+    //     match self.worst_cross_position(marks) {
+    //         Some(p) => LiquidationPlan::MarketOrder { coin: p.coin.clone(), sz: p.szi },
+    //         None => LiquidationPlan::None,
+    //     }
+    // }
+
+    /// 可提现校验
+    fn can_withdraw(&self, amount: Decimal) -> bool {
+        amount <= self.withdrawable
+    }
 }

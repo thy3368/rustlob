@@ -1,7 +1,7 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
 use common_entity::stable_string_entity_id;
-use example_core_use_case::{SpotBalance, WithdrawQuoteCmd, WithdrawQuoteState};
+use example_core_use_case::{Balance, WithdrawQuoteCmd, WithdrawQuoteState};
 use mysql::prelude::Queryable;
 
 use crate::shared::{
@@ -43,7 +43,7 @@ impl CommandUseCaseOutbound for MySqlWithdrawQuoteOutbound {
             account_row.ok_or(WithdrawQuoteOutboundError::BalanceNotFound)?;
 
         Ok(WithdrawQuoteState {
-            quote_balance: SpotBalance {
+            quote_balance: Balance {
                 party_id: stable_string_entity_id(account_id.as_str()),
                 account_id: stable_string_entity_id(account_id.as_str()),
                 asset_id: stable_string_entity_id("USDT"),

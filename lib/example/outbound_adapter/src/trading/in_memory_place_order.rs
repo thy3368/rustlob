@@ -4,7 +4,7 @@ use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     MarketRules, PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason,
-    ReservationKind, ReservationMarketKind, ReservationStatus, SpotBalance, SpotOrderGroupRelation,
+    ReservationKind, ReservationMarketKind, ReservationStatus, Balance, SpotOrderGroupRelation,
     SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
     SpotOrderV2, SpotTrade,
 };
@@ -38,8 +38,8 @@ impl InMemoryPlaceOrderOutbound {
     }
 
     pub fn seeded(
-        base_balance: SpotBalance,
-        quote_balance: SpotBalance,
+        base_balance: Balance,
+        quote_balance: Balance,
         market_rules: MarketRules,
     ) -> Result<Self, crate::StoreError> {
         Ok(Self::from_store(InMemoryStore::seed_balances(
@@ -49,7 +49,7 @@ impl InMemoryPlaceOrderOutbound {
         )?))
     }
 
-    pub fn seed_balance(&self, balance: SpotBalance) -> Result<(), crate::StoreError> {
+    pub fn seed_balance(&self, balance: Balance) -> Result<(), crate::StoreError> {
         self.store.seed_balance(balance)
     }
 
@@ -115,7 +115,7 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound
             .balances
             .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
         {
-            settlement_balances.push(SpotBalance::new(
+            settlement_balances.push(Balance::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(quote_asset_id.as_str()),

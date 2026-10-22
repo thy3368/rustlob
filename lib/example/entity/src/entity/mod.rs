@@ -27,7 +27,7 @@ pub use perp::trade::perp_position::{
     HyperliquidPerpPositionLeverageOutcome, HyperliquidPerpPositionStatus,
     HyperliquidPerpPositionTradeOutcome, PerpPosition, required_position_margin,
 };
-pub use account::spot_balance::{BalanceError, SpotBalance};
+pub use account::balance::{BalanceError, Balance};
 pub use account::{AccountStatus, SpotAccount};
 pub use hyperliquid_account::{
     MarginSummary, MasterAccount, PerpAssetRiskRule, PerpClearinghouseState,

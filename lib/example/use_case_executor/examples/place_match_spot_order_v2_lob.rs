@@ -4,7 +4,7 @@ use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, MarketRules, PlaceMatchSpotOrderV2Changes,
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
-    SpotBalance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    Balance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use example_outbound_adapter::{InMemoryPlaceOrderOutbound, InMemoryStore};
 use use_case_executor::trading::spot::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2_with_outbound;
@@ -16,7 +16,7 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
     let store = InMemoryStore::new(ASSET);
     store.seed_market_rules(MarketRules { symbol: "BTCUSDT".into(), min_qty: 1 })?;
     for balance in [
-        SpotBalance::new(
+        Balance::new(
             stable_string_entity_id("buyer"),
             stable_string_entity_id("buyer"),
             stable_string_entity_id("BTC"),
@@ -24,7 +24,7 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
             0,
             1,
         ),
-        SpotBalance::new(
+        Balance::new(
             stable_string_entity_id("buyer"),
             stable_string_entity_id("buyer"),
             stable_string_entity_id("USDT"),
@@ -32,7 +32,7 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
             0,
             1,
         ),
-        SpotBalance::new(
+        Balance::new(
             stable_string_entity_id("seller"),
             stable_string_entity_id("seller"),
             stable_string_entity_id("BTC"),
@@ -40,7 +40,7 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
             1,
             1,
         ),
-        SpotBalance::new(
+        Balance::new(
             stable_string_entity_id("seller"),
             stable_string_entity_id("seller"),
             stable_string_entity_id("USDT"),

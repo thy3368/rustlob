@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
-    MarketRules, SpotBalance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    MarketRules, Balance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 
@@ -180,7 +180,7 @@ impl MySqlStore {
         {
             balances.insert(
                 balance_key(account_numeric_id, stable_string_entity_id("BTC")),
-                SpotBalance::new(
+                Balance::new(
                     account_numeric_id,
                     account_numeric_id,
                     stable_string_entity_id("BTC"),
@@ -191,7 +191,7 @@ impl MySqlStore {
             );
             balances.insert(
                 balance_key(account_numeric_id, stable_string_entity_id("USDT")),
-                SpotBalance::new(
+                Balance::new(
                     account_numeric_id,
                     account_numeric_id,
                     stable_string_entity_id("USDT"),

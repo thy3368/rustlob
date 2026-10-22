@@ -67,14 +67,14 @@ struct InMemoryDemoApp {
 impl InMemoryDemoApp {
     fn new() -> Result<Self, StoreError> {
         let store = InMemoryStore::seed_balances(
-            example_core_use_case::SpotBalance::new(
+            example_core_use_case::Balance::new(
                 "trader-1".to_string(),
                 "BTC".to_string(),
                 0,
                 0,
                 2,
             ),
-            example_core_use_case::SpotBalance::new(
+            example_core_use_case::Balance::new(
                 "trader-1".to_string(),
                 "USDT".to_string(),
                 1_000,

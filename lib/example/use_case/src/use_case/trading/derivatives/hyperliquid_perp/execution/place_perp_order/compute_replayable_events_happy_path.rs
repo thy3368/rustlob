@@ -123,7 +123,7 @@ fn state() -> PlaceHyperliquidPerpOrderState {
         trading_enabled: true,
         next_order_sequence: 42,
         account_id: "acct-1".to_string(),
-        margin_balance: SpotBalance::new(
+        margin_balance: Balance::new(
             common_entity::stable_string_entity_id("acct-1"),
             common_entity::stable_string_entity_id("acct-1"),
             common_entity::stable_string_entity_id("USDC"),
@@ -159,7 +159,7 @@ fn non_flat_position(signed_size: i64) -> PerpPosition {
 }
 
 fn assert_balance_snapshot(
-    balance: &SpotBalance,
+    balance: &Balance,
     expected_available: u64,
     expected_frozen: u64,
     expected_version: u64,
@@ -231,7 +231,7 @@ fn assert_balance_updated_event(
     expected_frozen: u64,
 ) {
     assert_eq!(event.change_type, 1);
-    assert_eq!(event.entity_type, <SpotBalance as Entity>::entity_type());
+    assert_eq!(event.entity_type, <Balance as Entity>::entity_type());
     assert_eq!(event_field(event, "available"), Some(expected_available.to_string().as_str()));
     assert_eq!(event_field(event, "frozen"), Some(expected_frozen.to_string().as_str()));
 }

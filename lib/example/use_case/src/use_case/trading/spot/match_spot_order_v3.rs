@@ -15,7 +15,7 @@ use crate::entity::account::balance_ledger_v2::{
 };
 use crate::entity::{
     Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
-    SettlementTransferVoucher, SpotBalance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
+    SettlementTransferVoucher, Balance, SpotOrderSide, SpotOrderStatus, SpotOrderTif,
     spot as spot_entity,
 };
 use crate::support::{concat2, concat3, concat4};
@@ -37,7 +37,7 @@ pub enum MatchSpotOrderV3AfterChanges {
     PartiallyFilled {
         taker_order_after: SpotOrderV2,
         maker_orders_after: Vec<SpotOrderV2>,
-        balances_after: Vec<SpotBalance>,
+        balances_after: Vec<Balance>,
         created_trades: Vec<SpotTrade>,
         created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
@@ -46,7 +46,7 @@ pub enum MatchSpotOrderV3AfterChanges {
     Filled {
         filled_taker_order_after: SpotOrderV2,
         maker_orders_after: Vec<SpotOrderV2>,
-        balances_after: Vec<SpotBalance>,
+        balances_after: Vec<Balance>,
         created_trades: Vec<SpotTrade>,
         created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
@@ -55,7 +55,7 @@ pub enum MatchSpotOrderV3AfterChanges {
     CanceledAfterPartialFill {
         canceled_taker_order_after: SpotOrderV2,
         maker_orders_after: Vec<SpotOrderV2>,
-        balances_after: Vec<SpotBalance>,
+        balances_after: Vec<Balance>,
         created_trades: Vec<SpotTrade>,
         created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
@@ -63,7 +63,7 @@ pub enum MatchSpotOrderV3AfterChanges {
     /// ALO crossing maker 或 IOC 无流动性导致拒单。
     Rejected {
         rejected_taker_order_after: SpotOrderV2,
-        balances_after: Vec<SpotBalance>,
+        balances_after: Vec<Balance>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }
@@ -90,7 +90,7 @@ pub enum MatchSpotOrderV3Changes {
     PartiallyFilled {
         updated_taker_order: UpdatedEntityPair<SpotOrderV2>,
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
-        updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
+        updated_balances: Vec<UpdatedEntityPair<Balance>>,
         created_trades: Vec<SpotTrade>,
         created_vouchers: Vec<SettlementTransferVoucher>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
@@ -98,7 +98,7 @@ pub enum MatchSpotOrderV3Changes {
     Filled {
         filled_taker_order: UpdatedEntityPair<SpotOrderV2>,
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
-        updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
+        updated_balances: Vec<UpdatedEntityPair<Balance>>,
         created_trades: Vec<SpotTrade>,
         created_vouchers: Vec<SettlementTransferVoucher>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
@@ -106,14 +106,14 @@ pub enum MatchSpotOrderV3Changes {
     CanceledAfterPartialFill {
         canceled_taker_order: UpdatedEntityPair<SpotOrderV2>,
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
-        updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
+        updated_balances: Vec<UpdatedEntityPair<Balance>>,
         created_trades: Vec<SpotTrade>,
         created_vouchers: Vec<SettlementTransferVoucher>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     Rejected {
         rejected_taker_order: UpdatedEntityPair<SpotOrderV2>,
-        updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
+        updated_balances: Vec<UpdatedEntityPair<Balance>>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }
@@ -212,7 +212,7 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
 fn replay_events(
     updated_taker_order: &UpdatedEntityPair<SpotOrderV2>,
     updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
-    updated_balances: &[UpdatedEntityPair<SpotBalance>],
+    updated_balances: &[UpdatedEntityPair<Balance>],
     created_trades: &[SpotTrade],
     created_vouchers: &[SettlementTransferVoucher],
     created_balance_ledger_entries: &[BalanceLedgerV2],
@@ -714,7 +714,7 @@ fn release_to_balance(
 fn apply_balance_ledger_entry(
     operation: BalanceLedgerOperation,
     entry_id: u64,
-    balance: &mut SpotBalance,
+    balance: &mut Balance,
     amount: u64,
     reason: BalanceLedgerReason,
 ) -> Result<BalanceLedgerV2, BalanceLedgerEntryV2Error> {
@@ -1004,9 +1004,9 @@ fn zip_pairs<T: PartialEq>(
 }
 
 pub(super) fn merge_balance_pairs(
-    before: Vec<SpotBalance>,
-    after: Vec<SpotBalance>,
-) -> Result<Vec<UpdatedEntityPair<SpotBalance>>, MatchSpotOrderV3Error> {
+    before: Vec<Balance>,
+    after: Vec<Balance>,
+) -> Result<Vec<UpdatedEntityPair<Balance>>, MatchSpotOrderV3Error> {
     let before_map = before
         .into_iter()
         .map(|balance| (balance.business_entity_id(), balance))
@@ -1028,11 +1028,11 @@ pub(super) fn merge_balance_pairs(
 }
 
 pub(super) fn balance_replay_events_from_ledger_entries(
-    updated_balances: &[UpdatedEntityPair<SpotBalance>],
+    updated_balances: &[UpdatedEntityPair<Balance>],
     ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut current_balances =
-        HashMap::<String, SpotBalance>::with_capacity(updated_balances.len());
+        HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {
         let balance_id = balance.before.business_entity_id();
         current_balances.insert(balance_id, balance.before.clone());
@@ -1073,7 +1073,7 @@ pub(super) fn balance_replay_events_from_ledger_entries(
             .version
             .checked_add(1)
             .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
-        let after = SpotBalance::new(
+        let after = Balance::new(
             before.party_id,
             before.account_id,
             before.asset_id,
@@ -1103,7 +1103,7 @@ pub(super) fn balance_replay_events_from_ledger_entries(
 pub struct MatchSpotOrderV3State {
     pub taker_order: SpotOrderV2,
     pub maker_orders: Vec<SpotOrderV2>,
-    pub settlement_balances: Vec<SpotBalance>,
+    pub settlement_balances: Vec<Balance>,
     pub base_asset_id: String,
     pub quote_asset_id: String,
     pub fee_account_id: String,
@@ -1300,12 +1300,12 @@ fn build_matched_pairs(
     state: MatchSpotOrderV3State,
     taker_order_after: SpotOrderV2,
     maker_orders_after: Vec<SpotOrderV2>,
-    balances_after: Vec<SpotBalance>,
+    balances_after: Vec<Balance>,
 ) -> Result<
     (
         UpdatedEntityPair<SpotOrderV2>,
         Vec<UpdatedEntityPair<SpotOrderV2>>,
-        Vec<UpdatedEntityPair<SpotBalance>>,
+        Vec<UpdatedEntityPair<Balance>>,
     ),
     MatchSpotOrderV3Error,
 > {
@@ -1344,7 +1344,7 @@ impl MatchSpotOrderV3Changes {
         }
     }
 
-    pub fn updated_balances(&self) -> &[UpdatedEntityPair<SpotBalance>] {
+    pub fn updated_balances(&self) -> &[UpdatedEntityPair<Balance>] {
         match self {
             Self::Resting => &[],
             Self::PartiallyFilled { updated_balances, .. }
@@ -1386,11 +1386,11 @@ impl MatchSpotOrderV3Changes {
 }
 
 pub(super) struct BalanceMap {
-    balances: HashMap<String, SpotBalance>,
+    balances: HashMap<String, Balance>,
 }
 
 impl BalanceMap {
-    pub(super) fn new(balances: &[SpotBalance]) -> Self {
+    pub(super) fn new(balances: &[Balance]) -> Self {
         Self {
             balances: balances
                 .iter()
@@ -1404,13 +1404,13 @@ impl BalanceMap {
         &mut self,
         account_id: &str,
         asset_id: &str,
-    ) -> Result<&mut SpotBalance, MatchSpotOrderV3Error> {
+    ) -> Result<&mut Balance, MatchSpotOrderV3Error> {
         self.balances
             .get_mut(&concat3(account_id, ":", asset_id))
             .ok_or(MatchSpotOrderV3Error::BalanceNotFound)
     }
 
-    pub(super) fn into_balances(self) -> Vec<SpotBalance> {
+    pub(super) fn into_balances(self) -> Vec<Balance> {
         let mut balances = self.balances.into_values().collect::<Vec<_>>();
         balances.sort_by_key(|lhs| lhs.entity_id());
         balances

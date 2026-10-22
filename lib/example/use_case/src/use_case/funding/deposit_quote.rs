@@ -5,7 +5,7 @@ use common_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{BalanceError, SpotBalance};
+use crate::entity::{BalanceError, Balance};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DepositQuoteCmd {
@@ -21,7 +21,7 @@ impl IssuedByParty for DepositQuoteCmd {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepositQuoteState {
-    pub quote_balance: SpotBalance,
+    pub quote_balance: Balance,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -34,7 +34,7 @@ pub enum DepositQuoteError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepositQuoteChanges {
-    pub updated_quote_balance: UpdatedEntityPair<SpotBalance>,
+    pub updated_quote_balance: UpdatedEntityPair<Balance>,
 }
 
 impl ReplayableChanges for DepositQuoteChanges {
@@ -124,7 +124,7 @@ mod tests {
 
     fn sample_state() -> DepositQuoteState {
         DepositQuoteState {
-            quote_balance: SpotBalance {
+            quote_balance: Balance {
                 party_id: common_entity::stable_string_entity_id("trader-1"),
                 account_id: common_entity::stable_string_entity_id("trader-1"),
                 asset_id: common_entity::stable_string_entity_id("USDT"),

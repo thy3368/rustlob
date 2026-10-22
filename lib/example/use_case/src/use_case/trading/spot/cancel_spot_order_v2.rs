@@ -16,7 +16,7 @@ use crate::entity::spot::spot_order_v2::{
 };
 use crate::entity::{
     CancelSpotOrderV2Input, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, SpotBalance, SpotOrderSide,
+    ReservationMarketKind, Balance, SpotOrderSide,
 };
 use crate::support::{concat3, concat4};
 
@@ -38,7 +38,7 @@ pub enum CancelSpotOrderV2Lookup {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2State {
     pub order: SpotOrderV2,
-    pub balances: Vec<SpotBalance>,
+    pub balances: Vec<Balance>,
     pub base_asset_id: String,
     pub quote_asset_id: String,
     pub maker_fee_bps: u64,
@@ -48,14 +48,14 @@ pub struct CancelSpotOrderV2State {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2AfterChanges {
     pub order_after: SpotOrderV2,
-    pub balances_after: Vec<SpotBalance>,
+    pub balances_after: Vec<Balance>,
     pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV2>,
-    pub updated_balances: Vec<UpdatedEntityPair<SpotBalance>>,
+    pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
     pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
 }
 
@@ -193,11 +193,11 @@ impl StateMachineV2Diff for CancelSpotOrderV2UseCase {
 }
 
 struct BalanceMap {
-    balances: HashMap<String, SpotBalance>,
+    balances: HashMap<String, Balance>,
 }
 
 impl BalanceMap {
-    fn new(balances: &[SpotBalance]) -> Self {
+    fn new(balances: &[Balance]) -> Self {
         Self {
             balances: balances
                 .iter()
@@ -211,7 +211,7 @@ impl BalanceMap {
         &mut self,
         account_id: &str,
         asset_id: &str,
-    ) -> Result<&mut SpotBalance, CancelSpotOrderV2Error> {
+    ) -> Result<&mut Balance, CancelSpotOrderV2Error> {
         self.balances
             .get_mut(&concat3(account_id, ":", asset_id))
             .ok_or(CancelSpotOrderV2Error::BalanceNotFound)
@@ -220,11 +220,11 @@ impl BalanceMap {
     fn get_by_entity_id_mut(
         &mut self,
         entity_id: &str,
-    ) -> Result<&mut SpotBalance, CancelSpotOrderV2Error> {
+    ) -> Result<&mut Balance, CancelSpotOrderV2Error> {
         self.balances.get_mut(entity_id).ok_or(CancelSpotOrderV2Error::BalanceNotFound)
     }
 
-    fn into_balances(self) -> Vec<SpotBalance> {
+    fn into_balances(self) -> Vec<Balance> {
         let mut balances = self.balances.into_values().collect::<Vec<_>>();
         balances.sort_by_key(|lhs| lhs.entity_id());
         balances
@@ -232,7 +232,7 @@ impl BalanceMap {
 }
 
 fn balance_entity_id_for_account_asset(
-    balances: &[SpotBalance],
+    balances: &[Balance],
     account_id: &str,
     asset_id: &str,
 ) -> Result<String, CancelSpotOrderV2Error> {
@@ -242,12 +242,12 @@ fn balance_entity_id_for_account_asset(
             balance.account_id == common_entity::stable_string_entity_id(account_id)
                 && balance.asset_id == common_entity::stable_string_entity_id(asset_id)
         })
-        .map(SpotBalance::business_entity_id)
+        .map(Balance::business_entity_id)
         .ok_or(CancelSpotOrderV2Error::BalanceNotFound)
 }
 
 fn balance_entity_id_for_reservation(
-    balances: &[SpotBalance],
+    balances: &[Balance],
     reservation: &Reservation,
 ) -> Result<String, CancelSpotOrderV2Error> {
     balance_entity_id_for_account_asset(
@@ -407,7 +407,7 @@ fn release_to_balance(
 fn apply_balance_ledger_entry(
     operation: BalanceLedgerOperation,
     entry_id: String,
-    balance: &mut SpotBalance,
+    balance: &mut Balance,
     amount: u64,
     reason: BalanceLedgerReason,
 ) -> Result<BalanceLedgerV2, BalanceLedgerEntryV2Error> {
@@ -461,9 +461,9 @@ fn apply_behavior_ledger_entry(
 }
 
 fn merge_balance_pairs(
-    before: Vec<SpotBalance>,
-    after: Vec<SpotBalance>,
-) -> Result<Vec<UpdatedEntityPair<SpotBalance>>, CancelSpotOrderV2Error> {
+    before: Vec<Balance>,
+    after: Vec<Balance>,
+) -> Result<Vec<UpdatedEntityPair<Balance>>, CancelSpotOrderV2Error> {
     let before_map = before
         .into_iter()
         .map(|balance| (balance.business_entity_id(), balance))
@@ -483,11 +483,11 @@ fn merge_balance_pairs(
 }
 
 fn balance_replay_events_from_ledger_entries(
-    updated_balances: &[UpdatedEntityPair<SpotBalance>],
+    updated_balances: &[UpdatedEntityPair<Balance>],
     ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut current_balances =
-        HashMap::<String, SpotBalance>::with_capacity(updated_balances.len());
+        HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {
         let balance_id = balance.before.business_entity_id();
         current_balances.insert(balance_id, balance.before.clone());
@@ -528,7 +528,7 @@ fn balance_replay_events_from_ledger_entries(
             .version
             .checked_add(1)
             .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
-        let after = SpotBalance::new(
+        let after = Balance::new(
             before.party_id,
             before.account_id,
             before.asset_id,

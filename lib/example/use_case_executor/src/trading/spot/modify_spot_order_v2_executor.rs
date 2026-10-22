@@ -48,7 +48,7 @@ mod tests {
     use common_entity::stable_string_entity_id;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
-        OrderId, SpotBalance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+        OrderId, Balance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
     };
 
     use super::*;
@@ -129,7 +129,7 @@ mod tests {
 
             Ok(ModifySpotOrderV2State {
                 order,
-                balances: vec![SpotBalance::new(
+                balances: vec![Balance::new(
                     stable_string_entity_id("buyer"),
                     stable_string_entity_id("buyer"),
                     stable_string_entity_id("USDT"),

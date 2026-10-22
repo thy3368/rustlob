@@ -9,7 +9,7 @@ use crate::MarketRules;
 use crate::entity::{
     BalanceLedgerV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
     HyperliquidPerpOrderTimeInForce, PerpPosition, PlaceHyperliquidPerpOrderInput,
-    PlaceHyperliquidPerpOrderIntent, SpotBalance, required_position_margin,
+    PlaceHyperliquidPerpOrderIntent, Balance, required_position_margin,
 };
 
 /// Hyperliquid perp 下单可能返回的业务错误。
@@ -164,7 +164,7 @@ pub struct PlaceHyperliquidPerpOrderState {
     /// 下单账户 ID。
     pub account_id: String,
     /// Cross 保证金余额快照。
-    pub margin_balance: SpotBalance,
+    pub margin_balance: Balance,
     /// Cross 保证金币种，例如 `USDC`。
     pub margin_asset_id: String,
     /// 当前合约市场规则快照。
@@ -185,7 +185,7 @@ pub struct PlaceHyperliquidPerpOrderChanges {
     /// 本次新创建并已补齐 before/after 快照的余额冻结流水；无需冻结保证金时为空。
     pub created_balance_ledger_entry: Option<BalanceLedgerV2>,
     /// 本次实际受影响的保证金余额 before/after；reduce-only 或无需新增保证金时为空。
-    pub updated_margin_balances: Vec<UpdatedEntityPair<SpotBalance>>,
+    pub updated_margin_balances: Vec<UpdatedEntityPair<Balance>>,
 }
 
 impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {

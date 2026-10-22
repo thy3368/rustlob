@@ -270,7 +270,7 @@ pub(crate) mod tests {
     use common_entity::LogEntry;
     use example_core_use_case::{
         DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
-        PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotBalance, WithdrawQuoteCmd,
+        PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Balance, WithdrawQuoteCmd,
         WithdrawQuoteState,
     };
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -369,9 +369,9 @@ pub(crate) mod tests {
             _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
         ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
             let settlement_balances = vec![
-                SpotBalance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
-                SpotBalance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 5),
-                SpotBalance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+                Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
+                Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 5),
+                Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
             ];
             Ok(PlaceMatchSpotOrderV2State {
                 maker_orders: Vec::new(),
@@ -404,7 +404,7 @@ pub(crate) mod tests {
 
         fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
             Ok(DepositQuoteState {
-                quote_balance: SpotBalance::new(
+                quote_balance: Balance::new(
                     "trader-1".to_string(),
                     "USDT".to_string(),
                     1_000,
@@ -434,7 +434,7 @@ pub(crate) mod tests {
 
         fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
             Ok(WithdrawQuoteState {
-                quote_balance: SpotBalance::new(
+                quote_balance: Balance::new(
                     "trader-1".to_string(),
                     "USDT".to_string(),
                     1_000,
