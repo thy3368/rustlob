@@ -159,17 +159,20 @@ impl PerpPosition {
         self.signed_size * mark_price
     }
 
+    /// 初始保证金 下单时有用
+    pub fn im(&self) -> i64 {
+        self.signed_size * self.entry_px
+    }
+
+    /// 现值
     pub fn notional(&self, mark_price: u64) -> i64 {
         self.signed_size.abs() * mark_price
     }
 
-
+    /// 浮盈
     pub fn unrealized_pnl(&self, mark_price: u64) -> i64 {
-        self.signed_size *( mark_price-self.entry_px)
+        self.signed_size.abs() * (mark_price - self.entry_px)
     }
-
-
-
 
     /// 返回尚未创建的空仓位槽位。
     pub fn empty_slot(
