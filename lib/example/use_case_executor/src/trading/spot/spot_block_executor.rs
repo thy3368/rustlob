@@ -40,11 +40,10 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use common_entity::stable_string_entity_id;
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
+        ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
         ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderId,
-        Balance, SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError,
-        SpotBlockItemResult, SpotBlockState, SpotOrderSide, SpotOrderTif, SpotOrderType,
-        SpotOrderV2,
+        SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError, SpotBlockItemResult,
+        SpotBlockState, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
     };
 
     use super::*;

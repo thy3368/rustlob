@@ -4,8 +4,8 @@ use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
-    CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
-    CancelSpotOrderV2UseCase, Balance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
+    CancelSpotOrderV2UseCase, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

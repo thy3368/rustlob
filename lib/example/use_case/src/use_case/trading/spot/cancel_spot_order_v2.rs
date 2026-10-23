@@ -15,8 +15,8 @@ use crate::entity::spot::spot_order_v2::{
     SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError,
 };
 use crate::entity::{
-    CancelSpotOrderV2Input, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, Balance, SpotOrderSide,
+    Balance, CancelSpotOrderV2Input, Reservation, ReservationCloseReason, ReservationKind,
+    ReservationMarketKind, SpotOrderSide,
 };
 use crate::support::{concat3, concat4};
 
@@ -486,8 +486,7 @@ fn balance_replay_events_from_ledger_entries(
     updated_balances: &[UpdatedEntityPair<Balance>],
     ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-    let mut current_balances =
-        HashMap::<String, Balance>::with_capacity(updated_balances.len());
+    let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
     for balance in updated_balances {
         let balance_id = balance.before.business_entity_id();
         current_balances.insert(balance_id, balance.before.clone());

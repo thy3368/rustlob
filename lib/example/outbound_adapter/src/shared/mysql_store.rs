@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
-    MarketRules, Balance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    Balance, MarketRules, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 

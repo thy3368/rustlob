@@ -47,8 +47,8 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use common_entity::stable_string_entity_id;
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
-        OrderId, Balance, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+        ActivatePendingSpotOrderV2Input, Balance, ModifySpotOrderV2OrderType,
+        ModifySpotOrderV2State, OrderId, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
     };
 
     use super::*;

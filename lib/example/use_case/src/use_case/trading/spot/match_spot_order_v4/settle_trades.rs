@@ -12,7 +12,7 @@ use super::support::{
 };
 use crate::SpotTrade;
 use crate::entity::account::balance_ledger_v2::BalanceLedgerV2;
-use crate::entity::{SettlementTransferVoucher, Balance, spot as spot_entity};
+use crate::entity::{Balance, SettlementTransferVoucher, spot as spot_entity};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettleSpotTradesV4Cmd {

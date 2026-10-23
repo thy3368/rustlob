@@ -269,8 +269,8 @@ pub(crate) mod tests {
     use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, StateSink, StateSource};
     use common_entity::LogEntry;
     use example_core_use_case::{
-        DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
-        PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Balance, WithdrawQuoteCmd,
+        Balance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
+        PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, WithdrawQuoteCmd,
         WithdrawQuoteState,
     };
     #[derive(Debug, Clone, PartialEq, Eq)]

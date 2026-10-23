@@ -1,5 +1,5 @@
-use rust_decimal::prelude::Signed;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::Signed;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -177,6 +177,11 @@ impl PerpPositionV2 {
     /// 浮盈
     pub fn unrealized_pnl(&self, mark_price: Decimal) -> Decimal {
         self.szi.abs() * (mark_price - self.entry_px)
+    }
+
+    /// 初始保证金 下单时有用，其它开仓时会减去这个
+    pub fn im(&self) -> Decimal {
+        self.szi.abs() * self.entry_px / self.leverage
     }
 
     pub fn side_label(&self) -> &'static str {

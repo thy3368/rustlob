@@ -3,8 +3,8 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
-    PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Balance, SpotOrderV2,
+    Balance, MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource,
+    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 

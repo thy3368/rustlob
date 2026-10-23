@@ -1,7 +1,9 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, FieldDiff, FinancialClassification,
-    FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityReplayableEvent, FieldDiff,
+    FinancialClassification, FourColorArchetype,
 };
+use lob_repo_v2::LobError;
+use lob_repo_v2::lob::LobOrder;
 use thiserror::Error;
 
 use crate::entity::{
@@ -410,9 +412,6 @@ impl HyperliquidPerpOrder {
     // mm_required  = tiered_mm(notional)                 // 维持保证金（按档位）
     // equity       = margin_backing(position) + uPnL     // 支撑这个仓位的权益
 
-
-
-
     /// 返回订单当前是否可进入撮合。
     pub fn is_matchable(&self) -> bool {
         matches!(
@@ -773,5 +772,61 @@ fn push_change(
     let new_value = new_value.into();
     if old_value != new_value {
         changes.push(EntityFieldChange::new(field_name, old_value, new_value));
+    }
+}
+
+impl LobOrder for HyperliquidPerpOrder {
+    type Side = ();
+
+    fn entity_type() -> u8 {
+        todo!()
+    }
+
+    fn entity_id(&self) -> u64 {
+        todo!()
+    }
+
+    fn asset(&self) -> u32 {
+        todo!()
+    }
+
+    fn side(&self) -> Self::Side {
+        todo!()
+    }
+
+    fn is_buy_side(side: Self::Side) -> bool {
+        todo!()
+    }
+
+    fn price(&self) -> u64 {
+        todo!()
+    }
+
+    fn qty(&self) -> u64 {
+        todo!()
+    }
+
+    fn filled_qty(&self) -> u64 {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn entity_version(&self) -> u64 {
+        todo!()
+    }
+
+    fn is_active(&self) -> bool {
+        todo!()
+    }
+
+    fn from_replay_event(event: &EntityReplayableEvent, id: u64) -> Result<Self, LobError> {
+        todo!()
+    }
+
+    fn apply_replay_event(self, event: &EntityReplayableEvent) -> Result<Self, LobError> {
+        todo!()
     }
 }

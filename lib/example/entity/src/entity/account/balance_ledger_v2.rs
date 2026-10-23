@@ -6,8 +6,8 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::balance::{Balance, BalanceError};
 use super::balance_ledger_reason::BalanceLedgerReason;
-use super::balance::{BalanceError, Balance};
 use crate::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 
 const BALANCE_LEDGER_ENTRY_ENTITY_TYPE: u8 = 8;

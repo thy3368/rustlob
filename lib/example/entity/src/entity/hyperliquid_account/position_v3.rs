@@ -34,8 +34,8 @@ struct FundingAccum {
 
 pub struct PositionV3 {
     pub(crate) coin: String,       // "BTC"
-    szi: Decimal,       // 带符号仓位，正多负空
-    entry_px: Decimal,  // 加权开仓价
+    szi: Decimal,                  // 带符号仓位，正多负空
+    entry_px: Decimal,             // 加权开仓价
     pub(crate) leverage: Leverage, // { type: Cross|Isolated, value, raw_usd? }
 
     // ↓ 全部派生

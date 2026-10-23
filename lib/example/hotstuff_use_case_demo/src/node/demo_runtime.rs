@@ -7,8 +7,8 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::LogEntry;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
-    PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, Balance, SpotBlockAppliedChanges,
+    ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
+    PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, SpotBlockAppliedChanges,
     SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult, SpotBlockState,
     SpotBlockUseCase, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
 };

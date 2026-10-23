@@ -5,7 +5,7 @@ use common_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{BalanceError, Balance};
+use crate::entity::{Balance, BalanceError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DepositQuoteCmd {

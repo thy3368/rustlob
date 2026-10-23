@@ -86,8 +86,6 @@ impl PerpClearinghouseState {
     fn position_of(&self, coin: &str) -> Option<&PositionV3> {
         self.asset_positions.iter().find(|p| p.position.coin == coin).map(|p| &p.position)
     }
-
-
 }
 
 impl PerpClearinghouseState {

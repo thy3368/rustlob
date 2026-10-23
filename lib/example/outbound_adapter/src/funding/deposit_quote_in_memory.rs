@@ -1,6 +1,6 @@
 use cmd_handler::EntityReplayableEvent;
 use cmd_handler::command_use_case_def2::CommandUseCaseOutbound;
-use example_core_use_case::{DepositQuoteCmd, DepositQuoteState, Balance};
+use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState};
 
 use crate::shared::{
     DepositQuoteOutboundError, InMemoryStore, balance_key, event_identity_field, event_u64_field,
