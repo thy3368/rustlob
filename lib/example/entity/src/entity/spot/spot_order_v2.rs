@@ -1835,7 +1835,7 @@ impl LobOrder for SpotOrderV2 {
     ) -> Result<Self, lob_repo_v2::LobError> {
         Err(lob_repo_v2::LobError::Event("SpotOrderV2 replay update is not wired".into()))
     }
-    fn entity_version(&self) -> u64 {
+    fn entity_ver(&self) -> u64 {
         self.version
     }
 }

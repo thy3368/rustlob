@@ -814,7 +814,7 @@ impl LobOrder for HyperliquidPerpOrder {
         todo!()
     }
 
-    fn entity_version(&self) -> u64 {
+    fn entity_ver(&self) -> u64 {
         todo!()
     }
 

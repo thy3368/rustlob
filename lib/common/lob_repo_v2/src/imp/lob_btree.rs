@@ -155,7 +155,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
                     .order(id)
                     .ok_or_else(|| LobError::Event("order does not exist".into()))?
                     .clone();
-                if old.entity_version() != event.previous_lsn {
+                if old.entity_ver() != event.previous_lsn {
                     return Err(LobError::Event("invalid update".into()));
                 }
                 let order = old.apply_replay_event(event)?;
@@ -167,7 +167,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
             t if t == EntityChangeType::Deleted.as_tag() => {
                 let old =
                     self.order(id).ok_or_else(|| LobError::Event("order does not exist".into()))?;
-                if old.entity_version() != event.previous_lsn {
+                if old.entity_ver() != event.previous_lsn {
                     return Err(LobError::Event("invalid delete".into()));
                 }
                 self.delete(id);

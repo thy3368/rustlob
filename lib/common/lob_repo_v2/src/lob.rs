@@ -13,7 +13,7 @@ pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
     fn qty(&self) -> u64;
     fn filled_qty(&self) -> u64;
     fn created_at(&self) -> u64;
-    fn entity_version(&self) -> u64;
+    fn entity_ver(&self) -> u64;
     fn is_active(&self) -> bool;
     fn from_replay_event(event: &EntityReplayableEvent, id: u64) -> Result<Self, crate::LobError>;
     fn apply_replay_event(self, event: &EntityReplayableEvent) -> Result<Self, crate::LobError>;
