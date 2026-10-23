@@ -14,7 +14,10 @@ pub struct SpotClearinghouseState {
 impl SpotClearinghouseState {
     /// 从已校验事实装配子账户现货清算状态，映射键为资产 ID。
     pub fn new(account_id: u64, balances: BTreeMap<u64, Balance>) -> Self {
-        Self { account_id, balances }
+        Self {
+            account_id,
+            balances,
+        }
     }
 
     /// 返回子账户标识。
@@ -34,12 +37,16 @@ impl SpotClearinghouseState {
 
     /// 返回指定资产的总余额；若不存在该资产则返回零。
     pub fn total_balance_of(&self, asset_id: u64) -> u64 {
-        self.balance_of(asset_id).and_then(Balance::total).unwrap_or_default()
+        self.balance_of(asset_id)
+            .and_then(Balance::total)
+            .unwrap_or_default()
     }
 
     /// 返回指定资产的可用余额；若不存在该资产则返回零。
     pub fn available_balance_of(&self, asset_id: u64) -> u64 {
-        self.balance_of(asset_id).map(|balance| balance.available).unwrap_or_default()
+        self.balance_of(asset_id)
+            .map(|balance| balance.available)
+            .unwrap_or_default()
     }
 }
 
@@ -57,12 +64,18 @@ mod tests {
         balances.insert(42, balance(42, 100, 25));
         let state = SpotClearinghouseState::new(7, balances);
 
-        assert_eq!(state.balance_of(42).map(|balance| balance.asset_id), Some(42));
+        assert_eq!(
+            state.balance_of(42).map(|balance| balance.asset_id),
+            Some(42)
+        );
         assert_eq!(state.total_balance_of(42), 125);
         assert_eq!(state.available_balance_of(42), 100);
         assert!(state.balance_of(99).is_none());
         assert_eq!(state.total_balance_of(99), 0);
         assert_eq!(state.available_balance_of(99), 0);
-        assert_eq!(state.balances().keys().copied().collect::<Vec<_>>(), vec![42]);
+        assert_eq!(
+            state.balances().keys().copied().collect::<Vec<_>>(),
+            vec![42]
+        );
     }
 }

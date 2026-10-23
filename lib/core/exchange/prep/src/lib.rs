@@ -4,10 +4,8 @@
 //!
 //! ## 命令优先级
 //!
-//! - **P0**: 核心交易 (OpenPosition, ClosePosition, LimitOrder, MarketOrder,
-//!   CancelOrder)
-//! - **P1**: 风险控制 (SetLeverage, AdjustMargin, Liquidate, SetStopLoss,
-//!   SetTakeProfit)
+//! - **P0**: 核心交易 (OpenPosition, ClosePosition, LimitOrder, MarketOrder, CancelOrder)
+//! - **P1**: 风险控制 (SetLeverage, AdjustMargin, Liquidate, SetStopLoss, SetTakeProfit)
 //! - **P2**: 高级功能 (SwitchMarginMode, SettleFundingRate, ADL, TrailingStop)
 //! - **P3**: 扩展功能 (FlashClose, ReversePosition, BatchCancelOrders)
 

@@ -40,7 +40,10 @@ pub fn run_tcp_node(config: TcpNodeConfig) -> DemoResult<()> {
     }
 
     let signing_keys = deterministic_signing_keys();
-    let verifying_keys = signing_keys.iter().map(SigningKey::verifying_key).collect::<Vec<_>>();
+    let verifying_keys = signing_keys
+        .iter()
+        .map(SigningKey::verifying_key)
+        .collect::<Vec<_>>();
     let my_signing_key = signing_keys[config.node_index].clone();
     let my_verifying_key = verifying_keys[config.node_index];
     let my_tcp_addr = config.peer_addrs[config.node_index];

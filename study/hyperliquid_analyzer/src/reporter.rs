@@ -30,8 +30,11 @@ fn format_header(block: &Block) -> String {
     format!(
         "\n{}\n{}\n{}\n\n{}\n{}\n  区块高度:     {}\n  区块哈希:     {}\n  时间戳:       {}\n  提议者:       {}\n  总交易数:     {}\n\n",
         "╔══════════════════════════════════════════════════════════╗".bright_blue(),
-        format!("║        区块 #{} 完整分析                          ║", block.height)
-            .bright_blue(),
+        format!(
+            "║        区块 #{} 完整分析                          ║",
+            block.height
+        )
+        .bright_blue(),
         "╚══════════════════════════════════════════════════════════╝".bright_blue(),
         "📦 区块头信息".bright_cyan().bold(),
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_black(),
@@ -101,7 +104,9 @@ fn format_tx_type_distribution(analysis: &BlockAnalysis) -> String {
 fn format_transaction_list(block: &Block, limit: usize) -> String {
     let mut output = format!(
         "{}\n{}\n{:<6} {:<20} {:<20} {:<10} {}\n{}\n",
-        format!("📝 交易明细 (前 {} 笔)", limit).bright_cyan().bold(),
+        format!("📝 交易明细 (前 {} 笔)", limit)
+            .bright_cyan()
+            .bold(),
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_black(),
         "#",
         "类型",
@@ -123,7 +128,11 @@ fn format_transaction_list(block: &Block, limit: usize) -> String {
             TransactionAction::UpdateLeverage(_) => "UpdateLeverage",
         };
 
-        let status = if tx.error.is_none() { "✓".green() } else { "✗".red() };
+        let status = if tx.error.is_none() {
+            "✓".green()
+        } else {
+            "✗".red()
+        };
 
         let details = format_tx_details(&tx.action);
 
@@ -267,14 +276,20 @@ fn format_tx_details(action: &TransactionAction) -> String {
                 .iter()
                 .map(|order| {
                     let side = if order.is_buy { "Buy" } else { "Sell" };
-                    format!("Asset {} {} {} @ {}", order.asset, side, order.sz, order.limit_px)
+                    format!(
+                        "Asset {} {} {} @ {}",
+                        order.asset, side, order.sz, order.limit_px
+                    )
                 })
                 .collect();
             details.join("; ")
         }
         TransactionAction::Cancel(cancel) => {
-            let items: Vec<String> =
-                cancel.cancels.iter().map(|c| format!("Asset {} OID {}", c.asset, c.oid)).collect();
+            let items: Vec<String> = cancel
+                .cancels
+                .iter()
+                .map(|c| format!("Asset {} OID {}", c.asset, c.oid))
+                .collect();
             items.join("; ")
         }
         TransactionAction::CancelByCloid(cancel) => {
@@ -297,7 +312,10 @@ fn format_tx_details(action: &TransactionAction) -> String {
         }
         TransactionAction::ScheduleCancel(_) => "ScheduleCancel".to_string(),
         TransactionAction::UpdateLeverage(lev) => {
-            format!("Asset {} leverage {} (cross: {})", lev.asset, lev.leverage, lev.is_cross)
+            format!(
+                "Asset {} leverage {} (cross: {})",
+                lev.asset, lev.leverage, lev.is_cross
+            )
         }
     }
 }

@@ -15,7 +15,10 @@ pub(crate) fn concat3(a: &str, b: &str, c: &str) -> String {
 
 pub(crate) fn concat4(a: &str, b: &str, c: &str, d: &str) -> String {
     let mut out = String::with_capacity(
-        a.len().saturating_add(b.len()).saturating_add(c.len()).saturating_add(d.len()),
+        a.len()
+            .saturating_add(b.len())
+            .saturating_add(c.len())
+            .saturating_add(d.len()),
     );
     out.push_str(a);
     out.push_str(b);
@@ -47,7 +50,11 @@ pub(crate) fn derived_entity_id(entity_type: u8, fields: &[&[u8]]) -> u64 {
 
     let mut hash = (OFFSET ^ u64::from(entity_type)).wrapping_mul(PRIME);
     for field in fields {
-        for byte in (field.len() as u64).to_le_bytes().into_iter().chain(field.iter().copied()) {
+        for byte in (field.len() as u64)
+            .to_le_bytes()
+            .into_iter()
+            .chain(field.iter().copied())
+        {
             hash = (hash ^ u64::from(byte)).wrapping_mul(PRIME);
         }
     }
@@ -60,8 +67,17 @@ mod identity_tests {
 
     #[test]
     fn derived_identity_preserves_type_and_field_boundaries() {
-        assert_eq!(derived_entity_id(6, &[b"a", b"bc"]), derived_entity_id(6, &[b"a", b"bc"]));
-        assert_ne!(derived_entity_id(6, &[b"a", b"bc"]), derived_entity_id(6, &[b"ab", b"c"]));
-        assert_ne!(derived_entity_id(6, &[b"a", b"bc"]), derived_entity_id(7, &[b"a", b"bc"]));
+        assert_eq!(
+            derived_entity_id(6, &[b"a", b"bc"]),
+            derived_entity_id(6, &[b"a", b"bc"])
+        );
+        assert_ne!(
+            derived_entity_id(6, &[b"a", b"bc"]),
+            derived_entity_id(6, &[b"ab", b"c"])
+        );
+        assert_ne!(
+            derived_entity_id(6, &[b"a", b"bc"]),
+            derived_entity_id(7, &[b"a", b"bc"])
+        );
     }
 }

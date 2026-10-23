@@ -94,7 +94,10 @@ pub struct KafkaEventActor {
 
 impl KafkaEventActor {
     pub fn new(records: VecDeque<KafkaRecord>) -> Self {
-        Self { records, dispatcher: KafkaDispatcher::new() }
+        Self {
+            records,
+            dispatcher: KafkaDispatcher::new(),
+        }
     }
 
     pub fn into_result(self) -> Option<SettlementResult> {
@@ -134,7 +137,9 @@ pub fn run_event_actor_with_kafka_queue() -> Result<SettlementResult, EventHandl
             .ok_or_else(|| EventHandlerError("kafka actor ended without settlement result".into()))
     });
 
-    join_handle.join().map_err(|_| EventHandlerError("kafka actor thread panicked".into()))?
+    join_handle
+        .join()
+        .map_err(|_| EventHandlerError("kafka actor thread panicked".into()))?
 }
 
 #[cfg(test)]

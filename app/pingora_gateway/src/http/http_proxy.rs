@@ -33,14 +33,22 @@ impl HttpProxyApp {
         let user_route_config = UserRouteConfig::default();
         let user_router = Arc::new(UserRouter::new(user_route_config));
 
-        HttpProxyApp { client_connector: TransportConnector::new(None), proxy_to, user_router }
+        HttpProxyApp {
+            client_connector: TransportConnector::new(None),
+            proxy_to,
+            user_router,
+        }
     }
 
     /// 创建带自定义路由配置的代理服务器应用实例
     pub fn with_router(proxy_to: HttpPeer, user_route_config: UserRouteConfig) -> Self {
         let user_router = Arc::new(UserRouter::new(user_route_config));
 
-        HttpProxyApp { client_connector: TransportConnector::new(None), proxy_to, user_router }
+        HttpProxyApp {
+            client_connector: TransportConnector::new(None),
+            proxy_to,
+            user_router,
+        }
     }
 
     /// 解析 HTTP 请求并提取路径和用户ID
@@ -167,7 +175,10 @@ impl HttpProxyApp {
                     client_session.flush().await.unwrap();
                 }
                 DuplexEvent::UpstreamRead(n) => {
-                    server_session.write_all(&downstream_buf[0..n]).await.unwrap();
+                    server_session
+                        .write_all(&downstream_buf[0..n])
+                        .await
+                        .unwrap();
                     server_session.flush().await.unwrap();
                 }
             }
@@ -197,7 +208,10 @@ impl ServerApp for HttpProxyApp {
                 info!("🔀 User routing: {} -> user_id={}", path, user_id);
                 self.user_router.select_backend(user_id).await
             } else {
-                warn!("⚠️  Path requires user routing but no user_id found: {}", path);
+                warn!(
+                    "⚠️  Path requires user routing but no user_id found: {}",
+                    path
+                );
                 info!("Using default backend for: {}", path);
                 self.proxy_to.clone()
             }
@@ -305,8 +319,11 @@ mod tests {
 
     #[test]
     fn test_proxy_app_creation() {
-        let proxy_app =
-            HttpProxyApp::new(HttpPeer::new("127.0.0.1:3001", false, "localhost".to_string()));
+        let proxy_app = HttpProxyApp::new(HttpPeer::new(
+            "127.0.0.1:3001",
+            false,
+            "localhost".to_string(),
+        ));
         assert!(true, "Proxy app created successfully");
     }
 }

@@ -23,7 +23,11 @@ impl RevmExecutor {
         };
         db.insert_account_info(caller, account_info);
 
-        Self { db, contracts: HashMap::new(), caller }
+        Self {
+            db,
+            contracts: HashMap::new(),
+            caller,
+        }
     }
 
     pub fn deploy_contract(&mut self, name: &str, bytecode: Vec<u8>) -> Result<Address, String> {
@@ -38,14 +42,18 @@ impl RevmExecutor {
             })
             .build();
 
-        let result_and_state =
-            evm.transact().map_err(|e| format!("Transaction failed: {:?}", e))?;
+        let result_and_state = evm
+            .transact()
+            .map_err(|e| format!("Transaction failed: {:?}", e))?;
         drop(evm);
         self.db.commit(result_and_state.state);
         let result = result_and_state.result;
 
         match result {
-            ExecutionResult::Success { output: Output::Create(_, Some(address)), .. } => {
+            ExecutionResult::Success {
+                output: Output::Create(_, Some(address)),
+                ..
+            } => {
                 println!("✅ 合约 '{}' 部署成功: {:?}", name, address);
                 self.contracts.insert(name.to_string(), address);
                 Ok(address)
@@ -83,23 +91,30 @@ impl RevmExecutor {
             })
             .build();
 
-        let result_and_state =
-            evm.transact().map_err(|e| format!("Transaction failed: {:?}", e))?;
+        let result_and_state = evm
+            .transact()
+            .map_err(|e| format!("Transaction failed: {:?}", e))?;
         drop(evm);
         self.db.commit(result_and_state.state);
         let result = result_and_state.result;
 
         match result {
-            ExecutionResult::Success { output: Output::Call(output), gas_used, .. } => {
+            ExecutionResult::Success {
+                output: Output::Call(output),
+                gas_used,
+                ..
+            } => {
                 println!("✅ 合约调用成功，Gas 使用: {}", gas_used);
                 Ok(output)
             }
-            ExecutionResult::Revert { output, gas_used } => {
-                Err(format!("Contract call reverted (gas used: {}): {:?}", gas_used, output))
-            }
-            ExecutionResult::Halt { reason, gas_used } => {
-                Err(format!("Contract call halted (gas used: {}): {:?}", gas_used, reason))
-            }
+            ExecutionResult::Revert { output, gas_used } => Err(format!(
+                "Contract call reverted (gas used: {}): {:?}",
+                gas_used, output
+            )),
+            ExecutionResult::Halt { reason, gas_used } => Err(format!(
+                "Contract call halted (gas used: {}): {:?}",
+                gas_used, reason
+            )),
             _ => Err("Unexpected execution result".to_string()),
         }
     }
@@ -122,11 +137,16 @@ impl RevmExecutor {
             })
             .build();
 
-        let result = evm.transact().map_err(|e| format!("View call failed: {:?}", e))?;
+        let result = evm
+            .transact()
+            .map_err(|e| format!("View call failed: {:?}", e))?;
         let result = result.result;
 
         match result {
-            ExecutionResult::Success { output: Output::Call(output), .. } => Ok(output),
+            ExecutionResult::Success {
+                output: Output::Call(output),
+                ..
+            } => Ok(output),
             ExecutionResult::Revert { output, .. } => {
                 Err(format!("View call reverted: {:?}", output))
             }

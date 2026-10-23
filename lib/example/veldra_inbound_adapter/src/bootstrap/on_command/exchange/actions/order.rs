@@ -221,7 +221,11 @@ fn decimal_wire_to_core_units(raw: &str) -> String {
         normalized.push(ch);
     }
 
-    if normalized.is_empty() { raw.to_string() } else { normalized }
+    if normalized.is_empty() {
+        raw.to_string()
+    } else {
+        normalized
+    }
 }
 
 pub(crate) struct OrderAction;
@@ -241,17 +245,22 @@ impl ExchangeActionHandler for OrderAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "order" {
-        return Err(ExchangeHttpError::contract(OrderContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            OrderContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     // 通用字段校验统一复用 shared validator，避免各 action 分叉签名语义。
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.orders.is_empty() {
         return Err(ExchangeHttpError::contract(OrderContractError::EmptyOrders));
     }
-    if !matches!(request.action.grouping.as_str(), "na" | "normalTpsl" | "positionTpsl") {
-        return Err(ExchangeHttpError::contract(OrderContractError::InvalidGrouping));
+    if !matches!(
+        request.action.grouping.as_str(),
+        "na" | "normalTpsl" | "positionTpsl"
+    ) {
+        return Err(ExchangeHttpError::contract(
+            OrderContractError::InvalidGrouping,
+        ));
     }
     if let Some(builder) = &request.action.builder {
         validate_hex_address(&builder.b)
@@ -260,7 +269,9 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     for order in &request.action.orders {
         // 这里仅检查 wire 最小合法性；价格/数量的业务精度约束留给更内层 use case。
         if order.p.trim().is_empty() {
-            return Err(ExchangeHttpError::contract(OrderContractError::InvalidPrice));
+            return Err(ExchangeHttpError::contract(
+                OrderContractError::InvalidPrice,
+            ));
         }
         if order.s.trim().is_empty() {
             return Err(ExchangeHttpError::contract(OrderContractError::InvalidSize));
@@ -289,7 +300,11 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
                     ));
                 }
             }
-            _ => return Err(ExchangeHttpError::contract(OrderContractError::InvalidOrderType)),
+            _ => {
+                return Err(ExchangeHttpError::contract(
+                    OrderContractError::InvalidOrderType,
+                ));
+            }
         }
     }
     Ok(())
@@ -374,7 +389,9 @@ fn order_type_from_wire(
     order_type: &OrderTypeWire,
 ) -> Result<PlaceOnlySpotOrderV2OrderType, OrderContractError> {
     match (&order_type.limit, &order_type.trigger) {
-        (Some(limit), None) => Ok(PlaceOnlySpotOrderV2OrderType::Limit { tif: limit.tif.clone() }),
+        (Some(limit), None) => Ok(PlaceOnlySpotOrderV2OrderType::Limit {
+            tif: limit.tif.clone(),
+        }),
         (None, Some(trigger)) => Ok(PlaceOnlySpotOrderV2OrderType::Trigger {
             is_market: trigger.is_market,
             trigger_price: decimal_wire_to_core_units(&trigger.trigger_px),
@@ -413,7 +430,9 @@ fn execute_with_default_outbound(request: RequestWire) -> Vec<reply::OrderStatus
                 .action
                 .orders
                 .iter()
-                .map(|_| reply::OrderStatusWire::Error { error: error.to_string() })
+                .map(|_| reply::OrderStatusWire::Error {
+                    error: error.to_string(),
+                })
                 .collect();
         }
     };
@@ -446,7 +465,11 @@ where
     OE: std::fmt::Display,
 {
     let message = order_execution_error_message(error);
-    (0..count).map(|_| reply::OrderStatusWire::Error { error: message.clone() }).collect()
+    (0..count)
+        .map(|_| reply::OrderStatusWire::Error {
+            error: message.clone(),
+        })
+        .collect()
 }
 
 fn order_statuses_from_place_match_changes(
@@ -460,7 +483,10 @@ fn order_statuses_from_place_match_changes(
             created_taker_order,
             activation_changes: _,
             match_changes,
-        } => vec![order_status_from_match_changes(created_taker_order, match_changes)],
+        } => vec![order_status_from_match_changes(
+            created_taker_order,
+            match_changes,
+        )],
         PlaceMatchSpotOrderV2Changes::NormalTpslPlacedAndMatched {
             created_parent_order,
             created_child_orders,
@@ -468,9 +494,15 @@ fn order_statuses_from_place_match_changes(
             match_changes,
         } => {
             let mut statuses = Vec::with_capacity(1 + created_child_orders.len());
-            statuses.push(order_status_from_match_changes(created_parent_order, match_changes));
-            statuses
-                .extend(created_child_orders.iter().map(|order| resting_status(order.order_id())));
+            statuses.push(order_status_from_match_changes(
+                created_parent_order,
+                match_changes,
+            ));
+            statuses.extend(
+                created_child_orders
+                    .iter()
+                    .map(|order| resting_status(order.order_id())),
+            );
             statuses
         }
     }
@@ -491,9 +523,15 @@ fn order_status_from_match_changes(
         return resting_status(order.order_id());
     }
 
-    let notional =
-        taker_trades.iter().filter_map(|trade| trade.price.checked_mul(trade.qty)).sum::<u64>();
-    let avg_px = if filled_qty == 0 { 0 } else { notional / filled_qty };
+    let notional = taker_trades
+        .iter()
+        .filter_map(|trade| trade.price.checked_mul(trade.qty))
+        .sum::<u64>();
+    let avg_px = if filled_qty == 0 {
+        0
+    } else {
+        notional / filled_qty
+    };
     reply::OrderStatusWire::Filled {
         filled: reply::FilledOrderStatusWire {
             total_sz: filled_qty.to_string(),
@@ -504,7 +542,9 @@ fn order_status_from_match_changes(
 }
 
 fn resting_status(oid: u64) -> reply::OrderStatusWire {
-    reply::OrderStatusWire::Resting { resting: reply::RestingOrderStatusWire { oid } }
+    reply::OrderStatusWire::Resting {
+        resting: reply::RestingOrderStatusWire { oid },
+    }
 }
 
 fn order_execution_error_message<BE, OE>(error: ExecutionError<BE, OE>) -> String
@@ -566,7 +606,9 @@ mod tests {
             s: "2".to_string(),
             r: false,
             t: OrderTypeWire {
-                limit: Some(LimitOrderTypeWire { tif: "Gtc".to_string() }),
+                limit: Some(LimitOrderTypeWire {
+                    tif: "Gtc".to_string(),
+                }),
                 trigger: None,
             },
             c: cloid.map(str::to_string),
@@ -601,7 +643,9 @@ mod tests {
             SpotOrderSide::Buy,
             2,
             100,
-            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
+            SpotOrderType::Limit {
+                tif: SpotOrderTif::Gtc,
+            },
             None,
             0,
             1,
@@ -634,7 +678,10 @@ mod tests {
         created_trades: Vec<SpotTrade>,
     ) -> MatchSpotOrderV3Changes {
         MatchSpotOrderV3Changes::PartiallyFilled {
-            updated_taker_order: UpdatedEntityPair { before: order.clone(), after: order.clone() },
+            updated_taker_order: UpdatedEntityPair {
+                before: order.clone(),
+                after: order.clone(),
+            },
             updated_maker_orders: vec![],
             updated_balances: vec![],
             created_trades,
@@ -645,7 +692,10 @@ mod tests {
 
     fn empty_activation_changes(order: &SpotOrderV2) -> ActivateSpotOrderV2Changes {
         ActivateSpotOrderV2Changes {
-            updated_order: UpdatedEntityPair { before: order.clone(), after: order.clone() },
+            updated_order: UpdatedEntityPair {
+                before: order.clone(),
+                after: order.clone(),
+            },
             updated_balances: vec![],
             created_balance_ledger_entries: vec![],
         }
@@ -676,7 +726,9 @@ mod tests {
         assert_eq!(command.order_id, 1);
         assert_eq!(
             command.order_type,
-            PlaceOnlySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() }
+            PlaceOnlySpotOrderV2OrderType::Limit {
+                tif: "Gtc".to_string()
+            }
         );
     }
 
@@ -737,7 +789,9 @@ mod tests {
     #[test]
     fn placed_only_maps_to_resting() {
         let order = spot_order(42);
-        let changes = PlaceMatchSpotOrderV2Changes::SinglePlacedOnly { created_order: order };
+        let changes = PlaceMatchSpotOrderV2Changes::SinglePlacedOnly {
+            created_order: order,
+        };
 
         let statuses = order_statuses_from_place_match_changes(&changes);
 

@@ -409,7 +409,6 @@ impl Default for OrderType {
 /// - 使用 `#[repr(u8)]` 优化内存占用（1字节）
 /// - 状态编码从1开始，0可用于区分"无效/未初始化"状态
 /// - 终态（Filled, Cancelled, Rejected, Expired）明确，便于状态机判断
-///
 
 ///
 /// ## 状态定义
@@ -791,7 +790,8 @@ pub struct SpotOrder {
 
     // ===== 订单属性字段 =====
     pub client_order_id: Option<String>,            // 客户订单ID
-    pub source: OrderSource, // 订单来源 (API/WebUI/Algorithm/Conditional/System) (1字节)
+    pub source: OrderSource,                        /* 订单来源 (API/WebUI/Algorithm/
+                                                     * Conditional/System) (1字节) */
     pub execution_method: ExecutionMethod, // 执行方式 (Limit/Market) (1字节)
     pub conditional_type: ConditionalType, // 条件类型 (None/StopLoss/TakeProfit) (1字节)
     pub algorithm_strategy: AlgorithmStrategy, // 算法策略 (None/TWAP/VWAP/...) (1字节)
@@ -900,7 +900,11 @@ impl SpotOrder {
         let quote_asset = self.trading_pair.quote_asset().as_str().to_string();
 
         // 根据方向调用 CexFeeEntity 的费率计算
-        let fee_type = if is_taker { FeeType::Taker } else { FeeType::Maker };
+        let fee_type = if is_taker {
+            FeeType::Taker
+        } else {
+            FeeType::Maker
+        };
 
         // 调用费率计算函数（使用新的 API）
         match fee_entity.calculate_product_trading_fee(
@@ -1162,7 +1166,11 @@ impl SpotOrder {
 
     #[inline]
     pub fn order_type(&self) -> OrderType {
-        match (self.execution_method, self.conditional_type, self.time_in_force) {
+        match (
+            self.execution_method,
+            self.conditional_type,
+            self.time_in_force,
+        ) {
             (ExecutionMethod::Market, ConditionalType::None, TimeInForce::IOC) => OrderType::Market,
             (ExecutionMethod::Market, ConditionalType::StopLoss, _) => OrderType::StopLoss,
             (ExecutionMethod::Market, ConditionalType::TakeProfit, _) => OrderType::TakeProfit,
@@ -1177,13 +1185,16 @@ impl SpotOrder {
 
     #[inline]
     pub fn is_iceberg(&self) -> bool {
-        self.iceberg_qty.map(|q| q < self.total_base_qty).unwrap_or(false)
+        self.iceberg_qty
+            .map(|q| q < self.total_base_qty)
+            .unwrap_or(false)
     }
 
     #[inline]
     pub fn iceberg_visible_qty(&self) -> Quantity {
         if self.is_iceberg() {
-            self.unfilled_qty().min(self.iceberg_qty.unwrap_or(self.total_base_qty))
+            self.unfilled_qty()
+                .min(self.iceberg_qty.unwrap_or(self.total_base_qty))
         } else {
             self.unfilled_qty()
         }
@@ -1309,7 +1320,11 @@ mod tests {
         );
 
         let frozen_buy = buy_order.frozen_qty();
-        assert_eq!(frozen_buy, Price::from(50000), "Buy order should freeze 1.0 * 50000.0");
+        assert_eq!(
+            frozen_buy,
+            Price::from(50000),
+            "Buy order should freeze 1.0 * 50000.0"
+        );
 
         // 测试卖单的frozen_qty计算
         let sell_order = SpotOrder::create_order(
@@ -1325,7 +1340,11 @@ mod tests {
         );
 
         let frozen_sell = sell_order.frozen_qty();
-        assert_eq!(frozen_sell, Quantity::ONE, "Sell order should freeze 1.0 BTC");
+        assert_eq!(
+            frozen_sell,
+            Quantity::ONE,
+            "Sell order should freeze 1.0 BTC"
+        );
 
         // 测试部分成交后的frozen_qty
         let mut partial_order = SpotOrder::create_order(

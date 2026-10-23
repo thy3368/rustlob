@@ -194,25 +194,40 @@ mod tests {
     #[test]
     fn pre_check_rejects_blank_party_id() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.pre_check_query(
-            &QueryHyperliquidPerpOrderDetail { party_id: String::with_capacity(0), order_id: 1 },
+            &QueryHyperliquidPerpOrderDetail {
+                party_id: String::with_capacity(0),
+                order_id: 1,
+            },
         );
 
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InvalidPartyId));
+        assert_eq!(
+            result,
+            Err(QueryHyperliquidPerpOrderDetailError::InvalidPartyId)
+        );
     }
 
     #[test]
     fn pre_check_rejects_blank_order_id() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.pre_check_query(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 0 },
+            &QueryHyperliquidPerpOrderDetail {
+                party_id: "trader-1".to_string(),
+                order_id: 0,
+            },
         );
 
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InvalidOrderId));
+        assert_eq!(
+            result,
+            Err(QueryHyperliquidPerpOrderDetailError::InvalidOrderId)
+        );
     }
 
     #[test]
     fn validate_rejects_order_not_found() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
+            &QueryHyperliquidPerpOrderDetail {
+                party_id: "trader-1".to_string(),
+                order_id: 1,
+            },
             &QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: false,
                 owned_by_party: false,
@@ -220,13 +235,19 @@ mod tests {
             },
         );
 
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::OrderNotFound));
+        assert_eq!(
+            result,
+            Err(QueryHyperliquidPerpOrderDetailError::OrderNotFound)
+        );
     }
 
     #[test]
     fn validate_rejects_non_owner() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
+            &QueryHyperliquidPerpOrderDetail {
+                party_id: "trader-1".to_string(),
+                order_id: 1,
+            },
             &QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: true,
                 owned_by_party: false,
@@ -234,13 +255,19 @@ mod tests {
             },
         );
 
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::NotOrderOwner));
+        assert_eq!(
+            result,
+            Err(QueryHyperliquidPerpOrderDetailError::NotOrderOwner)
+        );
     }
 
     #[test]
     fn validate_rejects_missing_order_when_order_exists() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
+            &QueryHyperliquidPerpOrderDetail {
+                party_id: "trader-1".to_string(),
+                order_id: 1,
+            },
             &QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: true,
                 owned_by_party: true,
@@ -248,7 +275,10 @@ mod tests {
             },
         );
 
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState));
+        assert_eq!(
+            result,
+            Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState)
+        );
     }
 
     #[test]
@@ -258,7 +288,10 @@ mod tests {
         order.filled_sz = 1;
 
         let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
+            &QueryHyperliquidPerpOrderDetail {
+                party_id: "trader-1".to_string(),
+                order_id: 1,
+            },
             &QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: true,
                 owned_by_party: true,
@@ -266,13 +299,19 @@ mod tests {
             },
         );
 
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState));
+        assert_eq!(
+            result,
+            Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState)
+        );
     }
 
     #[test]
     fn compute_view_returns_order_body_fields() {
         let result = QueryHyperliquidPerpOrderDetailUseCase.compute_view(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
+            &QueryHyperliquidPerpOrderDetail {
+                party_id: "trader-1".to_string(),
+                order_id: 1,
+            },
             QueryHyperliquidPerpOrderDetailReadModel {
                 order_exists: true,
                 owned_by_party: true,

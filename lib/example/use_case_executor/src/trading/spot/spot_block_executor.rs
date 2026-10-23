@@ -83,7 +83,10 @@ mod tests {
 
     impl FakeSpotBlockOutbound {
         fn sink_calls(&self) -> Vec<ObservedSinkCall> {
-            self.sink_calls.lock().map(|calls| calls.clone()).unwrap_or_default()
+            self.sink_calls
+                .lock()
+                .map(|calls| calls.clone())
+                .unwrap_or_default()
         }
 
         fn record(
@@ -94,7 +97,10 @@ mod tests {
             self.sink_calls
                 .lock()
                 .map_err(|_| FakeSpotBlockOutboundError)?
-                .push(ObservedSinkCall { phase, events: events.to_vec() });
+                .push(ObservedSinkCall {
+                    phase,
+                    events: events.to_vec(),
+                });
             Ok(())
         }
     }
@@ -157,7 +163,9 @@ mod tests {
             SpotOrderSide::Buy,
             2,
             10_000,
-            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
+            SpotOrderType::Limit {
+                tif: SpotOrderTif::Gtc,
+            },
             Some("original-cloid".to_owned()),
             0,
             1,
@@ -190,13 +198,17 @@ mod tests {
             is_buy: true,
             price: "12000".to_owned(),
             size: "3".to_owned(),
-            order_type: ModifySpotOrderV2OrderType::Limit { tif: "gtc".to_owned() },
+            order_type: ModifySpotOrderV2OrderType::Limit {
+                tif: "gtc".to_owned(),
+            },
             cloid: None,
         })
     }
 
     fn valid_command() -> SpotBlockCmd {
-        SpotBlockCmd { commands: vec![cancel_command()] }
+        SpotBlockCmd {
+            commands: vec![cancel_command()],
+        }
     }
 
     #[test]
@@ -205,13 +217,17 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(ExecutionError::LoadState(DefaultSpotBlockOutboundError::StateUnavailable,)),
+            Err(ExecutionError::LoadState(
+                DefaultSpotBlockOutboundError::StateUnavailable,
+            )),
         );
     }
 
     #[test]
     fn execute_mixed_spot_block_projects_events_and_runs_all_sink_phases() {
-        let command = SpotBlockCmd { commands: vec![cancel_command(), modify_command()] };
+        let command = SpotBlockCmd {
+            commands: vec![cancel_command(), modify_command()],
+        };
         let outbound = FakeSpotBlockOutbound::default();
 
         let result = match execute_spot_block_with_outbound(&entry(command), &outbound) {
@@ -224,7 +240,10 @@ mod tests {
         assert_eq!(result.changes.item_results.len(), 2);
         assert!(matches!(
             &result.changes.item_results[0],
-            SpotBlockItemResult::Applied { changes: SpotBlockAppliedChanges::Cancel(_), .. }
+            SpotBlockItemResult::Applied {
+                changes: SpotBlockAppliedChanges::Cancel(_),
+                ..
+            }
         ));
         assert!(matches!(
             &result.changes.item_results[1],

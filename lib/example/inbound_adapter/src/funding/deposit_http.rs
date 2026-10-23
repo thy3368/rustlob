@@ -38,8 +38,14 @@ pub struct DepositQuoteHttpRequest {
 impl DepositQuoteHttpRequest {
     fn into_envelope(self) -> CommandEnvelope<DepositQuoteCmd> {
         CommandEnvelope {
-            meta: CommandMeta { trace_id: self.trace_id, command_id: self.command_id },
-            command: DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
+            meta: CommandMeta {
+                trace_id: self.trace_id,
+                command_id: self.command_id,
+            },
+            command: DepositQuoteCmd {
+                party_id: self.trader_id,
+                amount: self.amount,
+            },
         }
     }
 }
@@ -134,8 +140,10 @@ async fn create_deposit_actix<S>(
 where
     S: Send + Sync + 'static + DepositQuoteOutboundAccess,
 {
-    let response =
-        handle_deposit_quote_http(payload.into_inner(), state.get_ref().deposit_quote_outbound())?;
+    let response = handle_deposit_quote_http(
+        payload.into_inner(),
+        state.get_ref().deposit_quote_outbound(),
+    )?;
     Ok(HttpResponse::Ok().json(response))
 }
 

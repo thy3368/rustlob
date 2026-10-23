@@ -19,7 +19,10 @@ impl KafkaProducer {
             .create()
             .expect("Failed to create Kafka producer");
 
-        Self { producer, topic: topic.into() }
+        Self {
+            producer,
+            topic: topic.into(),
+        }
     }
 
     pub fn default_local(topic: impl Into<String>) -> Self {
@@ -33,8 +36,11 @@ impl EventPublisher2 for KafkaProducer {
         let record: FutureRecord<'_, (), Vec<u8>> =
             FutureRecord::to(&self.topic).payload(&payload).key(&());
 
-        block_on(self.producer.send(record, std::time::Duration::from_secs(5)))
-            .map_err(|e| PublishError(format!("Kafka error: {:?}", e)))?;
+        block_on(
+            self.producer
+                .send(record, std::time::Duration::from_secs(5)),
+        )
+        .map_err(|e| PublishError(format!("Kafka error: {:?}", e)))?;
         Ok(())
     }
 
@@ -66,7 +72,10 @@ mod tests {
             1000,
             1,
         );
-        let state = TestEvent { id: "123".to_string(), name: "test".to_string() };
+        let state = TestEvent {
+            id: "123".to_string(),
+            name: "test".to_string(),
+        };
         DomainEvent::new(change_log, state)
     }
 

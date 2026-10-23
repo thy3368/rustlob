@@ -65,7 +65,10 @@ fn handle_trade_created_event_optional(
         return Ok(None);
     };
 
-    aggregator.update_trade(&trade).map(Some).map_err(SpotTradeCreatedEventError::Aggregation)
+    aggregator
+        .update_trade(&trade)
+        .map(Some)
+        .map_err(SpotTradeCreatedEventError::Aggregation)
 }
 
 /// 成交 created event 到 K 线输入的解析或聚合错误。

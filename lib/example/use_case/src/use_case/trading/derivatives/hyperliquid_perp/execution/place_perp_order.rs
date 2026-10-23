@@ -144,7 +144,11 @@ impl PlaceHyperliquidPerpOrderCmd {
     }
 
     const fn side(&self) -> HyperliquidPerpOrderSide {
-        if self.is_buy { HyperliquidPerpOrderSide::Buy } else { HyperliquidPerpOrderSide::Sell }
+        if self.is_buy {
+            HyperliquidPerpOrderSide::Buy
+        } else {
+            HyperliquidPerpOrderSide::Sell
+        }
     }
 }
 
@@ -252,7 +256,9 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
             .belongs_to_account(common_entity::stable_string_entity_id(&state.account_id))
             || !state
                 .margin_balance
-                .is_asset(common_entity::stable_string_entity_id(&state.margin_asset_id))
+                .is_asset(common_entity::stable_string_entity_id(
+                    &state.margin_asset_id,
+                ))
         {
             return Err(PlaceHyperliquidPerpOrderError::InvalidMarginBalance);
         }
@@ -360,7 +366,9 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
         let mut freeze_ledger_entry = place_outcome
             .freeze_ledger_entry
             .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
-        freeze_ledger_entry.apply_to(&mut next_balance).map_err(map_margin_ledger_error)?;
+        freeze_ledger_entry
+            .apply_to(&mut next_balance)
+            .map_err(map_margin_ledger_error)?;
 
         Ok(PlaceHyperliquidPerpOrderChanges {
             created_order,

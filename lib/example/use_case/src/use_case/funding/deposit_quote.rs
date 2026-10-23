@@ -85,7 +85,9 @@ impl CommandUseCase4 for DepositQuoteUseCase {
     ) -> Result<Self::Changes, Self::Error> {
         let quote_balance_before = state.quote_balance;
         let mut quote_balance_after = quote_balance_before.clone();
-        quote_balance_after.credit_available(cmd.amount).map_err(map_balance_error)?;
+        quote_balance_after
+            .credit_available(cmd.amount)
+            .map_err(map_balance_error)?;
 
         Ok(DepositQuoteChanges {
             updated_quote_balance: UpdatedEntityPair {
@@ -146,8 +148,10 @@ mod tests {
     #[test]
     fn pre_check_rejects_zero_amount() {
         let use_case = DepositQuoteUseCase;
-        let result = use_case
-            .pre_check_command(&DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 0 });
+        let result = use_case.pre_check_command(&DepositQuoteCmd {
+            party_id: "trader-1".to_string(),
+            amount: 0,
+        });
 
         assert_eq!(result, Err(DepositQuoteError::InvalidAmount));
     }
@@ -156,11 +160,15 @@ mod tests {
     fn compute_replayable_events_updates_available_quote() -> Result<(), DepositQuoteError> {
         let use_case = DepositQuoteUseCase;
         let changes = use_case.compute_changes(
-            &DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
+            &DepositQuoteCmd {
+                party_id: "trader-1".to_string(),
+                amount: 200,
+            },
             sample_state(),
         )?;
-        let events =
-            changes.to_replayable_events().map_err(|_| DepositQuoteError::ArithmeticOverflow)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| DepositQuoteError::ArithmeticOverflow)?;
 
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());

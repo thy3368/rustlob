@@ -258,7 +258,8 @@ pub trait EntityLifecycle {
     /// 返回实体最后更新时间，单位为 Unix 纳秒。更新时从command里面取
     fn updated_at(&self) -> u64;
 
-    /// 有点版本号的意思，如果command的高于entity里面的，说明entity没有更新，use case里面要报错，在check state里面有用，解决数据一致问题。
+    /// 有点版本号的意思，如果command的高于entity里面的，说明entity没有更新，use
+    /// case里面要报错，在check state里面有用，解决数据一致问题。
 
     /// 返回生命周期时间是否满足 `created_at <= updated_at`。
     #[inline]
@@ -423,8 +424,9 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
 
         for change in self.created_field_changes() {
             let field_type = Self::replay_field_type(change.field_name.as_ref());
-            event
-                .add_field_change(ReplayFieldChange::from_entity_field_change(&change, field_type));
+            event.add_field_change(ReplayFieldChange::from_entity_field_change(
+                &change, field_type,
+            ));
         }
 
         Ok(event)
@@ -485,8 +487,9 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
 
         for change in changes {
             let field_type = Self::replay_field_type(change.field_name.as_ref());
-            event
-                .add_field_change(ReplayFieldChange::from_entity_field_change(&change, field_type));
+            event.add_field_change(ReplayFieldChange::from_entity_field_change(
+                &change, field_type,
+            ));
         }
 
         Ok(event)
@@ -513,7 +516,9 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
 
 #[inline]
 fn increment_version(version: u64) -> Result<u64, EntityError> {
-    version.checked_add(1).ok_or(EntityError::VersionOverflow { version })
+    version
+        .checked_add(1)
+        .ok_or(EntityError::VersionOverflow { version })
 }
 
 #[inline]

@@ -94,7 +94,10 @@ pub struct NatsEventActor {
 
 impl NatsEventActor {
     pub fn new(messages: VecDeque<NatsMessage>) -> Self {
-        Self { messages, dispatcher: NatsDispatcher::new() }
+        Self {
+            messages,
+            dispatcher: NatsDispatcher::new(),
+        }
     }
 
     pub fn into_result(self) -> Option<SettlementResult> {
@@ -134,7 +137,9 @@ pub fn run_event_actor_with_nats_queue() -> Result<SettlementResult, EventHandle
             .ok_or_else(|| EventHandlerError("nats actor ended without settlement result".into()))
     });
 
-    join_handle.join().map_err(|_| EventHandlerError("nats actor thread panicked".into()))?
+    join_handle
+        .join()
+        .map_err(|_| EventHandlerError("nats actor thread panicked".into()))?
 }
 
 #[cfg(test)]

@@ -41,7 +41,11 @@ impl<O: LobOrder> LocalLobBtree<O> {
         Ok(())
     }
     fn remove_idx(&mut self, o: &O, i: usize) {
-        let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
+        let map = if O::is_buy_side(o.side()) {
+            &mut self.bids
+        } else {
+            &mut self.asks
+        };
         if let Some(v) = map.get_mut(&o.price()) {
             v.retain(|&x| x != i);
             if v.is_empty() {
@@ -53,7 +57,11 @@ impl<O: LobOrder> LocalLobBtree<O> {
         if !o.is_active() {
             return;
         }
-        let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
+        let map = if O::is_buy_side(o.side()) {
+            &mut self.bids
+        } else {
+            &mut self.asks
+        };
         map.entry(o.price()).or_default().push(i);
     }
     fn put(&mut self, o: O) {
@@ -89,8 +97,11 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
         let map = if buy { &self.asks } else { &self.bids };
         let mut remaining = q;
         let mut out = vec![];
-        let iter: Box<dyn Iterator<Item = (&u64, &Vec<usize>)>> =
-            if buy { Box::new(map.iter()) } else { Box::new(map.iter().rev()) };
+        let iter: Box<dyn Iterator<Item = (&u64, &Vec<usize>)>> = if buy {
+            Box::new(map.iter())
+        } else {
+            Box::new(map.iter().rev())
+        };
         for (&px, indices) in iter {
             if (buy && px > p) || (!buy && px < p) {
                 break;
@@ -165,8 +176,9 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
                 self.put(order);
             }
             t if t == EntityChangeType::Deleted.as_tag() => {
-                let old =
-                    self.order(id).ok_or_else(|| LobError::Event("order does not exist".into()))?;
+                let old = self
+                    .order(id)
+                    .ok_or_else(|| LobError::Event("order does not exist".into()))?;
                 if old.entity_ver() != event.previous_lsn {
                     return Err(LobError::Event("invalid delete".into()));
                 }

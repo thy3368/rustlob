@@ -5,8 +5,9 @@ use rstest::rstest;
 
 #[actix_web::test]
 async fn cancel_action_run_json_returns_default_outbound_error_status() {
-    let response =
-        CancelAction::run_json(valid_cancel_request_json()).await.expect("cancel action runs");
+    let response = CancelAction::run_json(valid_cancel_request_json())
+        .await
+        .expect("cancel action runs");
 
     assert_eq!(response.response.type_, "cancel");
     assert_eq!(
@@ -37,7 +38,9 @@ async fn cancel_action_run_json_rejects_contract_errors(
     #[case] body: &'static [u8],
     #[case] expected_error: &'static str,
 ) {
-    let error = CancelAction::run_json(body).await.expect_err("cancel request should fail");
+    let error = CancelAction::run_json(body)
+        .await
+        .expect_err("cancel request should fail");
 
     assert!(matches!(error, ExchangeHttpError::ActionContract(_)));
     assert_eq!(error.to_string(), expected_error);

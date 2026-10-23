@@ -71,7 +71,10 @@ impl DepositQuoteCliCommand {
                 trace_id: Some("cli-deposit-quote".to_string()),
                 command_id: Some(format!("cli:deposit:{}:{}", self.trader_id, self.amount)),
             },
-            command: DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
+            command: DepositQuoteCmd {
+                party_id: self.trader_id,
+                amount: self.amount,
+            },
         }
     }
 }
@@ -89,11 +92,13 @@ where
 {
     let mut args = args.into_iter().map(Into::into);
 
-    let trader_id = args.next().unwrap_or_else(|| DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID.to_string());
+    let trader_id = args
+        .next()
+        .unwrap_or_else(|| DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID.to_string());
     let amount = match args.next() {
-        Some(raw) => {
-            raw.parse::<u64>().map_err(|_| ParseDepositQuoteCliArgsError::InvalidAmount(raw))?
-        }
+        Some(raw) => raw
+            .parse::<u64>()
+            .map_err(|_| ParseDepositQuoteCliArgsError::InvalidAmount(raw))?,
         None => DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT,
     };
 
@@ -158,7 +163,10 @@ mod tests {
     fn cli_adapter_translates_deposit_command_and_maps_text_response()
     -> Result<(), Box<dyn std::error::Error>> {
         let outbound = DepositQuoteTestOutbound::default();
-        let command = DepositQuoteCliCommand { trader_id: "trader-1".to_string(), amount: 200 };
+        let command = DepositQuoteCliCommand {
+            trader_id: "trader-1".to_string(),
+            amount: 200,
+        };
 
         let response = run_deposit_quote_cli(command, &outbound)?;
         let counts = outbound.snapshot_event_counts()?;

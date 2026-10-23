@@ -68,6 +68,9 @@ impl Handler<SpotTradeCmdOrQuery, SpotTradeResAny, SpotApiErrorAny> for SpotTrad
                 self, cmd,
             )?;
 
-        Ok(CmdResp::new(ResMetadata::new(0, false, Timestamp(0)), result))
+        Ok(CmdResp::new(
+            ResMetadata::new(0, false, Timestamp(0)),
+            result,
+        ))
     }
 }

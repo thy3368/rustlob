@@ -44,12 +44,26 @@ pub use use_case::support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair}
 /// Error raised while tracking entity state into replayable events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntityError {
-    EntityIdMismatch { expected: String, actual: String },
-    EntityIdParseError { entity_id: String, reason: String },
-    EntityVersionMismatch { expected_next: u64, actual_next: u64 },
-    FieldParseError { field: String, reason: String },
+    EntityIdMismatch {
+        expected: String,
+        actual: String,
+    },
+    EntityIdParseError {
+        entity_id: String,
+        reason: String,
+    },
+    EntityVersionMismatch {
+        expected_next: u64,
+        actual_next: u64,
+    },
+    FieldParseError {
+        field: String,
+        reason: String,
+    },
     NoChangesDetected,
-    VersionOverflow { version: u64 },
+    VersionOverflow {
+        version: u64,
+    },
     ClockError(String),
     Custom(String),
 }
@@ -58,12 +72,19 @@ impl std::fmt::Display for EntityError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::EntityIdMismatch { expected, actual } => {
-                write!(f, "Entity ID mismatch: expected {}, got {}", expected, actual)
+                write!(
+                    f,
+                    "Entity ID mismatch: expected {}, got {}",
+                    expected, actual
+                )
             }
             Self::EntityIdParseError { entity_id, reason } => {
                 write!(f, "Failed to parse entity ID '{}': {}", entity_id, reason)
             }
-            Self::EntityVersionMismatch { expected_next, actual_next } => {
+            Self::EntityVersionMismatch {
+                expected_next,
+                actual_next,
+            } => {
                 write!(
                     f,
                     "Entity version mismatch: expected next version {}, got {}",

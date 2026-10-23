@@ -274,18 +274,20 @@ impl PerpClearinghouseState {
                 continue;
             }
 
-            let mark =
-                input.market_marks.iter().find(|mark| mark.asset == position.perp_asset_id).ok_or(
-                    PerpClearinghouseStateCalcError::MissingMarketMark {
-                        asset: position.perp_asset_id,
-                    },
-                )?;
-            let risk_rule =
-                input.risk_rules.iter().find(|rule| rule.asset == position.perp_asset_id).ok_or(
-                    PerpClearinghouseStateCalcError::MissingRiskRule {
-                        asset: position.perp_asset_id,
-                    },
-                )?;
+            let mark = input
+                .market_marks
+                .iter()
+                .find(|mark| mark.asset == position.perp_asset_id)
+                .ok_or(PerpClearinghouseStateCalcError::MissingMarketMark {
+                    asset: position.perp_asset_id,
+                })?;
+            let risk_rule = input
+                .risk_rules
+                .iter()
+                .find(|rule| rule.asset == position.perp_asset_id)
+                .ok_or(PerpClearinghouseStateCalcError::MissingRiskRule {
+                    asset: position.perp_asset_id,
+                })?;
 
             let position_notional =
                 checked_mul(decimal_from_u64(position.qty())?, mark.mark_price)?;
@@ -340,8 +342,10 @@ impl PerpClearinghouseState {
         let total_margin_used =
             checked_add(position_initial_margin_used, open_order_initial_margin_used)?;
         // 账户权益以 collateral 事实加未实现盈亏估算；cross 视图只叠加 cross 仓位的盈亏。
-        let total_raw_usd =
-            checked_add(input.collateral.total_raw_usd, input.collateral.pending_settlement_delta)?;
+        let total_raw_usd = checked_add(
+            input.collateral.total_raw_usd,
+            input.collateral.pending_settlement_delta,
+        )?;
         let account_value = checked_add(total_raw_usd, total_unrealized_pnl)?;
         let cross_account_value = checked_add(total_raw_usd, cross_unrealized_pnl)?;
         let withdrawable_before_floor = checked_sub(account_value, total_margin_used)?;
@@ -422,7 +426,9 @@ impl PerpClearinghouseState {
 
     /// 返回是否存在未平仓仓位。
     pub fn has_open_positions(&self) -> bool {
-        self.position_risks.iter().any(|risk| !risk.position.is_flat())
+        self.position_risks
+            .iter()
+            .any(|risk| !risk.position.is_flat())
     }
 
     /// 按展示合约符号查找仓位。
@@ -435,7 +441,9 @@ impl PerpClearinghouseState {
 
     /// 按展示合约符号查找仓位风险快照。
     pub fn position_risk_of(&self, symbol: &str) -> Option<&PerpPositionRiskSnapshot> {
-        self.position_risks.iter().find(|risk| risk.position.trades_symbol(symbol))
+        self.position_risks
+            .iter()
+            .find(|risk| risk.position.trades_symbol(symbol))
     }
 }
 
@@ -475,15 +483,18 @@ fn validate_non_negative(
 }
 
 fn checked_add(lhs: Decimal, rhs: Decimal) -> Result<Decimal, PerpClearinghouseStateCalcError> {
-    lhs.checked_add(rhs).ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    lhs.checked_add(rhs)
+        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 fn checked_sub(lhs: Decimal, rhs: Decimal) -> Result<Decimal, PerpClearinghouseStateCalcError> {
-    lhs.checked_sub(rhs).ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    lhs.checked_sub(rhs)
+        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 fn checked_mul(lhs: Decimal, rhs: Decimal) -> Result<Decimal, PerpClearinghouseStateCalcError> {
-    lhs.checked_mul(rhs).ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    lhs.checked_mul(rhs)
+        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 fn checked_div_decimal(
@@ -493,7 +504,8 @@ fn checked_div_decimal(
     if rhs.is_zero() {
         return Ok(zero());
     }
-    lhs.checked_div(rhs).ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    lhs.checked_div(rhs)
+        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 fn decimal_from_u64(value: u64) -> Result<Decimal, PerpClearinghouseStateCalcError> {
@@ -508,7 +520,9 @@ fn decimal_to_units(value: Decimal) -> Result<u64, PerpClearinghouseStateCalcErr
     if value.is_sign_negative() || !value.fract().is_zero() {
         return Err(PerpClearinghouseStateCalcError::ArithmeticOverflow);
     }
-    value.to_u64().ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
+    value
+        .to_u64()
+        .ok_or(PerpClearinghouseStateCalcError::ArithmeticOverflow)
 }
 
 #[cfg(test)]

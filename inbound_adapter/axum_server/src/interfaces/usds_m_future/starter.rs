@@ -36,7 +36,10 @@ impl UsdsMFutureStarter {
             .with_state(trade_service);
 
         let market_data_routes = Router::new()
-            .route("/api/usds-m-future/market/data", post(md_controller::handle))
+            .route(
+                "/api/usds-m-future/market/data",
+                post(md_controller::handle),
+            )
             .with_state(market_data_service);
 
         let user_data_routes = Router::new()

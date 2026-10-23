@@ -121,12 +121,16 @@ pub struct InMemoryStorage {
 impl InMemoryStorage {
     /// 创建新的内存存储
     pub fn new() -> Self {
-        Self { nodes: HashMap::new() }
+        Self {
+            nodes: HashMap::new(),
+        }
     }
 
     /// 使用指定容量创建内存存储
     pub fn with_capacity(capacity: usize) -> Self {
-        Self { nodes: HashMap::with_capacity(capacity) }
+        Self {
+            nodes: HashMap::with_capacity(capacity),
+        }
     }
 
     /// 获取内存使用量（估算，字节）
@@ -187,7 +191,11 @@ impl<S: Storage> CachedStorage<S> {
     /// - `backend`: 底层存储实现
     /// - `cache_size`: 缓存大小限制
     pub fn new(backend: S, cache_size: usize) -> Self {
-        Self { backend, cache: HashMap::new(), cache_size }
+        Self {
+            backend,
+            cache: HashMap::new(),
+            cache_size,
+        }
     }
 
     /// 清空缓存
@@ -197,7 +205,10 @@ impl<S: Storage> CachedStorage<S> {
 
     /// 获取缓存命中率统计
     pub fn cache_stats(&self) -> CacheStats {
-        CacheStats { size: self.cache.len(), capacity: self.cache_size }
+        CacheStats {
+            size: self.cache.len(),
+            capacity: self.cache_size,
+        }
     }
 }
 
@@ -253,7 +264,11 @@ pub struct CacheStats {
 impl CacheStats {
     /// 计算缓存使用率
     pub fn usage_ratio(&self) -> f64 {
-        if self.capacity == 0 { 0.0 } else { self.size as f64 / self.capacity as f64 }
+        if self.capacity == 0 {
+            0.0
+        } else {
+            self.size as f64 / self.capacity as f64
+        }
     }
 }
 

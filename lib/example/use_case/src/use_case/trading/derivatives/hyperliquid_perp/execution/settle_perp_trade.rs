@@ -193,7 +193,10 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
                     .positions
                     .get(&key)
                     .cloned()
-                    .map(|after| UpdatedEntityPair { before: position.clone(), after })
+                    .map(|after| UpdatedEntityPair {
+                        before: position.clone(),
+                        after,
+                    })
             })
             .collect::<Vec<_>>();
         let mut changed_margin_balances = Vec::with_capacity(0);
@@ -218,8 +221,10 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
                 balance.identifier().map(str::to_string),
                 next_version,
             );
-            changed_margin_balances
-                .push(UpdatedEntityPair { before: balance.clone(), after: next_balance });
+            changed_margin_balances.push(UpdatedEntityPair {
+                before: balance.clone(),
+                after: next_balance,
+            });
         }
 
         Ok(SettleHyperliquidPerpTradeChanges {
@@ -250,7 +255,11 @@ fn validate_trade_ids_match(
     if cmd.trade_ids.len() != state.trades.len() {
         return Err(SettleHyperliquidPerpTradeError::TradeIdsMismatch);
     }
-    if cmd.trade_ids.iter().zip(&state.trades).any(|(trade_id, trade)| trade_id != &trade.trade_id)
+    if cmd
+        .trade_ids
+        .iter()
+        .zip(&state.trades)
+        .any(|(trade_id, trade)| trade_id != &trade.trade_id)
     {
         return Err(SettleHyperliquidPerpTradeError::TradeIdsMismatch);
     }
@@ -261,7 +270,11 @@ fn ensure_not_settled(
     state: &SettleHyperliquidPerpTradeState,
 ) -> Result<(), SettleHyperliquidPerpTradeError> {
     let settled: HashSet<&str> = state.settled_trade_ids.iter().map(String::as_str).collect();
-    if state.trades.iter().any(|trade| settled.contains(trade.trade_id.as_str())) {
+    if state
+        .trades
+        .iter()
+        .any(|trade| settled.contains(trade.trade_id.as_str()))
+    {
         return Err(SettleHyperliquidPerpTradeError::TradeAlreadySettled);
     }
     Ok(())
@@ -276,8 +289,9 @@ fn derive_settlement_outcome(
     let mut vouchers = Vec::with_capacity(state.trades.len());
 
     for (index, trade) in state.trades.iter().enumerate() {
-        let notional =
-            trade.notional_quote().ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+        let notional = trade
+            .notional_quote()
+            .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
         let taker_fee = fee_from_bps(notional, state.taker_fee_bps)?;
         let maker_fee = fee_from_bps(notional, state.maker_fee_bps)?;
 
@@ -332,8 +346,9 @@ fn derive_settlement_outcome(
         positions.insert(taker_position_key, settlement.taker_position_after);
         positions.insert(maker_position_key, settlement.maker_position_after);
 
-        let next_index =
-            index.checked_add(1).ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+        let next_index = index
+            .checked_add(1)
+            .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
         let settlement_id = settlement_id(cmd.settlement_batch_id.as_str(), next_index);
         let voucher = trade
             .derive_perp_settlement_transfer_voucher(
@@ -349,7 +364,11 @@ fn derive_settlement_outcome(
         vouchers.push(voucher);
     }
 
-    Ok(SettlementOutcome { vouchers, positions, balance_deltas })
+    Ok(SettlementOutcome {
+        vouchers,
+        positions,
+        balance_deltas,
+    })
 }
 
 fn validate_position_for_trade(
@@ -395,9 +414,12 @@ fn validate_balances_can_apply(
 ) -> Result<(), SettleHyperliquidPerpTradeError> {
     let balances = balance_map(&state.margin_balances);
     for (key, delta) in deltas {
-        let balance =
-            balances.get(key).ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
-        if !balance.is_asset(common_entity::stable_string_entity_id(&state.margin_asset_id)) {
+        let balance = balances
+            .get(key)
+            .ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
+        if !balance.is_asset(common_entity::stable_string_entity_id(
+            &state.margin_asset_id,
+        )) {
             return Err(SettleHyperliquidPerpTradeError::InvalidMarginBalance);
         }
         if apply_signed_delta(balance.available, delta.available_delta).is_err() {
@@ -463,7 +485,11 @@ fn position_map(positions: impl Iterator<Item = PerpPosition>) -> BTreeMap<Strin
     positions
         .map(|position| {
             (
-                position_key(&position.account_id, position.perp_asset_id, position.coin.as_str()),
+                position_key(
+                    &position.account_id,
+                    position.perp_asset_id,
+                    position.coin.as_str(),
+                ),
                 position,
             )
         })
@@ -471,12 +497,19 @@ fn position_map(positions: impl Iterator<Item = PerpPosition>) -> BTreeMap<Strin
 }
 
 fn balance_map(balances: &[Balance]) -> HashMap<String, &Balance> {
-    balances.iter().map(|balance| (balance.business_entity_id(), balance)).collect()
+    balances
+        .iter()
+        .map(|balance| (balance.business_entity_id(), balance))
+        .collect()
 }
 
 fn position_key(account_id: &str, asset: u32, symbol: &str) -> String {
     let asset = asset.to_string();
-    concat3(account_id, ":", concat3(asset.as_str(), ":", symbol).as_str())
+    concat3(
+        account_id,
+        ":",
+        concat3(asset.as_str(), ":", symbol).as_str(),
+    )
 }
 
 fn balance_key(account_id: &str, asset_id: &str) -> String {
@@ -619,7 +652,9 @@ mod tests {
         events: &'a [EntityReplayableEvent],
         field_name: &str,
     ) -> Option<&'a EntityReplayableEvent> {
-        events.iter().find(|event| event.is_updated() && event_field(event, field_name).is_some())
+        events
+            .iter()
+            .find(|event| event.is_updated() && event_field(event, field_name).is_some())
     }
 
     fn settlement_voucher(
@@ -657,7 +692,14 @@ mod tests {
 
     #[test]
     fn validate_rejects_trade_id_mismatch_and_already_settled() {
-        let trade = trade("trade-1", HyperliquidPerpOrderSide::Buy, "buyer", "seller", 100, 2);
+        let trade = trade(
+            "trade-1",
+            HyperliquidPerpOrderSide::Buy,
+            "buyer",
+            "seller",
+            100,
+            2,
+        );
         let state = state(
             vec![trade],
             vec![empty_position("buyer", 10), empty_position("seller", 10)],
@@ -681,7 +723,14 @@ mod tests {
 
     #[test]
     fn validate_rejects_missing_balance_position_and_invalid_leverage() {
-        let trade = trade("trade-1", HyperliquidPerpOrderSide::Buy, "buyer", "seller", 100, 2);
+        let trade = trade(
+            "trade-1",
+            HyperliquidPerpOrderSide::Buy,
+            "buyer",
+            "seller",
+            100,
+            2,
+        );
         let missing_position = state(
             vec![trade.clone()],
             vec![empty_position("buyer", 10)],
@@ -720,7 +769,14 @@ mod tests {
     fn compute_opens_positions_and_reserves_cross_margin()
     -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
-            vec![trade("trade-1", HyperliquidPerpOrderSide::Buy, "buyer", "seller", 100, 2)],
+            vec![trade(
+                "trade-1",
+                HyperliquidPerpOrderSide::Buy,
+                "buyer",
+                "seller",
+                100,
+                2,
+            )],
             vec![empty_position("buyer", 10), empty_position("seller", 10)],
             vec![balance("buyer", 1_000, 0), balance("seller", 1_000, 0)],
         );
@@ -735,14 +791,23 @@ mod tests {
         assert_eq!(changes.changed_positions.len(), 2);
         assert_eq!(changes.changed_margin_balances.len(), 2);
         assert_eq!(changes.changed_positions[0].before.version, 0);
-        assert_eq!(changes.changed_positions[0].after.required_margin().unwrap_or(0), 20);
+        assert_eq!(
+            changes.changed_positions[0]
+                .after
+                .required_margin()
+                .unwrap_or(0),
+            20
+        );
         assert_eq!(changes.changed_margin_balances[0].before.available, 1_000);
         assert_eq!(changes.changed_margin_balances[0].after.frozen, 20);
         assert_eq!(voucher.voucher_id(), voucher.entity_id());
         assert_eq!(voucher.settlement_id(), "settle-1-1");
         assert_eq!(voucher.trade_id(), "trade-1");
         assert_eq!(voucher.match_id(), Some("match-1"));
-        assert_eq!(voucher.settlement_kind(), crate::entity::SettlementKind::Perp);
+        assert_eq!(
+            voucher.settlement_kind(),
+            crate::entity::SettlementKind::Perp
+        );
         assert!(
             voucher
                 .transfers_for_purpose(
@@ -756,11 +821,17 @@ mod tests {
                 .is_empty()
         );
         assert!(events[0].is_created());
-        assert_eq!(field_as_u64(&events[0], "voucher_id"), Some(voucher.voucher_id()));
+        assert_eq!(
+            field_as_u64(&events[0], "voucher_id"),
+            Some(voucher.voucher_id())
+        );
         assert_eq!(event_field(&events[0], "settlement_kind"), Some("perp"));
         assert_eq!(event_field(&events[0], "settlement_id"), Some("settle-1-1"));
         assert_eq!(event_field(&events[0], "trade_id"), Some("trade-1"));
-        assert_eq!(event_field(&events[0], "fee_account_id"), Some("fee-account"));
+        assert_eq!(
+            event_field(&events[0], "fee_account_id"),
+            Some("fee-account")
+        );
         assert_eq!(field_as_u64(&events[0], "leg_count"), Some(0));
         assert_eq!(field_as_u64(&events[0], "notional"), None);
         assert_eq!(field_as_u64(&events[0], "taker_fee"), None);
@@ -776,7 +847,10 @@ mod tests {
             Some("20")
         );
         assert_eq!(
-            event_field(updated_event(&events, "seller", "frozen").unwrap(), "available"),
+            event_field(
+                updated_event(&events, "seller", "frozen").unwrap(),
+                "available"
+            ),
             Some("980")
         );
 
@@ -787,8 +861,18 @@ mod tests {
     fn compute_adds_same_side_position_with_weighted_entry()
     -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
-            vec![trade("trade-1", HyperliquidPerpOrderSide::Buy, "buyer", "seller", 120, 2)],
-            vec![position("buyer", 2 as i64, 100, 10, 0), empty_position("seller", 10)],
+            vec![trade(
+                "trade-1",
+                HyperliquidPerpOrderSide::Buy,
+                "buyer",
+                "seller",
+                120,
+                2,
+            )],
+            vec![
+                position("buyer", 2 as i64, 100, 10, 0),
+                empty_position("seller", 10),
+            ],
             vec![balance("buyer", 1_000, 20), balance("seller", 1_000, 0)],
         );
 
@@ -817,8 +901,18 @@ mod tests {
     fn compute_partial_close_without_counterparty_close_creates_no_realized_pnl_transfer()
     -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
-            vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 130, 1)],
-            vec![position("buyer", 3 as i64, 100, 10, 0), empty_position("seller", 10)],
+            vec![trade(
+                "trade-1",
+                HyperliquidPerpOrderSide::Sell,
+                "buyer",
+                "seller",
+                130,
+                1,
+            )],
+            vec![
+                position("buyer", 3 as i64, 100, 10, 0),
+                empty_position("seller", 10),
+            ],
             vec![balance("buyer", 1_000, 30), balance("seller", 1_000, 0)],
         );
 
@@ -838,9 +932,15 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(event_field_i64(buyer_position, "signed_size"), Some(2));
-        assert_eq!(event_field_i64(buyer_position, "cumulative_realized_pnl"), Some(30));
         assert_eq!(
-            event_field(updated_event(&events, "buyer", "available").unwrap(), "available"),
+            event_field_i64(buyer_position, "cumulative_realized_pnl"),
+            Some(30)
+        );
+        assert_eq!(
+            event_field(
+                updated_event(&events, "buyer", "available").unwrap(),
+                "available"
+            ),
             Some("1040")
         );
 
@@ -851,7 +951,14 @@ mod tests {
     fn compute_partial_close_with_counterparty_close_creates_realized_pnl_transfer_leg()
     -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
-            vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 130, 1)],
+            vec![trade(
+                "trade-1",
+                HyperliquidPerpOrderSide::Sell,
+                "buyer",
+                "seller",
+                130,
+                1,
+            )],
             vec![
                 position("buyer", 3 as i64, 100, 10, 0),
                 position("seller", -(2 as i64), 100, 10, 0),
@@ -873,15 +980,30 @@ mod tests {
         assert_eq!(pnl_legs[0].asset_id(), "USDC");
         assert_eq!(pnl_legs[0].amount(), 30);
         assert_eq!(field_as_u64(&events[0], "leg_count"), Some(1));
-        assert_eq!(event_field(&events[0], "leg_0_purpose"), Some("perp_realized_pnl_transfer"));
-        assert_eq!(event_field(&events[0], "leg_0_from_account_id"), Some("seller"));
-        assert_eq!(event_field(&events[0], "leg_0_to_account_id"), Some("buyer"));
         assert_eq!(
-            event_field(updated_event(&events, "buyer", "available").unwrap(), "available"),
+            event_field(&events[0], "leg_0_purpose"),
+            Some("perp_realized_pnl_transfer")
+        );
+        assert_eq!(
+            event_field(&events[0], "leg_0_from_account_id"),
+            Some("seller")
+        );
+        assert_eq!(
+            event_field(&events[0], "leg_0_to_account_id"),
+            Some("buyer")
+        );
+        assert_eq!(
+            event_field(
+                updated_event(&events, "buyer", "available").unwrap(),
+                "available"
+            ),
             Some("1040")
         );
         assert_eq!(
-            event_field(updated_event(&events, "seller", "available").unwrap(), "available"),
+            event_field(
+                updated_event(&events, "seller", "available").unwrap(),
+                "available"
+            ),
             Some("980")
         );
 
@@ -891,7 +1013,14 @@ mod tests {
     #[test]
     fn compute_flattens_positions_to_flat() -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
-            vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 120, 1)],
+            vec![trade(
+                "trade-1",
+                HyperliquidPerpOrderSide::Sell,
+                "buyer",
+                "seller",
+                120,
+                1,
+            )],
             vec![
                 position("buyer", 1 as i64, 100, 10, 0),
                 position("seller", -(1 as i64), 100, 10, 0),
@@ -905,7 +1034,12 @@ mod tests {
         let buyer_position = updated_event_with_field(&events, "cumulative_realized_pnl").unwrap();
         let voucher = settlement_voucher(&changes);
 
-        assert!(changes.changed_positions.iter().all(|pair| pair.after.is_flat()));
+        assert!(
+            changes
+                .changed_positions
+                .iter()
+                .all(|pair| pair.after.is_flat())
+        );
         assert!(changes.changed_positions[0].after.is_flat());
         assert!(changes.changed_positions[1].after.is_flat());
         assert_eq!(event_field_i64(buyer_position, "signed_size"), Some(0));
@@ -923,8 +1057,18 @@ mod tests {
     #[test]
     fn compute_flips_position_after_over_close() -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
-            vec![trade("trade-1", HyperliquidPerpOrderSide::Sell, "buyer", "seller", 90, 3)],
-            vec![position("buyer", 2 as i64, 100, 10, 0), empty_position("seller", 10)],
+            vec![trade(
+                "trade-1",
+                HyperliquidPerpOrderSide::Sell,
+                "buyer",
+                "seller",
+                90,
+                3,
+            )],
+            vec![
+                position("buyer", 2 as i64, 100, 10, 0),
+                empty_position("seller", 10),
+            ],
             vec![balance("buyer", 1_000, 20), balance("seller", 1_000, 0)],
         );
 
@@ -952,7 +1096,14 @@ mod tests {
     #[test]
     fn validate_rejects_insufficient_available_margin() {
         let state = state(
-            vec![trade("trade-1", HyperliquidPerpOrderSide::Buy, "buyer", "seller", 100, 2)],
+            vec![trade(
+                "trade-1",
+                HyperliquidPerpOrderSide::Buy,
+                "buyer",
+                "seller",
+                100,
+                2,
+            )],
             vec![empty_position("buyer", 10), empty_position("seller", 10)],
             vec![balance("buyer", 19, 0), balance("seller", 1_000, 0)],
         );
@@ -966,7 +1117,14 @@ mod tests {
     #[test]
     fn compute_creates_taker_and_maker_fee_legs() -> Result<(), SettleHyperliquidPerpTradeError> {
         let state = state(
-            vec![trade("trade-1", HyperliquidPerpOrderSide::Buy, "buyer", "seller", 10_000, 10)],
+            vec![trade(
+                "trade-1",
+                HyperliquidPerpOrderSide::Buy,
+                "buyer",
+                "seller",
+                10_000,
+                10,
+            )],
             vec![empty_position("buyer", 10), empty_position("seller", 10)],
             vec![balance("buyer", 100_000, 0), balance("seller", 100_000, 0)],
         );
@@ -982,10 +1140,22 @@ mod tests {
         assert_eq!(voucher.fee_amount_paid_by("buyer"), Some(50));
         assert_eq!(voucher.fee_amount_paid_by("seller"), Some(20));
         assert_eq!(field_as_u64(&events[0], "leg_count"), Some(2));
-        assert_eq!(event_field(&events[0], "leg_0_purpose"), Some("trading_fee"));
-        assert_eq!(event_field(&events[0], "leg_0_to_account_id"), Some("fee-account"));
-        assert_eq!(event_field(&events[0], "leg_1_purpose"), Some("trading_fee"));
-        assert_eq!(event_field(&events[0], "leg_1_to_account_id"), Some("fee-account"));
+        assert_eq!(
+            event_field(&events[0], "leg_0_purpose"),
+            Some("trading_fee")
+        );
+        assert_eq!(
+            event_field(&events[0], "leg_0_to_account_id"),
+            Some("fee-account")
+        );
+        assert_eq!(
+            event_field(&events[0], "leg_1_purpose"),
+            Some("trading_fee")
+        );
+        assert_eq!(
+            event_field(&events[0], "leg_1_to_account_id"),
+            Some("fee-account")
+        );
 
         Ok(())
     }

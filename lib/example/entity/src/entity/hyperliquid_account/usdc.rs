@@ -15,11 +15,13 @@ impl Usdc {
     pub(crate) fn from_decimal(d: Decimal) -> Self {
         // 向下截断，对用户保守
         let scaled = (d * Decimal::from(Self::SCALE)).trunc();
-        Usdc(
-            scaled
-                .to_i128()
-                .unwrap_or_else(|| if scaled.is_sign_negative() { i128::MIN } else { i128::MAX }),
-        )
+        Usdc(scaled.to_i128().unwrap_or_else(|| {
+            if scaled.is_sign_negative() {
+                i128::MIN
+            } else {
+                i128::MAX
+            }
+        }))
     }
 
     pub(crate) fn truncate(d: Decimal) -> Self {

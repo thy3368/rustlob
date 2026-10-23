@@ -53,7 +53,9 @@ impl ResponseError for InfoHttpError {
     }
 
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code())
-            .json(ErrorResponseWire { status: "err", error: self.to_string() })
+        HttpResponse::build(self.status_code()).json(ErrorResponseWire {
+            status: "err",
+            error: self.to_string(),
+        })
     }
 }

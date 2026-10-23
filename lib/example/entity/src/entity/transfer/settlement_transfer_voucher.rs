@@ -460,7 +460,9 @@ impl SettlementTransferVoucher {
 
     /// [General] 返回该凭证是否引用指定账户。
     pub fn references_account(&self, account_id: &str) -> bool {
-        self.legs.iter().any(|leg| leg.references_account(account_id))
+        self.legs
+            .iter()
+            .any(|leg| leg.references_account(account_id))
     }
 
     /// [General] 返回指定业务用途下的稳定转账结论。
@@ -507,7 +509,9 @@ impl SettlementTransferVoucher {
     /// [General] 返回该凭证是否引用指定底层余额流水。
     pub fn references_ledger_entry<I: IntoLedgerEntryId>(&self, entry_id: I) -> bool {
         let entry_id = entry_id.into_ledger_entry_id();
-        self.legs.iter().any(|leg| leg.references_ledger_entry(entry_id))
+        self.legs
+            .iter()
+            .any(|leg| leg.references_ledger_entry(entry_id))
     }
 
     fn balance_ledger_reason_for(&self, leg: &SettlementTransferLeg) -> BalanceLedgerReason {

@@ -58,7 +58,9 @@ fn limit_command(order_id: u64) -> PlaceOnlySpotOrderV2Cmd {
         is_buy: true,
         price: "100".to_string(),
         size: "2".to_string(),
-        order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "gtc".to_string() },
+        order_type: PlaceOnlySpotOrderV2OrderType::Limit {
+            tif: "gtc".to_string(),
+        },
         reduce_only: false,
         cloid: Some("tps-cloid".to_string()),
         base_asset_id: "BTC".to_string(),
@@ -82,10 +84,9 @@ fn run_business(warmup: Duration, measurement: Duration) -> RunStats {
     while warmup_start.elapsed() < warmup {
         set_order_id(&mut command, order_id);
         order_id = order_id.saturating_add(1);
-        let _ = black_box(compute_place_only_spot_order_v2_business(black_box(&entry(
-            command.clone(),
-            order_id,
-        ))));
+        let _ = black_box(compute_place_only_spot_order_v2_business(black_box(
+            &entry(command.clone(), order_id),
+        )));
     }
 
     let start = Instant::now();
@@ -101,7 +102,10 @@ fn run_business(warmup: Duration, measurement: Duration) -> RunStats {
         let _ = black_box(result);
     }
 
-    RunStats { successful, elapsed: start.elapsed() }
+    RunStats {
+        successful,
+        elapsed: start.elapsed(),
+    }
 }
 
 fn run_executor(warmup: Duration, measurement: Duration) -> RunStats {
@@ -133,13 +137,21 @@ fn run_executor(warmup: Duration, measurement: Duration) -> RunStats {
         let _ = black_box(result);
     }
 
-    RunStats { successful, elapsed: start.elapsed() }
+    RunStats {
+        successful,
+        elapsed: start.elapsed(),
+    }
 }
 
 fn main() {
-    let warmup = env_seconds("PLACE_ONLY_SPOT_ORDER_V2_TPS_WARMUP_SECONDS", DEFAULT_WARMUP_SECONDS);
-    let measurement =
-        env_seconds("PLACE_ONLY_SPOT_ORDER_V2_TPS_SECONDS", DEFAULT_MEASUREMENT_SECONDS);
+    let warmup = env_seconds(
+        "PLACE_ONLY_SPOT_ORDER_V2_TPS_WARMUP_SECONDS",
+        DEFAULT_WARMUP_SECONDS,
+    );
+    let measurement = env_seconds(
+        "PLACE_ONLY_SPOT_ORDER_V2_TPS_SECONDS",
+        DEFAULT_MEASUREMENT_SECONDS,
+    );
     let business = run_business(warmup, measurement);
     let executor = run_executor(warmup, measurement);
 

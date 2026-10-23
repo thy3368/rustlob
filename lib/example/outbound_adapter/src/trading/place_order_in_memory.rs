@@ -39,7 +39,10 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         let base_asset_id = base_asset_id_for(&market_rules.symbol).to_string();
         let quote_asset_id = quote_asset_id_for(&market_rules.symbol).to_string();
         let mut settlement_balances = state.balances.values().cloned().collect::<Vec<_>>();
-        if !state.balances.contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, &quote_asset_id)) {
+        if !state
+            .balances
+            .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, &quote_asset_id))
+        {
             settlement_balances.push(example_core_use_case::Balance::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
@@ -49,12 +52,20 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
                 1,
             ));
         }
-        if !state.balances.contains_key(&balance_key(&order_cmd.party_id, &base_asset_id))
-            || !state.balances.contains_key(&balance_key(&order_cmd.party_id, &quote_asset_id))
+        if !state
+            .balances
+            .contains_key(&balance_key(&order_cmd.party_id, &base_asset_id))
+            || !state
+                .balances
+                .contains_key(&balance_key(&order_cmd.party_id, &quote_asset_id))
         {
             return Err(PlaceOrderOutboundError::BalanceNotFound);
         }
-        let side = if order_cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
+        let side = if order_cmd.is_buy {
+            SpotOrderSide::Buy
+        } else {
+            SpotOrderSide::Sell
+        };
         let maker_orders = state
             .lob
             .match_orders(u64::MAX, u64::MAX, side)
@@ -96,19 +107,21 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
             let order_id = event_string_field(event, "order_id")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
             broker
-                .publish(SpotPipelineMessage::SpotOrderPlaced(SpotOrderPlacedMessage {
-                    match_id: order_id.clone(),
-                    order_id,
-                    party_id: event_string_field(event, "account_id")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    symbol: event_string_field(event, "symbol")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-                    asset: event_u64_field(event, "asset")
-                        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
-                        as u32,
-                    trace_id: None,
-                    command_id: None,
-                }))
+                .publish(SpotPipelineMessage::SpotOrderPlaced(
+                    SpotOrderPlacedMessage {
+                        match_id: order_id.clone(),
+                        order_id,
+                        party_id: event_string_field(event, "account_id")
+                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                        symbol: event_string_field(event, "symbol")
+                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
+                        asset: event_u64_field(event, "asset")
+                            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
+                            as u32,
+                        trace_id: None,
+                        command_id: None,
+                    },
+                ))
                 .map_err(|_| PlaceOrderOutboundError::BrokerPublishFailed)?;
         }
         Ok(())
@@ -130,7 +143,9 @@ pub(crate) fn replay_events(
             && event_string_field(event, "caused_by_order_id").is_some()
         {
             let reservation = decode_created_reservation(event)?;
-            state.reservations.insert(reservation.reservation_id.clone(), reservation);
+            state
+                .reservations
+                .insert(reservation.reservation_id.clone(), reservation);
             continue;
         }
         if event.entity_type == SpotOrderV2::entity_type() && event.is_created() {

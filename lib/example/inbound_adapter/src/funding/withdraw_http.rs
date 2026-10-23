@@ -38,8 +38,14 @@ pub struct WithdrawQuoteHttpRequest {
 impl WithdrawQuoteHttpRequest {
     fn into_envelope(self) -> CommandEnvelope<WithdrawQuoteCmd> {
         CommandEnvelope {
-            meta: CommandMeta { trace_id: self.trace_id, command_id: self.command_id },
-            command: WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
+            meta: CommandMeta {
+                trace_id: self.trace_id,
+                command_id: self.command_id,
+            },
+            command: WithdrawQuoteCmd {
+                party_id: self.trader_id,
+                amount: self.amount,
+            },
         }
     }
 }
@@ -98,7 +104,10 @@ pub fn build_withdraw_actix_scope<S>() -> Scope
 where
     S: Send + Sync + 'static + WithdrawQuoteOutboundAccess,
 {
-    web::scope("").route("/withdrawals/quote", web::post().to(create_withdraw_actix::<S>))
+    web::scope("").route(
+        "/withdrawals/quote",
+        web::post().to(create_withdraw_actix::<S>),
+    )
 }
 
 #[inbound_adapter_support::collect_http_endpoint(

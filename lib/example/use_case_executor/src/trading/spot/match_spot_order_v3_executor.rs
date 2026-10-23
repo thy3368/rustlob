@@ -147,7 +147,11 @@ mod tests {
     }
 
     fn place_cmd() -> MatchSpotOrderV3Cmd {
-        MatchSpotOrderV3Cmd { party_id: "buyer".to_string(), asset: 10_001, order_id: 1 }
+        MatchSpotOrderV3Cmd {
+            party_id: "buyer".to_string(),
+            asset: 10_001,
+            order_id: 1,
+        }
     }
 
     fn buy_order(
@@ -166,7 +170,14 @@ mod tests {
         price: u64,
         qty: u64,
     ) -> Result<SpotOrderV2, FakePlaceSpotOrderV2OutboundError> {
-        order(order_id, account_id, SpotOrderSide::Sell, price, qty, SpotOrderTif::Gtc)
+        order(
+            order_id,
+            account_id,
+            SpotOrderSide::Sell,
+            price,
+            qty,
+            SpotOrderTif::Gtc,
+        )
     }
 
     fn order(
@@ -214,7 +225,9 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(ExecutionError::LoadState(DefaultSpotOrderV2PlaceOutboundError::StateUnavailable,)),
+            Err(ExecutionError::LoadState(
+                DefaultSpotOrderV2PlaceOutboundError::StateUnavailable,
+            )),
         );
     }
 
@@ -228,7 +241,10 @@ mod tests {
 
         let changes = result.changes;
         assert_eq!(
-            changes.taker_order_after().expect("taker should be updated").status(),
+            changes
+                .taker_order_after()
+                .expect("taker should be updated")
+                .status(),
             SpotOrderStatus::Canceled,
         );
         assert_eq!(changes.updated_maker_orders().len(), 1);
@@ -236,7 +252,12 @@ mod tests {
         assert!(changes.created_trades()[0].created_at > 0);
         assert!(!changes.updated_balances().is_empty());
         assert!(!changes.created_balance_ledger_entries().is_empty());
-        assert!(changes.updated_balances().iter().any(|pair| pair.before != pair.after));
+        assert!(
+            changes
+                .updated_balances()
+                .iter()
+                .any(|pair| pair.before != pair.after)
+        );
 
         assert!(!result.events.is_empty());
     }

@@ -43,7 +43,11 @@ impl<
         match_order_handler: MatchOrderCmdHandler<R, P, L>,
         sett_order_handler: SettOrderCmdHandler<R, P>,
     ) -> Self {
-        Self { place_order_handler, match_order_handler, sett_order_handler }
+        Self {
+            place_order_handler,
+            match_order_handler,
+            sett_order_handler,
+        }
     }
 
     // 规则：place/match/settlement 分阶段串联，后一阶段必须消费前一阶段输出
@@ -54,7 +58,9 @@ impl<
             self.place_order_handler.publisher.clone(),
         )?;
         let trades = self.match_order_handler.cmd_handle(
-            MatchCmd { taker_order: order.object().clone() },
+            MatchCmd {
+                taker_order: order.object().clone(),
+            },
             self.match_order_handler.repo.clone(),
             self.match_order_handler.publisher.clone(),
         )?;
@@ -75,7 +81,11 @@ impl<
             None
         };
 
-        Ok(PlaceOrderPipelineReply { order, trades, balances })
+        Ok(PlaceOrderPipelineReply {
+            order,
+            trades,
+            balances,
+        })
     }
 
     pub fn handle(&self, cmd: &NewOrderCmd) -> Result<PlaceOrderPipelineReply, SpotApiErrorAny> {
@@ -267,7 +277,9 @@ mod tests {
     /// #规则BDD：先挂一笔卖单，再挂一笔限价买单，完全撮合
     /// -数据 /Users/hongyaotang/src/rustlob/lib/common/lob_repo/src/adapter/embedded_lob_repo.rs
     /// -lob 使用 EmbeddedLobRepo
-    /// -repo 不使用MockMySqlRepo 使用/Users/hongyaotang/src/rustlob/lib/common/db_repo/src/adapter/mysql_repo.rs 下的MySqlRepo
+    /// -repo 不使用MockMySqlRepo
+    /// 使用/Users/hongyaotang/src/rustlob/lib/common/db_repo/src/adapter/mysql_repo.rs
+    /// 下的MySqlRepo
     #[test]
     fn test_pipeline_exec_full_match_generates_trade() {
         let maker_order = create_sell_order(21, "maker_sell_001");
@@ -280,8 +292,9 @@ mod tests {
             SettOrderCmdHandler::new(repo.clone(), MockEventPublisher),
         );
 
-        let reply =
-            pipeline.exec(create_test_cmd("taker_buy_001")).expect("pipeline exec should succeed");
+        let reply = pipeline
+            .exec(create_test_cmd("taker_buy_001"))
+            .expect("pipeline exec should succeed");
 
         let trades = reply.trades.expect("full match should generate trades");
         let balances = reply.balances.expect("full match should generate balances");
@@ -305,8 +318,10 @@ mod tests {
         assert_eq!(stored_order.order_id, reply.order.object().order_id);
         assert_eq!(stored_trade.trade_id, trade.trade_id);
         assert_eq!(balances.len(), 2);
-        let asset_ids: Vec<AssetId> =
-            balances.iter().map(|balance| balance.object().asset_id).collect();
+        let asset_ids: Vec<AssetId> = balances
+            .iter()
+            .map(|balance| balance.object().asset_id)
+            .collect();
         assert!(asset_ids.contains(&AssetId::Usdt));
         assert!(asset_ids.contains(&AssetId::Btc));
         for balance in &balances {
@@ -341,8 +356,10 @@ mod tests {
 
         assert_eq!(trades.len(), 2);
         assert_ne!(trades[0].object().trade_id, trades[1].object().trade_id);
-        let maker_order_ids: Vec<_> =
-            trades.iter().map(|trade| trade.object().maker_order_id).collect();
+        let maker_order_ids: Vec<_> = trades
+            .iter()
+            .map(|trade| trade.object().maker_order_id)
+            .collect();
         assert!(maker_order_ids.contains(&maker_order_one.order_id));
         assert!(maker_order_ids.contains(&maker_order_two.order_id));
         for trade in &trades {
@@ -350,8 +367,9 @@ mod tests {
             assert_eq!(trade.object().price, Price::from(50000));
             assert_eq!(trade.object().base_qty, Quantity::ONE);
         }
-        let total_base_qty =
-            trades.iter().fold(Quantity::default(), |acc, trade| acc + trade.object().base_qty);
+        let total_base_qty = trades.iter().fold(Quantity::default(), |acc, trade| {
+            acc + trade.object().base_qty
+        });
         assert_eq!(total_base_qty, Quantity::from(2));
 
         let stored_first_trade = repo

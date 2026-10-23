@@ -1,4 +1,6 @@
-// 参考 v1 stream Endpoints /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/v1/websocket-api 定义所有 v1 stream 接口
+// 参考 v1 stream Endpoints
+// /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/v1/
+// websocket-api 定义所有 v1 stream 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 
@@ -563,7 +565,10 @@ pub enum UsdsMFutureTradeStreamCmdError {
     /// 序列化/反序列化错误
     SerializationError(String),
     /// 比率限制超出
-    RateLimitExceeded { limit_type: String, retry_after: i64 },
+    RateLimitExceeded {
+        limit_type: String,
+        retry_after: i64,
+    },
     /// API错误
     ApiError { code: i32, msg: String },
     /// 未知错误
@@ -669,6 +674,7 @@ impl TradeStreamUrlBuilder {
 /// 签名生成器接口
 pub trait SignatureGenerator: Send + Sync {
     /// 生成HMAC SHA256签名
-    /// 参数格式: symbol=BTCUSDT&side=BUY&type=LIMIT&timeInForce=GTC&quantity=1&price=9000&recvWindow=5000&timestamp=1591702613943
+    /// 参数格式: symbol=BTCUSDT&side=BUY&type=LIMIT&timeInForce=GTC&quantity=1&price=9000&
+    /// recvWindow=5000&timestamp=1591702613943
     fn generate(&self, query_string: &str, secret_key: &str) -> String;
 }

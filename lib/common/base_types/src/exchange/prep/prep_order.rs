@@ -156,7 +156,10 @@ pub struct PrepOrder {
 
 impl PrepOrder {
     pub fn frozen_margin(&mut self, mut balance: Balance, now: Timestamp) {
-        assert!(self.status == FutureOrderStatus::Pending, "Pending状态才能冻结");
+        assert!(
+            self.status == FutureOrderStatus::Pending,
+            "Pending状态才能冻结"
+        );
 
         let estimate_price = self.price.unwrap_or_else(|| Decimal::from(50000));
         // 直接使用 Price，无需转换
@@ -263,7 +266,13 @@ impl PrepOrder {
         let fill_price = self.price.unwrap_or_else(|| Decimal::from(50000));
 
         // 直接调用 position.update() 更新持仓
-        match_p.add(fill_qty, fill_price, self.leverage, self.side, crate::PositionSide::Long);
+        match_p.add(
+            fill_qty,
+            fill_price,
+            self.leverage,
+            self.side,
+            crate::PositionSide::Long,
+        );
 
         if self.remaining_qty().is_zero() {
             self.status = FutureOrderStatus::Filled

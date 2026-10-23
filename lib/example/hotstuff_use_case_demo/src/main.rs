@@ -20,24 +20,33 @@ fn main() -> DemoResult<()> {
     println!("[hotstuff_use_case_demo] 启动 3 节点 HotStuff spot order use case demo");
 
     let mut rng = rand_core::OsRng;
-    let signing_keys: Vec<SigningKey> =
-        (0..NODE_COUNT).map(|_| SigningKey::generate(&mut rng)).collect();
+    let signing_keys: Vec<SigningKey> = (0..NODE_COUNT)
+        .map(|_| SigningKey::generate(&mut rng))
+        .collect();
     let verifying_keys: Vec<VerifyingKey> =
         signing_keys.iter().map(SigningKey::verifying_key).collect();
-    println!("[hotstuff_use_case_demo] 生成 {} 个验证者密钥", verifying_keys.len());
+    println!(
+        "[hotstuff_use_case_demo] 生成 {} 个验证者密钥",
+        verifying_keys.len()
+    );
 
     let network_stubs = mock_network(verifying_keys.iter().copied());
     let init_vs_state = demo_validator_set_state(&verifying_keys);
     let initial_app_state = SpotOrderApp::initial_app_state();
-    let request_queues: Vec<Arc<Mutex<Vec<SpotBlockCommand>>>> =
-        (0..NODE_COUNT).map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
+    let request_queues: Vec<Arc<Mutex<Vec<SpotBlockCommand>>>> = (0..NODE_COUNT)
+        .map(|_| Arc::new(Mutex::new(Vec::new())))
+        .collect();
     let inserted_payload_blocks = Arc::new(Mutex::new(0usize));
     let committed_blocks = Arc::new(Mutex::new(0usize));
     let mut replicas: Vec<Replica<MemDB>> = Vec::new();
 
     for index in 0..NODE_COUNT {
         let kv_store = MemDB::new();
-        Replica::initialize(kv_store.clone(), initial_app_state.clone(), init_vs_state.clone());
+        Replica::initialize(
+            kv_store.clone(),
+            initial_app_state.clone(),
+            init_vs_state.clone(),
+        );
 
         let inserted_payload_blocks_for_handler = Arc::clone(&inserted_payload_blocks);
         let committed_blocks_for_handler = Arc::clone(&committed_blocks);
@@ -78,7 +87,11 @@ fn main() -> DemoResult<()> {
         .parse()?;
     let _http_server = start_http_server(
         http_addr,
-        Arc::clone(request_queues.first().ok_or("missing leader request queue")?),
+        Arc::clone(
+            request_queues
+                .first()
+                .ok_or("missing leader request queue")?,
+        ),
     )?;
 
     let place_command = PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
@@ -89,7 +102,9 @@ fn main() -> DemoResult<()> {
         is_buy: true,
         price: "100".to_string(),
         size: "2".to_string(),
-        order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "ioc".to_string() },
+        order_type: PlaceOnlySpotOrderV2OrderType::Limit {
+            tif: "ioc".to_string(),
+        },
         reduce_only: false,
         cloid: Some("demo-place-1".to_string()),
         base_asset_id: "BTC".to_string(),
@@ -162,8 +177,12 @@ fn main() -> DemoResult<()> {
         })
         .ok_or("committed cancel execution summary missing")?;
     let cancel_summary: serde_json::Value = serde_json::from_slice(&cancel_value)?;
-    let inserted_count = *inserted_payload_blocks.lock().map_err(|_| "insert count poisoned")?;
-    let committed_count = *committed_blocks.lock().map_err(|_| "commit count poisoned")?;
+    let inserted_count = *inserted_payload_blocks
+        .lock()
+        .map_err(|_| "insert count poisoned")?;
+    let committed_count = *committed_blocks
+        .lock()
+        .map_err(|_| "commit count poisoned")?;
     if inserted_count == 0 {
         return Err("未观察到非空 payload block inserted event".into());
     }
@@ -176,7 +195,10 @@ fn main() -> DemoResult<()> {
         serde_json::to_string(&place_summary)?,
         serde_json::to_string(&cancel_summary)?
     );
-    println!("[hotstuff_use_case_demo] 成功完成，请求出块并提交，耗时 {:?}", start.elapsed());
+    println!(
+        "[hotstuff_use_case_demo] 成功完成，请求出块并提交，耗时 {:?}",
+        start.elapsed()
+    );
 
     Ok(())
 }

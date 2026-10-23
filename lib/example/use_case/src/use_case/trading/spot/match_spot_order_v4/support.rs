@@ -159,13 +159,18 @@ pub(super) fn merge_balance_pairs(
     let mut pairs = Vec::with_capacity(after.len());
     for balance in after {
         let balance_id = balance.business_entity_id();
-        let before_balance =
-            before_map.get(&balance_id).cloned().ok_or(MatchSpotOrderV4Error::BalanceNotFound)?;
+        let before_balance = before_map
+            .get(&balance_id)
+            .cloned()
+            .ok_or(MatchSpotOrderV4Error::BalanceNotFound)?;
         if !seen.insert(balance_id) {
             return Err(MatchSpotOrderV4Error::BalanceNotFound);
         }
         if before_balance != balance {
-            pairs.push(UpdatedEntityPair { before: before_balance, after: balance });
+            pairs.push(UpdatedEntityPair {
+                before: before_balance,
+                after: balance,
+            });
         }
     }
     Ok(pairs)
@@ -216,7 +221,11 @@ pub(super) fn balance_replay_events_from_ledger_entries(
     let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
         let Some(before) = current_balances
-            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
+            .get(&concat3(
+                &entry.account_id.to_string(),
+                ":",
+                &entry.asset_id.to_string(),
+            ))
             .cloned()
         else {
             return Err(common_entity::EntityError::Custom(
@@ -244,10 +253,13 @@ pub(super) fn balance_replay_events_from_ledger_entries(
                 "balance ledger entry breaks balance replay chain".to_string(),
             ));
         }
-        let next_version = before
-            .version
-            .checked_add(1)
-            .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
+        let next_version =
+            before
+                .version
+                .checked_add(1)
+                .ok_or(common_entity::EntityError::VersionOverflow {
+                    version: before.version,
+                })?;
         let after = Balance::new(
             before.party_id,
             before.account_id,
@@ -258,7 +270,12 @@ pub(super) fn balance_replay_events_from_ledger_entries(
         );
         events.push(after.track_update_event_from(&before)?);
         current_balances.insert(
-            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
+            concat3(
+                &entry.account_id.to_string(),
+                ":",
+                &entry.asset_id.to_string(),
+            )
+            .clone(),
             after,
         );
     }
@@ -304,8 +321,9 @@ pub(super) fn settle_matched_trades(
     let mut created_vouchers = Vec::with_capacity(trades.len());
 
     for (index, trade) in trades.iter().enumerate() {
-        let trade_notional =
-            trade.notional_quote().ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
+        let trade_notional = trade
+            .notional_quote()
+            .ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
         let taker_principal_consume =
             principal_consume_amount_for_order(taker_order, trade.qty, trade_notional);
         consume_reservation(
@@ -385,8 +403,14 @@ fn consume_reservation(
         return Ok(());
     }
     let before = reservation.clone();
-    let close_reason = if amount == before.remaining_amount { Some(terminal_reason) } else { None };
-    reservation.consume(amount, close_reason).map_err(map_reservation_error_to_family)?;
+    let close_reason = if amount == before.remaining_amount {
+        Some(terminal_reason)
+    } else {
+        None
+    };
+    reservation
+        .consume(amount, close_reason)
+        .map_err(map_reservation_error_to_family)?;
     Ok(())
 }
 
@@ -463,7 +487,13 @@ fn release_order_reservation(
             .map_err(map_reservation_error_to_family)?;
         (asset_id, release_amount)
     };
-    release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)
+    release_to_balance(
+        order,
+        &asset_id,
+        release_amount,
+        balance_book,
+        ledger_entries,
+    )
 }
 
 fn release_to_balance(
@@ -474,16 +504,18 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), MatchSpotOrderV4Error> {
     let reason = match order.side() {
-        SpotOrderSide::Buy => {
-            BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order.order_id() }
-        }
-        SpotOrderSide::Sell => {
-            BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order.order_id() }
-        }
+        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
+            order_id: order.order_id(),
+        },
+        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
+            order_id: order.order_id(),
+        },
     };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
-    let next_release_index =
-        ledger_entries.len().checked_add(1).ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
+    let next_release_index = ledger_entries
+        .len()
+        .checked_add(1)
+        .ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
     let entry = apply_balance_ledger_entry(
         BalanceLedgerOperation::Unfreeze,
         common_entity::stable_string_entity_id(&concat4(
@@ -597,10 +629,14 @@ fn apply_trade_balance_effects(
         trade_ids: trade_ids.clone(),
         settlement_ids: settlement_ids.clone(),
     };
-    let seller_release_base_reason =
-        BalanceLedgerReason::SettleSpotTradeSellerReleaseFrozenBase { trade_ids, settlement_ids };
+    let seller_release_base_reason = BalanceLedgerReason::SettleSpotTradeSellerReleaseFrozenBase {
+        trade_ids,
+        settlement_ids,
+    };
 
-    let quote_notional = trade.notional_quote().ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
+    let quote_notional = trade
+        .notional_quote()
+        .ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
     let buyer_account_id = trade.buyer_account_id().to_string();
     let seller_account_id = trade.seller_account_id().to_string();
 
@@ -753,12 +789,20 @@ fn apply_trade_balance_effects(
 
 fn fee_payer_for_buyer(trade: &SpotTrade) -> Option<(String, u64)> {
     let amount = trade.buyer_fee();
-    if amount == 0 { None } else { Some((trade.buyer_account_id().to_string(), amount)) }
+    if amount == 0 {
+        None
+    } else {
+        Some((trade.buyer_account_id().to_string(), amount))
+    }
 }
 
 fn fee_payer_for_seller(trade: &SpotTrade) -> Option<(String, u64)> {
     let amount = trade.seller_fee();
-    if amount == 0 { None } else { Some((trade.seller_account_id().to_string(), amount)) }
+    if amount == 0 {
+        None
+    } else {
+        Some((trade.seller_account_id().to_string(), amount))
+    }
 }
 
 fn map_reservation_error_to_family(error: crate::ReservationError) -> MatchSpotOrderV4Error {

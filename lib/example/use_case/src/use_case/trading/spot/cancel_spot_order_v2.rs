@@ -94,7 +94,11 @@ impl ReplayableChanges for CancelSpotOrderV2Changes {
             .saturating_add(self.created_balance_ledger_entries.len())
             .saturating_add(self.created_balance_ledger_entries.len());
         let mut events = Vec::with_capacity(event_capacity);
-        events.push(self.updated_order.after.track_update_event_from(&self.updated_order.before)?);
+        events.push(
+            self.updated_order
+                .after
+                .track_update_event_from(&self.updated_order.before)?,
+        );
         events.extend(balance_replay_events_from_ledger_entries(
             &self.updated_balances,
             &self.created_balance_ledger_entries,
@@ -221,7 +225,9 @@ impl BalanceMap {
         &mut self,
         entity_id: &str,
     ) -> Result<&mut Balance, CancelSpotOrderV2Error> {
-        self.balances.get_mut(entity_id).ok_or(CancelSpotOrderV2Error::BalanceNotFound)
+        self.balances
+            .get_mut(entity_id)
+            .ok_or(CancelSpotOrderV2Error::BalanceNotFound)
     }
 
     fn into_balances(self) -> Vec<Balance> {
@@ -367,7 +373,13 @@ fn release_order_reservation(
             .map_err(map_reservation_error_to_cancel)?;
         (asset_id, release_amount)
     };
-    release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)
+    release_to_balance(
+        order,
+        &asset_id,
+        release_amount,
+        balance_book,
+        ledger_entries,
+    )
 }
 
 fn release_to_balance(
@@ -378,16 +390,18 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), CancelSpotOrderV2Error> {
     let reason = match order.side() {
-        SpotOrderSide::Buy => {
-            BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order.order_id() }
-        }
-        SpotOrderSide::Sell => {
-            BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order.order_id() }
-        }
+        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
+            order_id: order.order_id(),
+        },
+        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
+            order_id: order.order_id(),
+        },
     };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
-    let next_release_index =
-        ledger_entries.len().checked_add(1).ok_or(CancelSpotOrderV2Error::ArithmeticOverflow)?;
+    let next_release_index = ledger_entries
+        .len()
+        .checked_add(1)
+        .ok_or(CancelSpotOrderV2Error::ArithmeticOverflow)?;
     let entry = apply_balance_ledger_entry(
         BalanceLedgerOperation::Unfreeze,
         concat4(
@@ -472,12 +486,17 @@ fn merge_balance_pairs(
     let mut pairs = Vec::with_capacity(after.len());
     for balance in after {
         let balance_id = balance.business_entity_id();
-        let before_balance =
-            before_map.get(&balance_id).cloned().ok_or(CancelSpotOrderV2Error::BalanceNotFound)?;
+        let before_balance = before_map
+            .get(&balance_id)
+            .cloned()
+            .ok_or(CancelSpotOrderV2Error::BalanceNotFound)?;
         if !seen.insert(balance_id) {
             return Err(CancelSpotOrderV2Error::BalanceNotFound);
         }
-        pairs.push(UpdatedEntityPair { before: before_balance, after: balance });
+        pairs.push(UpdatedEntityPair {
+            before: before_balance,
+            after: balance,
+        });
     }
     Ok(pairs)
 }
@@ -495,7 +514,11 @@ fn balance_replay_events_from_ledger_entries(
     let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
         let Some(before) = current_balances
-            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
+            .get(&concat3(
+                &entry.account_id.to_string(),
+                ":",
+                &entry.asset_id.to_string(),
+            ))
             .cloned()
         else {
             return Err(common_entity::EntityError::Custom(
@@ -523,10 +546,13 @@ fn balance_replay_events_from_ledger_entries(
                 "balance ledger entry breaks balance replay chain".to_string(),
             ));
         }
-        let next_version = before
-            .version
-            .checked_add(1)
-            .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
+        let next_version =
+            before
+                .version
+                .checked_add(1)
+                .ok_or(common_entity::EntityError::VersionOverflow {
+                    version: before.version,
+                })?;
         let after = Balance::new(
             before.party_id,
             before.account_id,
@@ -537,7 +563,12 @@ fn balance_replay_events_from_ledger_entries(
         );
         events.push(after.track_update_event_from(&before)?);
         current_balances.insert(
-            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
+            concat3(
+                &entry.account_id.to_string(),
+                ":",
+                &entry.asset_id.to_string(),
+            )
+            .clone(),
             after,
         );
     }

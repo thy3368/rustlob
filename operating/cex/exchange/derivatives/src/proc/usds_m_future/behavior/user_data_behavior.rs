@@ -1,4 +1,6 @@
-// 参考 ## user data  Endpoints /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/account/rest-api 定义所有 user data 接口
+// 参考 ## user data  Endpoints
+// /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/
+// account/rest-api 定义所有 user data 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 

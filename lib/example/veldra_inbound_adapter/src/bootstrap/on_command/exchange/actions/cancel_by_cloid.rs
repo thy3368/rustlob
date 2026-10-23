@@ -74,16 +74,20 @@ impl ExchangeActionHandler for CancelByCloidAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "cancelByCloid" {
-        return Err(ExchangeHttpError::contract(CancelByCloidContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            CancelByCloidContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.cancels.is_empty() {
-        return Err(ExchangeHttpError::contract(CancelByCloidContractError::EmptyCancels));
+        return Err(ExchangeHttpError::contract(
+            CancelByCloidContractError::EmptyCancels,
+        ));
     }
     if matches!(request.action.f, Some(false)) {
-        return Err(ExchangeHttpError::contract(CancelByCloidContractError::InvalidFastFlag));
+        return Err(ExchangeHttpError::contract(
+            CancelByCloidContractError::InvalidFastFlag,
+        ));
     }
     for cancel in &request.action.cancels {
         validate_cloid(&cancel.cloid)
@@ -95,8 +99,10 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
 async fn execute(
     request: RequestWire,
 ) -> Result<reply::CancelByCloidResponseWire, ExchangeHttpError> {
-    let party_id =
-        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+    let party_id = request
+        .common
+        .vault_address
+        .unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
 
     let statuses = request
         .action
@@ -169,7 +175,10 @@ mod tests {
         )
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(error.to_string(), "Invalid `action.f`. `f` must be omitted when false.");
+        assert_eq!(
+            error.to_string(),
+            "Invalid `action.f`. `f` must be omitted when false."
+        );
     }
 
     #[test]
@@ -222,7 +231,10 @@ mod tests {
             &self,
             request: &common_entity::LogEntry<CancelSpotOrderV2Cmd>,
         ) -> Result<CancelSpotOrderV2State, Self::Error> {
-            *self.observed_lookup.lock().expect("lookup observation lock should be available") =
+            *self
+                .observed_lookup
+                .lock()
+                .expect("lookup observation lock should be available") =
                 Some(request.lookup.clone());
             Err(FakeOutboundError)
         }
@@ -270,10 +282,18 @@ mod tests {
             .expect_err("fake outbound should fail while loading state");
 
         assert_eq!(
-            *outbound.observed_lookup.lock().expect("lookup observation lock should be available"),
-            Some(CancelSpotOrderV2Lookup::Cloid("0x1234567890abcdef1234567890abcdef".to_string()))
+            *outbound
+                .observed_lookup
+                .lock()
+                .expect("lookup observation lock should be available"),
+            Some(CancelSpotOrderV2Lookup::Cloid(
+                "0x1234567890abcdef1234567890abcdef".to_string()
+            ))
         );
-        assert_eq!(cancel_execution_error_message(error), "load_state failed: fake outbound error");
+        assert_eq!(
+            cancel_execution_error_message(error),
+            "load_state failed: fake outbound error"
+        );
     }
 
     fn valid_request_json() -> &'static [u8] {

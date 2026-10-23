@@ -50,7 +50,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 async fn get_snapshot(
     State(app): State<std::sync::Arc<InMemoryDemoApp>>,
 ) -> Result<Json<Value>, SnapshotApiError> {
-    Ok(Json(snapshot_json(app.snapshot().map_err(SnapshotApiError::from)?)))
+    Ok(Json(snapshot_json(
+        app.snapshot().map_err(SnapshotApiError::from)?,
+    )))
 }
 
 #[derive(Debug)]
@@ -60,7 +62,9 @@ struct SnapshotApiError {
 
 impl From<StoreError> for SnapshotApiError {
     fn from(error: StoreError) -> Self {
-        Self { message: error.to_string() }
+        Self {
+            message: error.to_string(),
+        }
     }
 }
 
@@ -93,7 +97,10 @@ impl InMemoryDemoApp {
         let store = InMemoryStore::seed_balances(
             Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 2),
             Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 2),
-            example_core_use_case::MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
+            example_core_use_case::MarketRules {
+                symbol: "BTCUSDT".to_string(),
+                min_qty: 1,
+            },
         )?;
         let place_order_outbound = InMemoryPlaceOrderOutbound::from_store(store.clone());
         let deposit_quote_outbound = InMemoryDepositQuoteOutbound::from_store(store.clone());

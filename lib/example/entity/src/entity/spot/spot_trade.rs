@@ -51,7 +51,10 @@ pub struct SpotTrade {
 
 impl SpotTrade {
     /// 从已经校验过的撮合事实构造成交实体。
-    #[expect(clippy::too_many_arguments, reason = "完整成交事实构造器需要显式保留所有业务字段")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "完整成交事实构造器需要显式保留所有业务字段"
+    )]
     pub fn new(
         trade_id: String,
         match_id: String,
@@ -523,17 +526,32 @@ mod tests {
         assert_eq!(trade.maker_fee, 1);
         assert_eq!(trade.buyer_fee(), 2);
         assert_eq!(trade.seller_fee(), 1);
-        assert_eq!(trade.fee_role_for_account("buyer"), Some(SpotTradeFeeRole::Taker));
-        assert_eq!(trade.fee_role_for_account("seller"), Some(SpotTradeFeeRole::Maker));
+        assert_eq!(
+            trade.fee_role_for_account("buyer"),
+            Some(SpotTradeFeeRole::Taker)
+        );
+        assert_eq!(
+            trade.fee_role_for_account("seller"),
+            Some(SpotTradeFeeRole::Maker)
+        );
         assert_eq!(trade.fee_role_for_account("outsider"), None);
     }
 
     #[test]
     fn spot_trade_declares_mi_causal_source_metadata() {
-        assert_eq!(SpotTrade::four_color_archetype(), FourColorArchetype::MomentInterval);
-        assert_eq!(SpotTrade::mutation_model(), EntityMutationModel::AppendOnlyRecord);
+        assert_eq!(
+            SpotTrade::four_color_archetype(),
+            FourColorArchetype::MomentInterval
+        );
+        assert_eq!(
+            SpotTrade::mutation_model(),
+            EntityMutationModel::AppendOnlyRecord
+        );
         assert_eq!(SpotTrade::aggregate_role(), AggregateRole::AggregateRoot);
-        assert_eq!(SpotTrade::financial_classification(), FinancialClassification::BusinessVoucher);
+        assert_eq!(
+            SpotTrade::financial_classification(),
+            FinancialClassification::BusinessVoucher
+        );
         assert!(!SpotTrade::is_mi_chain_root());
         assert_eq!(
             SpotTrade::mi_causal_sources(),

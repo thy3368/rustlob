@@ -71,7 +71,9 @@ impl PlaceOrderCliCommand {
             is_buy: true,
             price: self.price.to_string(),
             size: self.qty.to_string(),
-            order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() },
+            order_type: PlaceOnlySpotOrderV2OrderType::Limit {
+                tif: "Gtc".to_string(),
+            },
             reduce_only: false,
             cloid: None,
             base_asset_id: "BTC".to_string(),
@@ -98,8 +100,12 @@ where
 {
     let mut args = args.into_iter().map(Into::into);
 
-    let trader_id = args.next().unwrap_or_else(|| PLACE_ORDER_CLI_DEFAULT_TRADER_ID.to_string());
-    let symbol = args.next().unwrap_or_else(|| PLACE_ORDER_CLI_DEFAULT_SYMBOL.to_string());
+    let trader_id = args
+        .next()
+        .unwrap_or_else(|| PLACE_ORDER_CLI_DEFAULT_TRADER_ID.to_string());
+    let symbol = args
+        .next()
+        .unwrap_or_else(|| PLACE_ORDER_CLI_DEFAULT_SYMBOL.to_string());
     let qty = parse_or_default(
         args.next(),
         PLACE_ORDER_CLI_DEFAULT_QTY,
@@ -115,7 +121,12 @@ where
         return Err(ParsePlaceOrderCliArgsError::TooManyArgs);
     }
 
-    Ok(PlaceOrderCliCommand { trader_id, symbol, qty, price })
+    Ok(PlaceOrderCliCommand {
+        trader_id,
+        symbol,
+        qty,
+        price,
+    })
 }
 
 fn parse_or_default(

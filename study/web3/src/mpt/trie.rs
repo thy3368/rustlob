@@ -31,12 +31,20 @@ pub struct MerklePatriciaTrie<S: Storage> {
 impl<S: Storage> MerklePatriciaTrie<S> {
     /// 创建新的 MPT
     pub fn new(storage: S) -> Self {
-        Self { storage, root_hash: [0u8; 32], entries_cache: HashMap::new() }
+        Self {
+            storage,
+            root_hash: [0u8; 32],
+            entries_cache: HashMap::new(),
+        }
     }
 
     /// 从现有根哈希创建 MPT（用于恢复持久化的树）
     pub fn from_root(storage: S, root_hash: [u8; 32]) -> Self {
-        Self { storage, root_hash, entries_cache: HashMap::new() }
+        Self {
+            storage,
+            root_hash,
+            entries_cache: HashMap::new(),
+        }
     }
 
     /// 计算节点哈希
@@ -45,13 +53,19 @@ impl<S: Storage> MerklePatriciaTrie<S> {
 
         match node {
             Node::Empty => [0u8; 32],
-            Node::Leaf { partial_path, value } => {
+            Node::Leaf {
+                partial_path,
+                value,
+            } => {
                 hasher.update(b"leaf");
                 hasher.update(partial_path);
                 hasher.update(value);
                 hasher.finalize().into()
             }
-            Node::Extension { partial_path, next_node_hash } => {
+            Node::Extension {
+                partial_path,
+                next_node_hash,
+            } => {
                 hasher.update(b"extension");
                 hasher.update(partial_path);
                 hasher.update(next_node_hash);
@@ -90,7 +104,10 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                 Node::leaf(path.nibbles().to_vec(), value)
             }
 
-            Node::Leaf { partial_path: existing_path, value: existing_value } => {
+            Node::Leaf {
+                partial_path: existing_path,
+                value: existing_value,
+            } => {
                 let existing_path_obj = Path::from_nibbles(existing_path.clone());
                 let common_len = path.common_prefix_len(&existing_path_obj);
 
@@ -150,7 +167,10 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                 }
             }
 
-            Node::Extension { partial_path: ext_path, next_node_hash } => {
+            Node::Extension {
+                partial_path: ext_path,
+                next_node_hash,
+            } => {
                 let ext_path_obj = Path::from_nibbles(ext_path.clone());
                 let common_len = path.common_prefix_len(&ext_path_obj);
 
@@ -202,7 +222,10 @@ impl<S: Storage> MerklePatriciaTrie<S> {
                 }
             }
 
-            Node::Branch { mut children, value: branch_value } => {
+            Node::Branch {
+                mut children,
+                value: branch_value,
+            } => {
                 if path.is_empty() {
                     // 路径结束 -> 更新分支节点的值
                     Node::branch(*children, Some(value))
@@ -238,12 +261,22 @@ impl<S: Storage> MerklePatriciaTrie<S> {
         match node {
             Node::Empty => Ok(None),
 
-            Node::Leaf { partial_path, value } => {
+            Node::Leaf {
+                partial_path,
+                value,
+            } => {
                 let leaf_path = Path::from_nibbles(partial_path);
-                if &leaf_path == path { Ok(Some(value)) } else { Ok(None) }
+                if &leaf_path == path {
+                    Ok(Some(value))
+                } else {
+                    Ok(None)
+                }
             }
 
-            Node::Extension { partial_path, next_node_hash } => {
+            Node::Extension {
+                partial_path,
+                next_node_hash,
+            } => {
                 let ext_path = Path::from_nibbles(partial_path);
                 if path.len() >= ext_path.len() {
                     let path_prefix = path.slice(0, ext_path.len());
@@ -332,7 +365,10 @@ impl<S: Storage> MerklePatriciaTrie<S> {
         match node {
             Node::Empty => {}
             Node::Leaf { .. } => {}
-            Node::Extension { partial_path, next_node_hash } => {
+            Node::Extension {
+                partial_path,
+                next_node_hash,
+            } => {
                 let ext_path = Path::from_nibbles(partial_path);
                 if path.len() >= ext_path.len() {
                     let remaining = path.slice(ext_path.len(), path.len());
@@ -378,7 +414,11 @@ impl<S: Storage> IteratorUseCase for MerklePatriciaTrie<S> {
     }
 
     fn entries(&self) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
-        Box::new(self.entries_cache.iter().map(|(k, v)| (k.clone(), v.clone())))
+        Box::new(
+            self.entries_cache
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone())),
+        )
     }
 
     fn len(&self) -> usize {
@@ -396,8 +436,11 @@ impl<S: Storage> MptUseCases for MerklePatriciaTrie<S> {
     }
 
     fn snapshot(&self) -> MptResult<MptSnapshot> {
-        let entries: Vec<(Vec<u8>, Vec<u8>)> =
-            self.entries_cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let entries: Vec<(Vec<u8>, Vec<u8>)> = self
+            .entries_cache
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
 
         Ok(MptSnapshot::new(self.root_hash, entries))
     }

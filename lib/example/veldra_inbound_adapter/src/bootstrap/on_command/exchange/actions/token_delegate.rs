@@ -69,9 +69,9 @@ impl ExchangeActionHandler for TokenDelegateAction {
 
 fn validate(request: &TokenDelegateRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "tokenDelegate" {
-        return Err(ExchangeHttpError::contract(TokenDelegateContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            TokenDelegateContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -96,7 +96,9 @@ fn validate(request: &TokenDelegateRequestWire) -> Result<(), ExchangeHttpError>
     validate_hex_address(&request.action.validator)
         .map_err(|_| ExchangeHttpError::contract(TokenDelegateContractError::InvalidValidator))?;
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(TokenDelegateContractError::NonceMismatch));
+        return Err(ExchangeHttpError::contract(
+            TokenDelegateContractError::NonceMismatch,
+        ));
     }
     Ok(())
 }

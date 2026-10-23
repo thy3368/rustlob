@@ -194,7 +194,9 @@ impl BalanceLedgerReason {
     /// 返回 funding batch id；非 funding 场景返回 `None`。
     pub fn funding_batch_id(&self) -> Option<&str> {
         match self {
-            Self::SettlePerpFunding { funding_batch_id, .. } => Some(funding_batch_id.as_str()),
+            Self::SettlePerpFunding {
+                funding_batch_id, ..
+            } => Some(funding_batch_id.as_str()),
             Self::FreezeForOrder { .. }
             | Self::UnfreezeForCancel { .. }
             | Self::ReserveForImmediateOrder { .. }
@@ -214,7 +216,10 @@ impl BalanceLedgerReason {
     /// 返回 settlement batch id；非现货成交资金腿场景返回 `None`。
     pub fn settlement_batch_id(&self) -> Option<&str> {
         match self {
-            Self::SettleSpotTrade { settlement_batch_id, .. } => Some(settlement_batch_id.as_str()),
+            Self::SettleSpotTrade {
+                settlement_batch_id,
+                ..
+            } => Some(settlement_batch_id.as_str()),
             _ => None,
         }
     }

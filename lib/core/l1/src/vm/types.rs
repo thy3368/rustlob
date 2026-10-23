@@ -36,6 +36,10 @@ impl VmExecutionInput<PendingRequest> {
         capability: impl Into<VmCapability>,
         transaction: PendingRequest,
     ) -> Self {
-        Self { vm_kind, capability: capability.into(), transaction }
+        Self {
+            vm_kind,
+            capability: capability.into(),
+            transaction,
+        }
     }
 }

@@ -54,7 +54,12 @@ impl SpotAccount {
     ///
     /// 该构造器只装配事实，不承担业务校验；风控冻结/解冻应通过业务方法完成。
     pub fn new(account_id: u64, party_id: u64, status: AccountStatus, version: u64) -> Self {
-        Self { account_id, party_id, status, version }
+        Self {
+            account_id,
+            party_id,
+            status,
+            version,
+        }
     }
 
     /// 返回账户当前是否处于可交易、可资金操作的激活状态。
@@ -224,7 +229,10 @@ mod tests {
         assert!(closed.is_closed());
         assert!(!closed.allows_trading_and_funding());
 
-        assert_eq!(SpotAccount::four_color_archetype(), FourColorArchetype::PartyPlaceThing);
+        assert_eq!(
+            SpotAccount::four_color_archetype(),
+            FourColorArchetype::PartyPlaceThing
+        );
         assert_eq!(SpotAccount::aggregate_role(), AggregateRole::AggregateRoot);
     }
 
@@ -234,7 +242,9 @@ mod tests {
         let frozen = sample_account(AccountStatus::Frozen, 9);
         let closed = sample_account(AccountStatus::Closed, 11);
 
-        let next = active.freeze_for_risk().expect("active account should freeze");
+        let next = active
+            .freeze_for_risk()
+            .expect("active account should freeze");
         assert_eq!(next.status, AccountStatus::Frozen);
         assert_eq!(next.version, 8);
         assert_eq!(next.account_id, active.account_id);
@@ -250,7 +260,9 @@ mod tests {
         let frozen = sample_account(AccountStatus::Frozen, 9);
         let closed = sample_account(AccountStatus::Closed, 11);
 
-        let next = frozen.unfreeze_from_risk().expect("frozen account should unfreeze");
+        let next = frozen
+            .unfreeze_from_risk()
+            .expect("frozen account should unfreeze");
         assert_eq!(next.status, AccountStatus::Active);
         assert_eq!(next.version, 10);
         assert_eq!(next.account_id, frozen.account_id);
@@ -314,6 +326,9 @@ mod tests {
         assert_eq!(account.entity_id(), 1001);
         assert_eq!(account.topic(), 0);
         assert_eq!(account.partition(), 1);
-        assert_eq!(SpotAccount::new(9999, 255, AccountStatus::Active, 1).partition(), 255);
+        assert_eq!(
+            SpotAccount::new(9999, 255, AccountStatus::Active, 1).partition(),
+            255
+        );
     }
 }

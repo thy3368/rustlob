@@ -222,7 +222,11 @@ fn replay_events(
         .saturating_add(created_vouchers.len())
         .saturating_add(created_balance_ledger_entries.len().saturating_mul(2));
     let mut events = Vec::with_capacity(event_capacity);
-    events.push(updated_taker_order.after.track_update_event_from(&updated_taker_order.before)?);
+    events.push(
+        updated_taker_order
+            .after
+            .track_update_event_from(&updated_taker_order.before)?,
+    );
     for trade in created_trades {
         events.push(trade.track_create_event()?);
     }
@@ -275,8 +279,9 @@ fn settle_matched_trades(
     let mut total_taker_fill = 0_u64;
 
     for (index, trade) in trades.into_iter().enumerate() {
-        let trade_notional =
-            trade.notional_quote().ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
+        let trade_notional = trade
+            .notional_quote()
+            .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
         total_taker_fill = total_taker_fill
             .checked_add(trade.qty)
             .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
@@ -486,9 +491,9 @@ fn finish_matched_after(
             balances_after,
             created_balance_ledger_entries,
         }),
-        SpotOrderStatus::Open | SpotOrderStatus::Pending => {
-            Err(MatchSpotOrderV3Error::OrderMatch(SpotOrderV2MatchError::NoTradesMatched))
-        }
+        SpotOrderStatus::Open | SpotOrderStatus::Pending => Err(MatchSpotOrderV3Error::OrderMatch(
+            SpotOrderV2MatchError::NoTradesMatched,
+        )),
     }
 }
 
@@ -595,8 +600,14 @@ fn consume_reservation(
         return Ok(());
     }
     let before = reservation.clone();
-    let close_reason = if amount == before.remaining_amount { Some(terminal_reason) } else { None };
-    reservation.consume(amount, close_reason).map_err(map_reservation_error_to_family)?;
+    let close_reason = if amount == before.remaining_amount {
+        Some(terminal_reason)
+    } else {
+        None
+    };
+    reservation
+        .consume(amount, close_reason)
+        .map_err(map_reservation_error_to_family)?;
     Ok(())
 }
 
@@ -673,7 +684,13 @@ fn release_order_reservation(
             .map_err(map_reservation_error_to_family)?;
         (asset_id, release_amount)
     };
-    release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)
+    release_to_balance(
+        order,
+        &asset_id,
+        release_amount,
+        balance_book,
+        ledger_entries,
+    )
 }
 
 fn release_to_balance(
@@ -684,16 +701,18 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), MatchSpotOrderV3Error> {
     let reason = match order.side() {
-        SpotOrderSide::Buy => {
-            BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order.order_id() }
-        }
-        SpotOrderSide::Sell => {
-            BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order.order_id() }
-        }
+        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
+            order_id: order.order_id(),
+        },
+        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
+            order_id: order.order_id(),
+        },
     };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
-    let next_release_index =
-        ledger_entries.len().checked_add(1).ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
+    let next_release_index = ledger_entries
+        .len()
+        .checked_add(1)
+        .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
     let entry = apply_balance_ledger_entry(
         BalanceLedgerOperation::Unfreeze,
         common_entity::stable_string_entity_id(&concat4(
@@ -807,10 +826,14 @@ fn apply_trade_balance_effects(
         trade_ids: trade_ids.clone(),
         settlement_ids: settlement_ids.clone(),
     };
-    let seller_release_base_reason =
-        BalanceLedgerReason::SettleSpotTradeSellerReleaseFrozenBase { trade_ids, settlement_ids };
+    let seller_release_base_reason = BalanceLedgerReason::SettleSpotTradeSellerReleaseFrozenBase {
+        trade_ids,
+        settlement_ids,
+    };
 
-    let quote_notional = trade.notional_quote().ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
+    let quote_notional = trade
+        .notional_quote()
+        .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
     let buyer_account_id = trade.buyer_account_id().to_string();
     let seller_account_id = trade.seller_account_id().to_string();
 
@@ -963,12 +986,20 @@ fn apply_trade_balance_effects(
 
 fn fee_payer_for_buyer(trade: &SpotTrade) -> Option<(String, u64)> {
     let amount = trade.buyer_fee();
-    if amount == 0 { None } else { Some((trade.buyer_account_id().to_string(), amount)) }
+    if amount == 0 {
+        None
+    } else {
+        Some((trade.buyer_account_id().to_string(), amount))
+    }
 }
 
 fn fee_payer_for_seller(trade: &SpotTrade) -> Option<(String, u64)> {
     let amount = trade.seller_fee();
-    if amount == 0 { None } else { Some((trade.seller_account_id().to_string(), amount)) }
+    if amount == 0 {
+        None
+    } else {
+        Some((trade.seller_account_id().to_string(), amount))
+    }
 }
 
 fn map_reservation_error_to_family(error: crate::ReservationError) -> MatchSpotOrderV3Error {
@@ -1014,13 +1045,18 @@ pub(super) fn merge_balance_pairs(
     let mut pairs = Vec::with_capacity(after.len());
     for balance in after {
         let balance_id = balance.business_entity_id();
-        let before_balance =
-            before_map.get(&balance_id).cloned().ok_or(MatchSpotOrderV3Error::BalanceNotFound)?;
+        let before_balance = before_map
+            .get(&balance_id)
+            .cloned()
+            .ok_or(MatchSpotOrderV3Error::BalanceNotFound)?;
         if !seen.insert(balance_id) {
             return Err(MatchSpotOrderV3Error::BalanceNotFound);
         }
         if before_balance != balance {
-            pairs.push(UpdatedEntityPair { before: before_balance, after: balance });
+            pairs.push(UpdatedEntityPair {
+                before: before_balance,
+                after: balance,
+            });
         }
     }
     Ok(pairs)
@@ -1039,7 +1075,11 @@ pub(super) fn balance_replay_events_from_ledger_entries(
     let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
         let Some(before) = current_balances
-            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
+            .get(&concat3(
+                &entry.account_id.to_string(),
+                ":",
+                &entry.asset_id.to_string(),
+            ))
             .cloned()
         else {
             return Err(common_entity::EntityError::Custom(
@@ -1067,10 +1107,13 @@ pub(super) fn balance_replay_events_from_ledger_entries(
                 "balance ledger entry breaks balance replay chain".to_string(),
             ));
         }
-        let next_version = before
-            .version
-            .checked_add(1)
-            .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
+        let next_version =
+            before
+                .version
+                .checked_add(1)
+                .ok_or(common_entity::EntityError::VersionOverflow {
+                    version: before.version,
+                })?;
         let after = Balance::new(
             before.party_id,
             before.account_id,
@@ -1081,7 +1124,12 @@ pub(super) fn balance_replay_events_from_ledger_entries(
         );
         events.push(after.track_update_event_from(&before)?);
         current_balances.insert(
-            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
+            concat3(
+                &entry.account_id.to_string(),
+                ":",
+                &entry.asset_id.to_string(),
+            )
+            .clone(),
             after,
         );
     }
@@ -1307,8 +1355,10 @@ fn build_matched_pairs(
     ),
     MatchSpotOrderV3Error,
 > {
-    let updated_taker_order =
-        UpdatedEntityPair { before: state.taker_order, after: taker_order_after };
+    let updated_taker_order = UpdatedEntityPair {
+        before: state.taker_order,
+        after: taker_order_after,
+    };
     let updated_maker_orders = zip_pairs(state.maker_orders, maker_orders_after)?;
     let updated_balances = merge_balance_pairs(state.settlement_balances, balances_after)?;
     Ok((updated_taker_order, updated_maker_orders, updated_balances))
@@ -1318,14 +1368,22 @@ impl MatchSpotOrderV3Changes {
     pub fn taker_order_pair(&self) -> Option<&UpdatedEntityPair<SpotOrderV2>> {
         match self {
             Self::Resting => None,
-            Self::PartiallyFilled { updated_taker_order, .. }
-            | Self::Filled { filled_taker_order: updated_taker_order, .. }
+            Self::PartiallyFilled {
+                updated_taker_order,
+                ..
+            }
+            | Self::Filled {
+                filled_taker_order: updated_taker_order,
+                ..
+            }
             | Self::CanceledAfterPartialFill {
-                canceled_taker_order: updated_taker_order, ..
+                canceled_taker_order: updated_taker_order,
+                ..
             }
-            | Self::Rejected { rejected_taker_order: updated_taker_order, .. } => {
-                Some(updated_taker_order)
-            }
+            | Self::Rejected {
+                rejected_taker_order: updated_taker_order,
+                ..
+            } => Some(updated_taker_order),
         }
     }
 
@@ -1336,19 +1394,36 @@ impl MatchSpotOrderV3Changes {
     pub fn updated_maker_orders(&self) -> &[UpdatedEntityPair<SpotOrderV2>] {
         match self {
             Self::Resting | Self::Rejected { .. } => &[],
-            Self::PartiallyFilled { updated_maker_orders, .. }
-            | Self::Filled { updated_maker_orders, .. }
-            | Self::CanceledAfterPartialFill { updated_maker_orders, .. } => updated_maker_orders,
+            Self::PartiallyFilled {
+                updated_maker_orders,
+                ..
+            }
+            | Self::Filled {
+                updated_maker_orders,
+                ..
+            }
+            | Self::CanceledAfterPartialFill {
+                updated_maker_orders,
+                ..
+            } => updated_maker_orders,
         }
     }
 
     pub fn updated_balances(&self) -> &[UpdatedEntityPair<Balance>] {
         match self {
             Self::Resting => &[],
-            Self::PartiallyFilled { updated_balances, .. }
-            | Self::Filled { updated_balances, .. }
-            | Self::CanceledAfterPartialFill { updated_balances, .. }
-            | Self::Rejected { updated_balances, .. } => updated_balances,
+            Self::PartiallyFilled {
+                updated_balances, ..
+            }
+            | Self::Filled {
+                updated_balances, ..
+            }
+            | Self::CanceledAfterPartialFill {
+                updated_balances, ..
+            }
+            | Self::Rejected {
+                updated_balances, ..
+            } => updated_balances,
         }
     }
 
@@ -1364,21 +1439,37 @@ impl MatchSpotOrderV3Changes {
     pub fn created_vouchers(&self) -> &[SettlementTransferVoucher] {
         match self {
             Self::Resting | Self::Rejected { .. } => &[],
-            Self::PartiallyFilled { created_vouchers, .. }
-            | Self::Filled { created_vouchers, .. }
-            | Self::CanceledAfterPartialFill { created_vouchers, .. } => created_vouchers,
+            Self::PartiallyFilled {
+                created_vouchers, ..
+            }
+            | Self::Filled {
+                created_vouchers, ..
+            }
+            | Self::CanceledAfterPartialFill {
+                created_vouchers, ..
+            } => created_vouchers,
         }
     }
 
     pub fn created_balance_ledger_entries(&self) -> &[BalanceLedgerV2] {
         match self {
             Self::Resting => &[],
-            Self::PartiallyFilled { created_balance_ledger_entries, .. }
-            | Self::Filled { created_balance_ledger_entries, .. }
-            | Self::CanceledAfterPartialFill { created_balance_ledger_entries, .. }
-            | Self::Rejected { created_balance_ledger_entries, .. } => {
-                created_balance_ledger_entries
+            Self::PartiallyFilled {
+                created_balance_ledger_entries,
+                ..
             }
+            | Self::Filled {
+                created_balance_ledger_entries,
+                ..
+            }
+            | Self::CanceledAfterPartialFill {
+                created_balance_ledger_entries,
+                ..
+            }
+            | Self::Rejected {
+                created_balance_ledger_entries,
+                ..
+            } => created_balance_ledger_entries,
         }
     }
 }

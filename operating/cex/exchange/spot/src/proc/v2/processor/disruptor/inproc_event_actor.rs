@@ -14,12 +14,18 @@ pub struct InprocEventActor<E, H> {
 
 impl<E, H> InprocEventActor<E, H> {
     pub fn new(receiver: Receiver<E>, handler: Arc<H>, actor_name: &'static str) -> Self {
-        Self { receiver, handler, actor_name }
+        Self {
+            receiver,
+            handler,
+            actor_name,
+        }
     }
 
     #[inline]
     fn into_internal_error(message: impl Into<String>) -> SpotApiErrorAny {
-        SpotApiErrorAny::Common(CommonError::Internal { message: message.into() })
+        SpotApiErrorAny::Common(CommonError::Internal {
+            message: message.into(),
+        })
     }
 
     pub fn actor_name(&self) -> &str {

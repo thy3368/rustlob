@@ -268,7 +268,11 @@ impl BalanceChangeLog {
             available_after: self.available_after,
             frozen_before: self.frozen_before,
             frozen_after: self.frozen_after,
-            order_id: if self.order_id == u64::MAX { None } else { Some(self.order_id) },
+            order_id: if self.order_id == u64::MAX {
+                None
+            } else {
+                Some(self.order_id)
+            },
             timestamp: Timestamp(self.timestamp),
             balance_version: self.balance_version,
         })
@@ -398,7 +402,13 @@ impl BalanceChangePodLog {
         self.timestamps[..len]
             .iter()
             .enumerate()
-            .filter_map(|(idx, &ts)| if ts >= start && ts <= end { Some(idx) } else { None })
+            .filter_map(|(idx, &ts)| {
+                if ts >= start && ts <= end {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
@@ -536,6 +546,9 @@ mod tests {
 
         assert_eq!(log.len(), 2);
         assert_eq!(log.filter_by_account(100).len(), 2);
-        assert_eq!(log.filter_by_type(BalanceChangeType::Deposit as u8).len(), 1);
+        assert_eq!(
+            log.filter_by_type(BalanceChangeType::Deposit as u8).len(),
+            1
+        );
     }
 }

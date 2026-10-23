@@ -49,7 +49,9 @@ async fn handle_connection(
         "type": "welcome",
         "message": "Hello from Sockudo WebSocket!"
     });
-    websocket.send(Message::text(simd_json::to_string(&welcome_msg)?)).await?;
+    websocket
+        .send(Message::text(simd_json::to_string(&welcome_msg)?))
+        .await?;
 
     // 连接处理循环
     while let Some(msg) = websocket.next().await {
@@ -64,7 +66,9 @@ async fn handle_connection(
                         "type": "response",
                         "message": format!("You said: {}", msg_data.text)
                     });
-                    websocket.send(Message::text(simd_json::to_string(&response)?)).await?;
+                    websocket
+                        .send(Message::text(simd_json::to_string(&response)?))
+                        .await?;
 
                     if msg_data.text.to_lowercase().contains("hello") {
                         let special_response = json!({
@@ -80,11 +84,17 @@ async fn handle_connection(
                         "type": "error",
                         "message": "Invalid message format"
                     });
-                    websocket.send(Message::text(simd_json::to_string(&error_response)?)).await?;
+                    websocket
+                        .send(Message::text(simd_json::to_string(&error_response)?))
+                        .await?;
                 }
             }
             Message::Binary(data) => {
-                println!("Received binary message from {}: {} bytes", addr, data.len());
+                println!(
+                    "Received binary message from {}: {} bytes",
+                    addr,
+                    data.len()
+                );
             }
             Message::Close(_) => {
                 println!("Client {} closed the connection", addr);

@@ -19,7 +19,9 @@ impl MySqlRepo {
         let pool = MySqlPoolOptions::new().connect_lazy(url).map_err(|e| {
             RepoError::DeserializationFailed(format!("Failed to connect to MySQL: {}", e))
         })?;
-        Ok(Self { pool: Some(Arc::new(pool)) })
+        Ok(Self {
+            pool: Some(Arc::new(pool)),
+        })
     }
 
     pub fn new_mock() -> Self {
@@ -245,7 +247,11 @@ mod tests {
 
         fn diff(&self, other: &Self) -> Vec<FieldChange> {
             if self.value != other.value {
-                vec![FieldChange::new("value", self.value.clone(), other.value.clone())]
+                vec![FieldChange::new(
+                    "value",
+                    self.value.clone(),
+                    other.value.clone(),
+                )]
             } else {
                 Vec::new()
             }
@@ -269,13 +275,18 @@ mod tests {
         let created = ChangeLog::new(
             "entity-1".to_string(),
             TestEntity::entity_type().to_string(),
-            ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
+            ChangeType::Created {
+                fields: vec![FieldChange::new("value", "", "alpha")],
+            },
             1,
             1,
         );
         let event = DomainEvent::new(
             created,
-            TestEntity { id: "entity-1".to_string(), value: "alpha".to_string() },
+            TestEntity {
+                id: "entity-1".to_string(),
+                value: "alpha".to_string(),
+            },
         );
 
         assert!(repo.replay_event(&event).is_ok());
@@ -289,21 +300,31 @@ mod tests {
             ChangeLog::new(
                 "entity-1".to_string(),
                 TestEntity::entity_type().to_string(),
-                ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
+                ChangeType::Created {
+                    fields: vec![FieldChange::new("value", "", "alpha")],
+                },
                 1,
                 1,
             ),
-            TestEntity { id: "entity-1".to_string(), value: "alpha".to_string() },
+            TestEntity {
+                id: "entity-1".to_string(),
+                value: "alpha".to_string(),
+            },
         );
         let second = DomainEvent::new(
             ChangeLog::new(
                 "entity-2".to_string(),
                 TestEntity::entity_type().to_string(),
-                ChangeType::Created { fields: vec![FieldChange::new("value", "", "beta")] },
+                ChangeType::Created {
+                    fields: vec![FieldChange::new("value", "", "beta")],
+                },
                 2,
                 2,
             ),
-            TestEntity { id: "entity-2".to_string(), value: "beta".to_string() },
+            TestEntity {
+                id: "entity-2".to_string(),
+                value: "beta".to_string(),
+            },
         );
 
         assert!(repo.replay_from_sequence(&[first, second], 2).is_ok());
@@ -316,13 +337,21 @@ mod tests {
             ChangeLog::new(
                 "entity-1".to_string(),
                 "OtherEntity".to_string(),
-                ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
+                ChangeType::Created {
+                    fields: vec![FieldChange::new("value", "", "alpha")],
+                },
                 1,
                 1,
             ),
-            TestEntity { id: "entity-1".to_string(), value: "alpha".to_string() },
+            TestEntity {
+                id: "entity-1".to_string(),
+                value: "alpha".to_string(),
+            },
         );
 
-        assert!(matches!(repo.replay_event(&event), Err(RepoError::DeserializationFailed(_))));
+        assert!(matches!(
+            repo.replay_event(&event),
+            Err(RepoError::DeserializationFailed(_))
+        ));
     }
 }

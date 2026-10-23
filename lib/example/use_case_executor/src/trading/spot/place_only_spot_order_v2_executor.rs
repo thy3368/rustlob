@@ -138,7 +138,9 @@ mod tests {
             is_buy: true,
             price: "100".to_string(),
             size: "2".to_string(),
-            order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: tif.to_string() },
+            order_type: PlaceOnlySpotOrderV2OrderType::Limit {
+                tif: tif.to_string(),
+            },
             reduce_only: false,
             cloid: Some("cloid-1".to_string()),
             base_asset_id: "BTC".to_string(),
@@ -193,12 +195,18 @@ mod tests {
         .expect("place-only single limit should execute with custom outbound");
 
         assert!(!result.events.is_empty());
-        let persisted =
-            outbound.persisted.lock().expect("persist record mutex should not be poisoned");
-        let replayed =
-            outbound.replayed.lock().expect("replay record mutex should not be poisoned");
-        let published =
-            outbound.published.lock().expect("publish record mutex should not be poisoned");
+        let persisted = outbound
+            .persisted
+            .lock()
+            .expect("persist record mutex should not be poisoned");
+        let replayed = outbound
+            .replayed
+            .lock()
+            .expect("replay record mutex should not be poisoned");
+        let published = outbound
+            .published
+            .lock()
+            .expect("publish record mutex should not be poisoned");
 
         assert_eq!(persisted.as_slice(), &[result.events.clone()]);
         assert_eq!(replayed.as_slice(), &[result.events.clone()]);
@@ -214,13 +222,18 @@ mod tests {
             }))
             .expect("place-only normal tpsl should execute with default outbound");
 
-        let PlaceOnlySpotOrderV2Changes::NormalTpsl { created_parent_order, created_child_orders } =
-            &result.changes
+        let PlaceOnlySpotOrderV2Changes::NormalTpsl {
+            created_parent_order,
+            created_child_orders,
+        } = &result.changes
         else {
             panic!("normal tpsl on_command should produce parent and child changes");
         };
 
-        assert_eq!(created_parent_order.group_relation, SpotOrderGroupRelation::NormalTpslParent);
+        assert_eq!(
+            created_parent_order.group_relation,
+            SpotOrderGroupRelation::NormalTpslParent
+        );
         assert_eq!(created_child_orders.len(), 2);
         assert!(created_child_orders.iter().all(|child| child.reduce_only));
         assert!(created_child_orders.iter().all(|child| child.is_pending()));
@@ -232,7 +245,12 @@ mod tests {
         }));
         assert_eq!(result.events.len(), 3);
         assert!(result.events.iter().all(EntityReplayableEvent::is_created));
-        assert!(result.events.iter().all(|event| event.entity_type == SpotOrderV2::entity_type()));
+        assert!(
+            result
+                .events
+                .iter()
+                .all(|event| event.entity_type == SpotOrderV2::entity_type())
+        );
         assert_eq!(
             result.events[0].entity_id,
             created_parent_order

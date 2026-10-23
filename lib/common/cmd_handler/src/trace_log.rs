@@ -59,7 +59,9 @@ where
 }
 
 fn format_span_id(raw: &str) -> &str {
-    raw.strip_prefix("Id(").and_then(|value| value.strip_suffix(')')).unwrap_or(raw)
+    raw.strip_prefix("Id(")
+        .and_then(|value| value.strip_suffix(')'))
+        .unwrap_or(raw)
 }
 
 fn strip_ansi_sequences(input: &str) -> String {
@@ -260,24 +262,29 @@ struct EventFieldVisitor {
 
 impl Visit for EventFieldVisitor {
     fn record_bool(&mut self, field: &Field, value: bool) {
-        self.fields.insert(field.name().to_string(), Value::Bool(value));
+        self.fields
+            .insert(field.name().to_string(), Value::Bool(value));
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        self.fields.insert(field.name().to_string(), Value::Number(Number::from(value)));
+        self.fields
+            .insert(field.name().to_string(), Value::Number(Number::from(value)));
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
-        self.fields.insert(field.name().to_string(), Value::Number(Number::from(value)));
+        self.fields
+            .insert(field.name().to_string(), Value::Number(Number::from(value)));
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.fields.insert(field.name().to_string(), Value::String(value.to_string()));
+        self.fields
+            .insert(field.name().to_string(), Value::String(value.to_string()));
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         let debug = format!("{value:?}");
-        self.fields.insert(field.name().to_string(), parse_scalar_token(debug.as_str()));
+        self.fields
+            .insert(field.name().to_string(), parse_scalar_token(debug.as_str()));
     }
 }
 
@@ -369,8 +376,13 @@ where
         object.insert(
             "trace_id".to_string(),
             value_or_null(
-                json_string(visitor.fields.get("trace_id").or(span_fields.get("trace_id")))
-                    .map(Value::String),
+                json_string(
+                    visitor
+                        .fields
+                        .get("trace_id")
+                        .or(span_fields.get("trace_id")),
+                )
+                .map(Value::String),
             ),
         );
         object.insert("span_id".to_string(), Value::String(span_id));
@@ -394,14 +406,21 @@ where
         object.insert(
             "latency_ns".to_string(),
             value_or_null(
-                json_u64(visitor.fields.get("latency_ns")).map(Number::from).map(Value::Number),
+                json_u64(visitor.fields.get("latency_ns"))
+                    .map(Number::from)
+                    .map(Value::Number),
             ),
         );
         object.insert(
             "command_id".to_string(),
             value_or_null(
-                json_string(visitor.fields.get("command_id").or(span_fields.get("command_id")))
-                    .map(Value::String),
+                json_string(
+                    visitor
+                        .fields
+                        .get("command_id")
+                        .or(span_fields.get("command_id")),
+                )
+                .map(Value::String),
             ),
         );
         object.insert(

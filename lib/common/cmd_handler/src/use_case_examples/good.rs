@@ -43,8 +43,7 @@ fn event_has_symbol(events: &[EntityReplayableEvent], symbol: &str) -> bool {
 // Shared good example for both writing and reviewing use cases:
 // - `party_id` is carried by the business on_command.
 // - `role()` names the business-game role, not a technical component.
-// - `pre_check_command`, `validate_against_state`, and `compute_output_and_events`
-//   each do one job.
+// - `pre_check_command`, `validate_against_state`, and `compute_output_and_events` each do one job.
 // - typed output and emitted events come from the same business decision.
 // - reply mapping stays outside the core use case.
 
@@ -123,7 +122,11 @@ impl CommandUseCase3 for PlaceOrderUseCase {
         _cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        if state.trading_enabled { Ok(()) } else { Err(PlaceOrderError::TradingDisabled) }
+        if state.trading_enabled {
+            Ok(())
+        } else {
+            Err(PlaceOrderError::TradingDisabled)
+        }
     }
 
     fn compute_output_and_events(
@@ -132,7 +135,10 @@ impl CommandUseCase3 for PlaceOrderUseCase {
         _state: Self::GivenState,
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
         let order_key = format!("{}:{}", cmd.party_id, cmd.symbol);
-        let output = PlaceOrderOutput { order_key: order_key.clone(), accepted: true };
+        let output = PlaceOrderOutput {
+            order_key: order_key.clone(),
+            accepted: true,
+        };
 
         let mut event = EntityReplayableEvent::new_created(
             0,
@@ -143,6 +149,9 @@ impl CommandUseCase3 for PlaceOrderUseCase {
         event.add_field_change(string_field("symbol", &cmd.symbol));
         event.add_field_change(int_field("qty", cmd.qty));
 
-        Ok(UseCaseOutput { output, events: vec![event] })
+        Ok(UseCaseOutput {
+            output,
+            events: vec![event],
+        })
     }
 }

@@ -52,15 +52,23 @@ pub enum SpotOrderType {
     /// 普通限价单；所谓市价意图由 IOC 加激进限价表达。
     Limit { tif: SpotOrderTif },
     /// 条件单；触发后进入 GTC 限价或 IOC 激进限价生命周期。
-    Trigger { is_market: bool, trigger_price: u64, tpsl: SpotOrderTriggerRole },
+    Trigger {
+        is_market: bool,
+        trigger_price: u64,
+        tpsl: SpotOrderTriggerRole,
+    },
 }
 
 impl SpotOrderType {
     pub const fn effective_tif(self) -> SpotOrderTif {
         match self {
             Self::Limit { tif } => tif,
-            Self::Trigger { is_market: true, .. } => SpotOrderTif::Ioc,
-            Self::Trigger { is_market: false, .. } => SpotOrderTif::Gtc,
+            Self::Trigger {
+                is_market: true, ..
+            } => SpotOrderTif::Ioc,
+            Self::Trigger {
+                is_market: false, ..
+            } => SpotOrderTif::Gtc,
         }
     }
 
@@ -71,8 +79,12 @@ impl SpotOrderType {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Limit { .. } => "limit",
-            Self::Trigger { is_market: true, .. } => "trigger_market",
-            Self::Trigger { is_market: false, .. } => "trigger_limit",
+            Self::Trigger {
+                is_market: true, ..
+            } => "trigger_market",
+            Self::Trigger {
+                is_market: false, ..
+            } => "trigger_limit",
         }
     }
 }

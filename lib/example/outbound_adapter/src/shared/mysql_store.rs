@@ -202,7 +202,17 @@ impl MySqlStore {
             );
         }
 
-        type OrderRow = (String, String, u32, String, String, String, String, u64, u64);
+        type OrderRow = (
+            String,
+            String,
+            u32,
+            String,
+            String,
+            String,
+            String,
+            u64,
+            u64,
+        );
         let order_rows: Vec<OrderRow> = conn
             .query(format!(
                 "SELECT order_id, account_id, asset, symbol, side, execution, time_in_force, qty, price FROM {ORDER_TABLE}"
@@ -321,6 +331,9 @@ pub(crate) fn event_u64_field_mysql(
             return None;
         }
 
-        std::str::from_utf8(change.new_value_bytes()).ok()?.parse::<u64>().ok()
+        std::str::from_utf8(change.new_value_bytes())
+            .ok()?
+            .parse::<u64>()
+            .ok()
     })
 }

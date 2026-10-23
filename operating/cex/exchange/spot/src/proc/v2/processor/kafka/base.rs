@@ -71,7 +71,10 @@ pub fn create_kafka_consumer(config: &KafkaConsumerConfig) -> Result<StreamConsu
         .set("bootstrap.servers", &config.kafka_brokers)
         .set("group.id", &config.group_id)
         .set("enable.auto.commit", "true")
-        .set("auto.commit.interval.ms", config.auto_commit_interval_ms.to_string())
+        .set(
+            "auto.commit.interval.ms",
+            config.auto_commit_interval_ms.to_string(),
+        )
         .set("session.timeout.ms", config.session_timeout_ms.to_string())
         .set("enable.partition.eof", "false")
         .set("auto.offset.reset", "earliest")

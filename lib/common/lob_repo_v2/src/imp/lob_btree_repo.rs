@@ -13,7 +13,10 @@ pub struct LobBtreeRepository<O: LobOrder> {
 
 impl<O: LobOrder> LobBtreeRepository<O> {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into(), marker: std::marker::PhantomData }
+        Self {
+            path: path.into(),
+            marker: std::marker::PhantomData,
+        }
     }
 }
 

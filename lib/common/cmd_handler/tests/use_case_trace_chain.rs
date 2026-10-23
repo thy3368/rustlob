@@ -165,8 +165,14 @@ struct SharedFileWriter {
 
 impl SharedFileWriter {
     fn new(path: &Path) -> io::Result<Self> {
-        let file = OpenOptions::new().create(true).truncate(true).write(true).open(path)?;
-        Ok(Self { output: Arc::new(Mutex::new(file)) })
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path)?;
+        Ok(Self {
+            output: Arc::new(Mutex::new(file)),
+        })
     }
 }
 
@@ -205,7 +211,9 @@ struct MinimalTraceEvent {
 }
 
 fn workspace_target_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").join("target")
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("target")
 }
 
 fn test_log_dir() -> io::Result<PathBuf> {
@@ -239,7 +247,10 @@ fn json_object(value: Option<&Value>) -> Map<String, Value> {
 fn parse_minimal_trace_event(line: &str) -> Result<MinimalTraceEvent, Box<dyn std::error::Error>> {
     let value: Value = serde_json::from_str(line)?;
     let object = value.as_object().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidData, "minimal trace line should be a json object")
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "minimal trace line should be a json object",
+        )
     })?;
 
     Ok(MinimalTraceEvent {
@@ -320,14 +331,23 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs()
                 && event.operation.as_deref() == Some("execute")
         })
         .ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotFound, "use case trace event should be present")
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "use case trace event should be present",
+            )
         })?;
 
     assert_eq!(use_case_event.trace_id.as_deref(), Some("trace-chain-001"));
     assert_eq!(use_case_event.status.as_deref(), Some("ok"));
-    assert_eq!(string_value(&use_case_event.request, "party_id"), Some("acct-007"));
+    assert_eq!(
+        string_value(&use_case_event.request, "party_id"),
+        Some("acct-007")
+    );
     assert_eq!(string_value(&use_case_event.response, "result"), Some("ok"));
-    assert_eq!(u64_value(&use_case_event.response, "domain_event_count"), Some(2));
+    assert_eq!(
+        u64_value(&use_case_event.response, "domain_event_count"),
+        Some(2)
+    );
 
     let outbound_events: Vec<&MinimalTraceEvent> = minimal_events
         .iter()
@@ -339,9 +359,14 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs()
 
     assert_eq!(outbound_events.len(), 4);
 
-    let operations: BTreeSet<&str> =
-        outbound_events.iter().filter_map(|event| event.operation.as_deref()).collect();
-    assert_eq!(operations, BTreeSet::from(["load_state", "persist", "publish", "replay"]));
+    let operations: BTreeSet<&str> = outbound_events
+        .iter()
+        .filter_map(|event| event.operation.as_deref())
+        .collect();
+    assert_eq!(
+        operations,
+        BTreeSet::from(["load_state", "persist", "publish", "replay"])
+    );
 
     for event in &outbound_events {
         assert_eq!(event.trace_id.as_deref(), Some("trace-chain-001"));
@@ -354,9 +379,15 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs()
         .iter()
         .find(|event| event.operation.as_deref() == Some("load_state"))
         .ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotFound, "load_state trace event should be present")
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "load_state trace event should be present",
+            )
         })?;
-    assert_eq!(string_value(&load_state_event.request, "symbol"), Some("BTCUSDT"));
+    assert_eq!(
+        string_value(&load_state_event.request, "symbol"),
+        Some("BTCUSDT")
+    );
     assert_eq!(u64_value(&load_state_event.request, "quantity"), Some(2));
     assert_eq!(u64_value(&load_state_event.response, "state"), Some(2));
 
@@ -385,7 +416,10 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs()
         "command_id=\"cmd-chain-001\"",
         "party_id=\"acct-007\"",
     ] {
-        assert!(full_trace.contains(expected), "expected full trace to contain `{expected}`");
+        assert!(
+            full_trace.contains(expected),
+            "expected full trace to contain `{expected}`"
+        );
     }
     Ok(())
 }

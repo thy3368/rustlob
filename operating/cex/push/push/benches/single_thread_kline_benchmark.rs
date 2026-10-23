@@ -85,14 +85,17 @@ fn benchmark_simd_kline_aggregator(c: &mut Criterion) {
 fn benchmark_single_thread_simd_kline_aggregator(c: &mut Criterion) {
     let test_data = generate_test_data(1_000_000); // 100万笔交易
 
-    c.bench_function("SingleThreadSimdKLineAggregator::process_trades_batch", |b| {
-        b.iter(|| {
-            let aggregator = SingleThreadSimdKLineAggregator::new();
-            if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
-                black_box(error);
-            }
-        });
-    });
+    c.bench_function(
+        "SingleThreadSimdKLineAggregator::process_trades_batch",
+        |b| {
+            b.iter(|| {
+                let aggregator = SingleThreadSimdKLineAggregator::new();
+                if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
+                    black_box(error);
+                }
+            });
+        },
+    );
 }
 
 // 基准测试 KLineAggregator 的高频交易处理
@@ -125,14 +128,17 @@ fn benchmark_simd_kline_aggregator_high_freq(c: &mut Criterion) {
 fn benchmark_single_thread_simd_kline_aggregator_high_freq(c: &mut Criterion) {
     let test_data = generate_high_freq_test_data(1_000_000); // 100万笔交易
 
-    c.bench_function("SingleThreadSimdKLineAggregator::process_trades_batch_high_freq", |b| {
-        b.iter(|| {
-            let aggregator = SingleThreadSimdKLineAggregator::new();
-            if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
-                black_box(error);
-            }
-        });
-    });
+    c.bench_function(
+        "SingleThreadSimdKLineAggregator::process_trades_batch_high_freq",
+        |b| {
+            b.iter(|| {
+                let aggregator = SingleThreadSimdKLineAggregator::new();
+                if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
+                    black_box(error);
+                }
+            });
+        },
+    );
 }
 
 fn benchmark_m100_simd_kline_aggregator(c: &mut Criterion) {
@@ -151,14 +157,17 @@ fn benchmark_m100_simd_kline_aggregator(c: &mut Criterion) {
 fn benchmark_m100_simd_kline_aggregator_high_freq(c: &mut Criterion) {
     let test_data = generate_high_freq_test_data(1_000_000); // 100万笔交易
 
-    c.bench_function("M100SimdKLineAggregator::process_trades_batch_high_freq", |b| {
-        b.iter(|| {
-            let mut aggregator = M100SimdKLineAggregator::new();
-            if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
-                black_box(error);
-            }
-        });
-    });
+    c.bench_function(
+        "M100SimdKLineAggregator::process_trades_batch_high_freq",
+        |b| {
+            b.iter(|| {
+                let mut aggregator = M100SimdKLineAggregator::new();
+                if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
+                    black_box(error);
+                }
+            });
+        },
+    );
 }
 
 fn benchmark_m100p_simd_kline_aggregator(c: &mut Criterion) {
@@ -177,14 +186,17 @@ fn benchmark_m100p_simd_kline_aggregator(c: &mut Criterion) {
 fn benchmark_m100p_simd_kline_aggregator_high_freq(c: &mut Criterion) {
     let test_data = generate_high_freq_test_data(1_000_000); // 100万笔交易
 
-    c.bench_function("M100PSimdKLineAggregator::process_trades_batch_high_freq", |b| {
-        b.iter(|| {
-            let mut aggregator = M100PSimdKLineAggregator::new();
-            if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
-                black_box(error);
-            }
-        });
-    });
+    c.bench_function(
+        "M100PSimdKLineAggregator::process_trades_batch_high_freq",
+        |b| {
+            b.iter(|| {
+                let mut aggregator = M100PSimdKLineAggregator::new();
+                if let Err(error) = aggregator.process_trades_batch(black_box(&test_data)) {
+                    black_box(error);
+                }
+            });
+        },
+    );
 }
 
 criterion_group!(

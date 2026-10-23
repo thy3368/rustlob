@@ -31,10 +31,12 @@ impl HttpInboundError {
         BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
         OE: std::error::Error + Send + Sync + 'static,
     {
-        Self(inbound_adapter_support::HttpInboundError::from_execution_error_with(
-            error,
-            |business| (business.http_status_code(), business.inbound_error_code()),
-        ))
+        Self(
+            inbound_adapter_support::HttpInboundError::from_execution_error_with(
+                error,
+                |business| (business.http_status_code(), business.inbound_error_code()),
+            ),
+        )
     }
 
     pub fn status_code(&self) -> u16 {
@@ -96,7 +98,9 @@ impl CliInboundError {
     where
         E: ExampleCliParseErrorMapping + Send + Sync + 'static,
     {
-        Self(inbound_adapter_support::CliInboundError::from_parse_error(error))
+        Self(inbound_adapter_support::CliInboundError::from_parse_error(
+            error,
+        ))
     }
 
     pub fn from_execution_error<BE, OE>(error: CommandUseCaseExecutionError<BE, OE>) -> Self
@@ -104,10 +108,12 @@ impl CliInboundError {
         BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
         OE: std::error::Error + Send + Sync + 'static,
     {
-        Self(inbound_adapter_support::CliInboundError::from_execution_error_with(
-            error,
-            ExampleBusinessErrorMapping::inbound_error_code,
-        ))
+        Self(
+            inbound_adapter_support::CliInboundError::from_execution_error_with(
+                error,
+                ExampleBusinessErrorMapping::inbound_error_code,
+            ),
+        )
     }
 
     pub fn from_mi_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
@@ -122,7 +128,9 @@ impl CliInboundError {
     where
         E: std::error::Error + Send + Sync + 'static,
     {
-        Self(inbound_adapter_support::CliInboundError::runtime(code, error))
+        Self(inbound_adapter_support::CliInboundError::runtime(
+            code, error,
+        ))
     }
 
     pub fn exit_code(&self) -> i32 {
@@ -241,7 +249,10 @@ pub(crate) fn find_u64_field(events: &[EntityReplayableEvent], field_name: &str)
                 return None;
             }
 
-            std::str::from_utf8(change.new_value_bytes()).ok()?.parse::<u64>().ok()
+            std::str::from_utf8(change.new_value_bytes())
+                .ok()?
+                .parse::<u64>()
+                .ok()
         })
     })
 }
@@ -256,7 +267,10 @@ pub(crate) fn find_last_u64_field(
                 return None;
             }
 
-            std::str::from_utf8(change.new_value_bytes()).ok()?.parse::<u64>().ok()
+            std::str::from_utf8(change.new_value_bytes())
+                .ok()?
+                .parse::<u64>()
+                .ok()
         })
     })
 }
@@ -312,7 +326,9 @@ pub(crate) mod tests {
         fn lock_events(
             mutex: &Mutex<Vec<EntityReplayableEvent>>,
         ) -> Result<MutexGuard<'_, Vec<EntityReplayableEvent>>, TestOutboundError> {
-            mutex.lock().map_err(|_| TestOutboundError::StoreUnavailable)
+            mutex
+                .lock()
+                .map_err(|_| TestOutboundError::StoreUnavailable)
         }
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), TestOutboundError> {

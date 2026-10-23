@@ -1,6 +1,7 @@
 // Binance Option WebSocket Market Streams
 // Base URL: wss://nbstream.binance.com/eoptions/
-// 根据 /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/option/websocket-market-streams 文档定义
+// 根据 /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/option/
+// websocket-market-streams 文档定义
 
 // use crate::proc::behavior::spot_trade_behavior::{CMetadata, CmdResp, SpotCmdErrorAny};
 
@@ -369,15 +370,25 @@ pub enum StreamType {
     /// 标记价格流: <underlyingAsset>@markPrice
     MarkPrice { underlying_asset: String },
     /// 部分订单簿深度流: <symbol>@depth<levels>[@<speed>]
-    Depth { symbol: String, levels: DepthLevel, speed: Option<UpdateSpeed> },
+    Depth {
+        symbol: String,
+        levels: DepthLevel,
+        speed: Option<UpdateSpeed>,
+    },
     /// 持仓量流: <underlyingAsset>@openInterest@<expirationDate>
-    OpenInterest { underlying_asset: String, expiration_date: String },
+    OpenInterest {
+        underlying_asset: String,
+        expiration_date: String,
+    },
     /// 新交易对流: option_pair
     NewSymbol,
     /// 24小时行情流: <symbol>@ticker
     Ticker { symbol: String },
     /// 24小时行情流（按到期日）: <underlyingAsset>@ticker@<expirationDate>
-    TickerByExpiry { underlying_asset: String, expiration_date: String },
+    TickerByExpiry {
+        underlying_asset: String,
+        expiration_date: String,
+    },
     /// 实时成交流: <symbol>@trade OR <underlyingAsset>@trade
     Trade { identifier: String },
     /// 指数价格流: <symbol>@index
@@ -410,7 +421,11 @@ impl StreamType {
             StreamType::MarkPrice { underlying_asset } => {
                 format!("{}@markPrice", underlying_asset)
             }
-            StreamType::Depth { symbol, levels, speed } => {
+            StreamType::Depth {
+                symbol,
+                levels,
+                speed,
+            } => {
                 let level_num = *levels as u32;
                 match speed {
                     Some(UpdateSpeed::Ms100) => format!("{}@depth{}@100ms", symbol, level_num),
@@ -418,12 +433,18 @@ impl StreamType {
                     Some(UpdateSpeed::Ms500) | None => format!("{}@depth{}", symbol, level_num),
                 }
             }
-            StreamType::OpenInterest { underlying_asset, expiration_date } => {
+            StreamType::OpenInterest {
+                underlying_asset,
+                expiration_date,
+            } => {
                 format!("{}@openInterest@{}", underlying_asset, expiration_date)
             }
             StreamType::NewSymbol => "option_pair".to_string(),
             StreamType::Ticker { symbol } => format!("{}@ticker", symbol),
-            StreamType::TickerByExpiry { underlying_asset, expiration_date } => {
+            StreamType::TickerByExpiry {
+                underlying_asset,
+                expiration_date,
+            } => {
                 format!("{}@ticker@{}", underlying_asset, expiration_date)
             }
             StreamType::Trade { identifier } => format!("{}@trade", identifier),
@@ -496,7 +517,9 @@ impl Default for OptionMarketDataStreamConfig {
     fn default() -> Self {
         Self {
             base_url: "wss://nbstream.binance.com/eoptions".to_string(),
-            connection_type: ConnectionType::CombinedStream { stream_names: Vec::new() },
+            connection_type: ConnectionType::CombinedStream {
+                stream_names: Vec::new(),
+            },
         }
     }
 }

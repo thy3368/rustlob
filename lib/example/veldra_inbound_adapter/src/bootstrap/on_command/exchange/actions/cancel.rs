@@ -74,12 +74,20 @@ pub struct CancelSpotOrderV2Request {
 
 impl CancelSpotOrderV2Request {
     fn from_wire_cancel(party_id: String, cancel: &CancelItemWire) -> Self {
-        Self { party_id, asset: cancel.a, lookup: CancelSpotOrderV2Lookup::Oid(cancel.o) }
+        Self {
+            party_id,
+            asset: cancel.a,
+            lookup: CancelSpotOrderV2Lookup::Oid(cancel.o),
+        }
     }
 
     #[allow(dead_code)]
     pub fn from_cloid(party_id: String, asset: u32, cloid: String) -> Self {
-        Self { party_id, asset, lookup: CancelSpotOrderV2Lookup::Cloid(cloid) }
+        Self {
+            party_id,
+            asset,
+            lookup: CancelSpotOrderV2Lookup::Cloid(cloid),
+        }
     }
 }
 
@@ -129,28 +137,36 @@ impl ExchangeActionHandler for CancelAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "cancel" {
-        return Err(ExchangeHttpError::contract(CancelContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            CancelContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.cancels.is_empty() {
-        return Err(ExchangeHttpError::contract(CancelContractError::EmptyCancels));
+        return Err(ExchangeHttpError::contract(
+            CancelContractError::EmptyCancels,
+        ));
     }
     if matches!(request.action.f, Some(false)) {
-        return Err(ExchangeHttpError::contract(CancelContractError::InvalidFastFlag));
+        return Err(ExchangeHttpError::contract(
+            CancelContractError::InvalidFastFlag,
+        ));
     }
     for cancel in &request.action.cancels {
         if cancel.o == 0 {
-            return Err(ExchangeHttpError::contract(CancelContractError::InvalidOrderId));
+            return Err(ExchangeHttpError::contract(
+                CancelContractError::InvalidOrderId,
+            ));
         }
     }
     Ok(())
 }
 
 async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, ExchangeHttpError> {
-    let party_id =
-        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+    let party_id = request
+        .common
+        .vault_address
+        .unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
 
     let statuses = request
         .action
@@ -164,9 +180,9 @@ async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, Exch
                 SpotOrderV2CancelExecutionSpec::command(&cancel_request, nonce, nonce, 0, nonce);
             match execute_cancel_spot_order_v2(&command) {
                 Ok(_) => reply::CancelStatusWire::Success("success"),
-                Err(error) => {
-                    reply::CancelStatusWire::Error { error: cancel_execution_error_message(error) }
-                }
+                Err(error) => reply::CancelStatusWire::Error {
+                    error: cancel_execution_error_message(error),
+                },
             }
         })
         .collect();
@@ -207,7 +223,12 @@ mod tests {
         let command = SpotOrderV2CancelExecutionSpec::command(&request, 42, 123, 7, 9);
 
         assert_eq!(
-            (command.lsn(), command.logical_ts(), command.client_id(), command.request_id()),
+            (
+                command.lsn(),
+                command.logical_ts(),
+                command.client_id(),
+                command.request_id()
+            ),
             (42, 123, 7, 9)
         );
 

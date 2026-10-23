@@ -1,5 +1,9 @@
 pub fn validate_prefixed_hex_with_len(value: &str, hex_len: usize) -> Result<(), ()> {
-    if is_prefixed_hex_with_len(value, hex_len) { Ok(()) } else { Err(()) }
+    if is_prefixed_hex_with_len(value, hex_len) {
+        Ok(())
+    } else {
+        Err(())
+    }
 }
 
 pub fn validate_hex_address(value: &str) -> Result<(), ()> {

@@ -3,10 +3,12 @@
 //!
 //! - `business_truth_center`: `HyperliquidPerpLiquidation`
 //! - `four_color_archetype`: `Moment-Interval`
-//! - `meaning`: 某个 perp 仓位被系统正式认定进入强平流程，并沿着缺口、保险基金、ADL 链路推进直到结束
-//! - `lifecycle_or_state_machine`:
-//!   `Started -> Executing -> ShortfallAssessed -> FundCovering | AdlCovering -> Closed | Exhausted`
-//! - `group_boundary`: 当前示例覆盖主强平会话与次级 MI 事实，不负责纯风险查询、成交清算、逐仓保证金调整或余额出入账
+//! - `meaning`: 某个 perp 仓位被系统正式认定进入强平流程，并沿着缺口、保险基金、ADL
+//!   链路推进直到结束
+//! - `lifecycle_or_state_machine`: `Started -> Executing -> ShortfallAssessed -> FundCovering |
+//!   AdlCovering -> Closed | Exhausted`
+//! - `group_boundary`: 当前示例覆盖主强平会话与次级 MI
+//!   事实，不负责纯风险查询、成交清算、逐仓保证金调整或余额出入账
 //!
 //! 这个分组最重要的主语不是订单，而是一次强平处置会话。
 //! 强平在触发方式上看起来像条件单，但业务主语并不是“某张订单被触发”，而是

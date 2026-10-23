@@ -1,4 +1,5 @@
-// 参考 ## wallet Endpoints  /Users/hongyaotang/src/rustlob/design/other/binance_wallet_docs 定义所有 wallet 接口
+// 参考 ## wallet Endpoints  /Users/hongyaotang/src/rustlob/design/other/binance_wallet_docs
+// 定义所有 wallet 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 use serde_json::Value;

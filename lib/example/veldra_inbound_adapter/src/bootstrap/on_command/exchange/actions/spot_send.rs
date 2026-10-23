@@ -72,9 +72,9 @@ impl ExchangeActionHandler for SpotSendAction {
 
 fn validate(request: &SpotSendRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "spotSend" {
-        return Err(ExchangeHttpError::contract(SpotSendContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            SpotSendContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -86,7 +86,9 @@ fn validate(request: &SpotSendRequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(ExchangeHttpError::contract(SpotSendContractError::ExpiresAfterNotSupported));
+        return Err(ExchangeHttpError::contract(
+            SpotSendContractError::ExpiresAfterNotSupported,
+        ));
     }
     validate_hyperliquid_chain(&request.action.hyperliquid_chain)
         .map_err(|_| ExchangeHttpError::contract(SpotSendContractError::InvalidHyperliquidChain))?;
@@ -95,13 +97,19 @@ fn validate(request: &SpotSendRequestWire) -> Result<(), ExchangeHttpError> {
     validate_hex_address(&request.action.destination)
         .map_err(|_| ExchangeHttpError::contract(SpotSendContractError::InvalidDestination))?;
     if request.action.token.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(SpotSendContractError::InvalidToken));
+        return Err(ExchangeHttpError::contract(
+            SpotSendContractError::InvalidToken,
+        ));
     }
     if request.action.amount.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(SpotSendContractError::InvalidAmount));
+        return Err(ExchangeHttpError::contract(
+            SpotSendContractError::InvalidAmount,
+        ));
     }
     if request.action.time != request.common.nonce {
-        return Err(ExchangeHttpError::contract(SpotSendContractError::NonceMismatch));
+        return Err(ExchangeHttpError::contract(
+            SpotSendContractError::NonceMismatch,
+        ));
     }
     Ok(())
 }
@@ -119,7 +127,10 @@ mod tests {
         let request =
             parse_json_request::<SpotSendRequestWire, ExchangeHttpError>(valid_request_json())
                 .expect("request should parse");
-        assert_eq!(request.action.token, "PURR:0xc4bf3f870c0e9465323c0b6ed28096c2");
+        assert_eq!(
+            request.action.token,
+            "PURR:0xc4bf3f870c0e9465323c0b6ed28096c2"
+        );
     }
 
     #[test]

@@ -45,7 +45,10 @@ struct OrderNode<O: LobOrder> {
 
 impl<O: LobOrder> OrderNode<O> {
     fn new(order: O) -> Self {
-        Self { order, next_idx: None }
+        Self {
+            order,
+            next_idx: None,
+        }
     }
 }
 
@@ -257,13 +260,16 @@ impl<O: LobOrder> LocalLob<O> {
     /// 获取指定价格级别的第一个订单索引
     #[inline]
     fn get_first_order_at_price(&self, price: Price, side: OrderSide) -> Option<usize> {
-        self.get_price_point(price, side).and_then(|pp| pp.first_order_idx)
+        self.get_price_point(price, side)
+            .and_then(|pp| pp.first_order_idx)
     }
 
     /// 将订单链接到价格级别的链表尾部
     fn link_order_to_price_level(&mut self, idx: usize, price: Price, side: OrderSide) {
         // 获取当前链表尾部
-        let last_idx = self.get_price_point(price, side).and_then(|pp| pp.last_order_idx);
+        let last_idx = self
+            .get_price_point(price, side)
+            .and_then(|pp| pp.last_order_idx);
 
         // 链接到现有尾部订单
         if let Some(last_idx) = last_idx {
@@ -426,7 +432,11 @@ impl<O: LobOrder> SymbolLob for LocalLob<O> {
         }
 
         // 返回匹配结果和剩余未匹配数量
-        if matched_orders.is_empty() { (None, quantity) } else { (Some(matched_orders), remaining) }
+        if matched_orders.is_empty() {
+            (None, quantity)
+        } else {
+            (Some(matched_orders), remaining)
+        }
     }
 
     fn add_order(&mut self, order: Self::Order) -> Result<(), LobError> {

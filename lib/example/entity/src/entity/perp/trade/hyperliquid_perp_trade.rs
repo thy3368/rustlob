@@ -124,7 +124,8 @@ impl HyperliquidPerpTrade {
 
     /// 可 BDD 规格化的聚合根行为：将一笔成交一次性落到 taker / maker 两边仓位。
     ///
-    /// 该方法只派生成交后的仓位事实和单边 outcome；余额、手续费、凭证和持久化仍由清结算 use case 编排。
+    /// 该方法只派生成交后的仓位事实和单边 outcome；余额、手续费、凭证和持久化仍由清结算 use case
+    /// 编排。
     pub fn settle_into_positions(
         &self,
         taker_position: &PerpPosition,
@@ -467,7 +468,8 @@ fn abs_i64_to_u64(value: i64) -> Option<u64> {
 fn signed_trade_qty(qty: u64, sign: i64) -> Result<i64, HyperliquidPerpPositionError> {
     let qty = i64::try_from(qty).map_err(|_| HyperliquidPerpPositionError::ArithmeticOverflow)?;
     if sign.is_negative() {
-        qty.checked_neg().ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
+        qty.checked_neg()
+            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
     } else {
         Ok(qty)
     }
@@ -652,7 +654,9 @@ mod tests {
         let mut maker_position = position("loser", -2, 80);
         maker_position.cumulative_realized_pnl = 25;
 
-        let settlement = trade.settle_into_positions(&taker_position, &maker_position).unwrap();
+        let settlement = trade
+            .settle_into_positions(&taker_position, &maker_position)
+            .unwrap();
 
         assert!(settlement.taker_position_after.is_short());
         assert_eq!(settlement.taker_position_after.qty(), 3);
@@ -743,7 +747,11 @@ mod tests {
                 .transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer)
                 .is_empty()
         );
-        assert!(voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee).is_empty());
+        assert!(
+            voucher
+                .transfers_for_purpose(SettlementTransferPurpose::TradingFee)
+                .is_empty()
+        );
     }
 
     #[test]

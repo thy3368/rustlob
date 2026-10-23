@@ -57,7 +57,9 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if let Some(time) = request.action.time {
         if time < request.common.nonce.saturating_add(5_000) {
-            return Err(ExchangeHttpError::contract(ScheduleCancelContractError::InvalidTime));
+            return Err(ExchangeHttpError::contract(
+                ScheduleCancelContractError::InvalidTime,
+            ));
         }
     }
     Ok(())

@@ -107,7 +107,9 @@ impl QueryUseCase for StubQueryUseCase {
         _query: &Self::Query,
         read_model: Self::ReadModel,
     ) -> Result<Self::View, Self::Error> {
-        Ok(StubView { order_count: read_model.order_count })
+        Ok(StubView {
+            order_count: read_model.order_count,
+        })
     }
 }
 
@@ -145,8 +147,13 @@ impl ObserveQueryUseCaseLatency for StubObserver {
 
 fn sample_envelope(party_id: &str) -> QueryEnvelope<StubQuery> {
     QueryEnvelope {
-        meta: QueryMeta { trace_id: Some("trace-1".to_string()) },
-        query: StubQuery { party_id: party_id.to_string(), symbol: "BTCUSDT".to_string() },
+        meta: QueryMeta {
+            trace_id: Some("trace-1".to_string()),
+        },
+        query: StubQuery {
+            party_id: party_id.to_string(),
+            symbol: "BTCUSDT".to_string(),
+        },
     }
 }
 
@@ -155,7 +162,11 @@ fn execute_returns_view_on_happy_path() {
     let executor = QueryUseCaseExecutor;
     let use_case = StubQueryUseCase;
     let outbound = StubQueryOutbound {
-        result: Ok(StubReadModel { symbol_exists: true, visible_to_party: true, order_count: 3 }),
+        result: Ok(StubReadModel {
+            symbol_exists: true,
+            visible_to_party: true,
+            order_count: 3,
+        }),
     };
     let observer = StubObserver::default();
 
@@ -170,7 +181,11 @@ fn execute_rejects_invalid_query_before_loading_read_model() {
     let executor = QueryUseCaseExecutor;
     let use_case = StubQueryUseCase;
     let outbound = StubQueryOutbound {
-        result: Ok(StubReadModel { symbol_exists: true, visible_to_party: true, order_count: 3 }),
+        result: Ok(StubReadModel {
+            symbol_exists: true,
+            visible_to_party: true,
+            order_count: 3,
+        }),
     };
     let observer = StubObserver::default();
 
@@ -178,7 +193,9 @@ fn execute_rejects_invalid_query_before_loading_read_model() {
 
     assert_eq!(
         result,
-        Err(QueryUseCaseExecutionError::Business(StubBusinessError::MissingPartyId))
+        Err(QueryUseCaseExecutionError::Business(
+            StubBusinessError::MissingPartyId
+        ))
     );
     assert_eq!(observer.observed_count(), 0);
 }
@@ -187,7 +204,9 @@ fn execute_rejects_invalid_query_before_loading_read_model() {
 fn execute_wraps_outbound_load_failure() {
     let executor = QueryUseCaseExecutor;
     let use_case = StubQueryUseCase;
-    let outbound = StubQueryOutbound { result: Err(StubOutboundError::ReadReplicaUnavailable) };
+    let outbound = StubQueryOutbound {
+        result: Err(StubOutboundError::ReadReplicaUnavailable),
+    };
     let observer = StubObserver::default();
 
     let result = executor.execute(&use_case, sample_envelope("trader-1"), &outbound, &observer);
@@ -207,12 +226,21 @@ fn execute_rejects_invalid_read_model() {
     let executor = QueryUseCaseExecutor;
     let use_case = StubQueryUseCase;
     let outbound = StubQueryOutbound {
-        result: Ok(StubReadModel { symbol_exists: true, visible_to_party: false, order_count: 3 }),
+        result: Ok(StubReadModel {
+            symbol_exists: true,
+            visible_to_party: false,
+            order_count: 3,
+        }),
     };
     let observer = StubObserver::default();
 
     let result = executor.execute(&use_case, sample_envelope("trader-1"), &outbound, &observer);
 
-    assert_eq!(result, Err(QueryUseCaseExecutionError::Business(StubBusinessError::NotVisible)));
+    assert_eq!(
+        result,
+        Err(QueryUseCaseExecutionError::Business(
+            StubBusinessError::NotVisible
+        ))
+    );
     assert_eq!(observer.observed_count(), 0);
 }

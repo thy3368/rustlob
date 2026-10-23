@@ -123,8 +123,18 @@ impl FieldDiff for HyperliquidPerpLeverageSetting {
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = Vec::with_capacity(0);
-        push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
-        push_change(&mut changes, "asset", self.asset.to_string(), other.asset.to_string());
+        push_change(
+            &mut changes,
+            "account_id",
+            &self.account_id,
+            &other.account_id,
+        );
+        push_change(
+            &mut changes,
+            "asset",
+            self.asset.to_string(),
+            other.asset.to_string(),
+        );
         push_change(
             &mut changes,
             "margin_mode",

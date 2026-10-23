@@ -80,7 +80,11 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         _cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        if state.accepted { Ok(()) } else { Err(SubmitError::Rejected) }
+        if state.accepted {
+            Ok(())
+        } else {
+            Err(SubmitError::Rejected)
+        }
     }
 
     fn compute_output_and_events(
@@ -88,20 +92,30 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         _cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        let output = SubmitOutput { accepted: state.accepted };
+        let output = SubmitOutput {
+            accepted: state.accepted,
+        };
         let mut event = EntityReplayableEvent::new_created(
             0,
             stable_entity_id(&state.accepted.to_string()),
             SUBMIT_ENTITY_TYPE,
         );
         event.add_field_change(bool_field("accepted", state.accepted));
-        Ok(UseCaseOutput { output, events: vec![event] })
+        Ok(UseCaseOutput {
+            output,
+            events: vec![event],
+        })
     }
 }
 
 fn bad_case_strategy() -> impl Strategy<Value = (SubmitCmd, SubmitState)> {
     any::<bool>().prop_map(|accepted| {
-        (SubmitCmd { trace_id: format!("trace-{accepted}") }, SubmitState { accepted })
+        (
+            SubmitCmd {
+                trace_id: format!("trace-{accepted}"),
+            },
+            SubmitState { accepted },
+        )
     })
 }
 

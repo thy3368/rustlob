@@ -61,7 +61,15 @@ impl<P> LogEntry<P> {
         request_id: u64,
         payload: P,
     ) -> Self {
-        Self { t, p, lsn, logical_ts, client_id, request_id, payload }
+        Self {
+            t,
+            p,
+            lsn,
+            logical_ts,
+            client_id,
+            request_id,
+            payload,
+        }
     }
     pub(crate) fn new(
         lsn: u64,
@@ -70,7 +78,15 @@ impl<P> LogEntry<P> {
         request_id: u64,
         payload: P,
     ) -> Self {
-        Self { t: 0, p: 0, lsn, logical_ts, client_id, request_id, payload }
+        Self {
+            t: 0,
+            p: 0,
+            lsn,
+            logical_ts,
+            client_id,
+            request_id,
+            payload,
+        }
     }
 
     pub const fn lsn(&self) -> u64 {

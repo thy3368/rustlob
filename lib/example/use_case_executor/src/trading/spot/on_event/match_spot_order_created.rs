@@ -81,7 +81,11 @@ pub enum MatchSpotOrderCreatedEventParseError {
     #[error("spot order event field `{field}` is not valid UTF-8")]
     InvalidUtf8 { field: &'static str },
     #[error("spot order event field `{field}` is not a valid {expected}: {value}")]
-    InvalidNumber { field: &'static str, expected: &'static str, value: String },
+    InvalidNumber {
+        field: &'static str,
+        expected: &'static str,
+        value: String,
+    },
 }
 
 impl From<ReplayEventFieldParseError> for MatchSpotOrderCreatedEventParseError {
@@ -89,9 +93,15 @@ impl From<ReplayEventFieldParseError> for MatchSpotOrderCreatedEventParseError {
         match error {
             ReplayEventFieldParseError::MissingField(field) => Self::MissingField(field),
             ReplayEventFieldParseError::InvalidUtf8 { field } => Self::InvalidUtf8 { field },
-            ReplayEventFieldParseError::InvalidNumber { field, expected, value } => {
-                Self::InvalidNumber { field, expected, value }
-            }
+            ReplayEventFieldParseError::InvalidNumber {
+                field,
+                expected,
+                value,
+            } => Self::InvalidNumber {
+                field,
+                expected,
+                value,
+            },
         }
     }
 }

@@ -275,10 +275,15 @@ impl MptSnapshot {
     pub fn new(root_hash: [u8; 32], entries: Vec<(Vec<u8>, Vec<u8>)>) -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        let timestamp =
-            SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |duration| duration.as_nanos());
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
 
-        Self { root_hash, entries, timestamp }
+        Self {
+            root_hash,
+            entries,
+            timestamp,
+        }
     }
 
     /// 获取快照大小（字节）
@@ -305,7 +310,10 @@ mod tests {
 
     #[test]
     fn test_mpt_snapshot() {
-        let entries = vec![(vec![1, 2, 3], vec![4, 5, 6]), (vec![7, 8, 9], vec![10, 11, 12])];
+        let entries = vec![
+            (vec![1, 2, 3], vec![4, 5, 6]),
+            (vec![7, 8, 9], vec![10, 11, 12]),
+        ];
 
         let snapshot = MptSnapshot::new([0u8; 32], entries.clone());
 

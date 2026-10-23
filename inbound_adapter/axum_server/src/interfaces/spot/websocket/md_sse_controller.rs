@@ -15,7 +15,10 @@ pub struct SpotMarketDataSSEImpl {
 impl SpotMarketDataSSEImpl {
     /// 创建新的 SpotMarketDataSSEImpl 实例
     pub fn new() -> Self {
-        Self { subscriptions: Vec::new(), combined_stream_enabled: false }
+        Self {
+            subscriptions: Vec::new(),
+            combined_stream_enabled: false,
+        }
     }
 }
 

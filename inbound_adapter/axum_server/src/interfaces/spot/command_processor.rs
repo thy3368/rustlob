@@ -30,7 +30,8 @@ use crate::interfaces::common::ins_repo;
 pub struct CommandProcessor {}
 impl CommandProcessor {
     pub async fn start_4_ds() -> Result<(), Box<dyn std::error::Error>> {
-        // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
+        // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior
+        // 中实例化
 
         // 使用 id_repo 中的单例服务
         let trade_v2_service = ins_repo::get_spot_trade_behavior_v4_distributed();
@@ -110,7 +111,8 @@ impl CommandProcessor {
 impl CommandProcessor {
     /// 启动 Spot HTTP 服务器
     pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
-        // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior 中实例化
+        // 创建应用服务（单例，全局共享）- TradeService 依赖于 HTTP 框架，无法在 spot_behavior
+        // 中实例化
 
         // 使用 id_repo 中的单例服务
         let trade_v2_service = ins_repo::get_spot_trade_behavior_v4_embedded();

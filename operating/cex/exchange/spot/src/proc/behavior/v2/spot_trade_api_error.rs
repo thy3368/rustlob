@@ -35,15 +35,32 @@ impl std::fmt::Display for InternalError {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TraderError {
     #[error("余额不足: 需要 {required}, 可用 {available}. {action}")]
-    InsufficientBalance { required: String, available: String, action: &'static str },
+    InsufficientBalance {
+        required: String,
+        available: String,
+        action: &'static str,
+    },
     #[error("订单{order_id}不存在. {action}")]
-    OrderNotFound { order_id: String, action: &'static str },
+    OrderNotFound {
+        order_id: String,
+        action: &'static str,
+    },
     #[error("订单状态{current}无法{want}. {action}")]
-    InvalidStatusTransition { current: String, want: String, action: &'static str },
+    InvalidStatusTransition {
+        current: String,
+        want: String,
+        action: &'static str,
+    },
     #[error("交易对{symbol}不存在. {suggestion}")]
-    TradingPairNotFound { symbol: String, suggestion: &'static str },
+    TradingPairNotFound {
+        symbol: String,
+        suggestion: &'static str,
+    },
     #[error("账户{account_id}已被冻结. {action}")]
-    AccountFrozen { account_id: String, action: &'static str },
+    AccountFrozen {
+        account_id: String,
+        action: &'static str,
+    },
 }
 
 impl TraderError {
@@ -72,7 +89,12 @@ impl TraderError {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum ApiError {
     #[error("Invalid field '{field}': {reason} (code:{code}, see {doc})")]
-    InvalidField { field: &'static str, reason: &'static str, code: i32, doc: &'static str },
+    InvalidField {
+        field: &'static str,
+        reason: &'static str,
+        code: i32,
+        doc: &'static str,
+    },
     #[error("Constraint '{constraint}' violated: value={value} range=[{min}, {max}] (code:{code})")]
     ConstraintViolation {
         constraint: &'static str,
@@ -82,9 +104,17 @@ pub enum ApiError {
         code: i32,
     },
     #[error("Unauthorized: {reason} (required: {required}) (code:{code})")]
-    Unauthorized { reason: &'static str, required: &'static str, code: i32 },
+    Unauthorized {
+        reason: &'static str,
+        required: &'static str,
+        code: i32,
+    },
     #[error("Rate limited: {limit} req/min, retry after {retry_after_ms}ms (code:{code})")]
-    RateLimited { retry_after_ms: u64, limit: u64, code: i32 },
+    RateLimited {
+        retry_after_ms: u64,
+        limit: u64,
+        code: i32,
+    },
     #[error("Resource '{resource}' not found (code:{code})")]
     NotFound { resource: &'static str, code: i32 },
     #[error("Service '{service}' unavailable (code:{code})")]

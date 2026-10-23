@@ -23,8 +23,8 @@ fn string_field(name: &str, value: &str) -> ReplayFieldChange {
 // - `role()` uses a technical component name, so four-color Role clarity is weak.
 // - `party_id` is missing even though a business party is clearly issuing the on_command.
 // - `trace_id` is placed on the business on_command, which encourages identity confusion.
-// - `GivenState` already contains the decision result and final event, so the use case
-//   mostly copies a precomputed answer into output and events.
+// - `GivenState` already contains the decision result and final event, so the use case mostly
+//   copies a precomputed answer into output and events.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubmitCmd {
@@ -73,7 +73,11 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         _cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        if state.accepted { Ok(()) } else { Err(SubmitError::Rejected) }
+        if state.accepted {
+            Ok(())
+        } else {
+            Err(SubmitError::Rejected)
+        }
     }
 
     fn compute_output_and_events(
@@ -81,8 +85,10 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        let output =
-            SubmitOutput { accepted: state.accepted, generated_status: state.generated_status };
+        let output = SubmitOutput {
+            accepted: state.accepted,
+            generated_status: state.generated_status,
+        };
 
         let mut event = EntityReplayableEvent::new_created(
             0,
@@ -91,6 +97,9 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         );
         event.add_field_change(string_field("status", state.generated_status));
 
-        Ok(UseCaseOutput { output, events: vec![event] })
+        Ok(UseCaseOutput {
+            output,
+            events: vec![event],
+        })
     }
 }

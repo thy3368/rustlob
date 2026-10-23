@@ -63,12 +63,18 @@ static MARKET_DATA_REPO: Lazy<Arc<MySqlDbRepo<SpotOrder>>> =
 
 // 为每个 TradingPair 枚举对应一个 LocalLob
 static EMBEDDED_LOB_REPO: Lazy<Arc<EmbeddedLobRepo<SpotOrder>>> = Lazy::new(|| {
-    let lobs = TradingPair::all().iter().map(|&symbol| LocalLob::new(symbol)).collect::<Vec<_>>();
+    let lobs = TradingPair::all()
+        .iter()
+        .map(|&symbol| LocalLob::new(symbol))
+        .collect::<Vec<_>>();
     Arc::new(EmbeddedLobRepo::new(lobs))
 });
 
 static DISTRIBUTED_LOB_REPO: Lazy<Arc<DistributedLobRepo<SpotOrder>>> = Lazy::new(|| {
-    let lobs = TradingPair::all().iter().map(|&symbol| RemoteLob::new(symbol)).collect::<Vec<_>>();
+    let lobs = TradingPair::all()
+        .iter()
+        .map(|&symbol| RemoteLob::new(symbol))
+        .collect::<Vec<_>>();
     Arc::new(DistributedLobRepo::new(lobs))
 });
 
@@ -84,7 +90,9 @@ static MPMC_QUEUE: Lazy<Arc<MPMCQueue>> = Lazy::new(|| {
 
 // Kafka 队列配置：10分区 3副本
 static KAFKA_QUEUE: Lazy<Arc<push::queue::queue_impl::kafka_queue::KafkaQueue>> = Lazy::new(|| {
-    let config = KafkaConfig::default().with_num_partitions(10).with_replication_factor(3);
+    let config = KafkaConfig::default()
+        .with_num_partitions(10)
+        .with_replication_factor(3);
     let queue = push::queue::queue_impl::kafka_queue::KafkaQueue::from_config(config);
 
     // 为每个 topic 创建 channel，使用全局配置（10分区 3副本）
@@ -170,8 +178,12 @@ static SPOT_USER_DATA_LISTEN_KEY_SERVICE: Lazy<Arc<SpotUserDataListenKeyImpl>> =
 // WebSocket 相关服务单例
 static CONNECTION_REPO: Lazy<Arc<ConnectionRepo>> =
     Lazy::new(|| Arc::new(ConnectionRepo::default()));
-static PUSH_SERVICE: Lazy<Arc<PushBehaviorV2Imp>> =
-    Lazy::new(|| Arc::new(PushBehaviorV2Imp::new(CONNECTION_REPO.clone(), MPMC_QUEUE.clone())));
+static PUSH_SERVICE: Lazy<Arc<PushBehaviorV2Imp>> = Lazy::new(|| {
+    Arc::new(PushBehaviorV2Imp::new(
+        CONNECTION_REPO.clone(),
+        MPMC_QUEUE.clone(),
+    ))
+});
 static SUBSCRIPTION_SERVICE: Lazy<Arc<SubscriptionService>> =
     Lazy::new(|| Arc::new(SubscriptionService::new(CONNECTION_REPO.clone())));
 static SPOT_MARKET_DATA_SSE_IMPL: Lazy<Arc<SpotMarketDataSSEImpl>> =

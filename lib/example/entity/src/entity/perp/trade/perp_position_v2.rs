@@ -17,7 +17,11 @@ pub struct FundingAccumulatorV2 {
 }
 impl Default for FundingAccumulatorV2 {
     fn default() -> Self {
-        Self { all_time: Decimal::ZERO, since_open: Decimal::ZERO, since_change: Decimal::ZERO }
+        Self {
+            all_time: Decimal::ZERO,
+            since_open: Decimal::ZERO,
+            since_change: Decimal::ZERO,
+        }
     }
 }
 
@@ -220,13 +224,17 @@ impl PerpPositionV2 {
         let (new_size, realized, new_entry) = if old.is_zero() {
             (signed_quantity, Decimal::ZERO, trade_price)
         } else if old.signum() == signed_quantity.signum() {
-            let total =
-                old.checked_add(signed_quantity).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            let total = old
+                .checked_add(signed_quantity)
+                .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
             let weighted = old
                 .abs()
                 .checked_mul(self.entry_px)
                 .and_then(|v| {
-                    signed_quantity.abs().checked_mul(trade_price).and_then(|w| v.checked_add(w))
+                    signed_quantity
+                        .abs()
+                        .checked_mul(trade_price)
+                        .and_then(|w| v.checked_add(w))
                 })
                 .and_then(|v| v.checked_div(total.abs()))
                 .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
@@ -239,11 +247,16 @@ impl PerpPositionV2 {
             let pnl = closing
                 .checked_mul(delta)
                 .and_then(|v| {
-                    if old.is_sign_negative() { Decimal::ZERO.checked_sub(v) } else { Some(v) }
+                    if old.is_sign_negative() {
+                        Decimal::ZERO.checked_sub(v)
+                    } else {
+                        Some(v)
+                    }
                 })
                 .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-            let total =
-                old.checked_add(signed_quantity).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            let total = old
+                .checked_add(signed_quantity)
+                .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
             (
                 total,
                 pnl,
@@ -260,7 +273,10 @@ impl PerpPositionV2 {
             .realized_pnl
             .checked_add(realized)
             .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        let version = self.version.checked_add(1).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+        let version = self
+            .version
+            .checked_add(1)
+            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
         self.szi = new_size;
         self.entry_px = new_entry;
         self.realized_pnl = cumulative;
@@ -287,8 +303,15 @@ impl PerpPositionV2 {
             .since_change
             .checked_add(signed_funding)
             .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        let v = self.version.checked_add(1).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        self.cum_funding = FundingAccumulatorV2 { all_time: a, since_open: o, since_change: c };
+        let v = self
+            .version
+            .checked_add(1)
+            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+        self.cum_funding = FundingAccumulatorV2 {
+            all_time: a,
+            since_open: o,
+            since_change: c,
+        };
         self.version = v;
         Ok(())
     }
@@ -299,7 +322,10 @@ impl PerpPositionV2 {
         isolated_margin: Option<Decimal>,
     ) -> Result<(), PerpPositionV2Error> {
         validate_margin(leverage, margin_mode, isolated_margin)?;
-        let v = self.version.checked_add(1).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+        let v = self
+            .version
+            .checked_add(1)
+            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
         self.leverage = leverage;
         self.margin_mode = margin_mode;
         self.isolated_margin = isolated_margin;
@@ -326,12 +352,16 @@ impl PerpPositionV2 {
                     .ok_or(PerpPositionV2Error::ArithmeticOverflow)?,
             )
             .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        let margin =
-            value.checked_div(self.leverage).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+        let margin = value
+            .checked_div(self.leverage)
+            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
         let roe = if equity.is_zero() {
             None
         } else {
-            Some(pnl.checked_div(equity).ok_or(PerpPositionV2Error::ArithmeticOverflow)?)
+            Some(
+                pnl.checked_div(equity)
+                    .ok_or(PerpPositionV2Error::ArithmeticOverflow)?,
+            )
         };
         Ok(PerpPositionMetricsV2 {
             position_value: value,

@@ -72,7 +72,10 @@ impl WithdrawQuoteCliCommand {
                 trace_id: Some("cli-withdraw-quote".to_string()),
                 command_id: Some(format!("cli:{}:withdraw:{}", self.trader_id, self.amount)),
             },
-            command: WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
+            command: WithdrawQuoteCmd {
+                party_id: self.trader_id,
+                amount: self.amount,
+            },
         }
     }
 }
@@ -90,11 +93,13 @@ where
 {
     let mut args = args.into_iter().map(Into::into);
 
-    let trader_id = args.next().unwrap_or_else(|| WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID.to_string());
+    let trader_id = args
+        .next()
+        .unwrap_or_else(|| WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID.to_string());
     let amount = match args.next() {
-        Some(raw) => {
-            raw.parse::<u64>().map_err(|_| ParseWithdrawQuoteCliArgsError::InvalidAmount(raw))?
-        }
+        Some(raw) => raw
+            .parse::<u64>()
+            .map_err(|_| ParseWithdrawQuoteCliArgsError::InvalidAmount(raw))?,
         None => WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT,
     };
 
@@ -159,7 +164,10 @@ mod tests {
     fn cli_adapter_translates_withdraw_command_and_maps_text_response()
     -> Result<(), Box<dyn std::error::Error>> {
         let outbound = WithdrawQuoteTestOutbound::default();
-        let command = WithdrawQuoteCliCommand { trader_id: "trader-1".to_string(), amount: 250 };
+        let command = WithdrawQuoteCliCommand {
+            trader_id: "trader-1".to_string(),
+            amount: 250,
+        };
 
         let response = run_withdraw_quote_cli(command, &outbound)?;
         let counts = outbound.snapshot_event_counts()?;

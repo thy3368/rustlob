@@ -1,4 +1,6 @@
-// 参考 ## Account Endpoints / Account information (USER_DATA) /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md 定义所有 user data 接口
+// 参考 ## Account Endpoints / Account information (USER_DATA)
+// /Users/hongyaotang/src/rustlob/design/other/binance-spot-api-docs/rest-api.md 定义所有 user data
+// 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 

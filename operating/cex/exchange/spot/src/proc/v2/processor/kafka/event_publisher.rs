@@ -92,7 +92,10 @@ impl KafkaEventPublisher {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", &config.kafka_brokers)
             .set("message.timeout.ms", config.send_timeout_ms.to_string())
-            .set("queue.buffering.max.messages", (config.batch_size * 10).to_string())
+            .set(
+                "queue.buffering.max.messages",
+                (config.batch_size * 10).to_string(),
+            )
             .set("batch.num.messages", config.batch_size.to_string())
             .create()
             .map_err(|e| format!("Failed to create Kafka producer: {}", e))?;
@@ -107,9 +110,10 @@ impl KafkaEventPublisher {
     fn send(&self, topic: &str, event: &ChangeLog) -> Result<(), PublishError> {
         let payload = self.serialize(event)?;
         let record = FutureRecord::to(topic).payload(&payload).key(&());
-        let future = self
-            .producer
-            .send(record, std::time::Duration::from_millis(self.config.send_timeout_ms as u64));
+        let future = self.producer.send(
+            record,
+            std::time::Duration::from_millis(self.config.send_timeout_ms as u64),
+        );
         futures::executor::block_on(future)
             .map_err(|(e, _)| PublishError::KafkaSend(format!("{:?}", e)))?;
         Ok(())
@@ -129,10 +133,13 @@ impl KafkaEventPublisher {
 impl EventPublisher for KafkaEventPublisher {
     fn publish_command(&self, cmd: &SpotTradeCmdOrQuery) -> Result<(), PublishError> {
         let payload = format!("{:?}", cmd).into_bytes();
-        let record = FutureRecord::to(&self.config.order_log_topic).payload(&payload).key(&());
-        let future = self
-            .producer
-            .send(record, std::time::Duration::from_millis(self.config.send_timeout_ms as u64));
+        let record = FutureRecord::to(&self.config.order_log_topic)
+            .payload(&payload)
+            .key(&());
+        let future = self.producer.send(
+            record,
+            std::time::Duration::from_millis(self.config.send_timeout_ms as u64),
+        );
         futures::executor::block_on(future)
             .map_err(|(e, _)| PublishError::KafkaSend(format!("{:?}", e)))?;
         Ok(())
@@ -254,7 +261,9 @@ mod tests {
 
     #[test]
     fn test_config_builder() {
-        let config = PublisherConfig::default().order_topic("custom-order").send_timeout(5000);
+        let config = PublisherConfig::default()
+            .order_topic("custom-order")
+            .send_timeout(5000);
         assert_eq!(config.order_log_topic, "custom-order");
         assert_eq!(config.send_timeout_ms, 5000);
     }

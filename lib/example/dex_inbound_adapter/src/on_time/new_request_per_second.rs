@@ -10,28 +10,34 @@ const REQUEST_TIMEOUT: Duration = Duration::from_millis(800);
 const REQUEST_INTERVAL: Duration = Duration::from_secs(1);
 
 pub fn build_request(sequence: u64) -> SpotBlockCommand {
-    SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
-        party_id: "buyer".to_string(),
-        asset: 10_001,
-        order_id: sequence.saturating_add(1),
-        symbol: "BTCUSDT".to_string(),
-        is_buy: true,
-        price: "100".to_string(),
-        size: "1".to_string(),
-        order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "ioc".to_string() },
-        reduce_only: false,
-        cloid: Some(format!("0x{sequence:032x}")),
-        base_asset_id: "BTC".to_string(),
-        quote_asset_id: "USDT".to_string(),
-        maker_fee_bps: 5,
-        taker_fee_bps: 10,
-    }))
+    SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(
+        PlaceOnlySpotOrderV2OrderCmd {
+            party_id: "buyer".to_string(),
+            asset: 10_001,
+            order_id: sequence.saturating_add(1),
+            symbol: "BTCUSDT".to_string(),
+            is_buy: true,
+            price: "100".to_string(),
+            size: "1".to_string(),
+            order_type: PlaceOnlySpotOrderV2OrderType::Limit {
+                tif: "ioc".to_string(),
+            },
+            reduce_only: false,
+            cloid: Some(format!("0x{sequence:032x}")),
+            base_asset_id: "BTC".to_string(),
+            quote_asset_id: "USDT".to_string(),
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
+        },
+    ))
 }
 
 pub fn run_request_per_second() -> Result<(), reqwest::Error> {
     let url =
         std::env::var("DEX_HOTSTUFF_URL").unwrap_or_else(|_| DEFAULT_HOTSTUFF_URL.to_string());
-    let client = reqwest::blocking::Client::builder().timeout(REQUEST_TIMEOUT).build()?;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()?;
     let mut sequence = 0_u64;
 
     loop {
@@ -76,7 +82,10 @@ mod tests {
         assert_eq!(order_fields(&first).0, 8);
         assert_eq!(order_fields(&second).0, 9);
         assert_eq!(order_fields(&first).1, "0x00000000000000000000000000000007");
-        assert_eq!(order_fields(&second).1, "0x00000000000000000000000000000008");
+        assert_eq!(
+            order_fields(&second).1,
+            "0x00000000000000000000000000000008"
+        );
     }
 
     #[test]

@@ -27,7 +27,9 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone>
 {
     fn event_handle(&self, event: DomainEvent<SpotTrade>) -> Result<(), SpotApiErrorAny> {
         let (_, trade) = event.into_parts();
-        let cmd = SettlementCmd { trades: vec![trade] };
+        let cmd = SettlementCmd {
+            trades: vec![trade],
+        };
         let _ = self.settlement_handler.cmd_handle(
             cmd,
             self.settlement_handler.repo.clone(),

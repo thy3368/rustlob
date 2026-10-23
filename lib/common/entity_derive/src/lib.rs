@@ -46,7 +46,11 @@ pub fn immutable(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     .into();
             }
         },
-        _ => return syn::Error::new_spanned(name, "只支持结构体").to_compile_error().into(),
+        _ => {
+            return syn::Error::new_spanned(name, "只支持结构体")
+                .to_compile_error()
+                .into();
+        }
     };
 
     let field_defs = fields
@@ -144,7 +148,11 @@ pub fn ActionType(attr: TokenStream, item: TokenStream) -> TokenStream {
 fn expand_action_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     if let Err(error) = validate_single_kind(
         attr,
-        &["pre_check_command", "validate_against_given_state", "compute_after_changes_unchecked"],
+        &[
+            "pre_check_command",
+            "validate_against_given_state",
+            "compute_after_changes_unchecked",
+        ],
         "action_type kind can only be specified once",
         "action_type only supports use case V2 hook kinds",
         "action_type kind must be `pre_check_command`, `validate_against_given_state`, or `compute_after_changes_unchecked`",
@@ -249,9 +257,11 @@ fn validate_single_kind(
         return Err(error.to_compile_error().into());
     }
     if !seen_kind {
-        return Err(syn::Error::new(proc_macro2::Span::call_site(), missing_kind_message)
-            .to_compile_error()
-            .into());
+        return Err(
+            syn::Error::new(proc_macro2::Span::call_site(), missing_kind_message)
+                .to_compile_error()
+                .into(),
+        );
     }
 
     Ok(())
@@ -396,7 +406,10 @@ fn generate_diff_fields(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> {
                 // 检查是否有 #[diff(skip)] 属性
                 let skip = field.attrs.iter().any(|attr| {
                     attr.path().is_ident("diff")
-                        && attr.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
+                        && attr
+                            .parse_args::<Ident>()
+                            .map(|i| i == "skip")
+                            .unwrap_or(false)
                 });
 
                 if skip {
@@ -489,7 +502,10 @@ fn generate_replay_fields(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> 
                 // 检查是否有 #[replay(skip)] 属性
                 let skip = field.attrs.iter().any(|attr| {
                     attr.path().is_ident("replay")
-                        && attr.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
+                        && attr
+                            .parse_args::<Ident>()
+                            .map(|i| i == "skip")
+                            .unwrap_or(false)
                 });
 
                 if skip {
@@ -628,7 +644,10 @@ fn generate_field_constructions(input: &DeriveInput) -> Vec<proc_macro2::TokenSt
                 // 检查是否有 #[created(skip)] 属性
                 let skip = field.attrs.iter().any(|attr| {
                     attr.path().is_ident("created")
-                        && attr.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
+                        && attr
+                            .parse_args::<Ident>()
+                            .map(|i| i == "skip")
+                            .unwrap_or(false)
                 });
 
                 if skip {
@@ -782,7 +801,10 @@ fn generate_field_schemas(input: &DeriveInput) -> Vec<proc_macro2::TokenStream> 
                 // 检查是否有 #[schema(skip)] 属性
                 let skip = field.attrs.iter().any(|attr| {
                     attr.path().is_ident("schema")
-                        && attr.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
+                        && attr
+                            .parse_args::<Ident>()
+                            .map(|i| i == "skip")
+                            .unwrap_or(false)
                 });
 
                 if skip {

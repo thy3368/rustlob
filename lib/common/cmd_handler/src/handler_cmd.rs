@@ -69,7 +69,8 @@ pub trait CmdHandlerInternal: Send + Sync {
     ) -> Result<(), Self::Error> {
         //todo 在这里回放
         // repo.replay_event::<SpotOrder>(&domain_events.events)
-        //     .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string() }))
+        //     .map_err(|e| SpotCmdErrorAny::Common(CommonError::Internal { message: e.to_string()
+        // }))
 
         todo!()
     }

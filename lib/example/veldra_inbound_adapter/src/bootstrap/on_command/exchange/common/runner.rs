@@ -88,7 +88,9 @@ mod tests {
 
         fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
             Box::pin(async {
-                Err(ExchangeHttpError::InvalidJsonShape("missing field".to_string()))
+                Err(ExchangeHttpError::InvalidJsonShape(
+                    "missing field".to_string(),
+                ))
             })
         }
     }
@@ -133,7 +135,9 @@ mod tests {
             type Reply = ();
 
             fn validate(_request: &Self::Request) -> Result<(), ExchangeHttpError> {
-                Err(ExchangeHttpError::UnsupportedActionType("order".to_string()))
+                Err(ExchangeHttpError::UnsupportedActionType(
+                    "order".to_string(),
+                ))
             }
 
             fn execute(_request: Self::Request) -> ExchangeActionFuture<'static, Self::Reply> {
@@ -148,7 +152,10 @@ mod tests {
         let result =
             run_exchange_action::<ValidateErrorSkipExecuteAction>(br#"{"value":true}"#).await;
 
-        assert!(matches!(result, Err(ExchangeHttpError::UnsupportedActionType(_))));
+        assert!(matches!(
+            result,
+            Err(ExchangeHttpError::UnsupportedActionType(_))
+        ));
         assert!(!EXECUTED.load(Ordering::SeqCst));
     }
 
@@ -176,7 +183,9 @@ mod tests {
             .expect("shared http runner should succeed");
 
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
-        let body = to_bytes(response.into_body()).await.expect("response body should be readable");
+        let body = to_bytes(response.into_body())
+            .await
+            .expect("response body should be readable");
         let actual: serde_json::Value =
             serde_json::from_slice(&body).expect("response body should be valid json");
         assert_eq!(actual, json!({ "status": "ok" }));

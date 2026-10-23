@@ -174,8 +174,18 @@ mod tests {
 
     #[test]
     fn test_notional_value() {
-        let trade =
-            Trade::new(1, 100, 50000, 10, Side::Buy, PositionSide::Long, 1700000000000, 5, 0, true);
+        let trade = Trade::new(
+            1,
+            100,
+            50000,
+            10,
+            Side::Buy,
+            PositionSide::Long,
+            1700000000000,
+            5,
+            0,
+            true,
+        );
 
         assert_eq!(trade.notional(), 500000); // 50000 * 10
     }
@@ -183,8 +193,18 @@ mod tests {
     #[test]
     fn test_is_open_close() {
         // 买入开多 = 开仓
-        let open_long =
-            Trade::new(1, 100, 50000, 10, Side::Buy, PositionSide::Long, 1700000000000, 5, 0, true);
+        let open_long = Trade::new(
+            1,
+            100,
+            50000,
+            10,
+            Side::Buy,
+            PositionSide::Long,
+            1700000000000,
+            5,
+            0,
+            true,
+        );
         assert!(open_long.is_open());
         assert!(!open_long.is_close());
 

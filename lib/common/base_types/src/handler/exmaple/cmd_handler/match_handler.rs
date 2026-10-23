@@ -142,7 +142,10 @@ mod tests {
     #[test]
     fn test_match_handler() {
         let handler = MatchHandler::new();
-        let cmd = MatchCmd { match_id: "m1".into(), taker_order_id: "order_1".into() };
+        let cmd = MatchCmd {
+            match_id: "m1".into(),
+            taker_order_id: "order_1".into(),
+        };
 
         let result = handler.cmd_handle(cmd, |writes, _| MatchOutput {
             result: MatchResult {

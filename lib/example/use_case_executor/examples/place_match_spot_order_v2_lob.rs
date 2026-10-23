@@ -14,7 +14,10 @@ const MAKER_ORDER_ID: u64 = 2;
 
 fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std::error::Error>> {
     let store = InMemoryStore::new(ASSET);
-    store.seed_market_rules(MarketRules { symbol: "BTCUSDT".into(), min_qty: 1 })?;
+    store.seed_market_rules(MarketRules {
+        symbol: "BTCUSDT".into(),
+        min_qty: 1,
+    })?;
     for balance in [
         Balance::new(
             stable_string_entity_id("buyer"),
@@ -61,7 +64,9 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
             SpotOrderSide::Sell,
             1,
             100,
-            SpotOrderType::Limit { tif: SpotOrderTif::Gtc },
+            SpotOrderType::Limit {
+                tif: SpotOrderTif::Gtc,
+            },
             None,
             0,
             1,
@@ -110,7 +115,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("expected a matched single order".into());
     };
     assert_eq!(match_changes.created_trades().len(), 1);
-    assert_eq!(match_changes.created_trades()[0].maker_order_id, MAKER_ORDER_ID);
+    assert_eq!(
+        match_changes.created_trades()[0].maker_order_id,
+        MAKER_ORDER_ID
+    );
     println!("matched maker order {MAKER_ORDER_ID}");
     Ok(())
 }

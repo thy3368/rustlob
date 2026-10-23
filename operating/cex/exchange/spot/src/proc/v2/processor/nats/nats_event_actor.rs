@@ -15,13 +15,17 @@ pub struct NatsProcessorConfig {
 
 impl Default for NatsProcessorConfig {
     fn default() -> Self {
-        Self { nats_url: "nats://localhost:4222".to_string() }
+        Self {
+            nats_url: "nats://localhost:4222".to_string(),
+        }
     }
 }
 
 impl NatsProcessorConfig {
     pub fn new(nats_url: impl Into<String>) -> Self {
-        Self { nats_url: nats_url.into() }
+        Self {
+            nats_url: nats_url.into(),
+        }
     }
 }
 
@@ -39,7 +43,10 @@ impl NatsSubscription {
             .block_on(client.subscribe(subject.to_owned()))
             .map_err(|e| format!("Failed to subscribe to NATS subject {}: {}", subject, e))?;
 
-        Ok(Self { _client: client, subscriber })
+        Ok(Self {
+            _client: client,
+            subscriber,
+        })
     }
 
     #[inline]
@@ -74,7 +81,14 @@ impl<E, H> NatsEventActor<E, H> {
         let runtime = Self::build_runtime()?;
         let subscription = NatsSubscription::connect(&runtime, &config.nats_url, &subject)?;
 
-        Ok(Self { runtime, subscription, subject, handler, actor_name, deserialize })
+        Ok(Self {
+            runtime,
+            subscription,
+            subject,
+            handler,
+            actor_name,
+            deserialize,
+        })
     }
 
     #[inline]

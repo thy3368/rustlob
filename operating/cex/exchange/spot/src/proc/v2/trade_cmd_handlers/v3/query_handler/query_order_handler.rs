@@ -53,9 +53,11 @@ impl<R: QueryRepo2> QueryHandler for QueryOrderHandler<R> {
                     action: "请检查订单号是否正确",
                 }
                 .into()),
-                Err(_) => {
-                    Err(ApiError::ServiceUnavailable { service: "database", code: -3001 }.into())
+                Err(_) => Err(ApiError::ServiceUnavailable {
+                    service: "database",
+                    code: -3001,
                 }
+                .into()),
             }
         } else if cmd.orig_client_order_id.is_some() {
             //todo 通过client_order_id查

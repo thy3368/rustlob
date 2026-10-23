@@ -75,7 +75,10 @@ impl InMemoryDemoApp {
                 0,
                 2,
             ),
-            example_core_use_case::MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
+            example_core_use_case::MarketRules {
+                symbol: "BTCUSDT".to_string(),
+                min_qty: 1,
+            },
         )?;
         let place_order_outbound = InMemoryPlaceOrderOutbound::from_store(store.clone());
         let deposit_quote_outbound = InMemoryDepositQuoteOutbound::from_store(store.clone());

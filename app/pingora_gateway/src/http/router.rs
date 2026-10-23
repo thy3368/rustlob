@@ -21,8 +21,14 @@ impl Default for UserRouteConfig {
         // let mut user_partition = HashMap::new();
         let mut partition_ips = HashMap::new();
         // 示例配置：不同用户路由到不同的后端服务器
-        partition_ips.insert(1, vec!["127.0.0.1:3001".to_string(), "127.0.0.1:3002".to_string()]);
-        partition_ips.insert(2, vec!["127.0.0.1:3003".to_string(), "127.0.0.1:3004".to_string()]);
+        partition_ips.insert(
+            1,
+            vec!["127.0.0.1:3001".to_string(), "127.0.0.1:3002".to_string()],
+        );
+        partition_ips.insert(
+            2,
+            vec!["127.0.0.1:3003".to_string(), "127.0.0.1:3004".to_string()],
+        );
         partition_ips.insert(3, vec!["127.0.0.1:3001".to_string()]);
         partition_ips.insert(4, vec!["127.0.0.1:3002".to_string()]);
 
@@ -109,8 +115,15 @@ impl UserIdExtractor {
     pub fn extract_from_json(body: &[u8]) -> Option<String> {
         if let Ok(json) = serde_json::from_slice::<serde_json::Value>(body) {
             // 尝试多个可能的字段名
-            let possible_fields =
-                ["user_id", "userId", "trader_id", "traderId", "uid", "accountId", "account_id"];
+            let possible_fields = [
+                "user_id",
+                "userId",
+                "trader_id",
+                "traderId",
+                "uid",
+                "accountId",
+                "account_id",
+            ];
 
             for field in &possible_fields {
                 if let Some(user_id) = json.get(field) {
@@ -210,7 +223,10 @@ mod tests {
     #[tokio::test]
     async fn test_round_robin() {
         let mut partition_ips = HashMap::new();
-        partition_ips.insert(1, vec!["127.0.0.1:3001".to_string(), "127.0.0.1:3002".to_string()]);
+        partition_ips.insert(
+            1,
+            vec!["127.0.0.1:3001".to_string(), "127.0.0.1:3002".to_string()],
+        );
         let config = UserRouteConfig {
             partition_ips,
             num_partitions: 1,

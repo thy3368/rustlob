@@ -1,4 +1,6 @@
-// 参考 ## user data stream Endpoints /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/user-data-streams 定义所有 user data stream 接口
+// 参考 ## user data stream Endpoints
+// /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/usds-margined-futures/
+// user-data-streams 定义所有 user data stream 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 

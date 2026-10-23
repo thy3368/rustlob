@@ -112,7 +112,11 @@ impl ReplayableChanges for MatchHyperliquidPerpOrderChanges {
         let mut events = Vec::with_capacity(0);
         for (trade, maker_order) in self.created_trades.iter().zip(&self.updated_maker_orders) {
             events.push(trade.track_create_event()?);
-            events.push(maker_order.after.track_update_event_from(&maker_order.before)?);
+            events.push(
+                maker_order
+                    .after
+                    .track_update_event_from(&maker_order.before)?,
+            );
         }
         events.push(
             self.updated_taker_order
@@ -201,7 +205,11 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
             let maker_price = maker_order
                 .limit_price()
                 .ok_or(MatchHyperliquidPerpOrderError::MakerMustBeLimit)?;
-            if !can_cross(taker_order_after.side, taker_order_after.order_price(), maker_price) {
+            if !can_cross(
+                taker_order_after.side,
+                taker_order_after.order_price(),
+                maker_price,
+            ) {
                 break;
             }
 
@@ -215,7 +223,11 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
                 .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
             let trade = HyperliquidPerpTrade::new(
-                concat3(cmd.match_id.as_str(), "-", trade_suffix.to_string().as_str()),
+                concat3(
+                    cmd.match_id.as_str(),
+                    "-",
+                    trade_suffix.to_string().as_str(),
+                ),
                 cmd.match_id.clone(),
                 taker_order_after.asset,
                 taker_order_after.symbol.clone(),
@@ -243,8 +255,10 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
             next_maker_order.filled_sz = next_maker_filled;
             next_maker_order.status = next_maker_status;
             next_maker_order.version = next_maker_version;
-            updated_maker_orders
-                .push(UpdatedEntityPair { before: maker_order.clone(), after: next_maker_order });
+            updated_maker_orders.push(UpdatedEntityPair {
+                before: maker_order.clone(),
+                after: next_maker_order,
+            });
 
             taker_remaining = taker_remaining
                 .checked_sub(trade_qty)
@@ -295,7 +309,9 @@ fn validate_matchable_order(
 }
 
 fn remaining_qty(order: &HyperliquidPerpOrder) -> Result<u64, MatchHyperliquidPerpOrderError> {
-    order.remaining_qty().ok_or(MatchHyperliquidPerpOrderError::InconsistentOrderState)
+    order
+        .remaining_qty()
+        .ok_or(MatchHyperliquidPerpOrderError::InconsistentOrderState)
 }
 
 fn can_cross(taker_side: HyperliquidPerpOrderSide, taker_price: u64, maker_price: u64) -> bool {
@@ -389,15 +405,33 @@ mod tests {
     }
 
     fn taker_buy(qty: u64, price: u64) -> HyperliquidPerpOrder {
-        order(TAKER_ORDER_ID, "buyer", HyperliquidPerpOrderSide::Buy, price, qty)
+        order(
+            TAKER_ORDER_ID,
+            "buyer",
+            HyperliquidPerpOrderSide::Buy,
+            price,
+            qty,
+        )
     }
 
     fn taker_sell(qty: u64, price: u64) -> HyperliquidPerpOrder {
-        order(TAKER_ORDER_ID, "seller", HyperliquidPerpOrderSide::Sell, price, qty)
+        order(
+            TAKER_ORDER_ID,
+            "seller",
+            HyperliquidPerpOrderSide::Sell,
+            price,
+            qty,
+        )
     }
 
     fn maker_sell(order_id: u64, qty: u64, price: u64) -> HyperliquidPerpOrder {
-        order(order_id, "seller", HyperliquidPerpOrderSide::Sell, price, qty)
+        order(
+            order_id,
+            "seller",
+            HyperliquidPerpOrderSide::Sell,
+            price,
+            qty,
+        )
     }
 
     fn maker_buy(order_id: u64, qty: u64, price: u64) -> HyperliquidPerpOrder {
@@ -428,13 +462,28 @@ mod tests {
         assert_eq!(event_field(event, "trade_id"), Some(expected_trade_id));
         assert_eq!(event_field(event, "match_id"), Some("match-1"));
         assert_eq!(field_as_u64(event, "taker_order_id"), Some(TAKER_ORDER_ID));
-        assert_eq!(field_as_u64(event, "maker_order_id"), Some(expected_maker_order_id));
-        assert_eq!(event_field(event, "taker_account_id"), Some(expected_taker_account_id));
-        assert_eq!(event_field(event, "maker_account_id"), Some(expected_maker_account_id));
-        assert_eq!(event_field(event, "taker_side"), Some(expected_taker_side.as_str()));
+        assert_eq!(
+            field_as_u64(event, "maker_order_id"),
+            Some(expected_maker_order_id)
+        );
+        assert_eq!(
+            event_field(event, "taker_account_id"),
+            Some(expected_taker_account_id)
+        );
+        assert_eq!(
+            event_field(event, "maker_account_id"),
+            Some(expected_maker_account_id)
+        );
+        assert_eq!(
+            event_field(event, "taker_side"),
+            Some(expected_taker_side.as_str())
+        );
         assert_eq!(field_as_u64(event, "price"), Some(expected_price));
         assert_eq!(field_as_u64(event, "qty"), Some(expected_qty));
-        assert_eq!(field_as_u64(event, "executed_at_ms"), Some(expected_executed_at_ms));
+        assert_eq!(
+            field_as_u64(event, "executed_at_ms"),
+            Some(expected_executed_at_ms)
+        );
     }
 
     fn assert_order_update_event(
@@ -557,7 +606,9 @@ mod tests {
     #[test]
     fn validate_rejects_market_maker_unmatchable_order_and_maker_is_taker() {
         let mut maker = maker_sell(MAKER_1_ORDER_ID, 1, 99);
-        maker.execution = HyperliquidPerpOrderExecution::Market { aggressive_price: 99 };
+        maker.execution = HyperliquidPerpOrderExecution::Market {
+            aggressive_price: 99,
+        };
         let state = MatchHyperliquidPerpOrderState {
             taker_order: taker_buy(3, 100),
             maker_orders: vec![maker],
@@ -704,7 +755,13 @@ mod tests {
             1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
-        assert_order_update_event(&events[2], 1, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+        assert_order_update_event(
+            &events[2],
+            1,
+            HyperliquidPerpOrderStatus::PartiallyFilled,
+            1,
+            2,
+        );
 
         Ok(())
     }
@@ -742,7 +799,10 @@ mod tests {
         // assert
         assert_eq!(events.len(), 3);
         assert_eq!(changes.created_trades.len(), 1);
-        assert_eq!(changes.updated_taker_order.after.status, HyperliquidPerpOrderStatus::Filled);
+        assert_eq!(
+            changes.updated_taker_order.after.status,
+            HyperliquidPerpOrderStatus::Filled
+        );
         assert_trade_event(
             &events[0],
             "match-1-1",
@@ -806,7 +866,13 @@ mod tests {
             1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
-        assert_order_update_event(&events[2], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+        assert_order_update_event(
+            &events[2],
+            2,
+            HyperliquidPerpOrderStatus::PartiallyFilled,
+            1,
+            2,
+        );
 
         Ok(())
     }
@@ -848,7 +914,10 @@ mod tests {
         // assert
         assert_eq!(events.len(), 5);
         assert_eq!(changes.created_trades.len(), 2);
-        assert_eq!(changes.updated_taker_order.after.status, HyperliquidPerpOrderStatus::Filled);
+        assert_eq!(
+            changes.updated_taker_order.after.status,
+            HyperliquidPerpOrderStatus::Filled
+        );
         assert_trade_event(
             &events[0],
             "match-1-1",
@@ -929,7 +998,13 @@ mod tests {
             1_717_171_717_000,
         );
         assert_order_update_event(&events[1], 1, HyperliquidPerpOrderStatus::Filled, 1, 2);
-        assert_order_update_event(&events[2], 1, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+        assert_order_update_event(
+            &events[2],
+            1,
+            HyperliquidPerpOrderStatus::PartiallyFilled,
+            1,
+            2,
+        );
 
         Ok(())
     }
@@ -964,7 +1039,10 @@ mod tests {
 
         // assert
         assert_eq!(events.len(), 3);
-        assert_eq!(changes.updated_taker_order.after.status, HyperliquidPerpOrderStatus::Filled);
+        assert_eq!(
+            changes.updated_taker_order.after.status,
+            HyperliquidPerpOrderStatus::Filled
+        );
         assert_trade_event(
             &events[0],
             "match-1-1",
@@ -976,7 +1054,13 @@ mod tests {
             2,
             1_717_171_717_000,
         );
-        assert_order_update_event(&events[1], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+        assert_order_update_event(
+            &events[1],
+            2,
+            HyperliquidPerpOrderStatus::PartiallyFilled,
+            1,
+            2,
+        );
         assert_order_update_event(&events[2], 2, HyperliquidPerpOrderStatus::Filled, 1, 2);
 
         Ok(())
@@ -1017,7 +1101,10 @@ mod tests {
         // assert
         assert_eq!(events.len(), 5);
         assert_eq!(changes.created_trades.len(), 2);
-        assert_eq!(changes.updated_taker_order.after.status, HyperliquidPerpOrderStatus::Filled);
+        assert_eq!(
+            changes.updated_taker_order.after.status,
+            HyperliquidPerpOrderStatus::Filled
+        );
         assert_trade_event(
             &events[0],
             "match-1-1",
@@ -1041,7 +1128,13 @@ mod tests {
             2,
             1_717_171_717_000,
         );
-        assert_order_update_event(&events[3], 2, HyperliquidPerpOrderStatus::PartiallyFilled, 1, 2);
+        assert_order_update_event(
+            &events[3],
+            2,
+            HyperliquidPerpOrderStatus::PartiallyFilled,
+            1,
+            2,
+        );
         assert_order_update_event(&events[4], 3, HyperliquidPerpOrderStatus::Filled, 1, 2);
 
         Ok(())
@@ -1074,11 +1167,20 @@ mod tests {
         let changes = MatchHyperliquidPerpOrderUseCase.compute_changes(&cmd(), state)?;
 
         assert_eq!(changes.created_trades.len(), 2);
-        assert!(changes.created_trades.iter().all(|trade| trade.created_at == 1_717_171_717_000));
+        assert!(
+            changes
+                .created_trades
+                .iter()
+                .all(|trade| trade.created_at == 1_717_171_717_000)
+        );
         assert_eq!(changes.updated_taker_order.after.order_id, TAKER_ORDER_ID);
         assert_eq!(changes.updated_taker_order.after.filled_sz, 3);
         assert_eq!(
-            changes.updated_maker_orders.iter().map(|pair| pair.after.order_id).collect::<Vec<_>>(),
+            changes
+                .updated_maker_orders
+                .iter()
+                .map(|pair| pair.after.order_id)
+                .collect::<Vec<_>>(),
             vec![MAKER_1_ORDER_ID, MAKER_2_ORDER_ID]
         );
 

@@ -69,9 +69,9 @@ impl ExchangeActionHandler for ApproveAgentAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "approveAgent" {
-        return Err(ExchangeHttpError::contract(ApproveAgentContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            ApproveAgentContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -96,7 +96,9 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     validate_hex_address(&request.action.agent_address)
         .map_err(|_| ExchangeHttpError::contract(ApproveAgentContractError::InvalidAgentAddress))?;
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(ApproveAgentContractError::NonceMismatch));
+        return Err(ExchangeHttpError::contract(
+            ApproveAgentContractError::NonceMismatch,
+        ));
     }
     Ok(())
 }

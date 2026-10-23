@@ -232,8 +232,10 @@ impl Reservation {
             return Err(ReservationError::AmountExceedsRemaining);
         }
 
-        let consumed_amount =
-            self.consumed_amount.checked_add(amount).ok_or(ReservationError::ArithmeticOverflow)?;
+        let consumed_amount = self
+            .consumed_amount
+            .checked_add(amount)
+            .ok_or(ReservationError::ArithmeticOverflow)?;
         let remaining_amount = self
             .remaining_amount
             .checked_sub(amount)
@@ -241,7 +243,10 @@ impl Reservation {
         if remaining_amount == 0 && close_reason.is_none() {
             return Err(ReservationError::MissingCloseReason);
         }
-        let version = self.version.checked_add(1).ok_or(ReservationError::ArithmeticOverflow)?;
+        let version = self
+            .version
+            .checked_add(1)
+            .ok_or(ReservationError::ArithmeticOverflow)?;
 
         self.consumed_amount = consumed_amount;
         self.remaining_amount = remaining_amount;
@@ -265,8 +270,10 @@ impl Reservation {
             return Err(ReservationError::AmountExceedsRemaining);
         }
 
-        let released_amount =
-            self.released_amount.checked_add(amount).ok_or(ReservationError::ArithmeticOverflow)?;
+        let released_amount = self
+            .released_amount
+            .checked_add(amount)
+            .ok_or(ReservationError::ArithmeticOverflow)?;
         let remaining_amount = self
             .remaining_amount
             .checked_sub(amount)
@@ -274,7 +281,10 @@ impl Reservation {
         if remaining_amount == 0 && close_reason.is_none() {
             return Err(ReservationError::MissingCloseReason);
         }
-        let version = self.version.checked_add(1).ok_or(ReservationError::ArithmeticOverflow)?;
+        let version = self
+            .version
+            .checked_add(1)
+            .ok_or(ReservationError::ArithmeticOverflow)?;
 
         self.released_amount = released_amount;
         self.remaining_amount = remaining_amount;
@@ -308,7 +318,11 @@ impl FieldDiff for Reservation {
         vec![
             EntityFieldChange::new("reservation_id", "", self.reservation_id.clone()),
             EntityFieldChange::new("owner_account_id", "", self.owner_account_id.clone()),
-            EntityFieldChange::new("caused_by_order_id", "", self.caused_by_order_id.to_string()),
+            EntityFieldChange::new(
+                "caused_by_order_id",
+                "",
+                self.caused_by_order_id.to_string(),
+            ),
             EntityFieldChange::new("market_kind", "", self.market_kind.as_str()),
             EntityFieldChange::new("reservation_kind", "", self.reservation_kind.as_str()),
             EntityFieldChange::new("asset_id", "", self.asset_id.clone()),
@@ -468,7 +482,10 @@ impl Entity for Reservation {
 }
 
 fn option_close_reason_value(reason: Option<ReservationCloseReason>) -> String {
-    reason.map(ReservationCloseReason::as_str).unwrap_or_default().to_string()
+    reason
+        .map(ReservationCloseReason::as_str)
+        .unwrap_or_default()
+        .to_string()
 }
 
 fn push_u64_change(
@@ -478,6 +495,10 @@ fn push_u64_change(
     after: u64,
 ) {
     if before != after {
-        changes.push(EntityFieldChange::new(field, before.to_string(), after.to_string()));
+        changes.push(EntityFieldChange::new(
+            field,
+            before.to_string(),
+            after.to_string(),
+        ));
     }
 }

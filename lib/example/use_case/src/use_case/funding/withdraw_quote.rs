@@ -91,7 +91,9 @@ impl CommandUseCase4 for WithdrawQuoteUseCase {
     ) -> Result<Self::Changes, Self::Error> {
         let quote_balance_before = state.quote_balance;
         let mut quote_balance_after = quote_balance_before.clone();
-        quote_balance_after.debit_available(cmd.amount).map_err(map_balance_error)?;
+        quote_balance_after
+            .debit_available(cmd.amount)
+            .map_err(map_balance_error)?;
 
         Ok(WithdrawQuoteChanges {
             updated_quote_balance: UpdatedEntityPair {
@@ -153,8 +155,10 @@ mod tests {
     #[test]
     fn pre_check_rejects_zero_amount() {
         let use_case = WithdrawQuoteUseCase;
-        let result = use_case
-            .pre_check_command(&WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 0 });
+        let result = use_case.pre_check_command(&WithdrawQuoteCmd {
+            party_id: "trader-1".to_string(),
+            amount: 0,
+        });
 
         assert_eq!(result, Err(WithdrawQuoteError::InvalidAmount));
     }
@@ -163,7 +167,10 @@ mod tests {
     fn validate_against_state_rejects_insufficient_balance() {
         let use_case = WithdrawQuoteUseCase;
         let result = use_case.validate_against_state(
-            &WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 2_000 },
+            &WithdrawQuoteCmd {
+                party_id: "trader-1".to_string(),
+                amount: 2_000,
+            },
             &sample_state(),
         );
 
@@ -174,11 +181,15 @@ mod tests {
     fn compute_replayable_events_updates_available_quote() -> Result<(), WithdrawQuoteError> {
         let use_case = WithdrawQuoteUseCase;
         let changes = use_case.compute_changes(
-            &WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
+            &WithdrawQuoteCmd {
+                party_id: "trader-1".to_string(),
+                amount: 200,
+            },
             sample_state(),
         )?;
-        let events =
-            changes.to_replayable_events().map_err(|_| WithdrawQuoteError::ArithmeticOverflow)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| WithdrawQuoteError::ArithmeticOverflow)?;
 
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());

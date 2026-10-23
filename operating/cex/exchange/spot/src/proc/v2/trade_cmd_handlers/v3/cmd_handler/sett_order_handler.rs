@@ -23,7 +23,10 @@ pub struct SettStateChangedSet {
 impl ReplayableEventSet for SettStateChangedSet {
     #[inline]
     fn event_count(&self) -> usize {
-        self.balances.as_ref().map(|balances| balances.len()).unwrap_or(0)
+        self.balances
+            .as_ref()
+            .map(|balances| balances.len())
+            .unwrap_or(0)
     }
 }
 
@@ -96,12 +99,16 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         let mut balance_events = Vec::with_capacity(balance_map.len());
         for balance in balance_map.into_values() {
             let change_log = balance.track_create().map_err(|e| {
-                SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
+                SpotApiErrorAny::Common(CommonError::Internal {
+                    message: e.to_string(),
+                })
             })?;
             balance_events.push(DomainEvent::new(change_log, balance));
         }
 
-        Ok(SettStateChangedSet { balances: Some(balance_events) })
+        Ok(SettStateChangedSet {
+            balances: Some(balance_events),
+        })
     }
 
     fn state_changed_set_to_reply(
@@ -119,7 +126,10 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
         cmd: &Self::Command,
         _repo: &Self::Repo,
     ) -> Result<Self::GivenStateSet, Self::Error> {
-        Ok(SettStateSet { trades: cmd.trades.clone(), map: HashMap::new() })
+        Ok(SettStateSet {
+            trades: cmd.trades.clone(),
+            map: HashMap::new(),
+        })
     }
 
     fn validate_command_in_lock(
@@ -145,9 +155,12 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for SettOrderCmdHandler
     ) -> Result<(), Self::Error> {
         if let Some(ref balances) = domain_events.balances {
             for balance_event in balances {
-                repo.replay_event::<AccountBalance>(balance_event).map_err(|e| {
-                    SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
-                })?;
+                repo.replay_event::<AccountBalance>(balance_event)
+                    .map_err(|e| {
+                        SpotApiErrorAny::Common(CommonError::Internal {
+                            message: e.to_string(),
+                        })
+                    })?;
             }
         }
         Ok(())
@@ -239,9 +252,13 @@ mod tests {
         let repo = MemdbRepo::default();
         let handler =
             SettOrderCmdHandler::<MemdbRepo, MockPublisher>::new(repo.clone(), MockPublisher);
-        let cmd = SettlementCmd { trades: Vec::<SpotTrade>::new() };
+        let cmd = SettlementCmd {
+            trades: Vec::<SpotTrade>::new(),
+        };
 
-        let state = handler.give(&cmd, &repo).expect("load_state_set_for_update should succeed");
+        let state = handler
+            .give(&cmd, &repo)
+            .expect("load_state_set_for_update should succeed");
         let changes = handler.then(&cmd, state).expect("apply should succeed");
 
         assert!(changes.balances.is_none());

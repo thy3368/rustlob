@@ -169,7 +169,11 @@ impl SubAccountProfile {
         master_account_id: AccountId,
         display_name: Option<String>,
     ) -> Self {
-        Self { account_id, master_account_id, display_name }
+        Self {
+            account_id,
+            master_account_id,
+            display_name,
+        }
     }
 
     /// 返回子账户身份。
@@ -210,7 +214,12 @@ impl MarginSummary {
         total_raw_usd: Decimal,
         total_margin_used: Decimal,
     ) -> Self {
-        Self { account_value, total_position_notional, total_raw_usd, total_margin_used }
+        Self {
+            account_value,
+            total_position_notional,
+            total_raw_usd,
+            total_margin_used,
+        }
     }
 
     /// 账户总权益。
@@ -253,7 +262,13 @@ impl SpotBalance {
         entry_notional: Option<Decimal>,
         identifier: Option<String>,
     ) -> Self {
-        Self { asset_id, total, hold, entry_notional, identifier }
+        Self {
+            asset_id,
+            total,
+            hold,
+            entry_notional,
+            identifier,
+        }
     }
 
     /// 返回余额归属币种。
@@ -297,7 +312,10 @@ pub struct SpotClearinghouseState {
 impl SpotClearinghouseState {
     /// 只装配某子账户的现货余额快照。
     pub fn new(account_id: AccountId, balances: Vec<SpotBalance>) -> Self {
-        Self { account_id, balances }
+        Self {
+            account_id,
+            balances,
+        }
     }
 
     /// 返回该现货快照所属子账户。
@@ -312,17 +330,23 @@ impl SpotClearinghouseState {
 
     /// 返回指定币种的余额总额；未找到时返回零。
     pub fn total_balance_of(&self, asset_id: &AssetId) -> Decimal {
-        self.balance_of(asset_id).map(SpotBalance::total).unwrap_or(Decimal::ZERO)
+        self.balance_of(asset_id)
+            .map(SpotBalance::total)
+            .unwrap_or(Decimal::ZERO)
     }
 
     /// 返回指定币种的可用余额；未找到时返回零。
     pub fn available_balance_of(&self, asset_id: &AssetId) -> Decimal {
-        self.balance_of(asset_id).map(SpotBalance::available).unwrap_or(Decimal::ZERO)
+        self.balance_of(asset_id)
+            .map(SpotBalance::available)
+            .unwrap_or(Decimal::ZERO)
     }
 
     /// 按币种定位余额快照。
     pub fn balance_of(&self, asset_id: &AssetId) -> Option<&SpotBalance> {
-        self.balances.iter().find(|balance| balance.asset_id() == asset_id)
+        self.balances
+            .iter()
+            .find(|balance| balance.asset_id() == asset_id)
     }
 }
 
@@ -477,7 +501,9 @@ impl PerpClearinghouseState {
 
     /// 按 perp 资产查找仓位。
     pub fn position_of(&self, asset_id: &PerpAssetId) -> Option<&PerpPosition> {
-        self.positions.iter().find(|position| position.asset_id() == asset_id)
+        self.positions
+            .iter()
+            .find(|position| position.asset_id() == asset_id)
     }
 }
 
@@ -510,7 +536,11 @@ impl SubAccountSnapshot {
             });
         }
 
-        Ok(Self { profile, spot_state, perp_state })
+        Ok(Self {
+            profile,
+            spot_state,
+            perp_state,
+        })
     }
 
     /// 返回子账户身份对象。
@@ -538,9 +568,15 @@ impl SubAccountSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SubAccountSnapshotError {
     #[error("spot account id mismatch: profile={profile_account_id}, spot={spot_account_id}")]
-    SpotAccountMismatch { profile_account_id: AccountId, spot_account_id: AccountId },
+    SpotAccountMismatch {
+        profile_account_id: AccountId,
+        spot_account_id: AccountId,
+    },
     #[error("perp account id mismatch: profile={profile_account_id}, perp={perp_account_id}")]
-    PerpAccountMismatch { profile_account_id: AccountId, perp_account_id: AccountId },
+    PerpAccountMismatch {
+        profile_account_id: AccountId,
+        perp_account_id: AccountId,
+    },
 }
 
 #[cfg(test)]
@@ -567,8 +603,13 @@ mod tests {
 
     #[test]
     fn spot_balance_available_is_total_minus_hold() {
-        let balance =
-            SpotBalance::new(AssetId::new("USDC"), dec!(10.5), dec!(3.25), Some(dec!(10.5)), None);
+        let balance = SpotBalance::new(
+            AssetId::new("USDC"),
+            dec!(10.5),
+            dec!(3.25),
+            Some(dec!(10.5)),
+            None,
+        );
 
         assert_eq!(balance.available(), dec!(7.25));
     }
@@ -577,7 +618,13 @@ mod tests {
     fn spot_state_returns_zero_for_missing_asset() {
         let state = SpotClearinghouseState::new(
             AccountId::new("sub-1"),
-            vec![SpotBalance::new(AssetId::new("USDC"), dec!(10), dec!(2), None, None)],
+            vec![SpotBalance::new(
+                AssetId::new("USDC"),
+                dec!(10),
+                dec!(2),
+                None,
+                None,
+            )],
         );
 
         assert_eq!(state.total_balance_of(&AssetId::new("BTC")), dec!(0));

@@ -1,4 +1,5 @@
-//根据 /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/option/trade 下面的文档， 定义 所有 option trade 接口
+//根据 /Users/hongyaotang/src/rustlob/design/other/binance_derivatives_api/option/trade
+// 下面的文档， 定义 所有 option trade 接口
 
 use base_types::cqrs::cqrs_types::{CMetadata, CmdResp};
 

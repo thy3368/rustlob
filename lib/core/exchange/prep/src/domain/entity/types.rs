@@ -73,8 +73,7 @@ pub enum PositionMode {
 }
 
 /// 订单有效期
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimeInForce {
     /// 成交为止
     #[default]

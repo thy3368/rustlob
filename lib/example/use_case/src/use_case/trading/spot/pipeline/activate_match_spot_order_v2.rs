@@ -72,8 +72,10 @@ impl StateMachineV2 for ActivateMatchSpotOrderV2UseCase {
     type StateChanged = ActivateMatchSpotOrderV2AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        ActivateSpotOrderV2UseCase
-            .check_command(&common_entity::LogEntrySequencer::derive(cmd, activation_cmd(cmd)))?;
+        ActivateSpotOrderV2UseCase.check_command(&common_entity::LogEntrySequencer::derive(
+            cmd,
+            activation_cmd(cmd),
+        ))?;
         Ok(())
     }
 
@@ -108,7 +110,10 @@ impl StateMachineV2 for ActivateMatchSpotOrderV2UseCase {
         let match_after =
             MatchSpotOrderV3UseCase.compute_state_changed(&match_cmd, &match_state)?;
 
-        Ok(ActivateMatchSpotOrderV2AfterChanges { activation_after, match_after })
+        Ok(ActivateMatchSpotOrderV2AfterChanges {
+            activation_after,
+            match_after,
+        })
     }
 }
 
@@ -145,7 +150,10 @@ impl StateMachineV2Diff for ActivateMatchSpotOrderV2UseCase {
         let match_changes =
             MatchSpotOrderV3UseCase::do_compute_state_diff(match_state, after.match_after)?;
 
-        Ok(ActivateMatchSpotOrderV2Changes { activation_changes, match_changes })
+        Ok(ActivateMatchSpotOrderV2Changes {
+            activation_changes,
+            match_changes,
+        })
     }
 }
 
@@ -158,7 +166,11 @@ fn activation_cmd(cmd: &ActivateMatchSpotOrderV2Cmd) -> ActivateSpotOrderV2Cmd {
 }
 
 fn match_cmd(cmd: &ActivateMatchSpotOrderV2Cmd) -> MatchSpotOrderV3Cmd {
-    MatchSpotOrderV3Cmd { party_id: cmd.party_id.clone(), asset: cmd.asset, order_id: cmd.order_id }
+    MatchSpotOrderV3Cmd {
+        party_id: cmd.party_id.clone(),
+        asset: cmd.asset,
+        order_id: cmd.order_id,
+    }
 }
 
 fn activation_state_from_given(state: &ActivateMatchSpotOrderV2State) -> ActivateSpotOrderV2State {

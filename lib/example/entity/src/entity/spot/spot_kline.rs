@@ -46,7 +46,10 @@ pub struct SpotKline {
 
 impl SpotKline {
     /// 从已经完成校验的聚合事实构造 K 线快照。
-    #[expect(clippy::too_many_arguments, reason = "K 线快照需要完整保留 OHLCV 与来源成交事实")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "K 线快照需要完整保留 OHLCV 与来源成交事实"
+    )]
     pub fn new(
         asset: u32,
         symbol: String,
@@ -65,7 +68,11 @@ impl SpotKline {
     ) -> Self {
         let id = crate::support::derived_entity_id(
             SPOT_KLINE_ENTITY_TYPE,
-            &[symbol.as_bytes(), &interval_ms.to_le_bytes(), &open_time_ms.to_le_bytes()],
+            &[
+                symbol.as_bytes(),
+                &interval_ms.to_le_bytes(),
+                &open_time_ms.to_le_bytes(),
+            ],
         );
         Self {
             id,
@@ -197,8 +204,14 @@ mod tests {
     fn derived_snapshot_replays_all_business_fields() {
         let kline = kline();
 
-        assert_eq!(SpotKline::four_color_archetype(), FourColorArchetype::MomentInterval);
-        assert_eq!(SpotKline::mutation_model(), EntityMutationModel::DerivedReadModel);
+        assert_eq!(
+            SpotKline::four_color_archetype(),
+            FourColorArchetype::MomentInterval
+        );
+        assert_eq!(
+            SpotKline::mutation_model(),
+            EntityMutationModel::DerivedReadModel
+        );
 
         let event = kline.track_create_event().expect("kline create event");
         assert!(event.is_created());

@@ -110,7 +110,9 @@ impl CommandUseCase3 for StubUseCase3 {
         if state.reject_in_compute {
             return Err(StubBusinessError::Compute);
         }
-        let output = StubOutput { event_count: state.loaded_event_count };
+        let output = StubOutput {
+            event_count: state.loaded_event_count,
+        };
         let events = (0..output.event_count).map(stub_event).collect();
         Ok(UseCaseOutput { output, events })
     }
@@ -124,11 +126,17 @@ struct StubOutbound {
 
 impl StubOutbound {
     fn with_state(state: StubState) -> Self {
-        Self { state: Mutex::new(Ok(state)), calls: Mutex::new(Vec::new()) }
+        Self {
+            state: Mutex::new(Ok(state)),
+            calls: Mutex::new(Vec::new()),
+        }
     }
 
     fn with_error(error: StubOutboundError) -> Self {
-        Self { state: Mutex::new(Err(error)), calls: Mutex::new(Vec::new()) }
+        Self {
+            state: Mutex::new(Err(error)),
+            calls: Mutex::new(Vec::new()),
+        }
     }
 
     fn calls(&self) -> Vec<&'static str> {
@@ -205,7 +213,10 @@ fn sample_envelope(party_id: &str, event_count: u64) -> CommandEnvelope<StubComm
             trace_id: Some("trace-1".to_string()),
             command_id: Some("cmd-1".to_string()),
         },
-        command: StubCommand { party_id: party_id.to_string(), event_count },
+        command: StubCommand {
+            party_id: party_id.to_string(),
+            event_count,
+        },
     }
 }
 
@@ -220,7 +231,12 @@ fn execute_returns_typed_output_and_events_on_happy_path() {
     });
     let observer = StubObserver::default();
 
-    let result = executor.execute(&use_case, sample_envelope("trader-1", 2), &outbound, &observer);
+    let result = executor.execute(
+        &use_case,
+        sample_envelope("trader-1", 2),
+        &outbound,
+        &observer,
+    );
 
     assert_eq!(
         result,
@@ -229,9 +245,15 @@ fn execute_returns_typed_output_and_events_on_happy_path() {
             events: vec![stub_event(0), stub_event(1)],
         })
     );
-    assert_eq!(outbound.calls(), vec!["load_state", "persist", "replay", "publish"]);
+    assert_eq!(
+        outbound.calls(),
+        vec!["load_state", "persist", "replay", "publish"]
+    );
     assert_eq!(observer.observed_count(), 1);
-    assert_eq!(observer.last().map(|metrics| metrics.domain_event_count), Some(2));
+    assert_eq!(
+        observer.last().map(|metrics| metrics.domain_event_count),
+        Some(2)
+    );
 }
 
 #[test]
@@ -247,7 +269,12 @@ fn execute_rejects_in_pre_check_before_loading_state() {
 
     let result = executor.execute(&use_case, sample_envelope("", 2), &outbound, &observer);
 
-    assert_eq!(result, Err(CommandUseCaseExecutionError::Business(StubBusinessError::PreCheck)));
+    assert_eq!(
+        result,
+        Err(CommandUseCaseExecutionError::Business(
+            StubBusinessError::PreCheck
+        ))
+    );
     assert!(outbound.calls().is_empty());
     assert_eq!(observer.observed_count(), 0);
 }
@@ -263,9 +290,19 @@ fn execute_stops_after_validate_failure() {
     });
     let observer = StubObserver::default();
 
-    let result = executor.execute(&use_case, sample_envelope("trader-1", 2), &outbound, &observer);
+    let result = executor.execute(
+        &use_case,
+        sample_envelope("trader-1", 2),
+        &outbound,
+        &observer,
+    );
 
-    assert_eq!(result, Err(CommandUseCaseExecutionError::Business(StubBusinessError::Validate)));
+    assert_eq!(
+        result,
+        Err(CommandUseCaseExecutionError::Business(
+            StubBusinessError::Validate
+        ))
+    );
     assert_eq!(outbound.calls(), vec!["load_state"]);
     assert_eq!(observer.observed_count(), 0);
 }
@@ -281,9 +318,19 @@ fn execute_stops_after_compute_failure() {
     });
     let observer = StubObserver::default();
 
-    let result = executor.execute(&use_case, sample_envelope("trader-1", 2), &outbound, &observer);
+    let result = executor.execute(
+        &use_case,
+        sample_envelope("trader-1", 2),
+        &outbound,
+        &observer,
+    );
 
-    assert_eq!(result, Err(CommandUseCaseExecutionError::Business(StubBusinessError::Compute)));
+    assert_eq!(
+        result,
+        Err(CommandUseCaseExecutionError::Business(
+            StubBusinessError::Compute
+        ))
+    );
     assert_eq!(outbound.calls(), vec!["load_state"]);
     assert_eq!(observer.observed_count(), 0);
 }
@@ -308,7 +355,10 @@ fn execute_and_map_reply_consumes_typed_output() {
     );
 
     assert_eq!(reply, Ok(6));
-    assert_eq!(observer.last().map(|metrics| metrics.domain_event_count), Some(3));
+    assert_eq!(
+        observer.last().map(|metrics| metrics.domain_event_count),
+        Some(3)
+    );
 }
 
 #[test]
@@ -318,7 +368,12 @@ fn execute_wraps_outbound_load_failure() {
     let outbound = StubOutbound::with_error(StubOutboundError::LoadFailed);
     let observer = StubObserver::default();
 
-    let result = executor.execute(&use_case, sample_envelope("trader-1", 2), &outbound, &observer);
+    let result = executor.execute(
+        &use_case,
+        sample_envelope("trader-1", 2),
+        &outbound,
+        &observer,
+    );
 
     assert_eq!(
         result,

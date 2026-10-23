@@ -95,6 +95,10 @@ mod tests {
     #[test]
     fn test_test_publisher() {
         let publisher = create_test_publisher().unwrap();
-        assert!(publisher.publish_order_logs(&[create_test_log(), create_test_log()]).is_ok());
+        assert!(
+            publisher
+                .publish_order_logs(&[create_test_log(), create_test_log()])
+                .is_ok()
+        );
     }
 }

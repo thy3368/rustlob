@@ -14,8 +14,14 @@ use crate::entity::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaceOnlySpotOrderV2OrderType {
-    Limit { tif: String },
-    Trigger { is_market: bool, trigger_price: String, trigger_role: String },
+    Limit {
+        tif: String,
+    },
+    Trigger {
+        is_market: bool,
+        trigger_price: String,
+        trigger_role: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,7 +45,10 @@ pub struct PlaceOnlySpotOrderV2OrderCmd {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaceOnlySpotOrderV2Cmd {
     Single(PlaceOnlySpotOrderV2OrderCmd),
-    NormalTpsl { parent: PlaceOnlySpotOrderV2OrderCmd, children: Vec<PlaceOnlySpotOrderV2OrderCmd> },
+    NormalTpsl {
+        parent: PlaceOnlySpotOrderV2OrderCmd,
+        children: Vec<PlaceOnlySpotOrderV2OrderCmd>,
+    },
 }
 
 impl IssuedByParty for PlaceOnlySpotOrderV2Cmd {
@@ -55,14 +64,24 @@ pub type PlaceOnlySpotOrderV2State = ();
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceOnlySpotOrderV2AfterChanges {
-    Single { created_order: SpotOrderV2 },
-    NormalTpsl { created_parent_order: SpotOrderV2, created_child_orders: Vec<SpotOrderV2> },
+    Single {
+        created_order: SpotOrderV2,
+    },
+    NormalTpsl {
+        created_parent_order: SpotOrderV2,
+        created_child_orders: Vec<SpotOrderV2>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceOnlySpotOrderV2Changes {
-    Single { created_order: SpotOrderV2 },
-    NormalTpsl { created_parent_order: SpotOrderV2, created_child_orders: Vec<SpotOrderV2> },
+    Single {
+        created_order: SpotOrderV2,
+    },
+    NormalTpsl {
+        created_parent_order: SpotOrderV2,
+        created_child_orders: Vec<SpotOrderV2>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -124,7 +143,10 @@ impl ReplayableChanges for PlaceOnlySpotOrderV2Changes {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         match self {
             Self::Single { created_order } => Ok(vec![created_order.track_create_event()?]),
-            Self::NormalTpsl { created_parent_order, created_child_orders } => {
+            Self::NormalTpsl {
+                created_parent_order,
+                created_child_orders,
+            } => {
                 let mut events = Vec::with_capacity(created_child_orders.len().saturating_add(1));
                 events.push(created_parent_order.track_create_event()?);
                 for child in created_child_orders {
@@ -246,8 +268,15 @@ fn check_order_command(
         PlaceOnlySpotOrderV2OrderType::Limit { tif } => {
             parse_tif(tif)?;
         }
-        PlaceOnlySpotOrderV2OrderType::Trigger { trigger_price, trigger_role, .. } => {
-            parse_positive_u64(trigger_price, PlaceOnlySpotOrderV2Error::InvalidTriggerPrice)?;
+        PlaceOnlySpotOrderV2OrderType::Trigger {
+            trigger_price,
+            trigger_role,
+            ..
+        } => {
+            parse_positive_u64(
+                trigger_price,
+                PlaceOnlySpotOrderV2Error::InvalidTriggerPrice,
+            )?;
             parse_trigger_role(trigger_role)?;
         }
     }
@@ -258,7 +287,10 @@ fn validate_normal_tpsl(
     parent: &PlaceOnlySpotOrderV2OrderCmd,
     children: &[PlaceOnlySpotOrderV2OrderCmd],
 ) -> Result<(), PlaceOnlySpotOrderV2Error> {
-    if !matches!(parent.order_type, PlaceOnlySpotOrderV2OrderType::Limit { .. }) {
+    if !matches!(
+        parent.order_type,
+        PlaceOnlySpotOrderV2OrderType::Limit { .. }
+    ) {
         return Err(PlaceOnlySpotOrderV2Error::ParentMustBeLimit);
     }
     if parent.reduce_only {
@@ -273,7 +305,10 @@ fn validate_normal_tpsl(
     order_ids.insert(parent.order_id);
 
     for child in children {
-        if !matches!(child.order_type, PlaceOnlySpotOrderV2OrderType::Trigger { .. }) {
+        if !matches!(
+            child.order_type,
+            PlaceOnlySpotOrderV2OrderType::Trigger { .. }
+        ) {
             return Err(PlaceOnlySpotOrderV2Error::ChildMustBeTrigger);
         }
         if !child.reduce_only {
@@ -306,7 +341,11 @@ fn build_order(
     version: u64,
     created_at: u64,
 ) -> Result<SpotOrderV2, PlaceOnlySpotOrderV2Error> {
-    let side = if order.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
+    let side = if order.is_buy {
+        SpotOrderSide::Buy
+    } else {
+        SpotOrderSide::Sell
+    };
     let qty = parse_positive_u64(&order.size, PlaceOnlySpotOrderV2Error::InvalidSize)?;
     let price = parse_positive_u64(&order.price, PlaceOnlySpotOrderV2Error::InvalidPrice)?;
     match &order.order_type {
@@ -328,7 +367,11 @@ fn build_order(
             created.reduce_only = order.reduce_only;
             Ok(created)
         }
-        PlaceOnlySpotOrderV2OrderType::Trigger { is_market, trigger_price, trigger_role } => {
+        PlaceOnlySpotOrderV2OrderType::Trigger {
+            is_market,
+            trigger_price,
+            trigger_role,
+        } => {
             let mut created = SpotOrderV2::new_pending_trigger(
                 order.order_id,
                 order.asset,

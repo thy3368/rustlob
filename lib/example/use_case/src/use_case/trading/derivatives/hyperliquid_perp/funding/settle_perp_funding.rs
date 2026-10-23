@@ -239,9 +239,14 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
                 )
             }
             .map_err(map_funding_balance_ledger_error)?;
-            entry.apply_to(&mut balance).map_err(map_funding_balance_ledger_error)?;
+            entry
+                .apply_to(&mut balance)
+                .map_err(map_funding_balance_ledger_error)?;
 
-            changed_margin_balances.push(UpdatedEntityPair { before, after: balance });
+            changed_margin_balances.push(UpdatedEntityPair {
+                before,
+                after: balance,
+            });
             created_balance_ledger_entries.push(entry);
         }
 
@@ -272,7 +277,11 @@ fn validate_common(
         return Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch);
     }
 
-    let settled: HashSet<&str> = state.settled_position_ids.iter().map(String::as_str).collect();
+    let settled: HashSet<&str> = state
+        .settled_position_ids
+        .iter()
+        .map(String::as_str)
+        .collect();
     for (expected_position_id, position) in cmd.position_ids.iter().zip(&state.positions) {
         if expected_position_id != &position.position_key {
             return Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch);
@@ -397,8 +406,10 @@ fn settlement_balance_ledger_reasons(
         funding_batch_id: String,
     }
 
-    let positions_by_id: BTreeMap<&str, &PerpPosition> =
-        positions.iter().map(|position| (position.position_key.as_str(), position)).collect();
+    let positions_by_id: BTreeMap<&str, &PerpPosition> = positions
+        .iter()
+        .map(|position| (position.position_key.as_str(), position))
+        .collect();
 
     let mut refs_by_balance: BTreeMap<String, FundingLedgerRefs> = BTreeMap::new();
     for settlement in settlements {
@@ -408,7 +419,8 @@ fn settlement_balance_ledger_reasons(
         let balance_id = balance_key(position.account_id.as_str(), margin_asset_id);
         let refs = refs_by_balance.entry(balance_id).or_default();
         refs.funding_batch_id = settlement.funding_batch_id.clone();
-        refs.settlement_ids.push(settlement.funding_settlement_id.clone());
+        refs.settlement_ids
+            .push(settlement.funding_settlement_id.clone());
         refs.position_ids.push(settlement.position_id.clone());
     }
 
@@ -519,7 +531,10 @@ mod tests {
     }
 
     fn cross_cmd_with_rate(funding_rate_e8: i64) -> SettleHyperliquidPerpFundingCmd {
-        SettleHyperliquidPerpFundingCmd { funding_rate_e8, ..cross_cmd() }
+        SettleHyperliquidPerpFundingCmd {
+            funding_rate_e8,
+            ..cross_cmd()
+        }
     }
 
     fn same_account_cross_state() -> SettleHyperliquidPerpFundingState {
@@ -615,43 +630,71 @@ mod tests {
             matches!(entry.reason, BalanceLedgerReason::SettlePerpFunding { .. })
         }));
         assert!(result.created_balance_ledger_entries.iter().all(|entry| {
-            result.changed_margin_balances.iter().any(|pair| entry.matches_balance_update(pair))
+            result
+                .changed_margin_balances
+                .iter()
+                .any(|pair| entry.matches_balance_update(pair))
         }));
 
         let events = result.to_replayable_events().unwrap();
         assert_eq!(events.len(), 6);
         assert_eq!(events.iter().filter(|event| event.is_created()).count(), 4);
         assert_eq!(events.iter().filter(|event| event.is_updated()).count(), 2);
-        assert!(events.iter().filter(|event| event.is_updated()).any(|event| {
-            event.field_changes.iter().any(|change| {
-                change.field_name_as_str().ok() == Some("available")
-                    && change.new_value_bytes() == b"990"
-            })
-        }));
-        assert!(events.iter().filter(|event| event.is_updated()).any(|event| {
-            event.field_changes.iter().any(|change| {
-                change.field_name_as_str().ok() == Some("available")
-                    && change.new_value_bytes() == b"1010"
-            })
-        }));
-        assert!(!events.iter().filter(|event| event.is_updated()).any(|event| {
-            event
-                .field_changes
+        assert!(
+            events
                 .iter()
-                .any(|change| change.field_name_as_str().ok() == Some("frozen"))
-        }));
-        assert!(events.iter().filter(|event| event.is_created()).any(|event| {
-            event.field_changes.iter().any(|change| {
-                change.field_name_as_str().ok() == Some("oracle_price")
-                    && change.new_value_bytes() == b"50000"
-            })
-        }));
-        assert!(events.iter().filter(|event| event.is_created()).any(|event| {
-            event.field_changes.iter().any(|change| {
-                change.field_name_as_str().ok() == Some("reason_funding_batch_id")
-                    && change.new_value_bytes() == b"funding-2026-06-10T08"
-            })
-        }));
+                .filter(|event| event.is_updated())
+                .any(|event| {
+                    event.field_changes.iter().any(|change| {
+                        change.field_name_as_str().ok() == Some("available")
+                            && change.new_value_bytes() == b"990"
+                    })
+                })
+        );
+        assert!(
+            events
+                .iter()
+                .filter(|event| event.is_updated())
+                .any(|event| {
+                    event.field_changes.iter().any(|change| {
+                        change.field_name_as_str().ok() == Some("available")
+                            && change.new_value_bytes() == b"1010"
+                    })
+                })
+        );
+        assert!(
+            !events
+                .iter()
+                .filter(|event| event.is_updated())
+                .any(|event| {
+                    event
+                        .field_changes
+                        .iter()
+                        .any(|change| change.field_name_as_str().ok() == Some("frozen"))
+                })
+        );
+        assert!(
+            events
+                .iter()
+                .filter(|event| event.is_created())
+                .any(|event| {
+                    event.field_changes.iter().any(|change| {
+                        change.field_name_as_str().ok() == Some("oracle_price")
+                            && change.new_value_bytes() == b"50000"
+                    })
+                })
+        );
+        assert!(
+            events
+                .iter()
+                .filter(|event| event.is_created())
+                .any(|event| {
+                    event.field_changes.iter().any(|change| {
+                        change.field_name_as_str().ok() == Some("reason_funding_batch_id")
+                            && change.new_value_bytes() == b"funding-2026-06-10T08"
+                    })
+                })
+        );
     }
 
     #[test]
@@ -700,7 +743,9 @@ mod tests {
     #[test]
     fn positive_funding_makes_long_pay_and_short_receive_with_absolute_fee() {
         let use_case = SettleHyperliquidPerpFundingUseCase;
-        let result = use_case.compute_changes(&cross_cmd(), cross_state()).unwrap();
+        let result = use_case
+            .compute_changes(&cross_cmd(), cross_state())
+            .unwrap();
 
         assert!(result.created_settlements.iter().any(|settlement| {
             settlement.position_id == "position-long"
@@ -760,15 +805,20 @@ mod tests {
         let cmd = cross_cmd();
         let result = use_case.compute_changes(&cmd, cross_state()).unwrap();
 
-        let settlements_by_account: BTreeMap<&str, Vec<&HyperliquidPerpFundingSettlement>> =
-            result.created_settlements.iter().fold(BTreeMap::new(), |mut acc, settlement| {
-                acc.entry(settlement.account_id.as_str()).or_default().push(settlement);
+        let settlements_by_account: BTreeMap<&str, Vec<&HyperliquidPerpFundingSettlement>> = result
+            .created_settlements
+            .iter()
+            .fold(BTreeMap::new(), |mut acc, settlement| {
+                acc.entry(settlement.account_id.as_str())
+                    .or_default()
+                    .push(settlement);
                 acc
             });
 
         for entry in &result.created_balance_ledger_entries {
-            let expected_settlements =
-                settlements_by_account.get(entry.account_id.to_string().as_str()).unwrap();
+            let expected_settlements = settlements_by_account
+                .get(entry.account_id.to_string().as_str())
+                .unwrap();
             match &entry.reason {
                 BalanceLedgerReason::SettlePerpFunding {
                     funding_batch_id,
@@ -867,7 +917,9 @@ mod tests {
     #[test]
     fn compute_changes_keeps_different_accounts_in_separate_ledgers() {
         let use_case = SettleHyperliquidPerpFundingUseCase;
-        let result = use_case.compute_changes(&cross_cmd(), cross_state()).unwrap();
+        let result = use_case
+            .compute_changes(&cross_cmd(), cross_state())
+            .unwrap();
 
         let mut accounts = result
             .created_balance_ledger_entries

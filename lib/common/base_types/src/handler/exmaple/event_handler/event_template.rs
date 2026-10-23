@@ -51,13 +51,15 @@ impl EventHandler<PlaceOrderAcceptedEvent, MatchOutput, EventHandlerError>
                         .result
                         .trades
                         .iter()
-                        .map(|trade| crate::handler::exmaple::cmd_handler::example_types::Trade {
-                            trade_id: trade.trade_id.clone(),
-                            taker_order_id: trade.taker_order_id.clone(),
-                            maker_order_id: trade.maker_order_id.clone(),
-                            price: trade.price,
-                            quantity: trade.quantity,
-                        })
+                        .map(
+                            |trade| crate::handler::exmaple::cmd_handler::example_types::Trade {
+                                trade_id: trade.trade_id.clone(),
+                                taker_order_id: trade.taker_order_id.clone(),
+                                maker_order_id: trade.maker_order_id.clone(),
+                                price: trade.price,
+                                quantity: trade.quantity,
+                            },
+                        )
                         .collect(),
                     order_updates: vec![],
                 },
@@ -117,17 +119,17 @@ impl EventHandler<TradeCreatedEvent, SettlementResult, EventHandlerError> for Tr
 
 pub fn emit_place_order_event(output: &PlaceOrderOutput) -> Option<PlaceOrderAcceptedEvent> {
     output.events.iter().find_map(|event| match event {
-        PlaceOrderEvent::Accepted(event) => {
-            Some(PlaceOrderAcceptedEvent { order_id: event.order_id.clone() })
-        }
+        PlaceOrderEvent::Accepted(event) => Some(PlaceOrderAcceptedEvent {
+            order_id: event.order_id.clone(),
+        }),
     })
 }
 
 pub fn emit_trade_created_event(output: &MatchOutput) -> Option<TradeCreatedEvent> {
     output.events.iter().find_map(|event| match event {
-        MatchEvent::TradeCreated(event) => {
-            Some(TradeCreatedEvent { trade_id: event.trade_id.clone() })
-        }
+        MatchEvent::TradeCreated(event) => Some(TradeCreatedEvent {
+            trade_id: event.trade_id.clone(),
+        }),
     })
 }
 
@@ -177,7 +179,9 @@ mod tests {
     #[test]
     fn test_place_order_event_handler_invokes_match_handler() {
         let handler = PlaceOrderEventHandler::new(MatchHandler::new());
-        let event = PlaceOrderAcceptedEvent { order_id: "order_1".into() };
+        let event = PlaceOrderAcceptedEvent {
+            order_id: "order_1".into(),
+        };
 
         let result = handler.event_handle(event);
         assert!(result.is_ok());
@@ -186,7 +190,9 @@ mod tests {
     #[test]
     fn test_trade_event_handler_invokes_settlement_handler() {
         let handler = TradeEventHandler::new(SettlementHandler::new());
-        let event = TradeCreatedEvent { trade_id: "trade_1".into() };
+        let event = TradeCreatedEvent {
+            trade_id: "trade_1".into(),
+        };
 
         let result = handler.event_handle(event);
         assert!(result.is_ok());

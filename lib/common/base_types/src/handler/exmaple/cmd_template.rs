@@ -1,12 +1,14 @@
 //! CmdHandler 职责规范模板。
 //!
 //! 这个文件不是具体业务实现，而是 CmdHandler 的职责约束与实现模板。
-//! 适用于 CQRS 写侧，用来统一 on_command -> state set -> changeset -> changelog persistence -> replay -> publish 的处理链路。
+//! 适用于 CQRS 写侧，用来统一 on_command -> state set -> changeset -> changelog persistence ->
+//! replay -> publish 的处理链路。
 //!
 //! ## 1. 定位
 //! - CmdHandler 属于写侧（write model）入口。
 //! - 负责把命令转成业务状态变更与后续变更输出。
-//! - 负责协调取数、校验、状态更新并产出 changelog、持久化 changelog、回放 changelog 更新 state、发消息。
+//! - 负责协调取数、校验、状态更新并产出 changelog、持久化 changelog、回放 changelog 更新
+//!   state、发消息。
 //! - 不负责 QueryHandler/read model 的查询拼装。
 //!
 //! ## 2. 标准处理链路
@@ -84,8 +86,9 @@
 //! - entity / domain object 承载核心业务规则与状态迁移
 //! - repository / publisher 通过抽象接口注入
 //!
-//! 对于撮合、清算、批量成交、批量更新等场景，不应假设“一次命令只依赖一个状态、只影响一个实体、只产出一个 changelog”。
-//! 更合理的抽象是：一次命令读取一个 state set，计算后产出一个 changeset，其中包含多个待写入变更和多个 changelog。
+//! 对于撮合、清算、批量成交、批量更新等场景，不应假设“一次命令只依赖一个状态、只影响一个实体、
+//! 只产出一个 changelog”。 更合理的抽象是：一次命令读取一个 state set，计算后产出一个
+//! changeset，其中包含多个待写入变更和多个 changelog。
 //!
 //! CmdHandler 需要定义清楚：
 //! - 成功语义
@@ -230,9 +233,9 @@
 //
 // /// create new state set 的模板示例。
 // ///
-// /// 主链路：build initial state set -> validate -> apply and collect changes -> persist changelog -> replay state -> publish -> return result。
-// pub struct CreateStateSetCmdTemplate<Builder, Validator, Applier, LogPersister, Replayer, Publisher>
-// {
+// /// 主链路：build initial state set -> validate -> apply and collect changes -> persist changelog
+// -> replay state -> publish -> return result。 pub struct CreateStateSetCmdTemplate<Builder,
+// Validator, Applier, LogPersister, Replayer, Publisher> {
 //     pub builder: Builder,
 //     pub validator: Validator,
 //     pub applier: Applier,
@@ -270,21 +273,16 @@
 //
 // /// single-thread state set 的模板示例。
 // ///
-// /// 主链路：load state set in single thread -> validate -> apply and collect changes -> persist changelog -> replay state -> publish -> return result。
-// pub struct SingleThreadStateSetCmdTemplate<
-//     Loader,
+// /// 主链路：load state set in single thread -> validate -> apply and collect changes -> persist
+// changelog -> replay state -> publish -> return result。 pub struct
+// SingleThreadStateSetCmdTemplate<     Loader,
 //     Validator,
 //     Applier,
 //     LogPersister,
 //     Replayer,
 //     Publisher,
-// > {
-//     pub loader: Loader,
-//     pub validator: Validator,
-//     pub applier: Applier,
-//     pub log_persister: LogPersister,
-//     pub replayer: Replayer,
-//     pub publisher: Publisher,
+// > { pub loader: Loader, pub validator: Validator, pub applier: Applier, pub log_persister:
+// > LogPersister, pub replayer: Replayer, pub publisher: Publisher,
 // }
 //
 // impl<Loader, Validator, Applier, LogPersister, Replayer, Publisher>
@@ -323,8 +321,8 @@
 //
 // /// update existing state set 的模板示例。
 // ///
-// /// 主链路：零预判 -> 一锁 -> 二判 -> 三更新并产出 changeset -> persist changelog -> replay state -> publish -> return result。
-// pub struct UpdateStateSetCmdTemplate<
+// /// 主链路：零预判 -> 一锁 -> 二判 -> 三更新并产出 changeset -> persist changelog -> replay state
+// -> publish -> return result。 pub struct UpdateStateSetCmdTemplate<
 //     PreChecker,
 //     Loader,
 //     InLockValidator,
@@ -332,14 +330,9 @@
 //     LogPersister,
 //     Replayer,
 //     Publisher,
-// > {
-//     pub pre_checker: PreChecker,
-//     pub loader: Loader,
-//     pub in_lock_validator: InLockValidator,
-//     pub applier: Applier,
-//     pub log_persister: LogPersister,
-//     pub replayer: Replayer,
-//     pub publisher: Publisher,
+// > { pub pre_checker: PreChecker, pub loader: Loader, pub in_lock_validator: InLockValidator, pub
+// > applier: Applier, pub log_persister: LogPersister, pub replayer: Replayer, pub publisher:
+// > Publisher,
 // }
 //
 // impl<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher>
@@ -401,14 +394,9 @@
 //     LogPersister,
 //     Replayer,
 //     Publisher,
-// > {
-//     pub pre_checker: PreChecker,
-//     pub loader: Loader,
-//     pub in_lock_validator: InLockValidator,
-//     pub applier: Applier,
-//     pub log_persister: LogPersister,
-//     pub replayer: Replayer,
-//     pub publisher: Publisher,
+// > { pub pre_checker: PreChecker, pub loader: Loader, pub in_lock_validator: InLockValidator, pub
+// > applier: Applier, pub log_persister: LogPersister, pub replayer: Replayer, pub publisher:
+// > Publisher,
 // }
 //
 // impl<PreChecker, Loader, InLockValidator, Applier, LogPersister, Replayer, Publisher>

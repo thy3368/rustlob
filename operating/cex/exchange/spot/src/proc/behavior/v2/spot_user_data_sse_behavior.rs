@@ -603,8 +603,7 @@ pub mod event_types {
 /// - 所有时间戳均为毫秒
 /// - 账户事件为实时推送
 /// - 支持 JSON 和 SBE 两种输出格式
-/// - 如果资产或交易对名称包含非 ASCII 字符，事件可能包含 UTF-8 编码的非 ASCII
-///   字符
+/// - 如果资产或交易对名称包含非 ASCII 字符，事件可能包含 UTF-8 编码的非 ASCII 字符
 /// - 平均价格可通过 `累计成交金额 / 累计成交数量` 计算
 #[allow(dead_code)]
 const USAGE_GUIDE: () = ();

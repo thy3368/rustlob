@@ -168,7 +168,12 @@ impl fmt::Display for MarketDataQueryError {
             Self::EmptyOrderBook { symbol_id } => {
                 write!(f, "订单簿为空: symbol_id={}", symbol_id)
             }
-            Self::InsufficientLiquidity { symbol_id, side, requested, available } => {
+            Self::InsufficientLiquidity {
+                symbol_id,
+                side,
+                requested,
+                available,
+            } => {
                 write!(
                     f,
                     "流动性不足: symbol_id={}, side={:?}, requested={}, available={}",
@@ -179,10 +184,21 @@ impl fmt::Display for MarketDataQueryError {
                 write!(f, "参数无效: field='{}', reason='{}'", field, reason)
             }
             Self::InvalidSequenceRange { from, to } => {
-                write!(f, "序列号范围无效: from={}, to={} (from must be < to)", from, to)
+                write!(
+                    f,
+                    "序列号范围无效: from={}, to={} (from must be < to)",
+                    from, to
+                )
             }
-            Self::InvalidDepth { requested, max_allowed } => {
-                write!(f, "深度参数无效: requested={}, max_allowed={}", requested, max_allowed)
+            Self::InvalidDepth {
+                requested,
+                max_allowed,
+            } => {
+                write!(
+                    f,
+                    "深度参数无效: requested={}, max_allowed={}",
+                    requested, max_allowed
+                )
             }
             Self::Internal { message } => {
                 write!(f, "内部错误: {}", message)
@@ -220,7 +236,12 @@ impl MarketDataQueryError {
         requested: Quantity,
         available: Quantity,
     ) -> Self {
-        Self::InsufficientLiquidity { symbol_id, side, requested, available }
+        Self::InsufficientLiquidity {
+            symbol_id,
+            side,
+            requested,
+            available,
+        }
     }
 
     /// 创建参数无效错误
@@ -238,13 +259,18 @@ impl MarketDataQueryError {
     /// 创建深度参数无效错误
     #[inline]
     pub fn invalid_depth(requested: usize, max_allowed: usize) -> Self {
-        Self::InvalidDepth { requested, max_allowed }
+        Self::InvalidDepth {
+            requested,
+            max_allowed,
+        }
     }
 
     /// 创建内部错误
     #[inline]
     pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal { message: message.into() }
+        Self::Internal {
+            message: message.into(),
+        }
     }
 
     /// 判断是否为客户端错误（4xx类错误）
@@ -279,10 +305,7 @@ impl MarketDataQueryError {
 /// # use lob::lob::*;
 /// let query = QueryLevel1::new(1, 12345);
 /// // 或使用 Builder 模式
-/// let query = QueryLevel1::builder()
-///     .symbol_id(1)
-///     .sequence(12345)
-///     .build();
+/// let query = QueryLevel1::builder().symbol_id(1).sequence(12345).build();
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct QueryLevel1 {
@@ -301,7 +324,10 @@ impl QueryLevel1 {
     /// * `sequence` - 序列号
     #[inline]
     pub fn new(symbol_id: SymbolId, sequence: SequenceNumber) -> Self {
-        Self { symbol_id, sequence }
+        Self {
+            symbol_id,
+            sequence,
+        }
     }
 
     /// 创建 Builder
@@ -403,7 +429,10 @@ impl QueryLevel1Batch {
     /// * `symbol_ids` - 交易对ID列表
     /// * `sequence` - 序列号
     pub fn new(symbol_ids: Vec<SymbolId>, sequence: SequenceNumber) -> Self {
-        Self { symbol_ids, sequence }
+        Self {
+            symbol_ids,
+            sequence,
+        }
     }
 
     /// 创建 Builder
@@ -476,7 +505,10 @@ impl QueryLevel1BatchBuilder {
     /// 如果必需字段未设置或交易对列表为空，返回错误
     pub fn try_build(self) -> Result<QueryLevel1Batch, MarketDataQueryError> {
         if self.symbol_ids.is_empty() {
-            return Err(MarketDataQueryError::invalid_parameter("symbol_ids", "cannot be empty"));
+            return Err(MarketDataQueryError::invalid_parameter(
+                "symbol_ids",
+                "cannot be empty",
+            ));
         }
 
         Ok(QueryLevel1Batch {
@@ -556,7 +588,11 @@ impl QueryLevel2 {
             "depth must be between 1 and {}",
             Self::MAX_DEPTH
         );
-        Self { symbol_id, sequence, depth }
+        Self {
+            symbol_id,
+            sequence,
+            depth,
+        }
     }
 
     /// 尝试创建 Level 2 查询命令
@@ -570,12 +606,19 @@ impl QueryLevel2 {
         depth: usize,
     ) -> Result<Self, MarketDataQueryError> {
         if depth == 0 {
-            return Err(MarketDataQueryError::invalid_parameter("depth", "must be greater than 0"));
+            return Err(MarketDataQueryError::invalid_parameter(
+                "depth",
+                "must be greater than 0",
+            ));
         }
         if depth > Self::MAX_DEPTH {
             return Err(MarketDataQueryError::invalid_depth(depth, Self::MAX_DEPTH));
         }
-        Ok(Self { symbol_id, sequence, depth })
+        Ok(Self {
+            symbol_id,
+            sequence,
+            depth,
+        })
     }
 
     /// 创建10档深度查询
@@ -618,10 +661,16 @@ impl QueryLevel2 {
     #[inline]
     pub fn validate(&self) -> Result<(), MarketDataQueryError> {
         if self.depth == 0 {
-            return Err(MarketDataQueryError::invalid_parameter("depth", "must be greater than 0"));
+            return Err(MarketDataQueryError::invalid_parameter(
+                "depth",
+                "must be greater than 0",
+            ));
         }
         if self.depth > Self::MAX_DEPTH {
-            return Err(MarketDataQueryError::invalid_depth(self.depth, Self::MAX_DEPTH));
+            return Err(MarketDataQueryError::invalid_depth(
+                self.depth,
+                Self::MAX_DEPTH,
+            ));
         }
         Ok(())
     }
@@ -653,7 +702,10 @@ pub struct QueryLevel3 {
 
 impl QueryLevel3 {
     pub fn new(symbol_id: SymbolId, sequence: u64) -> Self {
-        Self { symbol_id, sequence }
+        Self {
+            symbol_id,
+            sequence,
+        }
     }
 }
 
@@ -723,8 +775,15 @@ impl QueryIncrementalData {
         from_sequence: SequenceNumber,
         to_sequence: SequenceNumber,
     ) -> Self {
-        assert!(from_sequence < to_sequence, "from_sequence must be less than to_sequence");
-        Self { symbol_id, from_sequence, to_sequence }
+        assert!(
+            from_sequence < to_sequence,
+            "from_sequence must be less than to_sequence"
+        );
+        Self {
+            symbol_id,
+            from_sequence,
+            to_sequence,
+        }
     }
 
     /// 尝试创建增量数据查询命令
@@ -738,7 +797,10 @@ impl QueryIncrementalData {
         to_sequence: SequenceNumber,
     ) -> Result<Self, MarketDataQueryError> {
         if from_sequence >= to_sequence {
-            return Err(MarketDataQueryError::invalid_sequence_range(from_sequence, to_sequence));
+            return Err(MarketDataQueryError::invalid_sequence_range(
+                from_sequence,
+                to_sequence,
+            ));
         }
 
         let range = to_sequence - from_sequence;
@@ -749,7 +811,11 @@ impl QueryIncrementalData {
             ));
         }
 
-        Ok(Self { symbol_id, from_sequence, to_sequence })
+        Ok(Self {
+            symbol_id,
+            from_sequence,
+            to_sequence,
+        })
     }
 
     /// 创建查询最近 N 个事件的命令
@@ -761,7 +827,11 @@ impl QueryIncrementalData {
     /// * `count` - 要查询的事件数量
     pub fn last_n(symbol_id: SymbolId, latest_sequence: SequenceNumber, count: u64) -> Self {
         let from_sequence = latest_sequence.saturating_sub(count);
-        Self { symbol_id, from_sequence, to_sequence: latest_sequence }
+        Self {
+            symbol_id,
+            from_sequence,
+            to_sequence: latest_sequence,
+        }
     }
 
     /// 创建 Builder
@@ -919,7 +989,13 @@ impl IncrementalDataRes {
         to_sequence: SequenceNumber,
         has_more: bool,
     ) -> Self {
-        Self { symbol_id, deltas, from_sequence, to_sequence, has_more }
+        Self {
+            symbol_id,
+            deltas,
+            from_sequence,
+            to_sequence,
+            has_more,
+        }
     }
 
     /// 获取事件数量

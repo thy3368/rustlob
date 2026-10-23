@@ -10,7 +10,10 @@ use hyperliquid_analyzer::HyperliquidClient;
 #[command(name = "hl_user")]
 #[command(about = "Hyperliquid 用户信息查询工具", long_about = None)]
 struct Cli {
-    #[arg(value_name = "ADDRESS", default_value = "0x7839e2f2c375dd2935193f2736167514efff9916")]
+    #[arg(
+        value_name = "ADDRESS",
+        default_value = "0x7839e2f2c375dd2935193f2736167514efff9916"
+    )]
     address: String,
 }
 
@@ -45,9 +48,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  可提取金额:   {}", state.withdrawable.green());
 
             println!("\n  账户概览:");
-            println!("    账户价值:   ${}", state.cross_margin_summary.account_value.yellow());
-            println!("    总持仓:     ${}", state.cross_margin_summary.total_ntl_pos.yellow());
-            println!("    已用保证金: ${}", state.cross_margin_summary.total_margin_used.red());
+            println!(
+                "    账户价值:   ${}",
+                state.cross_margin_summary.account_value.yellow()
+            );
+            println!(
+                "    总持仓:     ${}",
+                state.cross_margin_summary.total_ntl_pos.yellow()
+            );
+            println!(
+                "    已用保证金: ${}",
+                state.cross_margin_summary.total_margin_used.red()
+            );
 
             if state.asset_positions.is_empty() {
                 println!("\n  当前无持仓");
@@ -55,7 +67,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\n  持仓明细:");
                 for pos in &state.asset_positions {
                     let p = &pos.position;
-                    let side = if p.side == "A" { "做多".green() } else { "做空".red() };
+                    let side = if p.side == "A" {
+                        "做多".green()
+                    } else {
+                        "做空".red()
+                    };
                     println!(
                         "    {} {} @ ${} {} 杠杆: {}x",
                         p.sz,
@@ -113,7 +129,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 for order in &orders {
                     let o = &order.order;
-                    let side = if o.side == "A" { "买入".green() } else { "卖出".red() };
+                    let side = if o.side == "A" {
+                        "买入".green()
+                    } else {
+                        "卖出".red()
+                    };
                     println!(
                         "  {} {} @ ${} {} ID: {}",
                         o.sz,
@@ -140,7 +160,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  无成交记录");
             } else {
                 for fill in fills.fills.iter().take(10) {
-                    let side = if fill.side == "A" { "买入".green() } else { "卖出".red() };
+                    let side = if fill.side == "A" {
+                        "买入".green()
+                    } else {
+                        "卖出".red()
+                    };
                     let datetime = UNIX_EPOCH + Duration::from_millis(fill.time);
                     let time_str = format!("{:?}", datetime);
                     println!(

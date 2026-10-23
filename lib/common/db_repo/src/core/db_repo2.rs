@@ -66,14 +66,20 @@ impl PageRequest {
     /// 获取下一页的分页请求
     #[inline]
     pub fn next_page(&self) -> Self {
-        Self { page: self.page + 1, page_size: self.page_size }
+        Self {
+            page: self.page + 1,
+            page_size: self.page_size,
+        }
     }
 
     /// 获取上一页的分页请求
     #[inline]
     pub fn prev_page(&self) -> Option<Self> {
         if self.page > 0 {
-            Some(Self { page: self.page - 1, page_size: self.page_size })
+            Some(Self {
+                page: self.page - 1,
+                page_size: self.page_size,
+            })
         } else {
             None
         }
@@ -82,7 +88,10 @@ impl PageRequest {
 
 impl Default for PageRequest {
     fn default() -> Self {
-        Self { page: 0, page_size: 20 }
+        Self {
+            page: 0,
+            page_size: 20,
+        }
     }
 }
 
@@ -130,7 +139,12 @@ pub struct PageResult<T> {
 impl<T> PageResult<T> {
     /// 创建新的分页结果
     pub fn new(content: Vec<T>, total_elements: u64, page: u64, page_size: u64) -> Self {
-        Self { content, total_elements, page, page_size }
+        Self {
+            content,
+            total_elements,
+            page,
+            page_size,
+        }
     }
 
     /// 获取总分页数
@@ -281,8 +295,7 @@ pub trait CmdRepo2: Send + Sync + QueryRepo2 {
     ///
     /// # 返回
     /// - `Ok(())`: 所有事件回放成功
-    /// - `Err(RepoError)`: 任何事件回放失败时返回错误
-    ///   第一个失败的事件会导致整个操作失败
+    /// - `Err(RepoError)`: 任何事件回放失败时返回错误 第一个失败的事件会导致整个操作失败
     ///
     /// # 行为说明
     /// - 按顺序逐个回放事件

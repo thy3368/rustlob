@@ -67,7 +67,8 @@ pub enum UpdateHyperliquidPerpLeverageError {
 
 /// Use case that updates the authoritative Hyperliquid perp leverage setting.
 ///
-/// 该用例以 `HyperliquidPerpLeverageSetting` 为配置真相；若 state 同时携带对应仓位，则同步更新仓位快照。
+/// 该用例以 `HyperliquidPerpLeverageSetting` 为配置真相；若 state
+/// 同时携带对应仓位，则同步更新仓位快照。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct UpdateHyperliquidPerpLeverageUseCase;
 
@@ -118,14 +119,19 @@ impl StateMachineV2 for UpdateHyperliquidPerpLeverageUseCase {
         if state.account_id != cmd.party_id {
             return Err(UpdateHyperliquidPerpLeverageError::AccountMismatch);
         }
-        if !state.leverage_setting.belongs_to_account(state.account_id.as_str())
+        if !state
+            .leverage_setting
+            .belongs_to_account(state.account_id.as_str())
             || !state.leverage_setting.trades_asset(cmd.asset)
         {
             return Err(UpdateHyperliquidPerpLeverageError::LeverageSettingMismatch);
         }
 
         let requested_margin_mode = margin_mode_from_is_cross(cmd.is_cross);
-        if !state.leverage_setting.matches_margin_mode(requested_margin_mode) {
+        if !state
+            .leverage_setting
+            .matches_margin_mode(requested_margin_mode)
+        {
             return Err(UpdateHyperliquidPerpLeverageError::MarginModeMismatch);
         }
         if let Some(position) = &state.position {
@@ -151,7 +157,9 @@ impl StateMachineV2 for UpdateHyperliquidPerpLeverageUseCase {
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let before = state.leverage_setting.clone();
-        let after = before.update_leverage(cmd.leverage).map_err(map_leverage_setting_error)?;
+        let after = before
+            .update_leverage(cmd.leverage)
+            .map_err(map_leverage_setting_error)?;
         let changed_position = if let Some(position) = &state.position {
             let before_position = position.clone();
             let mut after_position = position.clone();
@@ -163,7 +171,10 @@ impl StateMachineV2 for UpdateHyperliquidPerpLeverageUseCase {
                     after.leverage,
                 )
                 .map_err(map_position_error)?;
-            Some(UpdatedEntityPair { before: before_position, after: after_position })
+            Some(UpdatedEntityPair {
+                before: before_position,
+                after: after_position,
+            })
         } else {
             None
         };
@@ -195,7 +206,11 @@ fn map_position_error(error: HyperliquidPerpPositionError) -> UpdateHyperliquidP
 }
 
 fn margin_mode_from_is_cross(is_cross: bool) -> HyperliquidPerpMarginMode {
-    if is_cross { HyperliquidPerpMarginMode::Cross } else { HyperliquidPerpMarginMode::Isolated }
+    if is_cross {
+        HyperliquidPerpMarginMode::Cross
+    } else {
+        HyperliquidPerpMarginMode::Isolated
+    }
 }
 
 fn map_leverage_setting_error(
@@ -310,7 +325,10 @@ mod tests {
         assert_eq!(position.after.leverage, 10);
         assert_eq!(position.after.required_margin(), Some(30));
         assert_eq!(position.after.version, 3);
-        assert_eq!(position.after.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
+        assert_eq!(
+            position.after.lifecycle_status(),
+            HyperliquidPerpPositionStatus::Open
+        );
         assert_eq!(events.len(), 2);
     }
 
@@ -329,7 +347,15 @@ mod tests {
             changes.changed_leverage_setting.after.margin_mode,
             HyperliquidPerpMarginMode::Isolated
         );
-        assert_eq!(changes.changed_position.as_ref().unwrap().after.required_margin(), Some(30));
+        assert_eq!(
+            changes
+                .changed_position
+                .as_ref()
+                .unwrap()
+                .after
+                .required_margin(),
+            Some(30)
+        );
     }
 
     #[test]
