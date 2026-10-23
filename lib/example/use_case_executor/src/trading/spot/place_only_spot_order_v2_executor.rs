@@ -62,7 +62,7 @@ mod tests {
     use common_entity::Entity;
     use example_core_use_case::{
         PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
-        PlaceOnlySpotOrderV2State, PlaceOnlySpotOrderV2UseCase, SpotOrderGroupRelation,
+        PlaceOnlySpotOrderV2State, PlaceOnlySpotOrderV2UseCase, OrderGroupRelation,
         SpotOrderStatus, SpotOrderV2,
     };
 
@@ -232,14 +232,14 @@ mod tests {
 
         assert_eq!(
             created_parent_order.group_relation,
-            SpotOrderGroupRelation::NormalTpslParent
+            OrderGroupRelation::NormalTpslParent
         );
         assert_eq!(created_child_orders.len(), 2);
         assert!(created_child_orders.iter().all(|child| child.reduce_only));
         assert!(created_child_orders.iter().all(|child| child.is_pending()));
         assert!(created_child_orders.iter().all(|child| {
             child.group_relation
-                == SpotOrderGroupRelation::NormalTpslChild {
+                == OrderGroupRelation::NormalTpslChild {
                     parent_order_id: created_parent_order.order_id.clone(),
                 }
         }));

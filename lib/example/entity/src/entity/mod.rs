@@ -63,13 +63,13 @@ use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
-    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderTriggerRole,
-    SpotOrderType,
+    OrderSide, SpotOrderStatus, SpotOrderStatusReason, OrderTif, OrderTriggerRole,
+    OrderType,
 };
 pub use spot_entity::spot_order_v2::{
     ActivatePendingSpotOrderV2Input, CancelSpotOrderV2Input, CancelSpotOrderV2Outcome,
     MatchSpotOrderV2Input, MatchSpotOrderV2Outcome, SpotOrderFeeConsumeRequirement,
-    SpotOrderFeeHoldRequirement, SpotOrderGroupRelation, SpotOrderHoldAsset,
+    SpotOrderFeeHoldRequirement, OrderGroupRelation, SpotOrderHoldAsset,
     SpotOrderReleaseReason, SpotOrderReleaseRequirement, SpotOrderV2, SpotOrderV2BehaviorError,
     SpotOrderV2MatchError, SpotTradeFeeRole,
 };

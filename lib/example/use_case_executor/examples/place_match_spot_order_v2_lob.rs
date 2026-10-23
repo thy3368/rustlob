@@ -4,7 +4,7 @@ use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, Balance, MarketRules, PlaceMatchSpotOrderV2Changes,
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
-    SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    OrderSide, OrderTif, OrderType, SpotOrderV2,
 };
 use example_outbound_adapter::{InMemoryPlaceOrderOutbound, InMemoryStore};
 use use_case_executor::trading::spot::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2_with_outbound;
@@ -61,11 +61,11 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
             ASSET,
             "seller".into(),
             "BTCUSDT".into(),
-            SpotOrderSide::Sell,
+            OrderSide::Sell,
             1,
             100,
-            SpotOrderType::Limit {
-                tif: SpotOrderTif::Gtc,
+            OrderType::Limit {
+                tif: OrderTif::Gtc,
             },
             None,
             0,

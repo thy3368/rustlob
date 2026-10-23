@@ -15,7 +15,7 @@ use crate::entity::account::balance_ledger_v2::{
 };
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
-    SettlementTransferVoucher, SpotOrderSide, SpotOrderStatus, SpotOrderTif, spot as spot_entity,
+    SettlementTransferVoucher, OrderSide, SpotOrderStatus, OrderTif, spot as spot_entity,
 };
 use crate::support::{concat2, concat3, concat4};
 use crate::{MatchSpotOrderV2Input, SpotTrade};
@@ -283,11 +283,11 @@ fn settle_matched_trades(
             .notional_quote()
             .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
         total_taker_fill = total_taker_fill
-            .checked_add(trade.qty)
+            .checked_add(trade.size)
             .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
 
         let taker_principal_consume =
-            principal_consume_amount_for_taker(taker_order, trade.qty, trade_notional);
+            principal_consume_amount_for_taker(taker_order, trade.size, trade_notional);
         consume_reservation(
             &mut taker_order.reservation,
             taker_principal_consume,
@@ -297,7 +297,7 @@ fn settle_matched_trades(
             return Err(MatchSpotOrderV3Error::BalanceNotFound);
         };
         let maker_principal_consume =
-            principal_consume_amount_for_maker(maker_order, trade.qty, trade_notional);
+            principal_consume_amount_for_maker(maker_order, trade.size, trade_notional);
         consume_reservation(
             &mut maker_order.reservation,
             maker_principal_consume,
@@ -360,7 +360,7 @@ fn compute_match_after(
     let timestamp = logical_ts;
 
     match taker_after.time_in_force() {
-        SpotOrderTif::Gtc | SpotOrderTif::Ioc => {
+        OrderTif::Gtc | OrderTif::Ioc => {
             let taker_before_match = taker_after.clone();
             let match_outcome = taker_after.match_with_makers(
                 &mut maker_orders_after,
@@ -373,7 +373,7 @@ fn compute_match_after(
                     version: Some(version),
                 },
             )?;
-            if matches!(taker_after.time_in_force(), SpotOrderTif::Gtc)
+            if matches!(taker_after.time_in_force(), OrderTif::Gtc)
                 && match_outcome.trades.is_empty()
             {
                 return Ok(MatchSpotOrderV3AfterChanges::Resting);
@@ -391,7 +391,7 @@ fn compute_match_after(
                 version,
             )
         }
-        SpotOrderTif::Alo => {
+        OrderTif::Alo => {
             let Some(best_maker) = maker_orders_after.first() else {
                 return Ok(MatchSpotOrderV3AfterChanges::Resting);
             };
@@ -497,17 +497,17 @@ fn finish_matched_after(
     }
 }
 
-fn expected_principal_kind_for(side: SpotOrderSide) -> ReservationKind {
+fn expected_principal_kind_for(side: OrderSide) -> ReservationKind {
     match side {
-        SpotOrderSide::Buy => ReservationKind::SpotBuyQuote,
-        SpotOrderSide::Sell => ReservationKind::SpotSellBase,
+        OrderSide::Buy => ReservationKind::SpotBuyQuote,
+        OrderSide::Sell => ReservationKind::SpotSellBase,
     }
 }
 
-fn expected_fee_kind_for(side: SpotOrderSide) -> ReservationKind {
+fn expected_fee_kind_for(side: OrderSide) -> ReservationKind {
     match side {
-        SpotOrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
-        SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
+        OrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
+        OrderSide::Sell => ReservationKind::SpotSellFeeQuote,
     }
 }
 
@@ -575,8 +575,8 @@ fn principal_consume_amount_for_taker(
     trade_notional: u64,
 ) -> u64 {
     match order.side() {
-        SpotOrderSide::Buy => trade_notional,
-        SpotOrderSide::Sell => trade_qty,
+        OrderSide::Buy => trade_notional,
+        OrderSide::Sell => trade_qty,
     }
 }
 
@@ -586,8 +586,8 @@ fn principal_consume_amount_for_maker(
     trade_notional: u64,
 ) -> u64 {
     match order.side() {
-        SpotOrderSide::Buy => trade_notional,
-        SpotOrderSide::Sell => trade_qty,
+        OrderSide::Buy => trade_notional,
+        OrderSide::Sell => trade_qty,
     }
 }
 
@@ -701,10 +701,10 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), MatchSpotOrderV3Error> {
     let reason = match order.side() {
-        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
+        OrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
             order_id: order.order_id(),
         },
-        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
+        OrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
             order_id: order.order_id(),
         },
     };
@@ -849,7 +849,7 @@ fn apply_trade_balance_effects(
             )),
             account_id: buyer_account_id.clone(),
             asset_id: context.base_asset_id.to_string(),
-            amount: trade.qty,
+            amount: trade.size,
             reason: buyer_receive_base_reason,
         },
     )?;
@@ -897,7 +897,7 @@ fn apply_trade_balance_effects(
             )),
             account_id: seller_account_id,
             asset_id: context.base_asset_id.to_string(),
-            amount: trade.qty,
+            amount: trade.size,
             reason: seller_release_base_reason,
         },
     )?;

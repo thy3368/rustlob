@@ -14,7 +14,7 @@ use crate::entity::account::balance_ledger_v2::{
 };
 use crate::entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError};
 use crate::entity::{
-    Balance, ReservationError, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
+    Balance, ReservationError, OrderSide, SpotOrderStatus, OrderTif, OrderType,
 };
 use crate::support::concat3;
 
@@ -211,10 +211,10 @@ impl StateMachineV2 for ModifySpotOrderV2UseCase {
         if !lookup_matches_order(&cmd.order_id, order) {
             return Err(ModifySpotOrderV2Error::OrderLookupMismatch);
         }
-        if !matches!(order.order_type, SpotOrderType::Limit { .. }) {
+        if !matches!(order.order_type, OrderType::Limit { .. }) {
             return Err(ModifySpotOrderV2Error::OnlyLimitOrderCanBeModified);
         }
-        if order.status != SpotOrderStatus::Open || order.filled_qty != 0 {
+        if order.status != SpotOrderStatus::Open || order.filled_size != 0 {
             return Err(ModifySpotOrderV2Error::OrderNotModifiable);
         }
         if side_from_command(cmd) != order.side {
@@ -253,9 +253,9 @@ impl StateMachineV2 for ModifySpotOrderV2UseCase {
 
         let mut order_after = order.clone();
         order_after.limit_price = price;
-        order_after.qty = qty;
-        order_after.order_type = SpotOrderType::Limit { tif };
-        order_after.client_order_id = cmd.cloid.clone().or_else(|| order.client_order_id.clone());
+        order_after.size = qty;
+        order_after.order_type = OrderType::Limit { tif };
+        order_after.cloid = cmd.cloid.clone().or_else(|| order.cloid.clone());
         order_after.reservation = principal_after;
         order_after.fee_reservation = fee_after;
         order_after.updated_at = cmd.logical_ts();
@@ -308,21 +308,21 @@ impl StateMachineV2Diff for ModifySpotOrderV2UseCase {
 fn lookup_matches_order(lookup: &OrderId, order: &SpotOrderV2) -> bool {
     match lookup {
         OrderId::Oid(order_id) => order.order_id() == *order_id,
-        OrderId::Cloid(cloid) => order.client_order_id.as_deref() == Some(cloid.as_str()),
+        OrderId::Cloid(cloid) => order.cloid.as_deref() == Some(cloid.as_str()),
     }
 }
 
-fn side_from_command(cmd: &ModifySpotOrderV2Cmd) -> SpotOrderSide {
+fn side_from_command(cmd: &ModifySpotOrderV2Cmd) -> OrderSide {
     if cmd.is_buy {
-        SpotOrderSide::Buy
+        OrderSide::Buy
     } else {
-        SpotOrderSide::Sell
+        OrderSide::Sell
     }
 }
 
 fn parsed_limit_command(
     cmd: &ModifySpotOrderV2Cmd,
-) -> Result<(u64, u64, SpotOrderTif), ModifySpotOrderV2Error> {
+) -> Result<(u64, u64, OrderTif), ModifySpotOrderV2Error> {
     let price = parse_positive_u64(&cmd.price, ModifySpotOrderV2Error::InvalidPrice)?;
     let qty = parse_positive_u64(&cmd.size, ModifySpotOrderV2Error::InvalidSize)?;
     let ModifySpotOrderV2OrderType::Limit { tif } = &cmd.order_type else {
@@ -341,11 +341,11 @@ fn parse_positive_u64(
     }
 }
 
-fn parse_tif(raw: &str) -> Result<SpotOrderTif, ModifySpotOrderV2Error> {
+fn parse_tif(raw: &str) -> Result<OrderTif, ModifySpotOrderV2Error> {
     match raw {
-        "gtc" | "Gtc" => Ok(SpotOrderTif::Gtc),
-        "ioc" | "Ioc" => Ok(SpotOrderTif::Ioc),
-        "alo" | "Alo" => Ok(SpotOrderTif::Alo),
+        "gtc" | "Gtc" => Ok(OrderTif::Gtc),
+        "ioc" | "Ioc" => Ok(OrderTif::Ioc),
+        "alo" | "Alo" => Ok(OrderTif::Alo),
         _ => Err(ModifySpotOrderV2Error::InvalidTimeInForce),
     }
 }

@@ -8,7 +8,7 @@ use crate::entity::{
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
 };
 use crate::support::concat4;
-use crate::{SpotOrderSide, SpotTradeFeeRole};
+use crate::{OrderSide, SpotTradeFeeRole};
 
 const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 
@@ -19,10 +19,10 @@ const SPOT_TRADE_ENTITY_TYPE: u8 = 5;
 /// 在聚合边界上，它自身作为一条独立的成交事实聚合根存在。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotTrade {
-    /// 本系统稳定成交 ID。
+    /// 本系统稳定成交 ID。//todo 改成u64
     pub trade_id: String,
     /// 一次撮合批次 ID。
-    pub match_id: String,
+    pub match_id: String,//todo remove
     /// Hyperliquid 现货资产编号。
     pub asset: u32,
     /// 交易对，例如 `BTCUSDT`。
@@ -36,11 +36,11 @@ pub struct SpotTrade {
     /// maker 所属账户 ID。//todo delete
     pub maker_account_id: String,
     /// taker 买卖方向。
-    pub taker_side: SpotOrderSide,
+    pub taker_side: OrderSide,
     /// 成交价格，取 maker 限价。
     pub price: u64,
     /// 成交数量，以 base asset 计价。
-    pub qty: u64,
+    pub size: u64,
     /// 业务成交时间，单位为 Unix epoch 毫秒。
     pub created_at: u64,
     /// taker 为本笔成交支付的 quote 手续费金额。
@@ -64,7 +64,7 @@ impl SpotTrade {
         maker_order_id: u64,
         taker_account_id: String,
         maker_account_id: String,
-        taker_side: SpotOrderSide,
+        taker_side: OrderSide,
         price: u64,
         qty: u64,
         taker_fee: u64,
@@ -82,7 +82,7 @@ impl SpotTrade {
             maker_account_id,
             taker_side,
             price,
-            qty,
+            size: qty,
             taker_fee,
             maker_fee,
             created_at: executed_at_ms,
@@ -91,38 +91,38 @@ impl SpotTrade {
 
     /// 返回成交 quote 名义价值；乘法溢出时返回 `None`。
     pub fn notional_quote(&self) -> Option<u64> {
-        self.price.checked_mul(self.qty)
+        self.price.checked_mul(self.size)
     }
 
     /// 返回清结算中的买方账户 ID。
     pub fn buyer_account_id(&self) -> &str {
         match self.taker_side {
-            SpotOrderSide::Buy => self.taker_account_id.as_str(),
-            SpotOrderSide::Sell => self.maker_account_id.as_str(),
+            OrderSide::Buy => self.taker_account_id.as_str(),
+            OrderSide::Sell => self.maker_account_id.as_str(),
         }
     }
 
     /// 返回清结算中的卖方账户 ID。
     pub fn seller_account_id(&self) -> &str {
         match self.taker_side {
-            SpotOrderSide::Buy => self.maker_account_id.as_str(),
-            SpotOrderSide::Sell => self.taker_account_id.as_str(),
+            OrderSide::Buy => self.maker_account_id.as_str(),
+            OrderSide::Sell => self.taker_account_id.as_str(),
         }
     }
 
     /// 返回买方订单 ID。
     pub fn buyer_order_id(&self) -> u64 {
         match self.taker_side {
-            SpotOrderSide::Buy => self.taker_order_id,
-            SpotOrderSide::Sell => self.maker_order_id,
+            OrderSide::Buy => self.taker_order_id,
+            OrderSide::Sell => self.maker_order_id,
         }
     }
 
     /// 返回卖方订单 ID。
     pub fn seller_order_id(&self) -> u64 {
         match self.taker_side {
-            SpotOrderSide::Buy => self.maker_order_id,
-            SpotOrderSide::Sell => self.taker_order_id,
+            OrderSide::Buy => self.maker_order_id,
+            OrderSide::Sell => self.taker_order_id,
         }
     }
 
@@ -140,32 +140,32 @@ impl SpotTrade {
     /// 返回买方在该成交中的真实 fee 角色。
     pub fn buyer_fee_role(&self) -> SpotTradeFeeRole {
         match self.taker_side {
-            SpotOrderSide::Buy => SpotTradeFeeRole::Taker,
-            SpotOrderSide::Sell => SpotTradeFeeRole::Maker,
+            OrderSide::Buy => SpotTradeFeeRole::Taker,
+            OrderSide::Sell => SpotTradeFeeRole::Maker,
         }
     }
 
     /// 返回卖方在该成交中的真实 fee 角色。
     pub fn seller_fee_role(&self) -> SpotTradeFeeRole {
         match self.taker_side {
-            SpotOrderSide::Buy => SpotTradeFeeRole::Maker,
-            SpotOrderSide::Sell => SpotTradeFeeRole::Taker,
+            OrderSide::Buy => SpotTradeFeeRole::Maker,
+            OrderSide::Sell => SpotTradeFeeRole::Taker,
         }
     }
 
     /// 返回买方在本笔成交中支付的 quote 手续费金额。
     pub fn buyer_fee(&self) -> u64 {
         match self.taker_side {
-            SpotOrderSide::Buy => self.taker_fee,
-            SpotOrderSide::Sell => self.maker_fee,
+            OrderSide::Buy => self.taker_fee,
+            OrderSide::Sell => self.maker_fee,
         }
     }
 
     /// 返回卖方在本笔成交中支付的 quote 手续费金额。
     pub fn seller_fee(&self) -> u64 {
         match self.taker_side {
-            SpotOrderSide::Buy => self.maker_fee,
-            SpotOrderSide::Sell => self.taker_fee,
+            OrderSide::Buy => self.maker_fee,
+            OrderSide::Sell => self.taker_fee,
         }
     }
 
@@ -201,7 +201,7 @@ impl SpotTrade {
                     seller_account_id.to_string(),
                     buyer_account_id.to_string(),
                     base_asset_id.to_string(),
-                    self.qty,
+                    self.size,
                     SettlementTransferPurpose::SpotBuyerReceiveBase,
                     concat4(
                         "balance-ledger:",
@@ -258,7 +258,7 @@ impl SpotTrade {
                     seller_account_id.to_string(),
                     buyer_account_id.to_string(),
                     base_asset_id.to_string(),
-                    self.qty,
+                    self.size,
                     SettlementTransferPurpose::SpotSellerDeliverBase,
                     concat4(
                         "balance-ledger:",
@@ -395,7 +395,7 @@ impl FieldDiff for SpotTrade {
             EntityFieldChange::new("maker_account_id", "", self.maker_account_id.clone()),
             EntityFieldChange::new("taker_side", "", self.taker_side.as_str()),
             EntityFieldChange::new("price", "", self.price.to_string()),
-            EntityFieldChange::new("qty", "", self.qty.to_string()),
+            EntityFieldChange::new("qty", "", self.size.to_string()),
             EntityFieldChange::new("executed_at_ms", "", self.created_at.to_string()),
             EntityFieldChange::new("taker_fee", "", self.taker_fee.to_string()),
             EntityFieldChange::new("maker_fee", "", self.maker_fee.to_string()),
@@ -501,7 +501,7 @@ mod tests {
             2,
             "buyer".to_string(),
             "seller".to_string(),
-            SpotOrderSide::Buy,
+            OrderSide::Buy,
             100,
             2,
             2,
@@ -516,7 +516,7 @@ mod tests {
 
         assert_eq!(trade.trade_id, "match-1-1");
         assert_eq!(trade.match_id, "match-1");
-        assert_eq!(trade.taker_side, SpotOrderSide::Buy);
+        assert_eq!(trade.taker_side, OrderSide::Buy);
         assert_eq!(trade.notional_quote(), Some(200));
         assert_eq!(trade.buyer_account_id(), "buyer");
         assert_eq!(trade.seller_account_id(), "seller");
@@ -585,7 +585,7 @@ mod tests {
             4,
             "seller".to_string(),
             "buyer".to_string(),
-            SpotOrderSide::Sell,
+            OrderSide::Sell,
             100,
             2,
             2,

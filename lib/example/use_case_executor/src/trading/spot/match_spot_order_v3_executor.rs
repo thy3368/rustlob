@@ -45,7 +45,7 @@ mod tests {
     use common_entity::stable_string_entity_id;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
-        MatchSpotOrderV3UseCase, SpotOrderSide, SpotOrderStatus, SpotOrderTif, SpotOrderType,
+        MatchSpotOrderV3UseCase, OrderSide, SpotOrderStatus, OrderTif, OrderType,
         SpotOrderV2,
     };
 
@@ -77,7 +77,7 @@ mod tests {
             _request: &LogEntry<MatchSpotOrderV3Cmd>,
         ) -> Result<MatchSpotOrderV3State, Self::Error> {
             Ok(MatchSpotOrderV3State {
-                taker_order: buy_order(1, "buyer", 100, 2, SpotOrderTif::Ioc)?,
+                taker_order: buy_order(1, "buyer", 100, 2, OrderTif::Ioc)?,
                 maker_orders: vec![sell_order(2, "seller", 100, 1)?],
                 settlement_balances: vec![
                     Balance::new(
@@ -159,9 +159,9 @@ mod tests {
         account_id: &str,
         price: u64,
         qty: u64,
-        tif: SpotOrderTif,
+        tif: OrderTif,
     ) -> Result<SpotOrderV2, FakePlaceSpotOrderV2OutboundError> {
-        order(order_id, account_id, SpotOrderSide::Buy, price, qty, tif)
+        order(order_id, account_id, OrderSide::Buy, price, qty, tif)
     }
 
     fn sell_order(
@@ -173,20 +173,20 @@ mod tests {
         order(
             order_id,
             account_id,
-            SpotOrderSide::Sell,
+            OrderSide::Sell,
             price,
             qty,
-            SpotOrderTif::Gtc,
+            OrderTif::Gtc,
         )
     }
 
     fn order(
         order_id: u64,
         account_id: &str,
-        side: SpotOrderSide,
+        side: OrderSide,
         price: u64,
         qty: u64,
-        tif: SpotOrderTif,
+        tif: OrderTif,
     ) -> Result<SpotOrderV2, FakePlaceSpotOrderV2OutboundError> {
         let reservation = SpotOrderV2::principal_reservation(
             order_id, account_id, side, qty, price, "BTC", "USDT",
@@ -201,7 +201,7 @@ mod tests {
             side,
             qty,
             price,
-            SpotOrderType::Limit { tif },
+            OrderType::Limit { tif },
             None,
             0,
             1,

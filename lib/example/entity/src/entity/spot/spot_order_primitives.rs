@@ -3,14 +3,14 @@ use serde::{Deserialize, Serialize};
 
 /// 现货订单方向。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotOrderSide {
+pub enum OrderSide {
     /// 买入订单。
     Buy,
     /// 卖出订单。
     Sell,
 }
 
-impl SpotOrderSide {
+impl OrderSide {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Buy => "buy",
@@ -21,13 +21,13 @@ impl SpotOrderSide {
 
 /// Hyperliquid 现货限价单的有效方式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotOrderTif {
+pub enum OrderTif {
     Gtc,
     Ioc,
     Alo,
 }
 
-impl SpotOrderTif {
+impl OrderTif {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Gtc => "gtc",
@@ -39,7 +39,7 @@ impl SpotOrderTif {
 
 /// 条件触发订单角色。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotOrderTriggerRole {
+pub enum OrderTriggerRole {
     /// 止盈触发单。
     TakeProfit,
     /// 止损触发单。
@@ -48,27 +48,27 @@ pub enum SpotOrderTriggerRole {
 
 /// Hyperliquid 现货订单类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotOrderType {
+pub enum OrderType {
     /// 普通限价单；所谓市价意图由 IOC 加激进限价表达。
-    Limit { tif: SpotOrderTif },
+    Limit { tif: OrderTif },
     /// 条件单；触发后进入 GTC 限价或 IOC 激进限价生命周期。
     Trigger {
         is_market: bool,
         trigger_price: u64,
-        tpsl: SpotOrderTriggerRole,
+        tpsl: OrderTriggerRole,
     },
 }
 
-impl SpotOrderType {
-    pub const fn effective_tif(self) -> SpotOrderTif {
+impl OrderType {
+    pub const fn effective_tif(self) -> OrderTif {
         match self {
             Self::Limit { tif } => tif,
             Self::Trigger {
                 is_market: true, ..
-            } => SpotOrderTif::Ioc,
+            } => OrderTif::Ioc,
             Self::Trigger {
                 is_market: false, ..
-            } => SpotOrderTif::Gtc,
+            } => OrderTif::Gtc,
         }
     }
 
@@ -89,7 +89,7 @@ impl SpotOrderType {
     }
 }
 
-impl SpotOrderTriggerRole {
+impl OrderTriggerRole {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::TakeProfit => "take_profit",

@@ -7,7 +7,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{Balance, SpotOrderSide, SpotOrderStatus, SpotOrderType, SpotOrderV2};
+use crate::entity::{Balance, OrderSide, SpotOrderStatus, OrderType, SpotOrderV2};
 use crate::{
     ActivateMatchSpotOrderV2Changes, ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error,
     ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase, ActivateSpotOrderV2Changes,
@@ -427,7 +427,7 @@ impl WorkingSpotBlockState {
             {
                 return Err(SpotBlockError::DuplicateOrderIdentity);
             }
-            if let Some(cloid) = &order.client_order_id {
+            if let Some(cloid) = &order.cloid {
                 if self.order_by_cloid.insert(cloid.clone(), index).is_some() {
                     return Err(SpotBlockError::DuplicateClientOrderId);
                 }
@@ -812,7 +812,7 @@ fn maker_candidates_for(
                 SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
             )
         })
-        .filter(|order| matches!(order.order_type, SpotOrderType::Limit { .. }))
+        .filter(|order| matches!(order.order_type, OrderType::Limit { .. }))
         .cloned()
         .collect()
 }
@@ -833,16 +833,16 @@ fn maker_candidates_for_open_match(
                 SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
             )
         })
-        .filter(|order| matches!(order.order_type, SpotOrderType::Limit { .. }))
+        .filter(|order| matches!(order.order_type, OrderType::Limit { .. }))
         .cloned()
         .collect()
 }
 
-fn side_from_place_order(order: &PlaceOnlySpotOrderV2OrderCmd) -> SpotOrderSide {
+fn side_from_place_order(order: &PlaceOnlySpotOrderV2OrderCmd) -> OrderSide {
     if order.is_buy {
-        SpotOrderSide::Buy
+        OrderSide::Buy
     } else {
-        SpotOrderSide::Sell
+        OrderSide::Sell
     }
 }
 

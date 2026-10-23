@@ -148,7 +148,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> serde_json::Value {
                 "order_id": order.order_id,
                 "account_id": order.account_id,
                 "symbol": order.symbol,
-                "qty": order.qty,
+                "qty": order.size,
                 "price": order.order_price(),
                 "principal_reservation_amount": order.reservation.original_amount
             })
@@ -157,7 +157,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> serde_json::Value {
             trade_id,
             serde_json::json!({
                 "match_id": trade.match_id,
-                "qty": trade.qty,
+                "qty": trade.size,
                 "price": trade.price
             })
         )).collect::<serde_json::Map<String, serde_json::Value>>(),

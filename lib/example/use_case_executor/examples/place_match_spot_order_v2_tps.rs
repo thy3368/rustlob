@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, Balance, MarketRules, PlaceOnlySpotOrderV2Cmd,
-    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, SpotOrderSide, SpotOrderTif,
-    SpotOrderType, SpotOrderV2,
+    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, OrderSide, OrderTif,
+    OrderType, SpotOrderV2,
 };
 use example_outbound_adapter::InMemoryPlaceOrderOutbound;
 use use_case_executor::trading::spot::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2_with_outbound;
@@ -20,11 +20,11 @@ fn sell_order(id: u64) -> Result<SpotOrderV2, Box<dyn std::error::Error>> {
         10_001,
         "seller".into(),
         "BTCUSDT".into(),
-        SpotOrderSide::Sell,
+        OrderSide::Sell,
         1,
         100,
-        SpotOrderType::Limit {
-            tif: SpotOrderTif::Gtc,
+        OrderType::Limit {
+            tif: OrderTif::Gtc,
         },
         None,
         0,

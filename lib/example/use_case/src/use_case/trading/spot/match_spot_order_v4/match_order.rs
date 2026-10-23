@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2MatchError};
 
 use super::support::{MatchSpotOrderV4Error, validate_all_reservations_for_order, zip_pairs};
-use crate::entity::{SpotOrderStatus, SpotOrderTif, spot as spot_entity};
+use crate::entity::{SpotOrderStatus, OrderTif, spot as spot_entity};
 use crate::support::concat2;
 use crate::{MatchSpotOrderV2Input, SpotTrade};
 
@@ -285,7 +285,7 @@ fn compute_match_after(
     let timestamp = logical_ts;
 
     match taker_after.time_in_force() {
-        SpotOrderTif::Gtc | SpotOrderTif::Ioc => {
+        OrderTif::Gtc | OrderTif::Ioc => {
             let taker_before_match = taker_after.clone();
             let match_outcome = taker_after.match_with_makers(
                 &mut maker_orders_after,
@@ -298,7 +298,7 @@ fn compute_match_after(
                     version: Some(version),
                 },
             )?;
-            if matches!(taker_after.time_in_force(), SpotOrderTif::Gtc)
+            if matches!(taker_after.time_in_force(), OrderTif::Gtc)
                 && match_outcome.trades.is_empty()
             {
                 return Ok(MatchSpotOrderV4AfterChanges::Resting);
@@ -313,7 +313,7 @@ fn compute_match_after(
                 version,
             )
         }
-        SpotOrderTif::Alo => {
+        OrderTif::Alo => {
             let Some(best_maker) = maker_orders_after.first() else {
                 return Ok(MatchSpotOrderV4AfterChanges::Resting);
             };
@@ -338,7 +338,7 @@ fn finish_match_after(
     version: u64,
 ) -> Result<MatchSpotOrderV4AfterChanges, MatchSpotOrderV4Error> {
     let total_taker_fill = created_trades.iter().try_fold(0_u64, |acc, trade| {
-        acc.checked_add(trade.qty)
+        acc.checked_add(trade.size)
             .ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)
     })?;
     let taker_reservation_after_match = taker_after.reservation.clone();

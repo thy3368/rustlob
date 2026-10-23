@@ -43,7 +43,7 @@ mod tests {
         ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
         ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderId,
         SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError, SpotBlockItemResult,
-        SpotBlockState, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+        SpotBlockState, OrderSide, OrderTif, OrderType, SpotOrderV2,
     };
 
     use super::*;
@@ -160,11 +160,11 @@ mod tests {
             10_001,
             "buyer".to_owned(),
             "BTCUSDT".to_owned(),
-            SpotOrderSide::Buy,
+            OrderSide::Buy,
             2,
             10_000,
-            SpotOrderType::Limit {
-                tif: SpotOrderTif::Gtc,
+            OrderType::Limit {
+                tif: OrderTif::Gtc,
             },
             Some("original-cloid".to_owned()),
             0,

@@ -517,7 +517,7 @@ fn order_status_from_match_changes(
         .iter()
         .filter(|trade| trade.taker_order_id == order.order_id())
         .collect::<Vec<_>>();
-    let filled_qty = taker_trades.iter().map(|trade| trade.qty).sum::<u64>();
+    let filled_qty = taker_trades.iter().map(|trade| trade.size).sum::<u64>();
 
     if filled_qty == 0 {
         return resting_status(order.order_id());
@@ -525,7 +525,7 @@ fn order_status_from_match_changes(
 
     let notional = taker_trades
         .iter()
-        .filter_map(|trade| trade.price.checked_mul(trade.qty))
+        .filter_map(|trade| trade.price.checked_mul(trade.size))
         .sum::<u64>();
     let avg_px = if filled_qty == 0 {
         0
@@ -569,8 +569,8 @@ where
 mod tests {
     use cmd_handler::command_use_case_def2::UpdatedEntityPair;
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, ActivateSpotOrderV2Changes, SpotOrderSide, SpotOrderTif,
-        SpotOrderType, SpotOrderV2, SpotTrade,
+        ActivatePendingSpotOrderV2Input, ActivateSpotOrderV2Changes, OrderSide, OrderTif,
+        OrderType, SpotOrderV2, SpotTrade,
     };
 
     use super::*;
@@ -640,11 +640,11 @@ mod tests {
             10_001,
             "buyer".to_string(),
             "BTCUSDT".to_string(),
-            SpotOrderSide::Buy,
+            OrderSide::Buy,
             2,
             100,
-            SpotOrderType::Limit {
-                tif: SpotOrderTif::Gtc,
+            OrderType::Limit {
+                tif: OrderTif::Gtc,
             },
             None,
             0,
@@ -817,7 +817,7 @@ mod tests {
                 44,
                 "buyer".to_string(),
                 "seller".to_string(),
-                SpotOrderSide::Buy,
+                OrderSide::Buy,
                 100,
                 2,
                 1,

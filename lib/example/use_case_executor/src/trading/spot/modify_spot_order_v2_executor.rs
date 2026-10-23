@@ -48,7 +48,7 @@ mod tests {
     use common_entity::stable_string_entity_id;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, ModifySpotOrderV2OrderType,
-        ModifySpotOrderV2State, OrderId, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+        ModifySpotOrderV2State, OrderId, OrderSide, OrderTif, OrderType, SpotOrderV2,
     };
 
     use super::*;
@@ -107,11 +107,11 @@ mod tests {
                 10_001,
                 "buyer".to_owned(),
                 "BTCUSDT".to_owned(),
-                SpotOrderSide::Buy,
+                OrderSide::Buy,
                 2,
                 10_000,
-                SpotOrderType::Limit {
-                    tif: SpotOrderTif::Gtc,
+                OrderType::Limit {
+                    tif: OrderTif::Gtc,
                 },
                 Some("original-cloid".to_owned()),
                 0,
@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(changes.updated_order.after.order_price(), 12_000);
         assert_eq!(changes.updated_order.after.qty(), 3);
         assert_eq!(
-            changes.updated_order.after.client_order_id.as_deref(),
+            changes.updated_order.after.cloid.as_deref(),
             Some("original-cloid")
         );
         assert_eq!(changes.created_balance_ledger_entries.len(), 2);

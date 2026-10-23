@@ -7,8 +7,8 @@ use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     Balance, MarketRules, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
     PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason,
-    ReservationKind, ReservationMarketKind, ReservationStatus, SpotOrderGroupRelation,
-    SpotOrderSide, SpotOrderStatus, SpotOrderStatusReason, SpotOrderTif, SpotOrderType,
+    ReservationKind, ReservationMarketKind, ReservationStatus, OrderGroupRelation,
+    OrderSide, SpotOrderStatus, SpotOrderStatusReason, OrderTif, OrderType,
     SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
@@ -412,9 +412,9 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutboun
         }
 
         let taker_side = if order_cmd.is_buy {
-            SpotOrderSide::Buy
+            OrderSide::Buy
         } else {
-            SpotOrderSide::Sell
+            OrderSide::Sell
         };
         let maker_orders = state
             .lob
@@ -485,10 +485,10 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutbound 
     }
 }
 
-fn decode_side(event: &EntityReplayableEvent) -> Result<SpotOrderSide, PlaceOrderOutboundError> {
+fn decode_side(event: &EntityReplayableEvent) -> Result<OrderSide, PlaceOrderOutboundError> {
     match event_string_field(event, "side").as_deref() {
-        Some("buy") => Ok(SpotOrderSide::Buy),
-        Some("sell") => Ok(SpotOrderSide::Sell),
+        Some("buy") => Ok(OrderSide::Buy),
+        Some("sell") => Ok(OrderSide::Sell),
         _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
     }
 }
@@ -501,40 +501,40 @@ fn decode_limit_price(event: &EntityReplayableEvent) -> Result<u64, PlaceOrderOu
 
 fn decode_order_type(
     event: &EntityReplayableEvent,
-) -> Result<SpotOrderType, PlaceOrderOutboundError> {
+) -> Result<OrderType, PlaceOrderOutboundError> {
     let tif = match event_string_field(event, "effective_tif")
         .or_else(|| event_string_field(event, "time_in_force"))
         .as_deref()
     {
-        Some("gtc") => SpotOrderTif::Gtc,
-        Some("ioc") => SpotOrderTif::Ioc,
-        Some("alo") => SpotOrderTif::Alo,
+        Some("gtc") => OrderTif::Gtc,
+        Some("ioc") => OrderTif::Ioc,
+        Some("alo") => OrderTif::Alo,
         _ => return Err(PlaceOrderOutboundError::EventDecodeFailed),
     };
     Ok(match event_string_field(event, "order_type").as_deref() {
-        Some("trigger_market") => SpotOrderType::Trigger {
+        Some("trigger_market") => OrderType::Trigger {
             is_market: true,
             trigger_price: event_u64_field(event, "trigger_price")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
             tpsl: decode_trigger_role(event_string_field(event, "tpsl").as_deref())?,
         },
-        Some("trigger_limit") => SpotOrderType::Trigger {
+        Some("trigger_limit") => OrderType::Trigger {
             is_market: false,
             trigger_price: event_u64_field(event, "trigger_price")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
             tpsl: decode_trigger_role(event_string_field(event, "tpsl").as_deref())?,
         },
-        Some("limit") | None => SpotOrderType::Limit { tif },
+        Some("limit") | None => OrderType::Limit { tif },
         Some(_) => return Err(PlaceOrderOutboundError::EventDecodeFailed),
     })
 }
 
 fn decode_trigger_role(
     value: Option<&str>,
-) -> Result<example_core_use_case::SpotOrderTriggerRole, PlaceOrderOutboundError> {
+) -> Result<example_core_use_case::OrderTriggerRole, PlaceOrderOutboundError> {
     match value {
-        Some("take_profit") => Ok(example_core_use_case::SpotOrderTriggerRole::TakeProfit),
-        Some("stop_loss") => Ok(example_core_use_case::SpotOrderTriggerRole::StopLoss),
+        Some("take_profit") => Ok(example_core_use_case::OrderTriggerRole::TakeProfit),
+        Some("stop_loss") => Ok(example_core_use_case::OrderTriggerRole::StopLoss),
         _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
     }
 }
@@ -563,10 +563,10 @@ fn decode_bool(value: &str) -> Result<bool, PlaceOrderOutboundError> {
 
 fn decode_group_relation(
     value: Option<&str>,
-) -> Result<SpotOrderGroupRelation, PlaceOrderOutboundError> {
+) -> Result<OrderGroupRelation, PlaceOrderOutboundError> {
     match value {
-        None | Some("") | Some("standalone") => Ok(SpotOrderGroupRelation::Standalone),
-        Some("normal_tpsl_parent") => Ok(SpotOrderGroupRelation::NormalTpslParent),
+        None | Some("") | Some("standalone") => Ok(OrderGroupRelation::Standalone),
+        Some("normal_tpsl_parent") => Ok(OrderGroupRelation::NormalTpslParent),
         Some(value) => {
             let parent_order_id = value
                 .strip_prefix("normal_tpsl_child:")
@@ -574,7 +574,7 @@ fn decode_group_relation(
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
                 .parse()
                 .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
-            Ok(SpotOrderGroupRelation::NormalTpslChild { parent_order_id })
+            Ok(OrderGroupRelation::NormalTpslChild { parent_order_id })
         }
     }
 }
@@ -836,10 +836,10 @@ fn decode_created_trade(
 
 fn decode_trade_side(
     event: &EntityReplayableEvent,
-) -> Result<SpotOrderSide, PlaceOrderOutboundError> {
+) -> Result<OrderSide, PlaceOrderOutboundError> {
     match event_string_field(event, "taker_side").as_deref() {
-        Some("buy") => Ok(SpotOrderSide::Buy),
-        Some("sell") => Ok(SpotOrderSide::Sell),
+        Some("buy") => Ok(OrderSide::Buy),
+        Some("sell") => Ok(OrderSide::Sell),
         _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
     }
 }
@@ -859,7 +859,7 @@ fn apply_order_update_event(
         order.status = decode_status_value(status.as_str())?;
     }
     if let Some(filled_qty) = event_u64_field(event, "filled_qty") {
-        order.filled_qty = filled_qty;
+        order.filled_size = filled_qty;
     }
     if let Some(status_reason) = event_string_field(event, "status_reason") {
         order.status_reason = decode_status_reason(Some(status_reason.as_str()))?;
@@ -874,13 +874,13 @@ fn apply_order_update_event(
         order.updated_at = updated_at;
     }
     if let Some(qty) = event_u64_field(event, "qty") {
-        order.qty = qty;
+        order.size = qty;
     }
     if let Some(limit_price) = event_u64_field(event, "limit_price") {
         order.limit_price = limit_price;
     }
     if let Some(client_order_id) = event_string_field(event, "client_order_id") {
-        order.client_order_id = (!client_order_id.is_empty()).then_some(client_order_id.clone());
+        order.cloid = (!client_order_id.is_empty()).then_some(client_order_id.clone());
     }
     apply_reservation_update(&mut order.reservation, event, false)?;
     apply_reservation_update(&mut order.fee_reservation, event, true)?;
@@ -946,7 +946,7 @@ fn decode_order_from_event(
             created_at,
         )
     };
-    order.filled_qty =
+    order.filled_size =
         event_u64_field(event, "filled_qty").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     order.status = decode_status(event)?;
     order.status_reason =

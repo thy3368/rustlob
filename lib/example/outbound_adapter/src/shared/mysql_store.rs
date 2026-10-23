@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
-    Balance, MarketRules, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    Balance, MarketRules, OrderSide, OrderTif, OrderType, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
 
@@ -288,23 +288,23 @@ pub(crate) fn map_mysql_error(_error: mysql::Error) -> StoreError {
     StoreError::StoreUnavailable
 }
 
-fn decode_side_mysql(value: &str) -> Option<SpotOrderSide> {
+fn decode_side_mysql(value: &str) -> Option<OrderSide> {
     match value {
-        "buy" => Some(SpotOrderSide::Buy),
-        "sell" => Some(SpotOrderSide::Sell),
+        "buy" => Some(OrderSide::Buy),
+        "sell" => Some(OrderSide::Sell),
         _ => None,
     }
 }
 
-fn decode_order_type_mysql(execution: &str, time_in_force: &str) -> Option<SpotOrderType> {
+fn decode_order_type_mysql(execution: &str, time_in_force: &str) -> Option<OrderType> {
     let tif = match time_in_force {
-        "gtc" => SpotOrderTif::Gtc,
-        "ioc" => SpotOrderTif::Ioc,
-        "alo" => SpotOrderTif::Alo,
+        "gtc" => OrderTif::Gtc,
+        "ioc" => OrderTif::Ioc,
+        "alo" => OrderTif::Alo,
         _ => return None,
     };
     match execution {
-        "limit" | "market" => Some(SpotOrderType::Limit { tif }),
+        "limit" | "market" => Some(OrderType::Limit { tif }),
         _ => None,
     }
 }

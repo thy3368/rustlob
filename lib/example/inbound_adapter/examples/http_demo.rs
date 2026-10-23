@@ -180,7 +180,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> Value {
                     "order_id": order.order_id,
                     "account_id": order.account_id,
                     "symbol": order.symbol,
-                    "qty": order.qty,
+                    "qty": order.size,
                     "price": order.order_price(),
                     "principal_reservation_amount": order.reservation.original_amount
                 }),
@@ -196,7 +196,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> Value {
                 trade_id,
                 json!({
                     "match_id": trade.match_id,
-                    "qty": trade.qty,
+                    "qty": trade.size,
                     "price": trade.price
                 }),
             )

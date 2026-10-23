@@ -38,6 +38,16 @@ pub struct HyperliquidPerpTrade {
     pub price: u64,
     /// 成交数量。
     pub qty: u64,
+
+    pub closed_pnl: Usdc,        // 本次平仓实现盈亏（费前，开仓为 0）
+    pub fee: Usdc,               // 正=用户付平台，负=maker 返佣
+
+    // ── 上下文 ──
+    pub margin_mode: MarginMode,
+    pub liquidation: Option<LiqMarker>, // 强平标记
+    
+    
+    
     // /// 订单创建时间，单位为 Unix 纳秒。
     // pub created_at: u64,
     // /// 订单最后更新时间，单位为 Unix 纳秒。

@@ -10,7 +10,7 @@ use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, SpotBlockAppliedChanges,
     SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult, SpotBlockState,
-    SpotBlockUseCase, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    SpotBlockUseCase, OrderSide, OrderTif, OrderType, SpotOrderV2,
 };
 use hotstuff_rs::app::{
     App, ProduceBlockRequest, ProduceBlockResponse, ValidateBlockRequest, ValidateBlockResponse,
@@ -349,7 +349,7 @@ fn demo_sell_order(
     let reservation = SpotOrderV2::principal_reservation(
         order_id,
         account_id,
-        SpotOrderSide::Sell,
+        OrderSide::Sell,
         qty,
         price,
         "BTC",
@@ -362,11 +362,11 @@ fn demo_sell_order(
         10_001,
         account_id.to_string(),
         "BTCUSDT".to_string(),
-        SpotOrderSide::Sell,
+        OrderSide::Sell,
         qty,
         price,
-        SpotOrderType::Limit {
-            tif: SpotOrderTif::Gtc,
+        OrderType::Limit {
+            tif: OrderTif::Gtc,
         },
         None,
         0,
@@ -391,11 +391,11 @@ fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
         10_001,
         "buyer".to_string(),
         "BTCUSDT".to_string(),
-        SpotOrderSide::Buy,
+        OrderSide::Buy,
         2,
         100,
-        SpotOrderType::Limit {
-            tif: SpotOrderTif::Gtc,
+        OrderType::Limit {
+            tif: OrderTif::Gtc,
         },
         Some("demo-cancel-1".to_string()),
         0,

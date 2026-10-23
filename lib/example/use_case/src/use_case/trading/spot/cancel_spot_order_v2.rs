@@ -16,7 +16,7 @@ use crate::entity::spot::spot_order_v2::{
 };
 use crate::entity::{
     Balance, CancelSpotOrderV2Input, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, SpotOrderSide,
+    ReservationMarketKind, OrderSide,
 };
 use crate::support::{concat3, concat4};
 
@@ -313,17 +313,17 @@ fn validate_all_reservations_for_order(
     )
 }
 
-fn expected_principal_kind_for(side: SpotOrderSide) -> ReservationKind {
+fn expected_principal_kind_for(side: OrderSide) -> ReservationKind {
     match side {
-        SpotOrderSide::Buy => ReservationKind::SpotBuyQuote,
-        SpotOrderSide::Sell => ReservationKind::SpotSellBase,
+        OrderSide::Buy => ReservationKind::SpotBuyQuote,
+        OrderSide::Sell => ReservationKind::SpotSellBase,
     }
 }
 
-fn expected_fee_kind_for(side: SpotOrderSide) -> ReservationKind {
+fn expected_fee_kind_for(side: OrderSide) -> ReservationKind {
     match side {
-        SpotOrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
-        SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
+        OrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
+        OrderSide::Sell => ReservationKind::SpotSellFeeQuote,
     }
 }
 
@@ -390,10 +390,10 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), CancelSpotOrderV2Error> {
     let reason = match order.side() {
-        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
+        OrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
             order_id: order.order_id(),
         },
-        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
+        OrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
             order_id: order.order_id(),
         },
     };

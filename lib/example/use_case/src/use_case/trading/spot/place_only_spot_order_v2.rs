@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::entity::{
-    SpotOrderGroupRelation, SpotOrderSide, SpotOrderTif, SpotOrderTriggerRole, SpotOrderType,
+    OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType,
     SpotOrderV2, SpotOrderV2BehaviorError,
 };
 
@@ -205,12 +205,12 @@ impl StateMachineV2 for PlaceOnlySpotOrderV2UseCase {
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
                 let parent_order_id = parent.order_id.clone();
                 let mut created_parent_order = build_order(parent, cmd.lsn(), cmd.logical_ts())?;
-                created_parent_order.group_relation = SpotOrderGroupRelation::NormalTpslParent;
+                created_parent_order.group_relation = OrderGroupRelation::NormalTpslParent;
 
                 let mut created_child_orders = Vec::with_capacity(children.len());
                 for child in children {
                     let mut child_order = build_order(child, cmd.lsn(), cmd.logical_ts())?;
-                    child_order.group_relation = SpotOrderGroupRelation::NormalTpslChild {
+                    child_order.group_relation = OrderGroupRelation::NormalTpslChild {
                         parent_order_id: parent_order_id.clone(),
                     };
                     created_child_orders.push(child_order);
@@ -342,9 +342,9 @@ fn build_order(
     created_at: u64,
 ) -> Result<SpotOrderV2, PlaceOnlySpotOrderV2Error> {
     let side = if order.is_buy {
-        SpotOrderSide::Buy
+        OrderSide::Buy
     } else {
-        SpotOrderSide::Sell
+        OrderSide::Sell
     };
     let qty = parse_positive_u64(&order.size, PlaceOnlySpotOrderV2Error::InvalidSize)?;
     let price = parse_positive_u64(&order.price, PlaceOnlySpotOrderV2Error::InvalidPrice)?;
@@ -359,7 +359,7 @@ fn build_order(
                 side,
                 qty,
                 price,
-                SpotOrderType::Limit { tif },
+                OrderType::Limit { tif },
                 order.cloid.clone(),
                 version,
                 created_at,
@@ -380,7 +380,7 @@ fn build_order(
                 side,
                 qty,
                 price,
-                SpotOrderType::Trigger {
+                OrderType::Trigger {
                     is_market: *is_market,
                     trigger_price: parse_positive_u64(
                         trigger_price,
@@ -408,19 +408,19 @@ fn parse_positive_u64(
     }
 }
 
-fn parse_tif(raw: &str) -> Result<SpotOrderTif, PlaceOnlySpotOrderV2Error> {
+fn parse_tif(raw: &str) -> Result<OrderTif, PlaceOnlySpotOrderV2Error> {
     match raw {
-        "gtc" | "Gtc" => Ok(SpotOrderTif::Gtc),
-        "ioc" | "Ioc" => Ok(SpotOrderTif::Ioc),
-        "alo" | "Alo" => Ok(SpotOrderTif::Alo),
+        "gtc" | "Gtc" => Ok(OrderTif::Gtc),
+        "ioc" | "Ioc" => Ok(OrderTif::Ioc),
+        "alo" | "Alo" => Ok(OrderTif::Alo),
         _ => Err(PlaceOnlySpotOrderV2Error::InvalidTimeInForce),
     }
 }
 
-fn parse_trigger_role(raw: &str) -> Result<SpotOrderTriggerRole, PlaceOnlySpotOrderV2Error> {
+fn parse_trigger_role(raw: &str) -> Result<OrderTriggerRole, PlaceOnlySpotOrderV2Error> {
     match raw {
-        "tp" | "take_profit" | "TakeProfit" => Ok(SpotOrderTriggerRole::TakeProfit),
-        "sl" | "stop_loss" | "StopLoss" => Ok(SpotOrderTriggerRole::StopLoss),
+        "tp" | "take_profit" | "TakeProfit" => Ok(OrderTriggerRole::TakeProfit),
+        "sl" | "stop_loss" | "StopLoss" => Ok(OrderTriggerRole::StopLoss),
         _ => Err(PlaceOnlySpotOrderV2Error::InvalidTriggerRole),
     }
 }

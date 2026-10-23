@@ -151,7 +151,7 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use common_entity::{Entity, ReplayFieldChange, stable_string_entity_id};
     use example_core_use_case::{
-        Balance, MarketRules, SpotOrderSide, SpotOrderStatus, SpotOrderTriggerRole, SpotOrderType,
+        Balance, MarketRules, OrderSide, SpotOrderStatus, OrderTriggerRole, OrderType,
         SpotOrderV2,
     };
     use example_outbound_adapter::InMemoryPlaceOrderOutbound;
@@ -220,13 +220,13 @@ mod tests {
                 10_001,
                 "buyer".to_string(),
                 "BTCUSDT".to_string(),
-                SpotOrderSide::Buy,
+                OrderSide::Buy,
                 1,
                 100,
-                SpotOrderType::Trigger {
+                OrderType::Trigger {
                     is_market: false,
                     trigger_price: 100,
-                    tpsl: SpotOrderTriggerRole::StopLoss,
+                    tpsl: OrderTriggerRole::StopLoss,
                 },
                 None,
                 0,

@@ -10,27 +10,28 @@ use crate::entity::{
     BalanceLedgerEntryV2Error, BalanceLedgerReason, BalanceLedgerV2, Reservation, ReservationError,
     ReservationKind, ReservationMarketKind,
 };
+use crate::OrderSide;
 use crate::support::concat2;
 
 const HYPERLIQUID_PERP_ORDER_ENTITY_TYPE: u8 = 9;
 
-/// Hyperliquid perp 订单方向。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HyperliquidPerpOrderSide {
-    /// 买入或做多方向。
-    Buy,
-    /// 卖出或做空方向。
-    Sell,
-}
-
-impl HyperliquidPerpOrderSide {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Buy => "buy",
-            Self::Sell => "sell",
-        }
-    }
-}
+// /// Hyperliquid perp 订单方向。
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// pub enum HyperliquidPerpOrderSide {
+//     /// 买入或做多方向。
+//     Buy,
+//     /// 卖出或做空方向。
+//     Sell,
+// }
+// 
+// impl HyperliquidPerpOrderSide {
+//     pub const fn as_str(self) -> &'static str {
+//         match self {
+//             Self::Buy => "buy",
+//             Self::Sell => "sell",
+//         }
+//     }
+// }
 
 /// Hyperliquid perp 订单执行方式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,7 +222,7 @@ pub struct HyperliquidPerpOrder {
     /// 合约展示名，例如 `BTC-PERP`。
     pub symbol: String,
     /// 买卖方向。
-    pub side: HyperliquidPerpOrderSide,
+    pub side: OrderSide,
     /// 执行方式。
     pub execution: HyperliquidPerpOrderExecution,
     /// 限价订单有效方式。
@@ -262,7 +263,7 @@ impl HyperliquidPerpOrder {
         asset: u32,
         account_id: String,
         symbol: String,
-        side: HyperliquidPerpOrderSide,
+        side: OrderSide,
         execution: HyperliquidPerpOrderExecution,
         time_in_force: HyperliquidPerpOrderTimeInForce,
         qty: u64,

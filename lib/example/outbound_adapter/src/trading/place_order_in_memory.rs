@@ -3,7 +3,7 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::{Entity, stable_string_entity_id};
 use example_core_use_case::{
     Balance, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
-    SpotOrderSide, SpotOrderV2, SpotTrade,
+    OrderSide, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
 
@@ -62,9 +62,9 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
             return Err(PlaceOrderOutboundError::BalanceNotFound);
         }
         let side = if order_cmd.is_buy {
-            SpotOrderSide::Buy
+            OrderSide::Buy
         } else {
-            SpotOrderSide::Sell
+            OrderSide::Sell
         };
         let maker_orders = state
             .lob

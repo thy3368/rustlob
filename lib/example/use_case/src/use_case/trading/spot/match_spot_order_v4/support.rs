@@ -13,7 +13,7 @@ use crate::entity::account::balance_ledger_v2::{
 };
 use crate::entity::{
     Balance, Reservation, ReservationCloseReason, ReservationKind, ReservationMarketKind,
-    SettlementTransferVoucher, SpotOrderSide, spot as spot_entity,
+    SettlementTransferVoucher, OrderSide, spot as spot_entity,
 };
 use crate::support::{concat2, concat3, concat4};
 
@@ -80,17 +80,17 @@ pub(super) fn validate_all_reservations_for_order(
     )
 }
 
-fn expected_principal_kind_for(side: SpotOrderSide) -> ReservationKind {
+fn expected_principal_kind_for(side: OrderSide) -> ReservationKind {
     match side {
-        SpotOrderSide::Buy => ReservationKind::SpotBuyQuote,
-        SpotOrderSide::Sell => ReservationKind::SpotSellBase,
+        OrderSide::Buy => ReservationKind::SpotBuyQuote,
+        OrderSide::Sell => ReservationKind::SpotSellBase,
     }
 }
 
-fn expected_fee_kind_for(side: SpotOrderSide) -> ReservationKind {
+fn expected_fee_kind_for(side: OrderSide) -> ReservationKind {
     match side {
-        SpotOrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
-        SpotOrderSide::Sell => ReservationKind::SpotSellFeeQuote,
+        OrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
+        OrderSide::Sell => ReservationKind::SpotSellFeeQuote,
     }
 }
 
@@ -325,7 +325,7 @@ pub(super) fn settle_matched_trades(
             .notional_quote()
             .ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
         let taker_principal_consume =
-            principal_consume_amount_for_order(taker_order, trade.qty, trade_notional);
+            principal_consume_amount_for_order(taker_order, trade.size, trade_notional);
         consume_reservation(
             &mut taker_order.reservation,
             taker_principal_consume,
@@ -335,7 +335,7 @@ pub(super) fn settle_matched_trades(
             return Err(MatchSpotOrderV4Error::ReservationCountMismatch);
         };
         let maker_principal_consume =
-            principal_consume_amount_for_order(maker_order, trade.qty, trade_notional);
+            principal_consume_amount_for_order(maker_order, trade.size, trade_notional);
         consume_reservation(
             &mut maker_order.reservation,
             maker_principal_consume,
@@ -389,8 +389,8 @@ fn principal_consume_amount_for_order(
     trade_notional: u64,
 ) -> u64 {
     match order.side() {
-        SpotOrderSide::Buy => trade_notional,
-        SpotOrderSide::Sell => trade_qty,
+        OrderSide::Buy => trade_notional,
+        OrderSide::Sell => trade_qty,
     }
 }
 
@@ -504,10 +504,10 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), MatchSpotOrderV4Error> {
     let reason = match order.side() {
-        SpotOrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
+        OrderSide::Buy => BalanceLedgerReason::CancelSpotOrderReleaseQuote {
             order_id: order.order_id(),
         },
-        SpotOrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
+        OrderSide::Sell => BalanceLedgerReason::CancelSpotOrderReleaseBase {
             order_id: order.order_id(),
         },
     };
@@ -652,7 +652,7 @@ fn apply_trade_balance_effects(
             )),
             account_id: buyer_account_id.clone(),
             asset_id: context.base_asset_id.to_string(),
-            amount: trade.qty,
+            amount: trade.size,
             reason: buyer_receive_base_reason,
         },
     )?;
@@ -700,7 +700,7 @@ fn apply_trade_balance_effects(
             )),
             account_id: seller_account_id,
             asset_id: context.base_asset_id.to_string(),
-            amount: trade.qty,
+            amount: trade.size,
             reason: seller_release_base_reason,
         },
     )?;

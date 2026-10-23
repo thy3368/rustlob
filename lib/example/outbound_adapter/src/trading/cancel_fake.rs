@@ -5,7 +5,7 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
-    CancelSpotOrderV2UseCase, SpotOrderSide, SpotOrderTif, SpotOrderType, SpotOrderV2,
+    CancelSpotOrderV2UseCase, OrderSide, OrderTif, OrderType, SpotOrderV2,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -41,7 +41,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         let principal_reservation = SpotOrderV2::principal_reservation(
             1,
             request.party_id.as_str(),
-            SpotOrderSide::Buy,
+            OrderSide::Buy,
             2,
             100,
             "BTC",
@@ -51,7 +51,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         let fee_reservation = SpotOrderV2::fee_reservation(
             1,
             request.party_id.as_str(),
-            SpotOrderSide::Buy,
+            OrderSide::Buy,
             2,
             100,
             "USDT",
@@ -64,11 +64,11 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
             request.asset,
             request.party_id.clone(),
             "BTCUSDT".to_string(),
-            SpotOrderSide::Buy,
+            OrderSide::Buy,
             2,
             100,
-            SpotOrderType::Limit {
-                tif: SpotOrderTif::Gtc,
+            OrderType::Limit {
+                tif: OrderTif::Gtc,
             },
             Some("client-order-1".to_string()),
             0,

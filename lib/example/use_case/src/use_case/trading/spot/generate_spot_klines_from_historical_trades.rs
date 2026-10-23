@@ -165,7 +165,7 @@ impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
                 .ok_or(GenerateSpotKlinesFromHistoricalTradesError::ArithmeticOverflow)?;
             let notional_quote = trade
                 .price
-                .checked_mul(trade.qty)
+                .checked_mul(trade.size)
                 .ok_or(GenerateSpotKlinesFromHistoricalTradesError::ArithmeticOverflow)?;
 
             match buckets.get_mut(&open_time_ms) {
@@ -240,7 +240,7 @@ impl KlineAccumulator {
             high_price: trade.price,
             low_price: trade.price,
             close_price: trade.price,
-            volume_base: trade.qty,
+            volume_base: trade.size,
             volume_quote: notional_quote,
             trade_count: 1,
             first_trade_id: trade.trade_id.clone(),
@@ -258,7 +258,7 @@ impl KlineAccumulator {
         self.close_price = trade.price;
         self.volume_base = self
             .volume_base
-            .checked_add(trade.qty)
+            .checked_add(trade.size)
             .ok_or(GenerateSpotKlinesFromHistoricalTradesError::ArithmeticOverflow)?;
         self.volume_quote = self
             .volume_quote

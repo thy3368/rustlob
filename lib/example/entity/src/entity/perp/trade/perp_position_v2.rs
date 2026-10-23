@@ -1,5 +1,5 @@
-use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -30,6 +30,7 @@ pub struct PerpPositionMetricsV2 {
     pub position_value: Decimal,
     pub unrealized_pnl: Decimal,
     pub margin_used: Decimal,
+    ///这个仓位用保证金赚的“收益率”，不是账户总收益率。
     pub return_on_equity: Option<Decimal>,
 }
 
@@ -73,6 +74,10 @@ pub struct PerpPositionV2 {
     realized_pnl: Decimal,
     /// 该仓位的累计资金费记录。
     cum_funding: FundingAccumulatorV2,
+
+    /// 该仓位的累计费用记录。
+    cum_fee: Decimal,
+
     /// 仓位状态版本号，每次状态变更后递增。
     version: u64,
 }
@@ -91,6 +96,7 @@ impl PerpPositionV2 {
         isolated_margin: Option<Decimal>,
         realized_pnl: Decimal,
         cum_funding: FundingAccumulatorV2,
+        cum_fee: Decimal,
         version: u64,
     ) -> Result<Self, PerpPositionV2Error> {
         if signed_size.is_zero() && !entry_price.is_zero() {
@@ -192,7 +198,7 @@ impl PerpPositionV2 {
 
     /// 浮盈
     pub fn unrealized_pnl(&self, mark_price: Decimal) -> Decimal {
-        self.szi.abs() * (mark_price - self.entry_px)
+        self.szi * (mark_price - self.entry_px)
     }
 
     /// 初始保证金 下单时有用，其它开仓时会减去这个
