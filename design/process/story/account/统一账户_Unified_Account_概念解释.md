@@ -491,7 +491,7 @@ impl MarginSummary {
     }
 }
 
-/// 保证金模式（复用 account.rs 的 MarginMode）
+/// 保证金模式（复用 spot_account 的 MarginMode）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MarginMode {
     /// 全仓
@@ -500,7 +500,7 @@ pub enum MarginMode {
     Isolated,
 }
 
-/// 账户权限（复用 account.rs 的 AccountPermissions）
+/// 账户权限（复用 spot_account 的 AccountPermissions）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountPermissions {
     pub can_trade: bool,

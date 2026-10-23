@@ -34,6 +34,8 @@ disallowed-methods = [
 
     # 边界：禁止不透明转换和通用反序列化跨越架构边界
     { path = "std::mem::transmute", reason = "禁止不透明内存转换跨越业务边界" },
+    { path = "std::panic::catch_unwind", reason = "生产路径禁止捕获 panic 作为控制流" },
+    { path = "std::process::exit", reason = "生产路径禁止绕过错误传播直接退出进程" },
 ]
 
 # 锁竞争：热路径禁止互斥锁和写锁
@@ -50,6 +52,18 @@ disallowed-types = [
 
 # NUMA / CPU 亲和性：放在具体线程绑定、启动器和运行时初始化 crate 中实现
 # 这里仅保留性能约束说明，不在根 lint 中声明运行时无法静态检查的能力
+
+# 与 Google Rust Style Guide 一致的、可自动检查的复杂度边界。
+cognitive-complexity-threshold = 25
+too-many-arguments-threshold = 7
+too-many-lines-threshold = 250
+type-complexity-threshold = 250
+trivial-copy-size-limit = 64
+pass-by-value-size-limit = 256
+enum-variant-name-threshold = 3
+vec-box-size-threshold = 4096
+max-struct-bools = 3
+literal-representation-threshold = 10
 
 # 分支预测：通过热路径早返回、减少复杂嵌套、拆分冷路径实现
 # 这类优化依赖具体模块局部约定，不适合写成根 clippy 规则

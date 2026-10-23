@@ -3071,6 +3071,7 @@ version = "0.1.0"
 dependencies = [
  "cmd_handler",
  "entity",
+ "lob_repo_v2",
  "proptest",
  "rust_decimal",
  "serde",
@@ -5481,7 +5482,6 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "entity",
- "example_core_entity",
  "serde",
  "serde_json",
  "tempfile",

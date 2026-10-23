@@ -47,17 +47,29 @@ pub enum PerpPositionV2Error {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PerpPositionV2 {
+    /// 仓位的唯一标识。
     position_id: String,
+    /// 持有该仓位的账户标识。
     account_id: String,
+    /// 仓位对应的资产编号。
     asset_id: u32,
+    /// 仓位对应的币种或合约名称。
     coin: String,
+    /// 带方向的仓位数量；正数表示多仓，负数表示空仓，零表示无仓位。
     szi: Decimal,
+    /// 当前仓位的开仓均价；平仓后为空仓时为零。
     entry_px: Decimal,
+    /// 仓位使用的杠杆倍数。
     leverage: Decimal,
+    /// 仓位采用的保证金模式。
     margin_mode: MarginModeV2,
+    /// 逐仓模式下配置的保证金金额；全仓模式下为空。
     isolated_margin: Option<Decimal>,
+    /// 该仓位累计产生的已实现盈亏。
     realized_pnl: Decimal,
+    /// 该仓位的累计资金费记录。
     cum_funding: FundingAccumulatorV2,
+    /// 仓位状态版本号，每次状态变更后递增。
     version: u64,
 }
 
