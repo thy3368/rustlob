@@ -1,10 +1,14 @@
 use rust_decimal::Decimal;
 
-use crate::spot::common_trade::CommonTrade;
+use crate::spot::common_trade::TradeBase;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PerpTradeV2 {
-    pub comon_trade: CommonTrade,
+pub struct PerpTradeV3 {
+    pub trade_base: TradeBase,
+
+    pub taker_start_position: Decimal,
+
+    pub maker_start_position: Decimal,
 
     /// 本次平仓实现盈亏（费前，开仓为 0）
     pub taker_closed_pnl: Decimal,

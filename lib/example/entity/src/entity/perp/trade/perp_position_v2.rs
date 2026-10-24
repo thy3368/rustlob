@@ -1,7 +1,11 @@
+use base_types::UserId;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::perp::fund::funding_payment::FundingPayment;
+use crate::perp::trade::perp_trade_v3::PerpTradeV3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MarginModeV2 {
@@ -51,9 +55,9 @@ pub struct PerpPositionV2 {
     /// 仓位的唯一标识。
     position_id: u64,
     /// 持有该仓位的账户标识。
-    account_id: String,
+    user_id: UserId,
     /// 仓位对应的资产编号。
-    asset_id: u32,
+    asset: u32,
     /// 仓位对应的币种或合约名称。
     coin: String,
     /// 带方向的仓位数量；正数表示多仓，负数表示空仓，零表示无仓位。
@@ -68,12 +72,15 @@ pub struct PerpPositionV2 {
     isolated_margin: Option<Decimal>,
     /// 该仓位累计产生的已实现盈亏。
     realized_pnl: Decimal,
+    /// 该仓位的累计费用记录。
+    cum_fee: Decimal,
     /// 该仓位的累计资金费记录。
     cum_funding: FundingAccumulatorV2,
 
-    /// 该仓位的累计费用记录。
-    cum_fee: Decimal,
-
+    /// 订单创建时间，单位为 Unix 纳秒。
+    created_at: u64,
+    /// 订单最后更新时间，单位为 Unix 纳秒。
+    updated_at: u64,
     /// 仓位状态版本号，每次状态变更后递增。
     version: u64,
 }
@@ -82,7 +89,7 @@ impl PerpPositionV2 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         position_key: u64,
-        account_id: String,
+        user_id: UserId,
         asset_id: u32,
         coin: String,
         signed_size: Decimal,
@@ -104,8 +111,8 @@ impl PerpPositionV2 {
         validate_margin(leverage, margin_mode, isolated_margin)?;
         Ok(Self {
             position_id: position_key,
-            account_id,
-            asset_id,
+            user_id,
+            asset: asset_id,
             coin,
             szi: signed_size,
             entry_px: entry_price,
@@ -113,15 +120,18 @@ impl PerpPositionV2 {
             margin_mode,
             isolated_margin,
             realized_pnl,
+            cum_fee,
             cum_funding,
+            created_at: 0,
+            updated_at: 0,
             version,
         })
     }
-    pub fn empty_slot(position_id: u64, account_id: String, asset_id: u32, coin: String) -> Self {
+    pub fn empty_slot(position_id: u64, user_id: UserId, asset_id: u32, coin: String) -> Self {
         Self {
             position_id,
-            account_id,
-            asset_id,
+            user_id,
+            asset: asset_id,
             coin,
             szi: Decimal::ZERO,
             entry_px: Decimal::ZERO,
@@ -129,18 +139,21 @@ impl PerpPositionV2 {
             margin_mode: MarginModeV2::Cross,
             isolated_margin: None,
             realized_pnl: Decimal::ZERO,
+            cum_fee: Decimal::ZERO,
             cum_funding: Default::default(),
+            created_at: 0,
+            updated_at: 0,
             version: 0,
         }
     }
-    pub fn position_key(&self) -> &str {
-        &self.position_id
+    pub fn position_key(&self) -> u64 {
+        self.position_id
     }
-    pub fn account_id(&self) -> &str {
-        &self.account_id
+    pub fn user_id(&self) -> UserId {
+        self.user_id
     }
     pub fn asset_id(&self) -> u32 {
-        self.asset_id
+        self.asset
     }
     pub fn coin(&self) -> &str {
         &self.coin
@@ -162,6 +175,9 @@ impl PerpPositionV2 {
     }
     pub fn realized_pnl(&self) -> Decimal {
         self.realized_pnl
+    }
+    pub fn cum_fee(&self) -> Decimal {
+        self.cum_fee
     }
     pub fn cum_funding(&self) -> FundingAccumulatorV2 {
         self.cum_funding
@@ -272,7 +288,7 @@ impl PerpPositionV2 {
         }
         Ok(realized)
     }
-    pub fn apply_funding(&mut self, signed_funding: Decimal) -> Result<(), PerpPositionV2Error> {
+    fn apply_funding_amount(&mut self, signed_funding: Decimal) -> Result<(), PerpPositionV2Error> {
         let a = self
             .cum_funding
             .all_time
@@ -358,5 +374,53 @@ fn validate_margin(
             Err(PerpPositionV2Error::InvalidMarginConfiguration)
         }
         _ => Ok(()),
+    }
+}
+
+impl PerpPositionV2 {
+    pub fn apply_trade2(&mut self, trade: &PerpTradeV3) -> Result<Decimal, PerpPositionV2Error> {
+        if self.asset_id() != trade.trade_base.asset {
+            return Err(PerpPositionV2Error::InvalidState);
+        }
+        let (signed_quantity, closed_pnl, fee) = if self.user_id == trade.taker_user {
+            let signed = match trade.trade_base.taker_side {
+                crate::OrderSide::Buy => Some(trade.trade_base.size),
+                crate::OrderSide::Sell => Decimal::ZERO.checked_sub(trade.trade_base.size),
+            }
+            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            (signed, trade.taker_closed_pnl, trade.trade_base.taker_fee)
+        } else if self.user_id == trade.maker_user {
+            let signed = match trade.trade_base.taker_side {
+                crate::OrderSide::Buy => Decimal::ZERO.checked_sub(trade.trade_base.size),
+                crate::OrderSide::Sell => Some(trade.trade_base.size),
+            }
+            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            (signed, trade.maker_closed_pnl, trade.trade_base.maker_fee)
+        } else {
+            return Err(PerpPositionV2Error::InvalidState);
+        };
+        let old = self.clone();
+        let mut next = old.clone();
+        next.apply_trade(signed_quantity, trade.trade_base.price)?;
+        next.cum_fee =
+            old.cum_fee.checked_add(fee).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+        next.realized_pnl = old
+            .realized_pnl
+            .checked_add(closed_pnl)
+            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+        *self = next;
+        Ok(closed_pnl)
+    }
+
+    pub fn apply_funding(
+        &mut self,
+        trade: &FundingPayment,
+    ) -> Result<Decimal, PerpPositionV2Error> {
+        if self.user_id != trade.user || self.asset_id() != trade.coin.as_u32() {
+            return Err(PerpPositionV2Error::InvalidState);
+        }
+        let signed = Decimal::from_i128_with_scale(trade.usdc.raw(), 6);
+        self.apply_funding_amount(signed)?;
+        Ok(signed)
     }
 }

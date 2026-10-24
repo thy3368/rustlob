@@ -8,7 +8,7 @@ license.workspace = true
 [dependencies]
 cmd_handler = { path = "../../common/cmd_handler" }
 common_entity = { package = "entity", path = "../../common/entity" }
-base_types = { path = "../../common/base_types" }
+base_types = { path = "../../common/base_types", features = ["serde"] }
 rust_decimal = { version = "1.41", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"

@@ -1,10 +1,11 @@
+use base_types::UserId;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::OrderSide;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CommonTrade {
+pub struct TradeBase {
     /// 本系统稳定成交 ID。
     pub trade_id: u64,
 
@@ -12,6 +13,10 @@ pub struct CommonTrade {
     pub asset: u32,
     /// 交易对，例如 `BTCUSDT`。
     pub symbol: String,
+
+    pub taker_user: UserId,
+    pub maker_user: UserId,
+
     /// 主动吃单订单 Hyperliquid spot `oid`。
     pub taker_order_id: u64,
     /// 被动挂单订单 Hyperliquid spot `oid`。
