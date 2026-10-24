@@ -133,7 +133,7 @@ pub struct PlaceHyperliquidPerpOrderInput {
     /// 合约展示名，例如 `BTC-PERP`。
     pub symbol: String,
     /// 买卖方向。
-    pub side: HyperliquidPerpOrderSide,
+    pub side: OrderSide,
     /// 执行方式。
     pub execution: HyperliquidPerpOrderExecution,
     /// 限价订单有效方式。

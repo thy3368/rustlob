@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use common_entity::{Entity, EntityFieldChange, FieldDiff};
 
-use crate::HyperliquidPerpOrderSide;
+use crate::OrderSide;
 use crate::entity::{
     HyperliquidPerpPositionError, HyperliquidPerpPositionTradeOutcome, PerpPosition,
     SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferVoucher,
@@ -33,18 +33,18 @@ pub struct HyperliquidPerpTrade {
     /// maker 所属账户 ID。//todo delete
     pub maker_account_id: String,
     /// taker 买卖方向。
-    pub taker_side: HyperliquidPerpOrderSide,
+    pub taker_side: OrderSide,
     /// 成交价格，取 maker 限价。
     pub price: u64,
     /// 成交数量。
     pub qty: u64,
 
-    pub closed_pnl: Usdc, // 本次平仓实现盈亏（费前，开仓为 0）
-    pub fee: Usdc,        // 正=用户付平台，负=maker 返佣
-
-    // ── 上下文 ──
-    pub margin_mode: MarginMode,
-    pub liquidation: Option<LiqMarker>, // 强平标记
+    // pub closed_pnl: Usdc, // 本次平仓实现盈亏（费前，开仓为 0）
+    // pub fee: Usdc,        // 正=用户付平台，负=maker 返佣
+    //
+    // // ── 上下文 ──
+    // pub margin_mode: MarginMode,
+    // pub liquidation: Option<LiqMarker>, // 强平标记
 
     // /// 订单创建时间，单位为 Unix 纳秒。
     // pub created_at: u64,
@@ -79,7 +79,7 @@ impl HyperliquidPerpTrade {
         maker_order_id: u64,
         taker_account_id: String,
         maker_account_id: String,
-        taker_side: HyperliquidPerpOrderSide,
+        taker_side: OrderSide,
         price: u64,
         qty: u64,
         executed_at_ms: u64,
@@ -113,8 +113,8 @@ impl HyperliquidPerpTrade {
             return signed_trade_qty(
                 self.qty,
                 match self.taker_side {
-                    HyperliquidPerpOrderSide::Buy => 1,
-                    HyperliquidPerpOrderSide::Sell => -1,
+                    OrderSide::Buy => 1,
+                    OrderSide::Sell => -1,
                 },
             );
         }
@@ -122,8 +122,8 @@ impl HyperliquidPerpTrade {
             return signed_trade_qty(
                 self.qty,
                 match self.taker_side {
-                    HyperliquidPerpOrderSide::Buy => -1,
-                    HyperliquidPerpOrderSide::Sell => 1,
+                    OrderSide::Buy => -1,
+                    OrderSide::Sell => 1,
                 },
             );
         }
@@ -498,7 +498,7 @@ mod tests {
             2,
             "winner".to_string(),
             "loser".to_string(),
-            HyperliquidPerpOrderSide::Buy,
+            OrderSide::Buy,
             100,
             2,
             1_717_171_717_000,
@@ -507,7 +507,7 @@ mod tests {
 
     fn sell_trade() -> HyperliquidPerpTrade {
         let mut trade = trade();
-        trade.taker_side = HyperliquidPerpOrderSide::Sell;
+        trade.taker_side = OrderSide::Sell;
         trade
     }
 
