@@ -140,11 +140,7 @@ impl PriceLevel {
     /// 创建新的价格档位
     #[inline]
     pub fn new(price: Price, quantity: Quantity, order_count: u32) -> Self {
-        Self {
-            price,
-            quantity,
-            order_count,
-        }
+        Self { price, quantity, order_count }
     }
 }
 
@@ -212,19 +208,13 @@ impl<const MAX_LEVELS: usize> Level2<MAX_LEVELS> {
     /// 计算买方总深度（所有档位总数量）
     #[inline]
     pub fn total_bid_quantity(&self) -> Quantity {
-        self.bids[..self.bid_count]
-            .iter()
-            .filter_map(|&level| level.map(|l| l.quantity))
-            .sum()
+        self.bids[..self.bid_count].iter().filter_map(|&level| level.map(|l| l.quantity)).sum()
     }
 
     /// 计算卖方总深度（所有档位总数量）
     #[inline]
     pub fn total_ask_quantity(&self) -> Quantity {
-        self.asks[..self.ask_count]
-            .iter()
-            .filter_map(|&level| level.map(|l| l.quantity))
-            .sum()
+        self.asks[..self.ask_count].iter().filter_map(|&level| level.map(|l| l.quantity)).sum()
     }
 
     /// 清空所有档位
@@ -263,13 +253,7 @@ impl Level3Order {
         quantity: Quantity,
         unfilled_quantity: Quantity,
     ) -> Self {
-        Self {
-            order_id,
-            trader_id,
-            price,
-            quantity,
-            unfilled_quantity,
-        }
+        Self { order_id, trader_id, price, quantity, unfilled_quantity }
     }
 
     /// 检查订单是否仍然活跃
@@ -297,11 +281,7 @@ pub struct Level3 {
 
 impl Default for Level3 {
     fn default() -> Self {
-        Self {
-            bids: Vec::new(),
-            asks: Vec::new(),
-            level2: Level2::default(),
-        }
+        Self { bids: Vec::new(), asks: Vec::new(), level2: Level2::default() }
     }
 }
 
@@ -337,10 +317,7 @@ impl Level3 {
     /// 获取指定订单ID的订单
     #[inline]
     pub fn find_order(&self, order_id: OrderId) -> Option<&Level3Order> {
-        self.bids
-            .iter()
-            .chain(self.asks.iter())
-            .find(|order| order.order_id == order_id)
+        self.bids.iter().chain(self.asks.iter()).find(|order| order.order_id == order_id)
     }
 
     /// 移除指定订单

@@ -94,9 +94,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     validate_hex_address(&request.action.user)
         .map_err(|_| ExchangeHttpError::contract(UserDexAbstractionContractError::InvalidUser))?;
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(
-            UserDexAbstractionContractError::NonceMismatch,
-        ));
+        return Err(ExchangeHttpError::contract(UserDexAbstractionContractError::NonceMismatch));
     }
     Ok(())
 }

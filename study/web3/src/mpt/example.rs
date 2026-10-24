@@ -69,10 +69,7 @@ pub fn run_basic_example() -> Result<(), Box<dyn std::error::Error>> {
     trie.insert(b"alice", b"150 ETH")?;
     let new_value = trie.get(b"alice")?;
     let new_value = new_value.ok_or("Alice balance should exist after update")?;
-    println!(
-        "   ✓ Alice 的余额更新: {}",
-        String::from_utf8_lossy(&new_value)
-    );
+    println!("   ✓ Alice 的余额更新: {}", String::from_utf8_lossy(&new_value));
     println!("   根哈希更新: {:?}", hex::encode(trie.root_hash()));
     println!();
 
@@ -93,11 +90,7 @@ pub fn run_basic_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("📋 步骤 6: 遍历所有键值对");
     println!("   总数: {} 个键值对", trie.len());
     for (key, value) in trie.entries() {
-        println!(
-            "   - {} => {}",
-            String::from_utf8_lossy(&key),
-            String::from_utf8_lossy(&value)
-        );
+        println!("   - {} => {}", String::from_utf8_lossy(&key), String::from_utf8_lossy(&value));
     }
     println!();
 
@@ -302,41 +295,27 @@ pub fn run_ethereum_state_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   金额: {} wei", amount);
 
     // 更新发送方
-    let from_state = state_trie
-        .get(from_addr.as_bytes())?
-        .ok_or("sender state should exist before transfer")?;
+    let from_state =
+        state_trie.get(from_addr.as_bytes())?.ok_or("sender state should exist before transfer")?;
     let from_state_str = String::from_utf8_lossy(&from_state);
     let from_parts: Vec<&str> = from_state_str.split(',').collect();
-    let from_balance: u64 = from_parts[0]
-        .split(':')
-        .nth(1)
-        .ok_or("sender balance field missing")?
-        .parse()?;
-    let from_nonce: u64 = from_parts[1]
-        .split(':')
-        .nth(1)
-        .ok_or("sender nonce field missing")?
-        .parse()?;
+    let from_balance: u64 =
+        from_parts[0].split(':').nth(1).ok_or("sender balance field missing")?.parse()?;
+    let from_nonce: u64 =
+        from_parts[1].split(':').nth(1).ok_or("sender nonce field missing")?.parse()?;
 
     let new_from_state = format!("balance:{},nonce:{}", from_balance - amount, from_nonce + 1);
     state_trie.insert(from_addr.as_bytes(), new_from_state.as_bytes())?;
 
     // 更新接收方
-    let to_state = state_trie
-        .get(to_addr.as_bytes())?
-        .ok_or("receiver state should exist before transfer")?;
+    let to_state =
+        state_trie.get(to_addr.as_bytes())?.ok_or("receiver state should exist before transfer")?;
     let to_state_str = String::from_utf8_lossy(&to_state);
     let to_parts: Vec<&str> = to_state_str.split(',').collect();
-    let to_balance: u64 = to_parts[0]
-        .split(':')
-        .nth(1)
-        .ok_or("receiver balance field missing")?
-        .parse()?;
-    let to_nonce: u64 = to_parts[1]
-        .split(':')
-        .nth(1)
-        .ok_or("receiver nonce field missing")?
-        .parse()?;
+    let to_balance: u64 =
+        to_parts[0].split(':').nth(1).ok_or("receiver balance field missing")?.parse()?;
+    let to_nonce: u64 =
+        to_parts[1].split(':').nth(1).ok_or("receiver nonce field missing")?.parse()?;
 
     let new_to_state = format!("balance:{},nonce:{}", to_balance + amount, to_nonce);
     state_trie.insert(to_addr.as_bytes(), new_to_state.as_bytes())?;
@@ -462,10 +441,7 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!("   ✓ 插入 {} 笔交易完成", tx_count);
     println!("   - 总耗时: {:?}", insert_duration);
     println!("   - 平均每笔: {:.2?}", insert_duration / tx_count);
-    println!(
-        "   - 吞吐量: {:.0} tx/s",
-        tx_count as f64 / insert_duration.as_secs_f64()
-    );
+    println!("   - 吞吐量: {:.0} tx/s", tx_count as f64 / insert_duration.as_secs_f64());
     println!("   📍 交易根: {}", hex::encode(tx_root));
     println!();
 
@@ -484,10 +460,7 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!("   ✓ 查询 {} 笔交易完成", query_count);
     println!("   - 总耗时: {:?}", query_duration);
     println!("   - 平均每次: {:.2?}", query_duration / query_count);
-    println!(
-        "   - QPS: {:.0} queries/s",
-        query_count as f64 / query_duration.as_secs_f64()
-    );
+    println!("   - QPS: {:.0} queries/s", query_count as f64 / query_duration.as_secs_f64());
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -565,10 +538,7 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
 
     println!("   ✓ 插入 {} 个收据完成", receipts.len());
     println!("   - 总耗时: {:?}", receipt_insert_duration);
-    println!(
-        "   - 平均每个: {:.2?}",
-        receipt_insert_duration / receipts.len() as u32
-    );
+    println!("   - 平均每个: {:.2?}", receipt_insert_duration / receipts.len() as u32);
     println!(
         "   - 吞吐量: {:.0} receipt/s",
         receipts.len() as f64 / receipt_insert_duration.as_secs_f64()
@@ -588,10 +558,7 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!("   区块号: {}", block_number);
     println!("   交易数: {}", tx_count);
     println!("   Gas 使用: {}/{}", cumulative_gas, 30_000_000);
-    println!(
-        "   Gas 使用率: {:.1}%",
-        cumulative_gas as f64 / 30_000_000.0 * 100.0
-    );
+    println!("   Gas 使用率: {:.1}%", cumulative_gas as f64 / 30_000_000.0 * 100.0);
     println!();
 
     println!("🌳 Merkle 树根:");
@@ -638,10 +605,7 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!();
 
     println!("🔍 读取性能:");
-    println!(
-        "   QPS: {:.0} queries/s",
-        query_count as f64 / query_duration.as_secs_f64()
-    );
+    println!("   QPS: {:.0} queries/s", query_count as f64 / query_duration.as_secs_f64());
     println!("   延迟: {:.2?} per query", query_duration / query_count);
     println!();
 
@@ -687,14 +651,8 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!("   ✓ 压力测试完成");
     println!("   - 交易数: {}", stress_tx_count);
     println!("   - 总耗时: {:?}", stress_duration);
-    println!(
-        "   - 平均延迟: {:.2?}/tx",
-        stress_duration / stress_tx_count
-    );
-    println!(
-        "   - 峰值吞吐: {:.0} tx/s",
-        stress_tx_count as f64 / stress_duration.as_secs_f64()
-    );
+    println!("   - 平均延迟: {:.2?}/tx", stress_duration / stress_tx_count);
+    println!("   - 峰值吞吐: {:.0} tx/s", stress_tx_count as f64 / stress_duration.as_secs_f64());
     println!("   📍 根哈希: {}", hex::encode(stress_root));
     println!();
 
@@ -712,10 +670,7 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     let stress_query_duration = start.elapsed();
     println!("   ✓ 查询 {} 次完成", stress_query_count);
     println!("   - 总耗时: {:?}", stress_query_duration);
-    println!(
-        "   - 平均延迟: {:.2?}/query",
-        stress_query_duration / stress_query_count
-    );
+    println!("   - 平均延迟: {:.2?}/query", stress_query_duration / stress_query_count);
     println!(
         "   - QPS: {:.0} queries/s",
         stress_query_count as f64 / stress_query_duration.as_secs_f64()
@@ -732,22 +687,10 @@ pub fn run_ethereum_transaction_example() -> Result<(), Box<dyn std::error::Erro
     println!("✨ 以太坊交易树与收据树高频场景测试完成！");
     println!();
     println!("📈 性能总结:");
-    println!(
-        "   • 标准区块处理: {:.0} tx/s",
-        tx_count as f64 / insert_duration.as_secs_f64()
-    );
-    println!(
-        "   • 极限性能: {:.0} tx/s",
-        stress_tx_count as f64 / stress_duration.as_secs_f64()
-    );
-    println!(
-        "   • 平均插入延迟: {:.2?}",
-        stress_duration / stress_tx_count
-    );
-    println!(
-        "   • 平均查询延迟: {:.2?}",
-        stress_query_duration / stress_query_count
-    );
+    println!("   • 标准区块处理: {:.0} tx/s", tx_count as f64 / insert_duration.as_secs_f64());
+    println!("   • 极限性能: {:.0} tx/s", stress_tx_count as f64 / stress_duration.as_secs_f64());
+    println!("   • 平均插入延迟: {:.2?}", stress_duration / stress_tx_count);
+    println!("   • 平均查询延迟: {:.2?}", stress_query_duration / stress_query_count);
     println!();
     println!("💡 应用场景:");
     println!("   ✓ 区块验证器：快速验证交易和收据根哈希");
@@ -806,10 +749,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
 
     impl Transaction {
         fn serialize(&self) -> String {
-            format!(
-                "from:{},to:{},value:{},nonce:{}",
-                self.from, self.to, self.value, self.nonce
-            )
+            format!("from:{},to:{},value:{},nonce:{}", self.from, self.to, self.value, self.nonce)
         }
     }
 
@@ -919,10 +859,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("   ✓ 生成 {} 个交易证明完成", tx_proofs.len());
     println!("   - 总耗时: {:?}", proof_gen_duration);
-    println!(
-        "   - 平均每个: {:.2?}",
-        proof_gen_duration / tx_proofs.len() as u32
-    );
+    println!("   - 平均每个: {:.2?}", proof_gen_duration / tx_proofs.len() as u32);
     println!();
 
     // 统计证明大小
@@ -930,17 +867,9 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     for (idx, proof) in &tx_proofs {
         let size = proof.proof_size();
         total_proof_size += size;
-        println!(
-            "   📦 交易 #{}: 证明大小 {} bytes, 深度 {}",
-            idx,
-            size,
-            proof.depth()
-        );
+        println!("   📦 交易 #{}: 证明大小 {} bytes, 深度 {}", idx, size, proof.depth());
     }
-    println!(
-        "   📊 平均证明大小: {} bytes",
-        total_proof_size / tx_proofs.len()
-    );
+    println!("   📊 平均证明大小: {} bytes", total_proof_size / tx_proofs.len());
     println!();
 
     // 生成收据证明
@@ -958,10 +887,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("   ✓ 生成 {} 个收据证明完成", receipt_proofs.len());
     println!("   - 总耗时: {:?}", receipt_proof_gen_duration);
-    println!(
-        "   - 平均每个: {:.2?}",
-        receipt_proof_gen_duration / receipt_proofs.len() as u32
-    );
+    println!("   - 平均每个: {:.2?}", receipt_proof_gen_duration / receipt_proofs.len() as u32);
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -994,10 +920,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
         // 验证证明有效性
         if proof.verify()? {
             verified_count += 1;
-            let value = proof
-                .value
-                .as_ref()
-                .ok_or("verified proof should contain a value")?;
+            let value = proof.value.as_ref().ok_or("verified proof should contain a value")?;
             println!("   ✓ 交易 #{}: 验证成功 (值: {} bytes)", idx, value.len());
         } else {
             println!("   ✗ 交易 #{}: 证明无效", idx);
@@ -1009,10 +932,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("   ✓ 验证完成: {}/{} 成功", verified_count, tx_proofs.len());
     println!("   - 总耗时: {:?}", verify_duration);
-    println!(
-        "   - 平均每个: {:.2?}",
-        verify_duration / tx_proofs.len() as u32
-    );
+    println!("   - 平均每个: {:.2?}", verify_duration / tx_proofs.len() as u32);
     println!(
         "   - 验证速率: {:.0} proofs/s",
         tx_proofs.len() as f64 / verify_duration.as_secs_f64()
@@ -1037,16 +957,9 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
 
     let receipt_verify_duration = start.elapsed();
 
-    println!(
-        "   ✓ 验证完成: {}/{} 成功",
-        receipt_verified_count,
-        receipt_proofs.len()
-    );
+    println!("   ✓ 验证完成: {}/{} 成功", receipt_verified_count, receipt_proofs.len());
     println!("   - 总耗时: {:?}", receipt_verify_duration);
-    println!(
-        "   - 平均每个: {:.2?}",
-        receipt_verify_duration / receipt_proofs.len() as u32
-    );
+    println!("   - 平均每个: {:.2?}", receipt_verify_duration / receipt_proofs.len() as u32);
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1076,10 +989,7 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ✓ 批量生成证明完成");
     println!("   - 总耗时: {:?}", batch_gen_duration);
     println!("   - 平均每个: {:.2?}", batch_gen_duration / batch_size);
-    println!(
-        "   - 生成速率: {:.0} proofs/s",
-        batch_size as f64 / batch_gen_duration.as_secs_f64()
-    );
+    println!("   - 生成速率: {:.0} proofs/s", batch_size as f64 / batch_gen_duration.as_secs_f64());
     println!();
 
     // 批量验证证明
@@ -1132,23 +1042,14 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("   方案 2: 只下载 Merkle 证明");
     println!("   - 区块头: ~0.5 KB (仅包含根哈希)");
-    println!(
-        "   - Merkle 证明: {:.2} KB",
-        proof_data_size as f64 / 1024.0
-    );
-    println!(
-        "   - 总计: {:.2} KB",
-        (500 + proof_data_size) as f64 / 1024.0
-    );
+    println!("   - Merkle 证明: {:.2} KB", proof_data_size as f64 / 1024.0);
+    println!("   - 总计: {:.2} KB", (500 + proof_data_size) as f64 / 1024.0);
     println!();
     println!(
         "   📈 数据节省: {:.1}%",
         (1.0 - (proof_data_size as f64 / full_data_size as f64)) * 100.0
     );
-    println!(
-        "   📉 传输减少: {:.1}x",
-        full_data_size as f64 / proof_data_size as f64
-    );
+    println!("   📉 传输减少: {:.1}x", full_data_size as f64 / proof_data_size as f64);
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1169,15 +1070,9 @@ pub fn run_light_client_example() -> Result<(), Box<dyn std::error::Error>> {
         "   • 证明验证速率: {:.0} proofs/s",
         batch_size as f64 / batch_verify_duration.as_secs_f64()
     );
-    println!(
-        "   • 平均证明大小: {} bytes",
-        total_proof_size / tx_proofs.len()
-    );
+    println!("   • 平均证明大小: {} bytes", total_proof_size / tx_proofs.len());
     println!("   • 平均生成延迟: {:.2?}", batch_gen_duration / batch_size);
-    println!(
-        "   • 平均验证延迟: {:.2?}",
-        batch_verify_duration / batch_size
-    );
+    println!("   • 平均验证延迟: {:.2?}", batch_verify_duration / batch_size);
     println!();
     println!("💡 轻客户端优势:");
     println!("   ✓ 无需下载完整区块链 (节省 99%+ 存储空间)");

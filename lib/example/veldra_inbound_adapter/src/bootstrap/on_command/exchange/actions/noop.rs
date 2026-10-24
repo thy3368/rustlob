@@ -47,9 +47,9 @@ impl ExchangeActionHandler for NoopAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "noop" {
-        return Err(ExchangeHttpError::contract(
-            NoopContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(NoopContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     Ok(())

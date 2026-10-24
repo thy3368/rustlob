@@ -58,19 +58,15 @@ mod tests {
     fn execute_cancel_with_default_outbound_stops_at_load_state(
         #[case] lookup: CancelSpotOrderV2Lookup,
     ) {
-        let command = CancelSpotOrderV2Cmd {
-            party_id: "buyer".to_string(),
-            asset: 10000,
-            lookup,
-        };
+        let command = CancelSpotOrderV2Cmd { party_id: "buyer".to_string(), asset: 10000, lookup };
 
         let result = execute_cancel_spot_order_v2(&entry(command));
 
         assert_eq!(
             result,
-            Err(ExecutionError::LoadState(
-                DefaultSpotOrderV2CancelOutboundError::StateUnavailable,
-            )),
+            Err(
+                ExecutionError::LoadState(DefaultSpotOrderV2CancelOutboundError::StateUnavailable,)
+            ),
         );
     }
 
@@ -94,30 +90,16 @@ mod tests {
 
         let changes = result.changes;
         assert_eq!(changes.updated_order.before.status(), SpotOrderStatus::Open);
-        assert_eq!(
-            changes.updated_order.after.status(),
-            SpotOrderStatus::Canceled
-        );
+        assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
         assert_eq!(changes.updated_order.after.reservation.remaining_amount, 0);
-        assert_eq!(
-            changes.updated_order.after.fee_reservation.remaining_amount,
-            0
-        );
+        assert_eq!(changes.updated_order.after.fee_reservation.remaining_amount, 0);
         assert!(!changes.updated_balances.is_empty());
-        assert!(
-            changes
-                .updated_balances
-                .iter()
-                .all(|pair| pair.after.frozen < pair.before.frozen)
-        );
+        assert!(changes.updated_balances.iter().all(|pair| pair.after.frozen < pair.before.frozen));
         assert!(!changes.created_balance_ledger_entries.is_empty());
 
         assert!(!result.events.is_empty());
-        let updated_events = result
-            .events
-            .iter()
-            .filter(|event| event.is_updated())
-            .collect::<Vec<_>>();
+        let updated_events =
+            result.events.iter().filter(|event| event.is_updated()).collect::<Vec<_>>();
         assert!(!updated_events.is_empty());
         assert!(
             updated_events.iter().all(|event| event.lsn == event.previous_lsn + 1

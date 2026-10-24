@@ -37,10 +37,7 @@ impl<R: CmdRepo2, P: EventPublisher2> PlaceOrderCmdHandler<R, P> {
 
     fn generate_order_id(&self) -> u64 {
         use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64
     }
 }
 
@@ -65,12 +62,8 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         let price = (*cmd.price()).unwrap_or_default();
         let time_in_force = (*cmd.time_in_force()).unwrap_or(TimeInForce::GTC);
 
-        let actor_bytes = cmd
-            .metadata()
-            .actor()
-            .as_ref()
-            .map(|s| s.as_bytes().to_owned())
-            .unwrap_or_default();
+        let actor_bytes =
+            cmd.metadata().actor().as_ref().map(|s| s.as_bytes().to_owned()).unwrap_or_default();
         let mut trader_id_bytes = [0u8; 8];
         let len = actor_bytes.len().min(8);
         trader_id_bytes[..len].copy_from_slice(&actor_bytes[..len]);
@@ -90,9 +83,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         let change_log = track_create(&order)
             .map_err(|e| SpotApiErrorAny::Common(CommonError::Other(format!("{}", e))))?;
 
-        Ok(PlaceOrderStateChangedSet {
-            order: DomainEvent::new(change_log, order),
-        })
+        Ok(PlaceOrderStateChangedSet { order: DomainEvent::new(change_log, order) })
     }
 
     fn state_changed_set_to_reply(
@@ -110,9 +101,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         _cmd: &Self::Command,
         _repo: &Self::Repo,
     ) -> Result<Self::GivenStateSet, Self::Error> {
-        Ok(PlaceOrderStateSet {
-            order_id: self.generate_order_id(),
-        })
+        Ok(PlaceOrderStateSet { order_id: self.generate_order_id() })
     }
 
     fn validate_command_in_lock(
@@ -137,11 +126,7 @@ impl<R: CmdRepo2, P: EventPublisher2> CmdHandlerInternal for PlaceOrderCmdHandle
         repo: &Self::Repo,
     ) -> Result<(), Self::Error> {
         repo.replay_event::<SpotOrder>(&domain_events.order)
-            .map_err(|e| {
-                SpotApiErrorAny::Common(CommonError::Internal {
-                    message: e.to_string(),
-                })
-            })
+            .map_err(|e| SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() }))
     }
 
     fn publish_domain_events(
@@ -199,11 +184,7 @@ mod tests {
 
         let result = handler.cmd_handle(cmd, repo.clone(), MockEventPublisher);
 
-        assert!(
-            result.is_ok(),
-            "order should be placed successfully: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "order should be placed successfully: {:?}", result.err());
         let order_event = result.unwrap();
         let stored = repo
             .find_by_id::<SpotOrder>(&order_event.object().order_id.to_string())

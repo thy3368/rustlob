@@ -73,11 +73,7 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         _cmd: &Self::Command,
         state: &Self::GivenState,
     ) -> Result<(), Self::Error> {
-        if state.accepted {
-            Ok(())
-        } else {
-            Err(SubmitError::Rejected)
-        }
+        if state.accepted { Ok(()) } else { Err(SubmitError::Rejected) }
     }
 
     fn compute_output_and_events(
@@ -85,10 +81,8 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         cmd: &Self::Command,
         state: Self::GivenState,
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        let output = SubmitOutput {
-            accepted: state.accepted,
-            generated_status: state.generated_status,
-        };
+        let output =
+            SubmitOutput { accepted: state.accepted, generated_status: state.generated_status };
 
         let mut event = EntityReplayableEvent::new_created(
             0,
@@ -97,9 +91,6 @@ impl CommandUseCase3 for OrderCheckingEngineUseCase {
         );
         event.add_field_change(string_field("status", state.generated_status));
 
-        Ok(UseCaseOutput {
-            output,
-            events: vec![event],
-        })
+        Ok(UseCaseOutput { output, events: vec![event] })
     }
 }

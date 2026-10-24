@@ -108,11 +108,7 @@ pub enum SpotTradeTriggerInputParseError {
     #[error("spot trade event field `{field}` is not valid UTF-8")]
     InvalidUtf8 { field: &'static str },
     #[error("spot trade event field `{field}` is not a valid {expected}: {value}")]
-    InvalidNumber {
-        field: &'static str,
-        expected: &'static str,
-        value: String,
-    },
+    InvalidNumber { field: &'static str, expected: &'static str, value: String },
 }
 
 impl From<ReplayEventFieldParseError> for SpotTradeTriggerInputParseError {
@@ -120,15 +116,9 @@ impl From<ReplayEventFieldParseError> for SpotTradeTriggerInputParseError {
         match error {
             ReplayEventFieldParseError::MissingField(field) => Self::MissingField(field),
             ReplayEventFieldParseError::InvalidUtf8 { field } => Self::InvalidUtf8 { field },
-            ReplayEventFieldParseError::InvalidNumber {
-                field,
-                expected,
-                value,
-            } => Self::InvalidNumber {
-                field,
-                expected,
-                value,
-            },
+            ReplayEventFieldParseError::InvalidNumber { field, expected, value } => {
+                Self::InvalidNumber { field, expected, value }
+            }
         }
     }
 }
@@ -140,10 +130,7 @@ pub enum TriggerPendingSpotOrdersOnTradeError<OutboundError> {
     #[error("failed to load pending trigger spot orders: {0}")]
     Load(OutboundError),
     #[error("failed to activate and match triggered spot order {order_id}: {error:?}")]
-    Execute {
-        order_id: u64,
-        error: ExecutionError<ActivateMatchSpotOrderV2Error, OutboundError>,
-    },
+    Execute { order_id: u64, error: ExecutionError<ActivateMatchSpotOrderV2Error, OutboundError> },
 }
 
 #[cfg(test)]
@@ -151,8 +138,7 @@ mod tests {
     use cmd_handler::EntityReplayableEvent;
     use common_entity::{Entity, ReplayFieldChange, stable_string_entity_id};
     use example_core_use_case::{
-        Balance, MarketRules, OrderSide, SpotOrderStatus, OrderTriggerRole, OrderType,
-        SpotOrderV2,
+        Balance, MarketRules, OrderSide, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderV2,
     };
     use example_outbound_adapter::InMemoryPlaceOrderOutbound;
 
@@ -176,23 +162,14 @@ mod tests {
         let input =
             spot_trade_trigger_input_from_event(&trade_event(10_001, 123)).expect("valid event");
 
-        assert_eq!(
-            input,
-            Some(SpotTradeTriggerInput {
-                asset: 10_001,
-                market_price: 123
-            })
-        );
+        assert_eq!(input, Some(SpotTradeTriggerInput { asset: 10_001, market_price: 123 }));
     }
 
     #[test]
     fn created_trade_activates_and_matches_triggered_pending_order() {
         let outbound = InMemoryPlaceOrderOutbound::new();
         outbound
-            .seed_market_rules(MarketRules {
-                symbol: "BTCUSDT".to_string(),
-                min_qty: 1,
-            })
+            .seed_market_rules(MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 })
             .expect("market rules should seed");
         outbound
             .seed_balance(Balance::new(
@@ -244,10 +221,7 @@ mod tests {
         assert_eq!(results[0].events.len(), 5);
 
         let snapshot = outbound.snapshot().expect("snapshot should load");
-        assert_eq!(
-            snapshot.orders.get(&7).map(SpotOrderV2::status),
-            Some(SpotOrderStatus::Open)
-        );
+        assert_eq!(snapshot.orders.get(&7).map(SpotOrderV2::status), Some(SpotOrderStatus::Open));
         assert_eq!(snapshot.persisted_event_count, 5);
         assert!(
             outbound
@@ -263,11 +237,6 @@ mod tests {
             TriggerPendingSpotOrdersOnTradeHandler::new(InMemoryPlaceOrderOutbound::new());
         let event = EntityReplayableEvent::new_created(1, 1, 99);
 
-        assert_eq!(
-            handler
-                .handle(&event)
-                .expect("non-target event should be ignored"),
-            None
-        );
+        assert_eq!(handler.handle(&event).expect("non-target event should be ignored"), None);
     }
 }

@@ -28,12 +28,9 @@ pub fn enqueue_spot_block_command(
     leader_request_queue: &Arc<Mutex<Vec<SpotBlockCommand>>>,
     command: SpotBlockCommand,
 ) -> Result<(), (StatusCode, &'static str)> {
-    let mut queue = leader_request_queue.lock().map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "leader request queue poisoned",
-        )
-    })?;
+    let mut queue = leader_request_queue
+        .lock()
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "leader request queue poisoned"))?;
     queue.push(command);
     Ok(())
 }
@@ -47,10 +44,7 @@ pub fn start_http_server(
     let local_addr = listener.local_addr()?;
 
     let handle = std::thread::spawn(move || {
-        let runtime = match tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-        {
+        let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
             Ok(runtime) => runtime,
             Err(error) => {
                 eprintln!("[hotstuff_use_case_demo] HTTP runtime 启动失败: {error}");
@@ -68,9 +62,7 @@ pub fn start_http_server(
             };
             let app = Router::new()
                 .route("/spot-block/commands", post(post_spot_block_command))
-                .with_state(HttpCommandState {
-                    leader_request_queue,
-                });
+                .with_state(HttpCommandState { leader_request_queue });
 
             println!("[hotstuff_use_case_demo] HTTP listener 已启动: http://{local_addr}");
             if let Err(error) = axum::serve(listener, app).await {
@@ -100,9 +92,7 @@ mod tests {
                 is_buy: true,
                 price: "100".to_string(),
                 size: "1".to_string(),
-                order_type: PlaceOnlySpotOrderV2OrderType::Limit {
-                    tif: "ioc".to_string(),
-                },
+                order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "ioc".to_string() },
                 reduce_only: false,
                 cloid: Some(cloid.to_string()),
                 base_asset_id: "BTC".to_string(),
@@ -120,9 +110,7 @@ mod tests {
 
         assert!(enqueue_spot_block_command(&queue, command.clone()).is_ok());
 
-        let queued = queue
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let queued = queue.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         assert_eq!(queued.len(), 1);
         assert_eq!(queued[0], command);
     }

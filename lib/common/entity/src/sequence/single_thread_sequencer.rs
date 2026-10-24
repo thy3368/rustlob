@@ -18,10 +18,7 @@ impl SingleThreadSequencer {
     /// 创建从 `start` 开始分配序号的定序器。
     #[inline]
     pub const fn new(start: u64) -> Self {
-        Self {
-            next_sequence: start,
-            exhausted: false,
-        }
+        Self { next_sequence: start, exhausted: false }
     }
 
     /// 分配下一个序号；`u64::MAX` 只能成功分配一次。

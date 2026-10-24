@@ -68,9 +68,11 @@ impl EvmRuntimeAdapter {
     }
 
     fn encode_amount(payload_hash: &str) -> u64 {
-        payload_hash.as_bytes().iter().fold(0u64, |acc, byte| {
-            acc.wrapping_mul(131).wrapping_add(*byte as u64)
-        }) % 10_000
+        payload_hash
+            .as_bytes()
+            .iter()
+            .fold(0u64, |acc, byte| acc.wrapping_mul(131).wrapping_add(*byte as u64))
+            % 10_000
             + 1
     }
 
@@ -83,12 +85,7 @@ impl EvmRuntimeAdapter {
     }
 
     fn receipt(success: bool, gas_used: u64) -> Receipt {
-        Receipt {
-            success,
-            cumulative_gas_used: gas_used,
-            logs: vec![],
-            bloom: Bloom::ZERO,
-        }
+        Receipt { success, cumulative_gas_used: gas_used, logs: vec![], bloom: Bloom::ZERO }
     }
 
     fn deploy_contract(
@@ -223,10 +220,7 @@ impl EvmRuntimeAdapter {
             gas_used: 2,
             product_events: vec![ProductEvent {
                 product_type: "EvmSettlement".to_string(),
-                event_type: format!(
-                    "state:{}:{}:{}",
-                    request.request_id, stored_amount, released
-                ),
+                event_type: format!("state:{}:{}:{}", request.request_id, stored_amount, released),
                 payload: request.payload_hash.clone().into_bytes(),
             }],
         })
@@ -323,11 +317,7 @@ mod tests {
         assert_eq!(output.receipts.len(), 1);
         assert_eq!(output.product_events.len(), 1);
         assert_eq!(output.product_events[0].product_type, "EvmSettlement");
-        assert!(
-            output.product_events[0]
-                .event_type
-                .starts_with("created:req-evm-7:")
-        );
+        assert!(output.product_events[0].event_type.starts_with("created:req-evm-7:"));
     }
 
     #[test]
@@ -341,10 +331,7 @@ mod tests {
             ))
             .unwrap();
 
-        assert_eq!(
-            output.product_events[0].event_type,
-            "released:req-evm-7:true"
-        );
+        assert_eq!(output.product_events[0].event_type, "released:req-evm-7:true");
     }
 
     #[test]

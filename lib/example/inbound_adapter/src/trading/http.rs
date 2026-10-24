@@ -54,9 +54,7 @@ impl PlaceOrderHttpRequest {
             is_buy: true,
             price: self.price.to_string(),
             size: self.qty.to_string(),
-            order_type: PlaceOnlySpotOrderV2OrderType::Limit {
-                tif: "Gtc".to_string(),
-            },
+            order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() },
             reduce_only: false,
             cloid: None,
             base_asset_id: "BTC".to_string(),

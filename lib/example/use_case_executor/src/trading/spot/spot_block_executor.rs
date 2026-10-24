@@ -42,8 +42,8 @@ mod tests {
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
         ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderId,
-        SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError, SpotBlockItemResult,
-        SpotBlockState, OrderSide, OrderTif, OrderType, SpotOrderV2,
+        OrderSide, OrderTif, OrderType, SpotBlockAppliedChanges, SpotBlockCommand,
+        SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotOrderV2,
     };
 
     use super::*;
@@ -83,10 +83,7 @@ mod tests {
 
     impl FakeSpotBlockOutbound {
         fn sink_calls(&self) -> Vec<ObservedSinkCall> {
-            self.sink_calls
-                .lock()
-                .map(|calls| calls.clone())
-                .unwrap_or_default()
+            self.sink_calls.lock().map(|calls| calls.clone()).unwrap_or_default()
         }
 
         fn record(
@@ -97,10 +94,7 @@ mod tests {
             self.sink_calls
                 .lock()
                 .map_err(|_| FakeSpotBlockOutboundError)?
-                .push(ObservedSinkCall {
-                    phase,
-                    events: events.to_vec(),
-                });
+                .push(ObservedSinkCall { phase, events: events.to_vec() });
             Ok(())
         }
     }
@@ -163,9 +157,7 @@ mod tests {
             OrderSide::Buy,
             2,
             10_000,
-            OrderType::Limit {
-                tif: OrderTif::Gtc,
-            },
+            OrderType::Limit { tif: OrderTif::Gtc },
             Some("original-cloid".to_owned()),
             0,
             1,
@@ -198,17 +190,13 @@ mod tests {
             is_buy: true,
             price: "12000".to_owned(),
             size: "3".to_owned(),
-            order_type: ModifySpotOrderV2OrderType::Limit {
-                tif: "gtc".to_owned(),
-            },
+            order_type: ModifySpotOrderV2OrderType::Limit { tif: "gtc".to_owned() },
             cloid: None,
         })
     }
 
     fn valid_command() -> SpotBlockCmd {
-        SpotBlockCmd {
-            commands: vec![cancel_command()],
-        }
+        SpotBlockCmd { commands: vec![cancel_command()] }
     }
 
     #[test]
@@ -217,17 +205,13 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(ExecutionError::LoadState(
-                DefaultSpotBlockOutboundError::StateUnavailable,
-            )),
+            Err(ExecutionError::LoadState(DefaultSpotBlockOutboundError::StateUnavailable,)),
         );
     }
 
     #[test]
     fn execute_mixed_spot_block_projects_events_and_runs_all_sink_phases() {
-        let command = SpotBlockCmd {
-            commands: vec![cancel_command(), modify_command()],
-        };
+        let command = SpotBlockCmd { commands: vec![cancel_command(), modify_command()] };
         let outbound = FakeSpotBlockOutbound::default();
 
         let result = match execute_spot_block_with_outbound(&entry(command), &outbound) {
@@ -240,10 +224,7 @@ mod tests {
         assert_eq!(result.changes.item_results.len(), 2);
         assert!(matches!(
             &result.changes.item_results[0],
-            SpotBlockItemResult::Applied {
-                changes: SpotBlockAppliedChanges::Cancel(_),
-                ..
-            }
+            SpotBlockItemResult::Applied { changes: SpotBlockAppliedChanges::Cancel(_), .. }
         ));
         assert!(matches!(
             &result.changes.item_results[1],

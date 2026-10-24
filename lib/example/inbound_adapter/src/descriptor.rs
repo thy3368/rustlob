@@ -138,10 +138,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                 cli_error("outbound", "outbound_publish_failed"),
             ],
             defaults: json_object([
-                (
-                    "trader_id",
-                    Value::from(DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID),
-                ),
+                ("trader_id", Value::from(DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID)),
                 ("amount", Value::from(DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT)),
             ]),
         }),
@@ -182,10 +179,7 @@ pub fn example_inbound_descriptors() -> Vec<InboundApiDescriptor> {
                 cli_error("outbound", "outbound_publish_failed"),
             ],
             defaults: json_object([
-                (
-                    "trader_id",
-                    Value::from(WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID),
-                ),
+                ("trader_id", Value::from(WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID)),
                 ("amount", Value::from(WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT)),
             ]),
         }),
@@ -302,12 +296,7 @@ fn http_schema_components() -> Map<String, Value> {
         &mut schemas,
         "PlaceOrderHttpResponse",
         object_schema(
-            &[
-                "order_id",
-                "principal_reservation_amount",
-                "remaining_quote",
-                "domain_event_count",
-            ],
+            &["order_id", "principal_reservation_amount", "remaining_quote", "domain_event_count"],
             vec![
                 ("order_id", u64_schema()),
                 ("principal_reservation_amount", u64_schema()),
@@ -333,12 +322,7 @@ fn http_schema_components() -> Map<String, Value> {
         &mut schemas,
         "DepositQuoteHttpResponse",
         object_schema(
-            &[
-                "account_id",
-                "available_quote",
-                "frozen_quote",
-                "domain_event_count",
-            ],
+            &["account_id", "available_quote", "frozen_quote", "domain_event_count"],
             vec![
                 ("account_id", string_schema()),
                 ("available_quote", u64_schema()),
@@ -364,12 +348,7 @@ fn http_schema_components() -> Map<String, Value> {
         &mut schemas,
         "WithdrawQuoteHttpResponse",
         object_schema(
-            &[
-                "account_id",
-                "available_quote",
-                "frozen_quote",
-                "domain_event_count",
-            ],
+            &["account_id", "available_quote", "frozen_quote", "domain_event_count"],
             vec![
                 ("account_id", string_schema()),
                 ("available_quote", u64_schema()),
@@ -431,10 +410,7 @@ fn cli_schema_components() -> Map<String, Value> {
         "DepositQuoteCliResponse",
         object_schema(
             &["summary", "account_id"],
-            vec![
-                ("summary", string_schema()),
-                ("account_id", string_schema()),
-            ],
+            vec![("summary", string_schema()), ("account_id", string_schema())],
         ),
     );
     insert_schema(
@@ -450,10 +426,7 @@ fn cli_schema_components() -> Map<String, Value> {
         "WithdrawQuoteCliResponse",
         object_schema(
             &["summary", "account_id"],
-            vec![
-                ("summary", string_schema()),
-                ("account_id", string_schema()),
-            ],
+            vec![("summary", string_schema()), ("account_id", string_schema())],
         ),
     );
     schemas
@@ -549,24 +522,15 @@ mod tests {
             );
             assert_eq!(
                 operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
-                json!(format!(
-                    "#/components/schemas/{}",
-                    http.success_response_schema_name
-                ))
+                json!(format!("#/components/schemas/{}", http.success_response_schema_name))
             );
             assert_eq!(
                 operation["responses"]["400"]["content"]["application/json"]["schema"]["$ref"],
-                json!(format!(
-                    "#/components/schemas/{}",
-                    http.error_response_schema_name
-                ))
+                json!(format!("#/components/schemas/{}", http.error_response_schema_name))
             );
             assert_eq!(
                 operation["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
-                json!(format!(
-                    "#/components/schemas/{}",
-                    http.error_response_schema_name
-                ))
+                json!(format!("#/components/schemas/{}", http.error_response_schema_name))
             );
             assert_eq!(
                 operation["x-error-codes"],
@@ -666,10 +630,7 @@ mod tests {
             assert_eq!(command["bin"], json!(cli.bin));
             assert_eq!(command["usage"], json!(cli.usage));
             assert_eq!(command["defaults"], cli.defaults);
-            assert_eq!(
-                command["command_schema_name"],
-                json!(cli.command_schema_name)
-            );
+            assert_eq!(command["command_schema_name"], json!(cli.command_schema_name));
             assert_eq!(command["stdout_schema_name"], json!(cli.stdout_schema_name));
 
             let args = command["args"].as_array().unwrap();
@@ -677,10 +638,7 @@ mod tests {
             for (index, arg) in args.iter().enumerate() {
                 assert_eq!(arg["position"], json!(index));
                 assert_eq!(arg["name"], json!(cli.args[index].name));
-                assert_eq!(
-                    arg["default"],
-                    cli.args[index].default.clone().unwrap_or(Value::Null)
-                );
+                assert_eq!(arg["default"], cli.args[index].default.clone().unwrap_or(Value::Null));
             }
         }
 
@@ -792,12 +750,7 @@ mod tests {
     }
 
     fn schema_property_names_in(properties: &Value) -> BTreeSet<String> {
-        properties
-            .as_object()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect::<BTreeSet<_>>()
+        properties.as_object().unwrap().keys().cloned().collect::<BTreeSet<_>>()
     }
 
     fn nested_property_names(schema: &Value, path: &[&str]) -> BTreeSet<String> {

@@ -92,9 +92,9 @@ impl ExchangeActionHandler for SendAssetAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "sendAsset" {
-        return Err(ExchangeHttpError::contract(
-            SendAssetContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(SendAssetContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -106,14 +106,10 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(ExchangeHttpError::contract(
-            SendAssetContractError::VaultAddressNotSupported,
-        ));
+        return Err(ExchangeHttpError::contract(SendAssetContractError::VaultAddressNotSupported));
     }
     if request.common.expires_after.is_some() {
-        return Err(ExchangeHttpError::contract(
-            SendAssetContractError::ExpiresAfterNotSupported,
-        ));
+        return Err(ExchangeHttpError::contract(SendAssetContractError::ExpiresAfterNotSupported));
     }
     validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
         ExchangeHttpError::contract(SendAssetContractError::InvalidHyperliquidChain)
@@ -124,24 +120,16 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     validate_hex_address(&request.action.destination)
         .map_err(|_| ExchangeHttpError::contract(SendAssetContractError::InvalidDestination))?;
     if request.action.source_dex.trim() != request.action.source_dex {
-        return Err(ExchangeHttpError::contract(
-            SendAssetContractError::InvalidSourceDex,
-        ));
+        return Err(ExchangeHttpError::contract(SendAssetContractError::InvalidSourceDex));
     }
     if request.action.destination_dex.trim() != request.action.destination_dex {
-        return Err(ExchangeHttpError::contract(
-            SendAssetContractError::InvalidDestinationDex,
-        ));
+        return Err(ExchangeHttpError::contract(SendAssetContractError::InvalidDestinationDex));
     }
     if request.action.token.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            SendAssetContractError::InvalidToken,
-        ));
+        return Err(ExchangeHttpError::contract(SendAssetContractError::InvalidToken));
     }
     if request.action.amount.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            SendAssetContractError::InvalidAmount,
-        ));
+        return Err(ExchangeHttpError::contract(SendAssetContractError::InvalidAmount));
     }
     if !request.action.from_sub_account.is_empty() {
         validate_hex_address(&request.action.from_sub_account).map_err(|_| {
@@ -149,9 +137,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         })?;
     }
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(
-            SendAssetContractError::NonceMismatch,
-        ));
+        return Err(ExchangeHttpError::contract(SendAssetContractError::NonceMismatch));
     }
     Ok(())
 }

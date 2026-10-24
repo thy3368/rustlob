@@ -95,26 +95,19 @@ impl ReplayFieldChange {
 
     #[inline]
     pub fn field_name_as_str(&self) -> Result<&str, std::str::Utf8Error> {
-        let end = self
-            .field_name
-            .iter()
-            .position(|byte| *byte == 0)
-            .unwrap_or(self.field_name.len());
+        let end =
+            self.field_name.iter().position(|byte| *byte == 0).unwrap_or(self.field_name.len());
         std::str::from_utf8(self.field_name.get(..end).unwrap_or(&[]))
     }
 
     #[inline]
     pub fn old_value_bytes(&self) -> &[u8] {
-        self.old_value
-            .get(..self.old_value_len as usize)
-            .unwrap_or(&[])
+        self.old_value.get(..self.old_value_len as usize).unwrap_or(&[])
     }
 
     #[inline]
     pub fn new_value_bytes(&self) -> &[u8] {
-        self.new_value
-            .get(..self.new_value_len as usize)
-            .unwrap_or(&[])
+        self.new_value.get(..self.new_value_len as usize).unwrap_or(&[])
     }
 }
 
@@ -150,11 +143,7 @@ pub enum ReplayEventFieldParseError {
     InvalidUtf8 { field: &'static str },
     /// The replay event field text cannot be parsed as the expected number type.
     #[error("replay event field `{field}` is not a valid {expected}: {value}")]
-    InvalidNumber {
-        field: &'static str,
-        expected: &'static str,
-        value: String,
-    },
+    InvalidNumber { field: &'static str, expected: &'static str, value: String },
 }
 
 impl EntityReplayableEvent {
@@ -204,14 +193,7 @@ impl EntityReplayableEvent {
 
     #[inline]
     pub fn new_created(timestamp: u64, entity_id: u64, entity_type: u8) -> Self {
-        Self::new(
-            timestamp,
-            0,
-            0,
-            entity_id,
-            entity_type,
-            EntityChangeType::Created.as_tag(),
-        )
+        Self::new(timestamp, 0, 0, entity_id, entity_type, EntityChangeType::Created.as_tag())
     }
 
     #[inline]
@@ -267,9 +249,8 @@ impl EntityReplayableEvent {
         &self,
         field: &'static str,
     ) -> Result<String, ReplayEventFieldParseError> {
-        let value = self
-            .field_value(field)
-            .ok_or(ReplayEventFieldParseError::MissingField(field))?;
+        let value =
+            self.field_value(field).ok_or(ReplayEventFieldParseError::MissingField(field))?;
         let value = std::str::from_utf8(value)
             .map_err(|_| ReplayEventFieldParseError::InvalidUtf8 { field })?;
         Ok(value.to_owned())
@@ -281,13 +262,11 @@ impl EntityReplayableEvent {
         field: &'static str,
     ) -> Result<u32, ReplayEventFieldParseError> {
         let value = self.required_string_field(field)?;
-        value
-            .parse::<u32>()
-            .map_err(|_| ReplayEventFieldParseError::InvalidNumber {
-                field,
-                expected: "u32",
-                value,
-            })
+        value.parse::<u32>().map_err(|_| ReplayEventFieldParseError::InvalidNumber {
+            field,
+            expected: "u32",
+            value,
+        })
     }
 
     #[inline]
@@ -296,13 +275,11 @@ impl EntityReplayableEvent {
         field: &'static str,
     ) -> Result<u64, ReplayEventFieldParseError> {
         let value = self.required_string_field(field)?;
-        value
-            .parse::<u64>()
-            .map_err(|_| ReplayEventFieldParseError::InvalidNumber {
-                field,
-                expected: "u64",
-                value,
-            })
+        value.parse::<u64>().map_err(|_| ReplayEventFieldParseError::InvalidNumber {
+            field,
+            expected: "u64",
+            value,
+        })
     }
 
     #[inline]
@@ -380,10 +357,7 @@ mod tests {
         let event = event_with_fields(&[("account_id", b"buyer"), ("asset", b"10001")]);
 
         assert_eq!(event.field_value("account_id"), Some(b"buyer".as_slice()));
-        assert_eq!(
-            event.required_string_field("account_id"),
-            Ok("buyer".to_owned())
-        );
+        assert_eq!(event.required_string_field("account_id"), Ok("buyer".to_owned()));
         assert_eq!(event.required_u32_field("asset"), Ok(10001));
         assert_eq!(event.required_u64_field("asset"), Ok(10001));
     }
@@ -404,9 +378,7 @@ mod tests {
 
         assert_eq!(
             event.required_string_field("account_id"),
-            Err(ReplayEventFieldParseError::InvalidUtf8 {
-                field: "account_id"
-            })
+            Err(ReplayEventFieldParseError::InvalidUtf8 { field: "account_id" })
         );
     }
 

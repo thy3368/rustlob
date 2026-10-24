@@ -2,9 +2,9 @@
 
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, Balance, MarketRules, PlaceMatchSpotOrderV2Changes,
-    PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
-    OrderSide, OrderTif, OrderType, SpotOrderV2,
+    ActivatePendingSpotOrderV2Input, Balance, MarketRules, OrderSide, OrderTif, OrderType,
+    PlaceMatchSpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
+    PlaceOnlySpotOrderV2OrderType, SpotOrderV2,
 };
 use example_outbound_adapter::{InMemoryPlaceOrderOutbound, InMemoryStore};
 use use_case_executor::trading::spot::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2_with_outbound;
@@ -14,10 +14,7 @@ const MAKER_ORDER_ID: u64 = 2;
 
 fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std::error::Error>> {
     let store = InMemoryStore::new(ASSET);
-    store.seed_market_rules(MarketRules {
-        symbol: "BTCUSDT".into(),
-        min_qty: 1,
-    })?;
+    store.seed_market_rules(MarketRules { symbol: "BTCUSDT".into(), min_qty: 1 })?;
     for balance in [
         Balance::new(
             stable_string_entity_id("buyer"),
@@ -64,9 +61,7 @@ fn outbound(with_maker: bool) -> Result<InMemoryPlaceOrderOutbound, Box<dyn std:
             OrderSide::Sell,
             1,
             100,
-            OrderType::Limit {
-                tif: OrderTif::Gtc,
-            },
+            OrderType::Limit { tif: OrderTif::Gtc },
             None,
             0,
             1,
@@ -115,10 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("expected a matched single order".into());
     };
     assert_eq!(match_changes.created_trades().len(), 1);
-    assert_eq!(
-        match_changes.created_trades()[0].maker_order_id,
-        MAKER_ORDER_ID
-    );
+    assert_eq!(match_changes.created_trades()[0].maker_order_id, MAKER_ORDER_ID);
     println!("matched maker order {MAKER_ORDER_ID}");
     Ok(())
 }

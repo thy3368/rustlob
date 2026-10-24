@@ -109,11 +109,7 @@ impl Balance {
     }
 
     pub fn business_entity_id(&self) -> String {
-        concat3(
-            &self.account_id.to_string(),
-            ":",
-            &self.asset_id.to_string(),
-        )
+        concat3(&self.account_id.to_string(), ":", &self.asset_id.to_string())
     }
 
     /// 返回余额总额，即 `available + frozen`；若溢出则返回 `None`。
@@ -152,14 +148,9 @@ impl Balance {
             return Err(BalanceError::InvalidAmount);
         }
 
-        let available = self
-            .available
-            .checked_sub(amount)
-            .ok_or(BalanceError::InsufficientAvailableBalance)?;
-        let frozen = self
-            .frozen
-            .checked_add(amount)
-            .ok_or(BalanceError::ArithmeticOverflow)?;
+        let available =
+            self.available.checked_sub(amount).ok_or(BalanceError::InsufficientAvailableBalance)?;
+        let frozen = self.frozen.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
         self.apply_amounts(available, frozen)
     }
 
@@ -169,14 +160,10 @@ impl Balance {
             return Err(BalanceError::InvalidAmount);
         }
 
-        let frozen = self
-            .frozen
-            .checked_sub(amount)
-            .ok_or(BalanceError::InsufficientFrozenBalance)?;
-        let available = self
-            .available
-            .checked_add(amount)
-            .ok_or(BalanceError::ArithmeticOverflow)?;
+        let frozen =
+            self.frozen.checked_sub(amount).ok_or(BalanceError::InsufficientFrozenBalance)?;
+        let available =
+            self.available.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
         self.apply_amounts(available, frozen)
     }
 
@@ -186,10 +173,8 @@ impl Balance {
             return Err(BalanceError::InvalidAmount);
         }
 
-        let available = self
-            .available
-            .checked_add(amount)
-            .ok_or(BalanceError::ArithmeticOverflow)?;
+        let available =
+            self.available.checked_add(amount).ok_or(BalanceError::ArithmeticOverflow)?;
         self.apply_amounts(available, self.frozen)
     }
 
@@ -204,10 +189,8 @@ impl Balance {
             return Err(BalanceError::InvalidAmount);
         }
 
-        let available = self
-            .available
-            .checked_sub(amount)
-            .ok_or(BalanceError::InsufficientAvailableBalance)?;
+        let available =
+            self.available.checked_sub(amount).ok_or(BalanceError::InsufficientAvailableBalance)?;
         self.apply_amounts(available, self.frozen)
     }
 
@@ -217,18 +200,13 @@ impl Balance {
             return Err(BalanceError::InvalidAmount);
         }
 
-        let frozen = self
-            .frozen
-            .checked_sub(amount)
-            .ok_or(BalanceError::InsufficientFrozenBalance)?;
+        let frozen =
+            self.frozen.checked_sub(amount).ok_or(BalanceError::InsufficientFrozenBalance)?;
         self.apply_amounts(self.available, frozen)
     }
 
     fn apply_amounts(&mut self, available: u64, frozen: u64) -> Result<(), BalanceError> {
-        let version = self
-            .version
-            .checked_add(1)
-            .ok_or(BalanceError::ArithmeticOverflow)?;
+        let version = self.version.checked_add(1).ok_or(BalanceError::ArithmeticOverflow)?;
         self.available = available;
         self.frozen = frozen;
         self.version = version;
@@ -247,11 +225,7 @@ impl FieldDiff for Balance {
             EntityFieldChange::new("available", "", self.available.to_string()),
             EntityFieldChange::new("frozen", "", self.frozen.to_string()),
             EntityFieldChange::new("entry_notional", "", option_u64_value(self.entry_notional)),
-            EntityFieldChange::new(
-                "identifier",
-                "",
-                self.identifier.clone().unwrap_or_default(),
-            ),
+            EntityFieldChange::new("identifier", "", self.identifier.clone().unwrap_or_default()),
         ]
     }
 

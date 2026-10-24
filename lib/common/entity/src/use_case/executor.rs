@@ -25,11 +25,7 @@ pub enum ExecutionError<BE, OE> {
     Persist(OE),
     Replay(OE),
     Publish(OE),
-    DuplicateEventKey {
-        lsn: u64,
-        entity_type: u8,
-        entity_id: u64,
-    },
+    DuplicateEventKey { lsn: u64, entity_type: u8, entity_id: u64 },
 }
 
 /// MI family runtime 所需的 authoritative given state source port。
@@ -80,22 +76,16 @@ impl StateMachineExecutor {
         SS: StateSource<F, Error = OB::Error>,
         OB: StateSink<F>,
     {
-        family
-            .check_command(command)
-            .map_err(ExecutionError::Business)?;
+        family.check_command(command).map_err(ExecutionError::Business)?;
         // 加载 authoritative given state，后续业务校验与计算都以该状态为准。
-        let given_state = state_source
-            .load_given_state(command)
-            .map_err(ExecutionError::LoadState)?;
+        let given_state =
+            state_source.load_given_state(command).map_err(ExecutionError::LoadState)?;
 
-        let changes = family
-            .compute_state_diff(command, given_state)
-            .map_err(ExecutionError::Business)?;
+        let changes =
+            family.compute_state_diff(command, given_state).map_err(ExecutionError::Business)?;
 
         // 将 changes 投影为事件后，按固定顺序执行 outbound 副作用。
-        let mut events = changes
-            .to_replayable_events()
-            .map_err(ExecutionError::ProjectEvents)?;
+        let mut events = changes.to_replayable_events().map_err(ExecutionError::ProjectEvents)?;
         for event in &mut events {
             event.lsn = command.lsn();
             event.logical_ts = command.logical_ts();
@@ -110,13 +100,9 @@ impl StateMachineExecutor {
             }
         }
 
-        state_sink
-            .persist(&events)
-            .map_err(ExecutionError::Persist)?;
+        state_sink.persist(&events).map_err(ExecutionError::Persist)?;
         state_sink.replay(&events).map_err(ExecutionError::Replay)?;
-        state_sink
-            .publish(&events)
-            .map_err(ExecutionError::Publish)?;
+        state_sink.publish(&events).map_err(ExecutionError::Publish)?;
 
         Ok(ExecutionResult { changes, events })
     }

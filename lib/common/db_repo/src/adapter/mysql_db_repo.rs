@@ -53,18 +53,12 @@ impl<E: Entity> MySqlDbRepo<E> {
             RepoError::DeserializationFailed(format!("Failed to get connection: {}", e))
         })?;
 
-        Ok(MySqlDbRepo {
-            connection: Mutex::new(Some(conn)),
-            _entity: std::marker::PhantomData,
-        })
+        Ok(MySqlDbRepo { connection: Mutex::new(Some(conn)), _entity: std::marker::PhantomData })
     }
 
     /// 创建一个无连接的实例（用于测试）
     pub fn new_mock() -> Self {
-        MySqlDbRepo {
-            connection: Mutex::new(None),
-            _entity: std::marker::PhantomData,
-        }
+        MySqlDbRepo { connection: Mutex::new(None), _entity: std::marker::PhantomData }
     }
 
     /// 按实体ID查询单个实体
@@ -494,12 +488,7 @@ impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
     ) -> Result<PageResult<Self::E>, RepoError> {
         // For mock instance, return empty result
         if self.connection.lock().unwrap().is_none() {
-            return Ok(PageResult::new(
-                Vec::new(),
-                0,
-                page_req.page,
-                page_req.page_size,
-            ));
+            return Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size));
         }
 
         // SQL: SELECT * FROM [entity_type]
@@ -510,12 +499,7 @@ impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
         // SELECT COUNT(*) FROM [entity_type] WHERE [condition_fields]
         //
         // TODO: 实现分页查询和 COUNT 查询
-        Ok(PageResult::new(
-            Vec::new(),
-            0,
-            page_req.page,
-            page_req.page_size,
-        ))
+        Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size))
     }
 
     /// 按序列号范围分页查询
@@ -527,12 +511,7 @@ impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
     ) -> Result<PageResult<Self::E>, RepoError> {
         // For mock instance, return empty result
         if self.connection.lock().unwrap().is_none() {
-            return Ok(PageResult::new(
-                Vec::new(),
-                0,
-                page_req.page,
-                page_req.page_size,
-            ));
+            return Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size));
         }
 
         // SQL: SELECT * FROM [entity_type]
@@ -540,12 +519,7 @@ impl<E: Entity + FromCreatedEvent> QueryRepo for MySqlDbRepo<E> {
         //      LIMIT ? OFFSET ?
         //
         // TODO: 实现范围分页查询
-        Ok(PageResult::new(
-            Vec::new(),
-            0,
-            page_req.page,
-            page_req.page_size,
-        ))
+        Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size))
     }
 
     /// 按实体ID查询
@@ -605,10 +579,7 @@ impl<E: Entity> MySqlDbRepo<E> {
         if where_clause.is_empty() {
             format!("SELECT COUNT(*) as cnt FROM {}", entity_type)
         } else {
-            format!(
-                "SELECT COUNT(*) as cnt FROM {} WHERE {}",
-                entity_type, where_clause
-            )
+            format!("SELECT COUNT(*) as cnt FROM {} WHERE {}", entity_type, where_clause)
         }
     }
 

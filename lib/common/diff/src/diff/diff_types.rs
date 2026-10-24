@@ -45,18 +45,10 @@ impl std::fmt::Display for EntityError {
             EntityError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
             EntityError::DeserializationError(msg) => write!(f, "Deserialization error: {}", msg),
             EntityError::EntityIdMismatch { expected, actual } => {
-                write!(
-                    f,
-                    "Entity ID mismatch: expected {}, got {}",
-                    expected, actual
-                )
+                write!(f, "Entity ID mismatch: expected {}, got {}", expected, actual)
             }
             EntityError::EntityTypeMismatch { expected, actual } => {
-                write!(
-                    f,
-                    "Entity type mismatch: expected {}, got {}",
-                    expected, actual
-                )
+                write!(f, "Entity type mismatch: expected {}, got {}", expected, actual)
             }
             EntityError::FieldParseError { field, reason } => {
                 write!(f, "Failed to parse field '{}': {}", field, reason)
@@ -132,11 +124,7 @@ impl FieldChange {
         old_value: String,
         new_value: String,
     ) -> Self {
-        Self {
-            field_name: Cow::Borrowed(field_name),
-            old_value,
-            new_value,
-        }
+        Self { field_name: Cow::Borrowed(field_name), old_value, new_value }
     }
 }
 
@@ -161,10 +149,7 @@ impl TableSchema {
     /// 创建新的表结构定义
     #[inline]
     pub fn new(table_name: impl Into<String>) -> Self {
-        Self {
-            table_name: table_name.into(),
-            fields: Vec::new(),
-        }
+        Self { table_name: table_name.into(), fields: Vec::new() }
     }
 
     /// 查找指定名称的字段
@@ -200,10 +185,7 @@ impl TableSchema {
     /// 移除指定名称的字段
     #[inline]
     pub fn remove_field(&mut self, name: &str) -> Option<FieldSchema> {
-        self.fields
-            .iter()
-            .position(|f| f.field_name == name)
-            .map(|i| self.fields.remove(i))
+        self.fields.iter().position(|f| f.field_name == name).map(|i| self.fields.remove(i))
     }
 
     /// 获取字段数量
@@ -238,10 +220,7 @@ impl TableSchema {
         }
 
         if self.fields.is_empty() {
-            return Err(format!(
-                "Table '{}' must have at least one field",
-                self.table_name
-            ));
+            return Err(format!("Table '{}' must have at least one field", self.table_name));
         }
 
         // 检查字段名称唯一性
@@ -273,21 +252,13 @@ impl TableSchema {
             .map(|f| format!("{}({})", f.field_name, f.field_type))
             .collect::<Vec<_>>()
             .join(", ");
-        format!(
-            "Table '{}' with {} fields: [{}]",
-            self.table_name,
-            self.fields.len(),
-            field_list
-        )
+        format!("Table '{}' with {} fields: [{}]", self.table_name, self.fields.len(), field_list)
     }
 }
 
 impl Default for TableSchema {
     fn default() -> Self {
-        Self {
-            table_name: String::new(),
-            fields: Vec::new(),
-        }
+        Self { table_name: String::new(), fields: Vec::new() }
     }
 }
 
@@ -329,10 +300,7 @@ pub struct DomainEvent<T> {
 
 impl<T: Clone + Debug> DomainEvent<T> {
     pub fn new(change_log: ChangeLog, object: T) -> Self {
-        Self {
-            change_log,
-            state: object,
-        }
+        Self { change_log, state: object }
     }
 
     pub fn change_log(&self) -> &ChangeLog {
@@ -497,9 +465,7 @@ pub trait Entity: Clone + Debug + Send + Sync + 'static {
         Ok(ChangeLog::new(
             self.entity_id().to_string(),
             Self::entity_type().parse().unwrap(),
-            ChangeType::Updated {
-                changed_fields: field_changes,
-            },
+            ChangeType::Updated { changed_fields: field_changes },
             current_timestamp(),
             next_sequence(),
         ))
@@ -604,9 +570,7 @@ pub trait FromCreatedEvent: Sized {
     fn from_field_map(
         fields: &std::collections::HashMap<String, String>,
     ) -> Result<Self, EntityError> {
-        Err(EntityError::Custom(
-            "from_field_map not implemented for this type".to_string(),
-        ))
+        Err(EntityError::Custom("from_field_map not implemented for this type".to_string()))
     }
 }
 
@@ -657,10 +621,7 @@ fn next_sequence() -> u64 {
 
 #[inline]
 fn current_timestamp() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos() as u64
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64
 }
 
 /// 操作类型枚举
@@ -735,9 +696,7 @@ where
     Ok(ChangeLog::new(
         entity.entity_id().to_string(),
         T::entity_type().parse().unwrap(),
-        ChangeType::Updated {
-            changed_fields: field_changes,
-        },
+        ChangeType::Updated { changed_fields: field_changes },
         current_timestamp(),
         next_sequence(),
     ))
@@ -769,9 +728,7 @@ pub fn extract_fields_from_created_event(
             }
             Ok(field_map)
         }
-        _ => Err(EntityError::Custom(
-            "Event is not a Created type event".to_string(),
-        )),
+        _ => Err(EntityError::Custom("Event is not a Created type event".to_string())),
     }
 }
 
@@ -789,36 +746,28 @@ pub fn parse_field_value(value: &str, type_hint: &str) -> Result<String, EntityE
             // 数值类型直接验证可解析性
             match type_hint {
                 "u64" => {
-                    value
-                        .parse::<u64>()
-                        .map_err(|_| EntityError::FieldParseError {
-                            field: "value".to_string(),
-                            reason: format!("Cannot parse '{}' as u64", value),
-                        })?;
+                    value.parse::<u64>().map_err(|_| EntityError::FieldParseError {
+                        field: "value".to_string(),
+                        reason: format!("Cannot parse '{}' as u64", value),
+                    })?;
                 }
                 "i64" => {
-                    value
-                        .parse::<i64>()
-                        .map_err(|_| EntityError::FieldParseError {
-                            field: "value".to_string(),
-                            reason: format!("Cannot parse '{}' as i64", value),
-                        })?;
+                    value.parse::<i64>().map_err(|_| EntityError::FieldParseError {
+                        field: "value".to_string(),
+                        reason: format!("Cannot parse '{}' as i64", value),
+                    })?;
                 }
                 "f64" => {
-                    value
-                        .parse::<f64>()
-                        .map_err(|_| EntityError::FieldParseError {
-                            field: "value".to_string(),
-                            reason: format!("Cannot parse '{}' as f64", value),
-                        })?;
+                    value.parse::<f64>().map_err(|_| EntityError::FieldParseError {
+                        field: "value".to_string(),
+                        reason: format!("Cannot parse '{}' as f64", value),
+                    })?;
                 }
                 "bool" => {
-                    value
-                        .parse::<bool>()
-                        .map_err(|_| EntityError::FieldParseError {
-                            field: "value".to_string(),
-                            reason: format!("Cannot parse '{}' as bool", value),
-                        })?;
+                    value.parse::<bool>().map_err(|_| EntityError::FieldParseError {
+                        field: "value".to_string(),
+                        reason: format!("Cannot parse '{}' as bool", value),
+                    })?;
                 }
                 _ => {}
             }
@@ -953,10 +902,7 @@ mod tests {
 
     #[test]
     fn test_auto_track_create() {
-        let entity = TestEntity {
-            id: 1,
-            value: "test".to_string(),
-        };
+        let entity = TestEntity { id: 1, value: "test".to_string() };
 
         let entry = entity.track_create().unwrap();
         assert_eq!(entry.entity_id(), "1");
@@ -971,10 +917,7 @@ mod tests {
 
     #[test]
     fn test_auto_track_update() {
-        let mut entity = TestEntity {
-            id: 1,
-            value: "old".to_string(),
-        };
+        let mut entity = TestEntity { id: 1, value: "old".to_string() };
 
         let entry = entity
             .track_update(|e| {
@@ -1002,15 +945,9 @@ mod tests {
 
     #[test]
     fn test_auto_track_update_from() {
-        let old_entity = TestEntity {
-            id: 1,
-            value: "old".to_string(),
-        };
+        let old_entity = TestEntity { id: 1, value: "old".to_string() };
 
-        let new_entity = TestEntity {
-            id: 1,
-            value: "new".to_string(),
-        };
+        let new_entity = TestEntity { id: 1, value: "new".to_string() };
 
         let entry = new_entity.track_update_from(&old_entity).unwrap();
 
@@ -1026,15 +963,9 @@ mod tests {
 
     #[test]
     fn test_auto_track_no_changes() {
-        let old_entity = TestEntity {
-            id: 1,
-            value: "same".to_string(),
-        };
+        let old_entity = TestEntity { id: 1, value: "same".to_string() };
 
-        let new_entity = TestEntity {
-            id: 1,
-            value: "same".to_string(),
-        };
+        let new_entity = TestEntity { id: 1, value: "same".to_string() };
 
         let result = new_entity.track_update_from(&old_entity);
         assert!(result.is_err());

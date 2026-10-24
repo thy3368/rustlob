@@ -66,10 +66,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let total_time = start.elapsed();
     println!("\n处理完成!");
     println!("总耗时: {:?}", total_time);
-    println!(
-        "平均速度: {:.0} 笔/秒",
-        1_000_000.0 / total_time.as_secs_f64()
-    );
+    println!("平均速度: {:.0} 笔/秒", 1_000_000.0 / total_time.as_secs_f64());
 
     // 显示结果
     let (total_trades, total_volume) = aggregator.get_total_stats();
@@ -78,12 +75,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     println!("总交易量: {:.2}", total_volume as f64);
 
     // 显示当前 K 线
-    for window in &[
-        TimeWindow::Second,
-        TimeWindow::Minute,
-        TimeWindow::FifteenMin,
-        TimeWindow::Hour,
-    ] {
+    for window in
+        &[TimeWindow::Second, TimeWindow::Minute, TimeWindow::FifteenMin, TimeWindow::Hour]
+    {
         if let Some(ohlc) = aggregator.get_current_ohlc(*window) {
             let window_name = match window {
                 TimeWindow::Second => "1秒",
@@ -105,12 +99,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
     // 显示滑动窗口统计
     println!("\n滑动窗口统计:");
-    for window in &[
-        TimeWindow::Second,
-        TimeWindow::Minute,
-        TimeWindow::FifteenMin,
-        TimeWindow::Hour,
-    ] {
+    for window in
+        &[TimeWindow::Second, TimeWindow::Minute, TimeWindow::FifteenMin, TimeWindow::Hour]
+    {
         let (open, high, low, close, volume) = aggregator.get_sliding_stats(*window, 10);
 
         let window_name = match window {

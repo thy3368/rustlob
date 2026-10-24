@@ -6,11 +6,11 @@ use lob_repo_v2::LobError;
 use lob_repo_v2::lob::LobOrder;
 use thiserror::Error;
 
+use crate::OrderSide;
 use crate::entity::{
     BalanceLedgerEntryV2Error, BalanceLedgerReason, BalanceLedgerV2, Reservation, ReservationError,
     ReservationKind, ReservationMarketKind,
 };
-use crate::OrderSide;
 use crate::support::concat2;
 
 const HYPERLIQUID_PERP_ORDER_ENTITY_TYPE: u8 = 9;
@@ -23,7 +23,7 @@ const HYPERLIQUID_PERP_ORDER_ENTITY_TYPE: u8 = 9;
 //     /// 卖出或做空方向。
 //     Sell,
 // }
-// 
+//
 // impl HyperliquidPerpOrderSide {
 //     pub const fn as_str(self) -> &'static str {
 //         match self {
@@ -341,9 +341,7 @@ impl HyperliquidPerpOrder {
                     reservation.asset_id.clone(),
                     margin_balance_entity_id,
                     reservation.original_amount,
-                    BalanceLedgerReason::FreezeForOrder {
-                        order_id: input.order_id,
-                    },
+                    BalanceLedgerReason::FreezeForOrder { order_id: input.order_id },
                 )?;
                 (false, Some(reservation), Some(freeze_ledger_entry))
             }
@@ -369,10 +367,7 @@ impl HyperliquidPerpOrder {
             order
         };
 
-        Ok(PlaceHyperliquidPerpOrderOutcome {
-            order,
-            freeze_ledger_entry,
-        })
+        Ok(PlaceHyperliquidPerpOrderOutcome { order, freeze_ledger_entry })
     }
 
     /// 返回带强平来源标记的订单快照。
@@ -537,31 +532,11 @@ impl FieldDiff for HyperliquidPerpOrder {
             option_u64_value(self.exchange_oid),
             option_u64_value(other.exchange_oid),
         );
-        push_change(
-            &mut changes,
-            "asset",
-            self.asset.to_string(),
-            other.asset.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "account_id",
-            &self.account_id,
-            &other.account_id,
-        );
+        push_change(&mut changes, "asset", self.asset.to_string(), other.asset.to_string());
+        push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
         push_change(&mut changes, "symbol", &self.symbol, &other.symbol);
-        push_change(
-            &mut changes,
-            "side",
-            self.side.as_str(),
-            other.side.as_str(),
-        );
-        push_change(
-            &mut changes,
-            "execution",
-            self.execution.as_str(),
-            other.execution.as_str(),
-        );
+        push_change(&mut changes, "side", self.side.as_str(), other.side.as_str());
+        push_change(&mut changes, "execution", self.execution.as_str(), other.execution.as_str());
         push_change(
             &mut changes,
             "time_in_force",
@@ -574,36 +549,23 @@ impl FieldDiff for HyperliquidPerpOrder {
             self.order_price().to_string(),
             other.order_price().to_string(),
         );
-        push_change(
-            &mut changes,
-            "qty",
-            self.sz.to_string(),
-            other.sz.to_string(),
-        );
+        push_change(&mut changes, "qty", self.sz.to_string(), other.sz.to_string());
         push_change(
             &mut changes,
             "reservation_id",
             reservation_string(&self.reservation, |reservation| &reservation.reservation_id),
-            reservation_string(&other.reservation, |reservation| {
-                &reservation.reservation_id
-            }),
+            reservation_string(&other.reservation, |reservation| &reservation.reservation_id),
         );
         push_change(
             &mut changes,
             "reservation_owner_account_id",
-            reservation_string(&self.reservation, |reservation| {
-                &reservation.owner_account_id
-            }),
-            reservation_string(&other.reservation, |reservation| {
-                &reservation.owner_account_id
-            }),
+            reservation_string(&self.reservation, |reservation| &reservation.owner_account_id),
+            reservation_string(&other.reservation, |reservation| &reservation.owner_account_id),
         );
         push_change(
             &mut changes,
             "reservation_caused_by_order_id",
-            reservation_u64_string(&self.reservation, |reservation| {
-                reservation.caused_by_order_id
-            }),
+            reservation_u64_string(&self.reservation, |reservation| reservation.caused_by_order_id),
             reservation_u64_string(&other.reservation, |reservation| {
                 reservation.caused_by_order_id
             }),
@@ -644,19 +606,13 @@ impl FieldDiff for HyperliquidPerpOrder {
             &mut changes,
             "reservation_original_amount",
             reservation_amount(&self.reservation, |reservation| reservation.original_amount),
-            reservation_amount(&other.reservation, |reservation| {
-                reservation.original_amount
-            }),
+            reservation_amount(&other.reservation, |reservation| reservation.original_amount),
         );
         push_change(
             &mut changes,
             "reservation_remaining_amount",
-            reservation_amount(&self.reservation, |reservation| {
-                reservation.remaining_amount
-            }),
-            reservation_amount(&other.reservation, |reservation| {
-                reservation.remaining_amount
-            }),
+            reservation_amount(&self.reservation, |reservation| reservation.remaining_amount),
+            reservation_amount(&other.reservation, |reservation| reservation.remaining_amount),
         );
         push_change(
             &mut changes,
@@ -677,12 +633,7 @@ impl FieldDiff for HyperliquidPerpOrder {
             self.filled_sz.to_string(),
             other.filled_sz.to_string(),
         );
-        push_change(
-            &mut changes,
-            "status",
-            self.status.as_str(),
-            other.status.as_str(),
-        );
+        push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         push_change(
             &mut changes,
             "reduce_only",
@@ -802,22 +753,14 @@ fn reservation_u64_string(
     reservation: &Option<Reservation>,
     field: impl FnOnce(&Reservation) -> u64,
 ) -> String {
-    reservation
-        .as_ref()
-        .map(field)
-        .map(|value| value.to_string())
-        .unwrap_or_default()
+    reservation.as_ref().map(field).map(|value| value.to_string()).unwrap_or_default()
 }
 
 fn reservation_amount(
     reservation: &Option<Reservation>,
     field: impl FnOnce(&Reservation) -> u64,
 ) -> String {
-    reservation
-        .as_ref()
-        .map(field)
-        .map(|value| value.to_string())
-        .unwrap_or_default()
+    reservation.as_ref().map(field).map(|value| value.to_string()).unwrap_or_default()
 }
 
 fn push_change(

@@ -39,10 +39,8 @@ impl Message<ProcessImage> for ImageProcessor {
         // 模拟图片处理耗时
         sleep(Duration::from_millis(100)).await;
 
-        let result = format!(
-            "图片 {} 已调整为 {}x{}",
-            msg.image_id, msg.target_size.0, msg.target_size.1
-        );
+        let result =
+            format!("图片 {} 已调整为 {}x{}", msg.image_id, msg.target_size.0, msg.target_size.1);
         println!("Worker {} 完成: {}", self.worker_id, result);
 
         result
@@ -131,10 +129,7 @@ impl ImageProcessingSupervisor {
         println!("初始化 Worker Pool，创建 {} 个 Worker", self.max_workers);
 
         for i in 0..self.max_workers {
-            let worker = ImageProcessor {
-                worker_id: i,
-                failure_count: 0,
-            };
+            let worker = ImageProcessor { worker_id: i, failure_count: 0 };
 
             let worker_ref = ImageProcessor::spawn(worker);
             self.workers.push(worker_ref);
@@ -158,30 +153,12 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 提交多个图片处理任务
     let tasks = vec![
-        ProcessImage {
-            image_id: "img1.jpg".to_string(),
-            target_size: (800, 600),
-        },
-        ProcessImage {
-            image_id: "img2.jpg".to_string(),
-            target_size: (1024, 768),
-        },
-        ProcessImage {
-            image_id: "img3.jpg".to_string(),
-            target_size: (640, 480),
-        },
-        ProcessImage {
-            image_id: "img4.jpg".to_string(),
-            target_size: (1920, 1080),
-        },
-        ProcessImage {
-            image_id: "img5.jpg".to_string(),
-            target_size: (1280, 720),
-        },
-        ProcessImage {
-            image_id: "img6.jpg".to_string(),
-            target_size: (800, 600),
-        },
+        ProcessImage { image_id: "img1.jpg".to_string(), target_size: (800, 600) },
+        ProcessImage { image_id: "img2.jpg".to_string(), target_size: (1024, 768) },
+        ProcessImage { image_id: "img3.jpg".to_string(), target_size: (640, 480) },
+        ProcessImage { image_id: "img4.jpg".to_string(), target_size: (1920, 1080) },
+        ProcessImage { image_id: "img5.jpg".to_string(), target_size: (1280, 720) },
+        ProcessImage { image_id: "img6.jpg".to_string(), target_size: (800, 600) },
     ];
 
     // 提交任务

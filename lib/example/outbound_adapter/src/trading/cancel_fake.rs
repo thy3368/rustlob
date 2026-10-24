@@ -19,10 +19,7 @@ pub struct FakeSpotOrderV2CancelOutbound {
 
 impl FakeSpotOrderV2CancelOutbound {
     pub fn observed_lookup(&self) -> Option<CancelSpotOrderV2Lookup> {
-        self.observed_lookup
-            .lock()
-            .map(|lookup| lookup.clone())
-            .unwrap_or(None)
+        self.observed_lookup.lock().map(|lookup| lookup.clone()).unwrap_or(None)
     }
 }
 
@@ -33,10 +30,8 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         &self,
         request: &LogEntry<CancelSpotOrderV2Cmd>,
     ) -> Result<CancelSpotOrderV2State, Self::Error> {
-        *self
-            .observed_lookup
-            .lock()
-            .map_err(|_| FakeSpotOrderV2CancelOutboundError)? = Some(request.lookup.clone());
+        *self.observed_lookup.lock().map_err(|_| FakeSpotOrderV2CancelOutboundError)? =
+            Some(request.lookup.clone());
 
         let principal_reservation = SpotOrderV2::principal_reservation(
             1,
@@ -67,9 +62,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
             OrderSide::Buy,
             2,
             100,
-            OrderType::Limit {
-                tif: OrderTif::Gtc,
-            },
+            OrderType::Limit { tif: OrderTif::Gtc },
             Some("client-order-1".to_string()),
             0,
             1,

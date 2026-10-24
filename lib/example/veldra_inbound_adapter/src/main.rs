@@ -46,12 +46,8 @@ async fn main() -> io::Result<()> {
     });
 
     // 启动 HTTP API 服务。
-    HttpServer::new(|| {
-        App::new()
-            .service(build_exchange_scope())
-            .service(build_info_scope())
-    })
-    .bind(bind_address)?
-    .run()
-    .await
+    HttpServer::new(|| App::new().service(build_exchange_scope()).service(build_info_scope()))
+        .bind(bind_address)?
+        .run()
+        .await
 }

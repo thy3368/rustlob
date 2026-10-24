@@ -18,10 +18,7 @@ pub enum WsClientMessageWire {
     #[serde(rename = "unsubscribe")]
     Unsubscribe { subscription: SubscriptionWire },
     #[serde(rename = "post")]
-    Post {
-        id: u64,
-        request: Box<WsPostRequestWire>,
-    },
+    Post { id: u64, request: Box<WsPostRequestWire> },
     #[serde(rename = "ping")]
     Ping(PingWire),
 }
@@ -42,10 +39,7 @@ pub enum SubscriptionWire {
     #[serde(rename = "webData2")]
     WebData2 { user: String },
     #[serde(rename = "candle")]
-    Candle {
-        coin: String,
-        interval: CandleIntervalWire,
-    },
+    Candle { coin: String, interval: CandleIntervalWire },
     #[serde(rename = "l2Book")]
     L2Book {
         coin: String,
@@ -65,11 +59,7 @@ pub enum SubscriptionWire {
     #[serde(rename = "userFills")]
     UserFills {
         user: String,
-        #[serde(
-            rename = "aggregateByTime",
-            default,
-            skip_serializing_if = "Option::is_none"
-        )]
+        #[serde(rename = "aggregateByTime", default, skip_serializing_if = "Option::is_none")]
         aggregate_by_time: Option<bool>,
     },
     #[serde(rename = "userFundings")]
@@ -491,16 +481,9 @@ pub struct WsPostResponseWire {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WsPostResponsePayloadWire {
-    Ok {
-        type_: WsPostResponseTypeWire,
-        data: JsonValue,
-    },
-    Error {
-        raw: JsonValue,
-    },
-    Unknown {
-        raw: JsonValue,
-    },
+    Ok { type_: WsPostResponseTypeWire, data: JsonValue },
+    Error { raw: JsonValue },
+    Unknown { raw: JsonValue },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -534,62 +517,54 @@ impl HyperliquidWsMessageParser {
         };
 
         match channel {
-            "subscriptionResponse" => Ok(WsServerMessageWire::SubscriptionResponse(from_data(
-                object, "data",
-            )?)),
+            "subscriptionResponse" => {
+                Ok(WsServerMessageWire::SubscriptionResponse(from_data(object, "data")?))
+            }
             "pong" => Ok(WsServerMessageWire::Pong),
             "post" => Ok(WsServerMessageWire::Post(parse_post_response(object)?)),
-            "allMids" => Ok(boxed_channel(WsChannelMessageWire::AllMids(from_data(
-                object, "data",
-            )?))),
-            "notification" => Ok(boxed_channel(WsChannelMessageWire::Notification(
-                from_data(object, "data")?,
-            ))),
-            "webData2" => Ok(boxed_channel(WsChannelMessageWire::WebData2(from_data(
-                object, "data",
-            )?))),
-            "candle" => Ok(boxed_channel(WsChannelMessageWire::Candle(from_data(
-                object, "data",
-            )?))),
-            "l2Book" => Ok(boxed_channel(WsChannelMessageWire::L2Book(from_data(
-                object, "data",
-            )?))),
-            "trades" => Ok(boxed_channel(WsChannelMessageWire::Trades(from_data(
-                object, "data",
-            )?))),
-            "orderUpdates" => Ok(boxed_channel(WsChannelMessageWire::OrderUpdates(
-                from_data(object, "data")?,
-            ))),
-            "userEvents" => Ok(boxed_channel(WsChannelMessageWire::UserEvents(from_data(
-                object, "data",
-            )?))),
-            "userFills" => Ok(boxed_channel(WsChannelMessageWire::UserFills(from_data(
-                object, "data",
-            )?))),
-            "userFundings" => Ok(boxed_channel(WsChannelMessageWire::UserFundings(
-                from_data(object, "data")?,
-            ))),
+            "allMids" => {
+                Ok(boxed_channel(WsChannelMessageWire::AllMids(from_data(object, "data")?)))
+            }
+            "notification" => {
+                Ok(boxed_channel(WsChannelMessageWire::Notification(from_data(object, "data")?)))
+            }
+            "webData2" => {
+                Ok(boxed_channel(WsChannelMessageWire::WebData2(from_data(object, "data")?)))
+            }
+            "candle" => Ok(boxed_channel(WsChannelMessageWire::Candle(from_data(object, "data")?))),
+            "l2Book" => Ok(boxed_channel(WsChannelMessageWire::L2Book(from_data(object, "data")?))),
+            "trades" => Ok(boxed_channel(WsChannelMessageWire::Trades(from_data(object, "data")?))),
+            "orderUpdates" => {
+                Ok(boxed_channel(WsChannelMessageWire::OrderUpdates(from_data(object, "data")?)))
+            }
+            "userEvents" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserEvents(from_data(object, "data")?)))
+            }
+            "userFills" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserFills(from_data(object, "data")?)))
+            }
+            "userFundings" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserFundings(from_data(object, "data")?)))
+            }
             "userNonFundingLedgerUpdates" => Ok(boxed_channel(
                 WsChannelMessageWire::UserNonFundingLedgerUpdates(from_data(object, "data")?),
             )),
-            "activeAssetCtx" => Ok(boxed_channel(WsChannelMessageWire::ActiveAssetCtx(
-                from_data(object, "data")?,
-            ))),
-            "activeAssetData" => Ok(boxed_channel(WsChannelMessageWire::ActiveAssetData(
-                from_data(object, "data")?,
-            ))),
+            "activeAssetCtx" => {
+                Ok(boxed_channel(WsChannelMessageWire::ActiveAssetCtx(from_data(object, "data")?)))
+            }
+            "activeAssetData" => {
+                Ok(boxed_channel(WsChannelMessageWire::ActiveAssetData(from_data(object, "data")?)))
+            }
             "userTwapSliceFills" => Ok(boxed_channel(WsChannelMessageWire::UserTwapSliceFills(
                 from_data(object, "data")?,
             ))),
-            "userTwapHistory" => Ok(boxed_channel(WsChannelMessageWire::UserTwapHistory(
-                from_data(object, "data")?,
-            ))),
-            "bbo" => Ok(boxed_channel(WsChannelMessageWire::Bbo(from_data(
-                object, "data",
-            )?))),
-            "userToaster" => Ok(boxed_channel(WsChannelMessageWire::UserToaster(from_data(
-                object, "data",
-            )?))),
+            "userTwapHistory" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserTwapHistory(from_data(object, "data")?)))
+            }
+            "bbo" => Ok(boxed_channel(WsChannelMessageWire::Bbo(from_data(object, "data")?))),
+            "userToaster" => {
+                Ok(boxed_channel(WsChannelMessageWire::UserToaster(from_data(object, "data")?)))
+            }
             "userRequest" => Ok(boxed_channel(WsChannelMessageWire::UserRequest(
                 object.get("data").cloned().ok_or_else(|| {
                     HyperliquidWsError::Protocol(
@@ -597,9 +572,9 @@ impl HyperliquidWsMessageParser {
                     )
                 })?,
             ))),
-            "ledgerUpdates" => Ok(boxed_channel(WsChannelMessageWire::LedgerUpdates(
-                from_data(object, "data")?,
-            ))),
+            "ledgerUpdates" => {
+                Ok(boxed_channel(WsChannelMessageWire::LedgerUpdates(from_data(object, "data")?)))
+            }
             "twapStates" => Ok(boxed_channel(WsChannelMessageWire::TwapStates(
                 object.get("data").cloned().ok_or_else(|| {
                     HyperliquidWsError::Protocol(
@@ -642,22 +617,16 @@ fn parse_post_response(
 ) -> Result<WsPostResponseWire, HyperliquidWsError> {
     // `post` 是少数需要二次解包的服务端消息：
     // 外层是 channel=post，内层 `data` 再带 id/response。
-    let data = object
-        .get("data")
-        .and_then(JsonValue::as_object)
-        .ok_or_else(|| {
-            HyperliquidWsError::Protocol("channel `post` must contain object `data`".to_string())
-        })?;
+    let data = object.get("data").and_then(JsonValue::as_object).ok_or_else(|| {
+        HyperliquidWsError::Protocol("channel `post` must contain object `data`".to_string())
+    })?;
     let id = data.get("id").and_then(JsonValue::as_u64).ok_or_else(|| {
         HyperliquidWsError::Protocol("channel `post` is missing numeric `data.id`".to_string())
     })?;
     let response = data.get("response").cloned().ok_or_else(|| {
         HyperliquidWsError::Protocol("channel `post` is missing `data.response`".to_string())
     })?;
-    Ok(WsPostResponseWire {
-        id,
-        response: classify_post_response(response),
-    })
+    Ok(WsPostResponseWire { id, response: classify_post_response(response) })
 }
 
 fn classify_post_response(response: JsonValue) -> WsPostResponsePayloadWire {
@@ -672,10 +641,7 @@ fn classify_post_response(response: JsonValue) -> WsPostResponsePayloadWire {
             "action" => WsPostResponseTypeWire::Action,
             _ => return WsPostResponsePayloadWire::Unknown { raw: response },
         };
-        let data = object
-            .get("payload")
-            .cloned()
-            .unwrap_or(JsonValue::Object(object.clone()));
+        let data = object.get("payload").cloned().unwrap_or(JsonValue::Object(object.clone()));
         return WsPostResponsePayloadWire::Ok { type_: kind, data };
     }
     if object.contains_key("error") {
@@ -694,10 +660,7 @@ mod tests {
     fn serializes_all_subscription_variants_with_official_type_names() {
         let subscriptions = vec![
             (SubscriptionWire::AllMids { dex: None }, "allMids"),
-            (
-                SubscriptionWire::Notification { user: addr() },
-                "notification",
-            ),
+            (SubscriptionWire::Notification { user: addr() }, "notification"),
             (SubscriptionWire::WebData2 { user: addr() }, "webData2"),
             (
                 SubscriptionWire::Candle {
@@ -715,71 +678,29 @@ mod tests {
                 },
                 "l2Book",
             ),
-            (
-                SubscriptionWire::Trades {
-                    coin: "BTC".to_string(),
-                },
-                "trades",
-            ),
-            (
-                SubscriptionWire::OrderUpdates { user: addr() },
-                "orderUpdates",
-            ),
+            (SubscriptionWire::Trades { coin: "BTC".to_string() }, "trades"),
+            (SubscriptionWire::OrderUpdates { user: addr() }, "orderUpdates"),
             (SubscriptionWire::UserEvents { user: addr() }, "userEvents"),
             (
-                SubscriptionWire::UserFills {
-                    user: addr(),
-                    aggregate_by_time: Some(true),
-                },
+                SubscriptionWire::UserFills { user: addr(), aggregate_by_time: Some(true) },
                 "userFills",
             ),
-            (
-                SubscriptionWire::UserFundings { user: addr() },
-                "userFundings",
-            ),
+            (SubscriptionWire::UserFundings { user: addr() }, "userFundings"),
             (
                 SubscriptionWire::UserNonFundingLedgerUpdates { user: addr() },
                 "userNonFundingLedgerUpdates",
             ),
+            (SubscriptionWire::ActiveAssetCtx { coin: "BTC".to_string() }, "activeAssetCtx"),
             (
-                SubscriptionWire::ActiveAssetCtx {
-                    coin: "BTC".to_string(),
-                },
-                "activeAssetCtx",
-            ),
-            (
-                SubscriptionWire::ActiveAssetData {
-                    user: addr(),
-                    coin: "BTC".to_string(),
-                },
+                SubscriptionWire::ActiveAssetData { user: addr(), coin: "BTC".to_string() },
                 "activeAssetData",
             ),
-            (
-                SubscriptionWire::UserTwapSliceFills { user: addr() },
-                "userTwapSliceFills",
-            ),
-            (
-                SubscriptionWire::UserTwapHistory { user: addr() },
-                "userTwapHistory",
-            ),
-            (
-                SubscriptionWire::Bbo {
-                    coin: "BTC".to_string(),
-                },
-                "bbo",
-            ),
-            (
-                SubscriptionWire::UserToaster { user: addr() },
-                "userToaster",
-            ),
-            (
-                SubscriptionWire::UserRequest { user: addr() },
-                "userRequest",
-            ),
-            (
-                SubscriptionWire::LedgerUpdates { user: addr() },
-                "ledgerUpdates",
-            ),
+            (SubscriptionWire::UserTwapSliceFills { user: addr() }, "userTwapSliceFills"),
+            (SubscriptionWire::UserTwapHistory { user: addr() }, "userTwapHistory"),
+            (SubscriptionWire::Bbo { coin: "BTC".to_string() }, "bbo"),
+            (SubscriptionWire::UserToaster { user: addr() }, "userToaster"),
+            (SubscriptionWire::UserRequest { user: addr() }, "userRequest"),
+            (SubscriptionWire::LedgerUpdates { user: addr() }, "ledgerUpdates"),
             (SubscriptionWire::TwapStates { user: addr() }, "twapStates"),
             (
                 SubscriptionWire::AllDexsClearinghouseState { user: addr() },
@@ -814,23 +735,21 @@ mod tests {
 
         let action = serde_json::to_value(WsClientMessageWire::Post {
             id: 9,
-            request: Box::new(WsPostRequestWire::Action(Box::new(
-                ExchangeActionRequestWire {
-                    action: crate::bootstrap::on_command::exchange::ExchangeActionWire::Noop,
-                    common: crate::bootstrap::on_command::exchange::CommonExchangeFields {
-                        nonce: 1710000000000,
-                        signature: crate::bootstrap::on_command::exchange::SignatureWire {
-                            r: "0x1111111111111111111111111111111111111111111111111111111111111111"
-                                .to_string(),
-                            s: "0x2222222222222222222222222222222222222222222222222222222222222222"
-                                .to_string(),
-                            v: 27,
-                        },
-                        vault_address: None,
-                        expires_after: None,
+            request: Box::new(WsPostRequestWire::Action(Box::new(ExchangeActionRequestWire {
+                action: crate::bootstrap::on_command::exchange::ExchangeActionWire::Noop,
+                common: crate::bootstrap::on_command::exchange::CommonExchangeFields {
+                    nonce: 1710000000000,
+                    signature: crate::bootstrap::on_command::exchange::SignatureWire {
+                        r: "0x1111111111111111111111111111111111111111111111111111111111111111"
+                            .to_string(),
+                        s: "0x2222222222222222222222222222222222222222222222222222222222222222"
+                            .to_string(),
+                        v: 27,
                     },
+                    vault_address: None,
+                    expires_after: None,
                 },
-            ))),
+            }))),
         })
         .expect("action post serializes");
         assert_eq!(
@@ -868,10 +787,7 @@ mod tests {
         match message {
             WsServerMessageWire::SubscriptionResponse(response) => {
                 assert_eq!(response.method, "subscribe");
-                assert_eq!(
-                    response.subscription,
-                    SubscriptionWire::AllMids { dex: None }
-                );
+                assert_eq!(response.subscription, SubscriptionWire::AllMids { dex: None });
             }
             other => panic!("unexpected message: {other:?}"),
         }
@@ -958,40 +874,22 @@ mod tests {
                     }]
                 }),
             ),
-            (
-                "userFundings",
-                json!({ "fundings": [{ "coin": "BTC", "funding": "1", "time": 1 }] }),
-            ),
+            ("userFundings", json!({ "fundings": [{ "coin": "BTC", "funding": "1", "time": 1 }] })),
             (
                 "userNonFundingLedgerUpdates",
                 json!({ "nonFundingLedgerUpdates": [{ "time": 1, "delta": { "type": "deposit" } }] }),
             ),
             ("activeAssetCtx", json!({ "coin": "BTC", "markPx": "1" })),
             ("activeAssetData", json!({ "coin": "BTC", "midPx": "1" })),
-            (
-                "userTwapSliceFills",
-                json!({ "fills": [{ "coin": "BTC", "time": 1 }] }),
-            ),
-            (
-                "userTwapHistory",
-                json!({ "history": [{ "coin": "BTC", "time": 1 }] }),
-            ),
-            (
-                "bbo",
-                json!({ "coin": "BTC", "time": 1, "bid": { "px": "1", "sz": "1" } }),
-            ),
+            ("userTwapSliceFills", json!({ "fills": [{ "coin": "BTC", "time": 1 }] })),
+            ("userTwapHistory", json!({ "history": [{ "coin": "BTC", "time": 1 }] })),
+            ("bbo", json!({ "coin": "BTC", "time": 1, "bid": { "px": "1", "sz": "1" } })),
             ("userToaster", json!({ "notification": "toast" })),
             ("userRequest", json!({ "status": "ok" })),
             ("ledgerUpdates", json!({ "nonFundingLedgerUpdates": [] })),
             ("twapStates", json!({ "states": [] })),
-            (
-                "allDexsClearinghouseState",
-                json!({ "": { "assetPositions": [] } }),
-            ),
-            (
-                "allDexsAssetCtxs",
-                json!({ "": [{ "coin": "BTC", "markPx": "1" }] }),
-            ),
+            ("allDexsClearinghouseState", json!({ "": { "assetPositions": [] } })),
+            ("allDexsAssetCtxs", json!({ "": [{ "coin": "BTC", "markPx": "1" }] })),
         ];
 
         for (channel, data) in cases {
@@ -1026,10 +924,7 @@ mod tests {
                 assert_eq!(response.id, 7);
                 assert!(matches!(
                     response.response,
-                    WsPostResponsePayloadWire::Ok {
-                        type_: WsPostResponseTypeWire::Info,
-                        ..
-                    }
+                    WsPostResponsePayloadWire::Ok { type_: WsPostResponseTypeWire::Info, .. }
                 ));
             }
             other => panic!("unexpected message: {other:?}"),
@@ -1048,10 +943,7 @@ mod tests {
 
         match error {
             WsServerMessageWire::Post(response) => {
-                assert!(matches!(
-                    response.response,
-                    WsPostResponsePayloadWire::Error { .. }
-                ));
+                assert!(matches!(response.response, WsPostResponsePayloadWire::Error { .. }));
             }
             other => panic!("unexpected message: {other:?}"),
         }

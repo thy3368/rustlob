@@ -32,10 +32,7 @@ pub enum CommonError {
     /// 非法订单状态转换
     InvalidStatusTransition { from: OrderStatus, to: OrderStatus },
     /// 非法参数
-    InvalidParameter {
-        field: &'static str,
-        reason: &'static str,
-    },
+    InvalidParameter { field: &'static str, reason: &'static str },
     /// 账户被冻结
     AccountFrozen { account_id: u64 },
     /// 交易对不存在
@@ -73,15 +70,8 @@ impl CommonError {
 impl std::fmt::Display for CommonError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InsufficientBalance {
-                required,
-                available,
-            } => {
-                write!(
-                    f,
-                    "Insufficient balance: required {}, available {}",
-                    required, available
-                )
+            Self::InsufficientBalance { required, available } => {
+                write!(f, "Insufficient balance: required {}, available {}", required, available)
             }
             Self::OrderNotFound { order_id } => {
                 write!(f, "Order not found: {}", order_id)
@@ -120,41 +110,21 @@ pub enum SpotApiErrorAny {
     /// 通用错误
     Common(CommonError),
     /// FOK订单无法全部成交被拒绝
-    FillOrKillRejected {
-        order_id: OrderId,
-        filled: Quantity,
-        requested: Quantity,
-    },
+    FillOrKillRejected { order_id: OrderId, filled: Quantity, requested: Quantity },
     /// 非法的TimeInForce
     InvalidTimeInForce { reason: &'static str },
     /// 价格超出限制
-    PriceOutOfRange {
-        price: Price,
-        min: Price,
-        max: Price,
-    },
+    PriceOutOfRange { price: Price, min: Price, max: Price },
     /// 数量超出限制
-    QuantityOutOfRange {
-        quantity: Quantity,
-        min: Quantity,
-        max: Quantity,
-    },
+    QuantityOutOfRange { quantity: Quantity, min: Quantity, max: Quantity },
 }
 
 impl std::fmt::Display for SpotApiErrorAny {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Common(e) => write!(f, "{}", e),
-            Self::FillOrKillRejected {
-                order_id,
-                filled,
-                requested,
-            } => {
-                write!(
-                    f,
-                    "FOK order {} rejected: filled {}/{}",
-                    order_id, filled, requested
-                )
+            Self::FillOrKillRejected { order_id, filled, requested } => {
+                write!(f, "FOK order {} rejected: filled {}/{}", order_id, filled, requested)
             }
             Self::InvalidTimeInForce { reason } => {
                 write!(f, "Invalid TimeInForce: {}", reason)
@@ -191,10 +161,7 @@ pub enum QueryError {
     /// 数据库错误
     DatabaseError { message: String },
     /// 非法参数
-    InvalidParameter {
-        field: &'static str,
-        reason: &'static str,
-    },
+    InvalidParameter { field: &'static str, reason: &'static str },
     /// 系统内部错误
     Internal { message: String },
 }

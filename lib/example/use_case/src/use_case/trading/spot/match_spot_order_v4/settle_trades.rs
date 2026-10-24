@@ -21,9 +21,7 @@ pub struct SettleSpotTradesV4Cmd {
 
 impl Default for SettleSpotTradesV4Cmd {
     fn default() -> Self {
-        Self {
-            settlement_id_prefix: "spot-settlement".to_owned(),
-        }
+        Self { settlement_id_prefix: "spot-settlement".to_owned() }
     }
 }
 
@@ -183,10 +181,8 @@ impl StateMachineV2Diff for SettleSpotTradesV4UseCase {
                 created_vouchers,
                 created_balance_ledger_entries,
             } => {
-                let updated_taker_order = UpdatedEntityPair {
-                    before: state.taker_order,
-                    after: taker_order_after,
-                };
+                let updated_taker_order =
+                    UpdatedEntityPair { before: state.taker_order, after: taker_order_after };
                 let updated_maker_orders = zip_pairs(state.maker_orders, maker_orders_after)?;
                 let updated_balances =
                     merge_balance_pairs(state.settlement_balances, balances_after)?;
@@ -236,12 +232,7 @@ fn compute_settlement_after(
     )?;
 
     bump_order_version_if_changed(&state.taker_order, &mut taker_after, logical_ts, version)?;
-    bump_changed_maker_versions(
-        &state.maker_orders,
-        &mut maker_orders_after,
-        logical_ts,
-        version,
-    )?;
+    bump_changed_maker_versions(&state.maker_orders, &mut maker_orders_after, logical_ts, version)?;
 
     if taker_after == state.taker_order
         && maker_orders_after == state.maker_orders
@@ -293,10 +284,7 @@ impl SettleSpotTradesV4Changes {
     pub fn taker_order_after(&self) -> Option<&SpotOrderV2> {
         match self {
             Self::Unchanged => None,
-            Self::Settled {
-                updated_taker_order,
-                ..
-            } => Some(&updated_taker_order.after),
+            Self::Settled { updated_taker_order, .. } => Some(&updated_taker_order.after),
         }
     }
 }

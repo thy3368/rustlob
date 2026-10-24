@@ -8,9 +8,9 @@ use common_entity::LogEntry;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
-    PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, SpotBlockAppliedChanges,
-    SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult, SpotBlockState,
-    SpotBlockUseCase, OrderSide, OrderTif, OrderType, SpotOrderV2,
+    OrderSide, OrderTif, OrderType, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
+    SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult,
+    SpotBlockState, SpotBlockUseCase, SpotOrderV2,
 };
 use hotstuff_rs::app::{
     App, ProduceBlockRequest, ProduceBlockResponse, ValidateBlockRequest, ValidateBlockResponse,
@@ -87,10 +87,7 @@ pub struct MemWriteBatch {
 
 impl WriteBatch for MemWriteBatch {
     fn new() -> Self {
-        Self {
-            insertions: HashMap::new(),
-            deletions: HashSet::new(),
-        }
+        Self { insertions: HashMap::new(), deletions: HashSet::new() }
     }
 
     fn set(&mut self, key: &[u8], value: &[u8]) {
@@ -149,9 +146,7 @@ impl SpotOrderApp {
             return None;
         }
 
-        let spot_block_command = SpotBlockCmd {
-            commands: requests.to_vec(),
-        };
+        let spot_block_command = SpotBlockCmd { commands: requests.to_vec() };
         let block_sequence = block_height.checked_add(1)?;
         let logical_ts = block_sequence.checked_mul(1_000_000_000)?;
         let entry = common_entity::LogEntrySequencer::from_metadata(
@@ -232,10 +227,7 @@ impl SpotBlockExecutionSummary {
                     SpotBlockItemResult::Applied {
                         changes: SpotBlockAppliedChanges::Cancel(_),
                         ..
-                    } | SpotBlockItemResult::Rejected {
-                        command: SpotBlockCommand::Cancel(_),
-                        ..
-                    }
+                    } | SpotBlockItemResult::Rejected { command: SpotBlockCommand::Cancel(_), .. }
                 )
             })
             .count();
@@ -303,13 +295,7 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
         Ok(SpotBlockState {
             orders: vec![demo_sell_order(2, "seller", 100, 1)?, cancel_order],
             balances: vec![
-                Balance::new(
-                    "buyer".to_string(),
-                    "USDT".to_string(),
-                    100_000,
-                    buyer_frozen,
-                    1,
-                ),
+                Balance::new("buyer".to_string(), "USDT".to_string(), 100_000, buyer_frozen, 1),
                 Balance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
                 Balance::new("seller".to_string(), "BTC".to_string(), 0, 1, 1),
                 Balance::new("seller".to_string(), "USDT".to_string(), 0, 1, 1),
@@ -365,9 +351,7 @@ fn demo_sell_order(
         OrderSide::Sell,
         qty,
         price,
-        OrderType::Limit {
-            tif: OrderTif::Gtc,
-        },
+        OrderType::Limit { tif: OrderTif::Gtc },
         None,
         0,
         1,
@@ -394,9 +378,7 @@ fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
         OrderSide::Buy,
         2,
         100,
-        OrderType::Limit {
-            tif: OrderTif::Gtc,
-        },
+        OrderType::Limit { tif: OrderTif::Gtc },
         Some("demo-cancel-1".to_string()),
         0,
         1,
@@ -442,12 +424,7 @@ impl App<MemDB> for SpotOrderApp {
         let data_hash = data_hash(&data);
         let app_state_updates = Self::execute(&requests, block_height);
 
-        ProduceBlockResponse {
-            data_hash,
-            data,
-            app_state_updates,
-            validator_set_updates: None,
-        }
+        ProduceBlockResponse { data_hash, data, app_state_updates, validator_set_updates: None }
     }
 
     fn validate_block(&mut self, request: ValidateBlockRequest<MemDB>) -> ValidateBlockResponse {
@@ -515,10 +492,7 @@ fn place_result_key(command: &PlaceOnlySpotOrderV2Cmd) -> Vec<u8> {
     format!(
         "place:{}:{}",
         order.party_id,
-        order
-            .cloid
-            .clone()
-            .unwrap_or_else(|| order.order_id.to_string())
+        order.cloid.clone().unwrap_or_else(|| order.order_id.to_string())
     )
     .into_bytes()
 }
@@ -563,16 +537,9 @@ pub fn demo_validator_set_state(verifying_keys: &[VerifyingKey]) -> ValidatorSet
     for verifying_key in verifying_keys {
         initial_validator_set.put(verifying_key, Power::new(1));
     }
-    ValidatorSetState::new(
-        initial_validator_set.clone(),
-        initial_validator_set,
-        None,
-        true,
-    )
+    ValidatorSetState::new(initial_validator_set.clone(), initial_validator_set, None, true)
 }
 
 pub fn deterministic_signing_keys() -> Vec<SigningKey> {
-    (1..=NODE_COUNT)
-        .map(|seed| SigningKey::from_bytes(&[seed as u8; 32]))
-        .collect()
+    (1..=NODE_COUNT).map(|seed| SigningKey::from_bytes(&[seed as u8; 32])).collect()
 }

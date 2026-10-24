@@ -884,11 +884,7 @@ impl StreamNameBuilder {
 
     /// 全市场标记价格流: !markPrice@arr 或 !markPrice@arr@1s
     pub fn mark_price_all(fast_update: bool) -> String {
-        if fast_update {
-            "!markPrice@arr@1s".to_string()
-        } else {
-            "!markPrice@arr".to_string()
-        }
+        if fast_update { "!markPrice@arr@1s".to_string() } else { "!markPrice@arr".to_string() }
     }
 
     /// K线流: <symbol>@kline_<interval>
@@ -898,12 +894,7 @@ impl StreamNameBuilder {
 
     /// 持续合约K线流: <pair>_<contractType>@continuousKline_<interval>
     pub fn continuous_kline(pair: &str, contract_type: &str, interval: &str) -> String {
-        format!(
-            "{}_{}_@continuousKline_{}",
-            pair.to_lowercase(),
-            contract_type,
-            interval
-        )
+        format!("{}_{}_@continuousKline_{}", pair.to_lowercase(), contract_type, interval)
     }
 
     /// 个股Ticker流: <symbol>@ticker

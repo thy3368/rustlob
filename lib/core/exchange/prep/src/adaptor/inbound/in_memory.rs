@@ -13,10 +13,7 @@ pub struct InMemoryOrderRepository {
 
 impl InMemoryOrderRepository {
     pub fn new() -> Self {
-        Self {
-            orders: HashMap::new(),
-            next_id: 1,
-        }
+        Self { orders: HashMap::new(), next_id: 1 }
     }
 }
 
@@ -51,51 +48,31 @@ impl OrderRepository for InMemoryOrderRepository {
     }
 
     fn get_bids_at_price(&self, price: Price) -> Vec<&Order> {
-        self.orders
-            .values()
-            .filter(|o| o.is_active() && o.is_buy() && o.price == price)
-            .collect()
+        self.orders.values().filter(|o| o.is_active() && o.is_buy() && o.price == price).collect()
     }
 
     fn get_asks_at_price(&self, price: Price) -> Vec<&Order> {
-        self.orders
-            .values()
-            .filter(|o| o.is_active() && !o.is_buy() && o.price == price)
-            .collect()
+        self.orders.values().filter(|o| o.is_active() && !o.is_buy() && o.price == price).collect()
     }
 
     fn best_bid(&self) -> Option<Price> {
-        self.orders
-            .values()
-            .filter(|o| o.is_active() && o.is_buy())
-            .map(|o| o.price)
-            .max()
+        self.orders.values().filter(|o| o.is_active() && o.is_buy()).map(|o| o.price).max()
     }
 
     fn best_ask(&self) -> Option<Price> {
-        self.orders
-            .values()
-            .filter(|o| o.is_active() && !o.is_buy())
-            .map(|o| o.price)
-            .min()
+        self.orders.values().filter(|o| o.is_active() && !o.is_buy()).map(|o| o.price).min()
     }
 
     fn get_bids(&self) -> Vec<&Order> {
-        let mut bids: Vec<_> = self
-            .orders
-            .values()
-            .filter(|o| o.is_active() && o.is_buy())
-            .collect();
+        let mut bids: Vec<_> =
+            self.orders.values().filter(|o| o.is_active() && o.is_buy()).collect();
         bids.sort_by(|a, b| b.price.cmp(&a.price).then(a.created_at.cmp(&b.created_at)));
         bids
     }
 
     fn get_asks(&self) -> Vec<&Order> {
-        let mut asks: Vec<_> = self
-            .orders
-            .values()
-            .filter(|o| o.is_active() && !o.is_buy())
-            .collect();
+        let mut asks: Vec<_> =
+            self.orders.values().filter(|o| o.is_active() && !o.is_buy()).collect();
         asks.sort_by(|a, b| a.price.cmp(&b.price).then(a.created_at.cmp(&b.created_at)));
         asks
     }
@@ -109,10 +86,7 @@ pub struct InMemoryPositionRepository {
 
 impl InMemoryPositionRepository {
     pub fn new() -> Self {
-        Self {
-            positions: HashMap::new(),
-            next_id: 1,
-        }
+        Self { positions: HashMap::new(), next_id: 1 }
     }
 }
 
@@ -151,9 +125,7 @@ impl PositionRepository for InMemoryPositionRepository {
         trader: TraderId,
         position_side: PositionSide,
     ) -> Option<&Position> {
-        self.positions
-            .values()
-            .find(|p| p.trader == trader && p.position_side == position_side)
+        self.positions.values().find(|p| p.trader == trader && p.position_side == position_side)
     }
 
     fn get_position_by_trader_side_mut(
@@ -161,9 +133,7 @@ impl PositionRepository for InMemoryPositionRepository {
         trader: TraderId,
         position_side: PositionSide,
     ) -> Option<&mut Position> {
-        self.positions
-            .values_mut()
-            .find(|p| p.trader == trader && p.position_side == position_side)
+        self.positions.values_mut().find(|p| p.trader == trader && p.position_side == position_side)
     }
 }
 
@@ -196,12 +166,7 @@ mod tests {
         });
 
         match result {
-            CommandResult::LimitOrder {
-                order_id,
-                trades,
-                remaining_quantity,
-                status,
-            } => {
+            CommandResult::LimitOrder { order_id, trades, remaining_quantity, status } => {
                 assert_eq!(order_id, 1);
                 assert!(trades.is_empty());
                 assert_eq!(remaining_quantity, 100);
@@ -242,12 +207,7 @@ mod tests {
         });
 
         match result {
-            CommandResult::LimitOrder {
-                trades,
-                remaining_quantity,
-                status,
-                ..
-            } => {
+            CommandResult::LimitOrder { trades, remaining_quantity, status, .. } => {
                 assert_eq!(trades.len(), 1);
                 assert_eq!(trades[0].quantity(), 100);
                 assert_eq!(trades[0].price(), 50000);
@@ -289,12 +249,7 @@ mod tests {
         });
 
         match result {
-            CommandResult::LimitOrder {
-                trades,
-                remaining_quantity,
-                status,
-                ..
-            } => {
+            CommandResult::LimitOrder { trades, remaining_quantity, status, .. } => {
                 assert_eq!(trades.len(), 1);
                 assert_eq!(trades[0].quantity(), 50);
                 assert_eq!(remaining_quantity, 50);
@@ -335,12 +290,7 @@ mod tests {
         });
 
         match result {
-            CommandResult::LimitOrder {
-                trades,
-                remaining_quantity,
-                status,
-                ..
-            } => {
+            CommandResult::LimitOrder { trades, remaining_quantity, status, .. } => {
                 assert!(trades.is_empty());
                 assert_eq!(remaining_quantity, 100);
                 assert_eq!(status, OrderStatus::Cancelled);
@@ -380,12 +330,7 @@ mod tests {
         });
 
         match result {
-            CommandResult::LimitOrder {
-                trades,
-                remaining_quantity,
-                status,
-                ..
-            } => {
+            CommandResult::LimitOrder { trades, remaining_quantity, status, .. } => {
                 assert_eq!(trades.len(), 1);
                 assert_eq!(trades[0].quantity(), 50);
                 assert_eq!(remaining_quantity, 50);
@@ -421,11 +366,7 @@ mod tests {
         let cancel_result = service.handle(Command::CancelOrder { order_id });
 
         match cancel_result {
-            CommandResult::CancelOrder {
-                success,
-                cancelled_quantity,
-                ..
-            } => {
+            CommandResult::CancelOrder { success, cancelled_quantity, .. } => {
                 assert!(success);
                 assert_eq!(cancelled_quantity, 100);
             }

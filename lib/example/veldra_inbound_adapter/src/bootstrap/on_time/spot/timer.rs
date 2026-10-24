@@ -9,10 +9,7 @@ use use_case_executor::trading::spot::match_spot_order_v3_executor::execute_matc
 pub type TimerResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 fn scheduled_place_commands(round: u64) -> [MatchSpotOrderV3Cmd; 2] {
-    [
-        scheduled_place_command(round, 1),
-        scheduled_place_command(round, 2),
-    ]
+    [scheduled_place_command(round, 1), scheduled_place_command(round, 2)]
 }
 
 fn scheduled_place_command(round: u64, sequence: u8) -> MatchSpotOrderV3Cmd {

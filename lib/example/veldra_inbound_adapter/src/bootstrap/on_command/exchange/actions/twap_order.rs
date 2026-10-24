@@ -88,20 +88,16 @@ impl ExchangeActionHandler for TwapOrderAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "twapOrder" {
-        return Err(ExchangeHttpError::contract(
-            TwapOrderContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(TwapOrderContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.twap.s.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            TwapOrderContractError::InvalidSize,
-        ));
+        return Err(ExchangeHttpError::contract(TwapOrderContractError::InvalidSize));
     }
     if request.action.twap.m == 0 {
-        return Err(ExchangeHttpError::contract(
-            TwapOrderContractError::InvalidMinutes,
-        ));
+        return Err(ExchangeHttpError::contract(TwapOrderContractError::InvalidMinutes));
     }
     Ok(())
 }
@@ -112,9 +108,7 @@ async fn execute() -> Result<reply::TwapOrderResponseWire, ExchangeHttpError> {
     Ok(ok_status_response(
         "twapOrder",
         reply::TwapOrderStatusWire::Running {
-            running: reply::TwapRunningStatusWire {
-                twap_id: STUB_TWAP_ID,
-            },
+            running: reply::TwapRunningStatusWire { twap_id: STUB_TWAP_ID },
         },
     ))
 }

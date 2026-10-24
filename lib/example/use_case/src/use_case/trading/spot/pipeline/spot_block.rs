@@ -7,7 +7,7 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{Balance, OrderSide, SpotOrderStatus, OrderType, SpotOrderV2};
+use crate::entity::{Balance, OrderSide, OrderType, SpotOrderStatus, SpotOrderV2};
 use crate::{
     ActivateMatchSpotOrderV2Changes, ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error,
     ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase, ActivateSpotOrderV2Changes,
@@ -59,16 +59,8 @@ pub struct SpotBlockChanges {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotBlockItemResult {
-    Applied {
-        command_index: usize,
-        command: SpotBlockCommand,
-        changes: SpotBlockAppliedChanges,
-    },
-    Rejected {
-        command_index: usize,
-        command: SpotBlockCommand,
-        error: SpotBlockItemError,
-    },
+    Applied { command_index: usize, command: SpotBlockCommand, changes: SpotBlockAppliedChanges },
+    Rejected { command_index: usize, command: SpotBlockCommand, error: SpotBlockItemError },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -162,11 +154,7 @@ impl StateMachineV2 for SpotBlockUseCase {
         if cmd.commands.is_empty() {
             return Err(SpotBlockError::EmptyCommands);
         }
-        if cmd
-            .commands
-            .iter()
-            .any(|command| command_party_id(command).is_none_or(str::is_empty))
-        {
+        if cmd.commands.iter().any(|command| command_party_id(command).is_none_or(str::is_empty)) {
             return Err(SpotBlockError::EmptyPartyId);
         }
         shared_party_id(&cmd.commands).ok_or(SpotBlockError::MixedPartyIds)?;
@@ -229,11 +217,9 @@ impl SpotBlockUseCase {
                             command,
                             changes: SpotBlockAppliedChanges::Cancel(changes),
                         },
-                        Err(error) => SpotBlockItemResult::Rejected {
-                            command_index,
-                            command,
-                            error,
-                        },
+                        Err(error) => {
+                            SpotBlockItemResult::Rejected { command_index, command, error }
+                        }
                     }
                 }
                 SpotBlockCommand::Modify(modify_cmd) => {
@@ -247,11 +233,9 @@ impl SpotBlockUseCase {
                             command,
                             changes: SpotBlockAppliedChanges::Modify(changes),
                         },
-                        Err(error) => SpotBlockItemResult::Rejected {
-                            command_index,
-                            command,
-                            error,
-                        },
+                        Err(error) => {
+                            SpotBlockItemResult::Rejected { command_index, command, error }
+                        }
                     }
                 }
                 SpotBlockCommand::PlaceMatch(place_cmd) => {
@@ -265,11 +249,9 @@ impl SpotBlockUseCase {
                             command,
                             changes: SpotBlockAppliedChanges::PlaceMatch(changes),
                         },
-                        Err(error) => SpotBlockItemResult::Rejected {
-                            command_index,
-                            command,
-                            error,
-                        },
+                        Err(error) => {
+                            SpotBlockItemResult::Rejected { command_index, command, error }
+                        }
                     }
                 }
 
@@ -420,11 +402,7 @@ impl WorkingSpotBlockState {
         self.balance_by_entity_id.clear();
 
         for (index, order) in self.orders.iter().enumerate() {
-            if self
-                .order_by_entity_id
-                .insert(order.entity_id(), index)
-                .is_some()
-            {
+            if self.order_by_entity_id.insert(order.entity_id(), index).is_some() {
                 return Err(SpotBlockError::DuplicateOrderIdentity);
             }
             if let Some(cloid) = &order.cloid {
@@ -435,11 +413,7 @@ impl WorkingSpotBlockState {
         }
 
         for (index, balance) in self.balances.iter().enumerate() {
-            if self
-                .balance_by_entity_id
-                .insert(balance.business_entity_id(), index)
-                .is_some()
-            {
+            if self.balance_by_entity_id.insert(balance.business_entity_id(), index).is_some() {
                 return Err(SpotBlockError::DuplicateBalanceEntityId);
             }
         }
@@ -473,10 +447,7 @@ impl WorkingSpotBlockState {
     }
 
     fn order_by_order_id(&self, order_id: u64) -> Result<SpotOrderV2, SpotBlockItemError> {
-        let mut matches = self
-            .orders
-            .iter()
-            .filter(|order| order.order_id() == order_id);
+        let mut matches = self.orders.iter().filter(|order| order.order_id() == order_id);
         let order = matches.next().ok_or(SpotBlockItemError::OrderNotFound)?;
         if matches.next().is_some() {
             return Err(SpotBlockItemError::OrderLookupAmbiguous);
@@ -486,10 +457,8 @@ impl WorkingSpotBlockState {
 
     fn replace_order(&mut self, order: SpotOrderV2) -> Result<(), SpotBlockError> {
         let order_id = order.entity_id();
-        let index = *self
-            .order_by_entity_id
-            .get(&order_id)
-            .ok_or(SpotBlockError::InvalidStateIndexing)?;
+        let index =
+            *self.order_by_entity_id.get(&order_id).ok_or(SpotBlockError::InvalidStateIndexing)?;
         self.orders[index] = order;
         self.rebuild_indexes()
     }
@@ -521,9 +490,7 @@ fn apply_cancel(
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<CancelSpotOrderV2Changes, SpotBlockItemError> {
-    CancelSpotOrderV2UseCase
-        .check_command(cmd)
-        .map_err(SpotBlockItemError::Cancel)?;
+    CancelSpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::Cancel)?;
     let order = working.order_for_cancel(&cmd.lookup)?;
     let state = CancelSpotOrderV2State {
         order,
@@ -542,11 +509,8 @@ fn apply_cancel(
     working
         .replace_order(changes.updated_order.after.clone())
         .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
-    let balances_after = changes
-        .updated_balances
-        .iter()
-        .map(|pair| pair.after.clone())
-        .collect::<Vec<_>>();
+    let balances_after =
+        changes.updated_balances.iter().map(|pair| pair.after.clone()).collect::<Vec<_>>();
     working
         .replace_balances(&balances_after)
         .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
@@ -558,9 +522,7 @@ fn apply_activate(
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<ActivateSpotOrderV2Changes, SpotBlockItemError> {
-    ActivateSpotOrderV2UseCase
-        .check_command(cmd)
-        .map_err(SpotBlockItemError::Activate)?;
+    ActivateSpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::Activate)?;
     let pending_order = working.order_by_order_id(cmd.order_id)?;
     let state = ActivateSpotOrderV2State {
         pending_order,
@@ -579,11 +541,8 @@ fn apply_activate(
     working
         .replace_order(changes.updated_order.after.clone())
         .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
-    let balances_after = changes
-        .updated_balances
-        .iter()
-        .map(|pair| pair.after.clone())
-        .collect::<Vec<_>>();
+    let balances_after =
+        changes.updated_balances.iter().map(|pair| pair.after.clone()).collect::<Vec<_>>();
     working
         .replace_balances(&balances_after)
         .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
@@ -657,9 +616,7 @@ fn apply_modify(
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<ModifySpotOrderV2Changes, SpotBlockItemError> {
-    ModifySpotOrderV2UseCase
-        .check_command(cmd)
-        .map_err(SpotBlockItemError::Modify)?;
+    ModifySpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::Modify)?;
     let order = working.order_for_modify(&cmd.order_id)?;
     let state = ModifySpotOrderV2State {
         order,
@@ -678,11 +635,8 @@ fn apply_modify(
     working
         .replace_order(changes.updated_order.after.clone())
         .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
-    let balances_after = changes
-        .updated_balances
-        .iter()
-        .map(|pair| pair.after.clone())
-        .collect::<Vec<_>>();
+    let balances_after =
+        changes.updated_balances.iter().map(|pair| pair.after.clone()).collect::<Vec<_>>();
     working
         .replace_balances(&balances_after)
         .map_err(|_| SpotBlockItemError::OrderLookupAmbiguous)?;
@@ -694,9 +648,7 @@ fn apply_place_match(
     block_state: &SpotBlockState,
     working: &mut WorkingSpotBlockState,
 ) -> Result<PlaceMatchSpotOrderV2Changes, SpotBlockItemError> {
-    PlaceMatchSpotOrderV2UseCase
-        .check_command(cmd)
-        .map_err(SpotBlockItemError::PlaceMatch)?;
+    PlaceMatchSpotOrderV2UseCase.check_command(cmd).map_err(SpotBlockItemError::PlaceMatch)?;
     let place_order = place_parent_order_cmd(cmd.payload());
     let state = PlaceMatchSpotOrderV2State {
         maker_orders: maker_candidates_for(place_order, &working.orders),
@@ -807,10 +759,7 @@ fn maker_candidates_for(
         .filter(|order| order.asset == place_order.asset)
         .filter(|order| order.side != taker_side)
         .filter(|order| {
-            matches!(
-                order.status,
-                SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-            )
+            matches!(order.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
         })
         .filter(|order| matches!(order.order_type, OrderType::Limit { .. }))
         .cloned()
@@ -828,10 +777,7 @@ fn maker_candidates_for_open_match(
         .filter(|order| order.asset == taker_order.asset)
         .filter(|order| order.side != taker_order.side)
         .filter(|order| {
-            matches!(
-                order.status,
-                SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-            )
+            matches!(order.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
         })
         .filter(|order| matches!(order.order_type, OrderType::Limit { .. }))
         .cloned()
@@ -839,11 +785,7 @@ fn maker_candidates_for_open_match(
 }
 
 fn side_from_place_order(order: &PlaceOnlySpotOrderV2OrderCmd) -> OrderSide {
-    if order.is_buy {
-        OrderSide::Buy
-    } else {
-        OrderSide::Sell
-    }
+    if order.is_buy { OrderSide::Buy } else { OrderSide::Sell }
 }
 
 fn place_parent_order_cmd(cmd: &PlaceOnlySpotOrderV2Cmd) -> &PlaceOnlySpotOrderV2OrderCmd {
@@ -859,8 +801,7 @@ fn shared_party_id(commands: &[SpotBlockCommand]) -> Option<&str> {
     if first.is_empty() {
         return None;
     }
-    iter.all(|party_id| party_id == Some(first))
-        .then_some(first)
+    iter.all(|party_id| party_id == Some(first)).then_some(first)
 }
 
 fn command_party_id(command: &SpotBlockCommand) -> Option<&str> {

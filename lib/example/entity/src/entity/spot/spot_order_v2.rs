@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::spot_order_primitives::{
-    OrderSide, SpotOrderStatus, SpotOrderStatusReason, OrderTif, OrderTriggerRole,
-    OrderType, option_status_reason_value, push_change,
+    OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderStatusReason,
+    option_status_reason_value, push_change,
 };
 use super::spot_trade::SpotTrade;
 use crate::entity::{
@@ -360,7 +360,7 @@ pub struct SpotOrderV2 {
     /// 本地生命周期状态。
     pub status: SpotOrderStatus,
     /// Hyperliquid 细分状态原因。
-    pub status_reason: Option<SpotOrderStatusReason>,//todo delete
+    pub status_reason: Option<SpotOrderStatusReason>, //todo delete
     /// 订单 principal 冻结凭证。//todo delete
     pub reservation: Reservation,
     /// 订单 fee 冻结凭证。
@@ -383,9 +383,7 @@ pub struct SpotOrderV2 {
 
 impl SpotOrderV2 {
     fn serde_default_order_type() -> OrderType {
-        OrderType::Limit {
-            tif: OrderTif::Gtc,
-        }
+        OrderType::Limit { tif: OrderTif::Gtc }
     }
 
     /// 创建未触发条件单；该状态不生成 principal / fee reservation。
@@ -534,11 +532,7 @@ impl SpotOrderV2 {
                 quote_asset_id.to_string(),
                 quote_notional(qty, order_price).ok_or(ReservationError::ArithmeticOverflow)?,
             ),
-            OrderSide::Sell => (
-                ReservationKind::SpotSellBase,
-                base_asset_id.to_string(),
-                qty,
-            ),
+            OrderSide::Sell => (ReservationKind::SpotSellBase, base_asset_id.to_string(), qty),
         };
         Reservation::new(
             concat2("reservation:", order_id.to_string().as_str()),
@@ -707,24 +701,15 @@ impl SpotOrderV2 {
             return false;
         }
 
-        let OrderType::Trigger {
-            trigger_price,
-            tpsl,
-            ..
-        } = self.order_type
-        else {
+        let OrderType::Trigger { trigger_price, tpsl, .. } = self.order_type else {
             return false;
         };
 
         match (self.side, tpsl) {
             (OrderSide::Buy, OrderTriggerRole::TakeProfit)
-            | (OrderSide::Sell, OrderTriggerRole::StopLoss) => {
-                market_price <= trigger_price
-            }
+            | (OrderSide::Sell, OrderTriggerRole::StopLoss) => market_price <= trigger_price,
             (OrderSide::Buy, OrderTriggerRole::StopLoss)
-            | (OrderSide::Sell, OrderTriggerRole::TakeProfit) => {
-                market_price >= trigger_price
-            }
+            | (OrderSide::Sell, OrderTriggerRole::TakeProfit) => market_price >= trigger_price,
         }
     }
 
@@ -749,10 +734,7 @@ impl SpotOrderV2 {
 
     /// 返回 active lifecycle 的 principal reservation；未触发条件单返回 `None`。
     pub fn active_reservation(&self) -> Option<&Reservation> {
-        if matches!(
-            self.status,
-            SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-        ) {
+        if matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
             Some(&self.reservation)
         } else {
             None
@@ -761,10 +743,7 @@ impl SpotOrderV2 {
 
     /// 返回 active lifecycle 的 fee reservation；未触发条件单返回 `None`。
     pub fn active_fee_reservation(&self) -> Option<&Reservation> {
-        if matches!(
-            self.status,
-            SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-        ) {
+        if matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
             Some(&self.fee_reservation)
         } else {
             None
@@ -943,12 +922,7 @@ impl SpotOrderV2 {
         let amount = fee_amount_round_up(trade_notional, fee_bps)
             .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)?;
 
-        Ok(SpotOrderFeeConsumeRequirement {
-            asset: self.fee_hold_asset(),
-            amount,
-            role,
-            fee_bps,
-        })
+        Ok(SpotOrderFeeConsumeRequirement { asset: self.fee_hold_asset(), amount, role, fee_bps })
     }
 
     /// 返回订单终态下允许释放的 principal / fee requirement。
@@ -956,14 +930,8 @@ impl SpotOrderV2 {
         &self,
         _maker_fee_bps: u64,
         _taker_fee_bps: u64,
-    ) -> (
-        Option<SpotOrderReleaseRequirement>,
-        Option<SpotOrderReleaseRequirement>,
-    ) {
-        (
-            self.terminal_release_requirement(),
-            self.fee_terminal_release_requirement(),
-        )
+    ) -> (Option<SpotOrderReleaseRequirement>, Option<SpotOrderReleaseRequirement>) {
+        (self.terminal_release_requirement(), self.fee_terminal_release_requirement())
     }
 
     /// 返回该订单是否允许撤销。
@@ -976,7 +944,9 @@ impl SpotOrderV2 {
         match self.status {
             SpotOrderStatus::Pending => self.filled_size == 0,
             SpotOrderStatus::Open => self.filled_size == 0,
-            SpotOrderStatus::PartiallyFilled => 0 < self.filled_size && self.filled_size < self.size,
+            SpotOrderStatus::PartiallyFilled => {
+                0 < self.filled_size && self.filled_size < self.size
+            }
             SpotOrderStatus::Filled => self.filled_size == self.size,
             SpotOrderStatus::Canceled => self.filled_size <= self.size,
             SpotOrderStatus::Rejected => self.filled_size == 0,
@@ -1007,17 +977,10 @@ impl SpotOrderV2 {
         if !self.has_consistent_execution_state() {
             return Err(SpotOrderV2MatchError::InconsistentExecutionState);
         }
-        if !matches!(
-            self.status,
-            SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-        ) {
+        if !matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
             return Err(SpotOrderV2MatchError::OrderNotMatchable);
         }
-        if self
-            .remaining_qty()
-            .ok_or(SpotOrderV2MatchError::InconsistentExecutionState)?
-            == 0
-        {
+        if self.remaining_qty().ok_or(SpotOrderV2MatchError::InconsistentExecutionState)? == 0 {
             return Err(SpotOrderV2MatchError::OrderNotMatchable);
         }
         Ok(())
@@ -1062,9 +1025,8 @@ impl SpotOrderV2 {
             return Err(SpotOrderV2MatchError::SameSideMaker);
         }
 
-        let maker_price = maker
-            .match_limit_price()
-            .ok_or(SpotOrderV2MatchError::MakerMustBeLimit)?;
+        let maker_price =
+            maker.match_limit_price().ok_or(SpotOrderV2MatchError::MakerMustBeLimit)?;
         Ok(self.crosses_maker_price(maker_price))
     }
 
@@ -1103,9 +1065,7 @@ impl SpotOrderV2 {
     }
 
     fn next_version(&self) -> Result<u64, SpotOrderV2MatchError> {
-        self.version
-            .checked_add(1)
-            .ok_or(SpotOrderV2MatchError::ArithmeticOverflow)
+        self.version.checked_add(1).ok_or(SpotOrderV2MatchError::ArithmeticOverflow)
     }
 
     // 领域方法：订单生命周期推进
@@ -1147,12 +1107,7 @@ impl SpotOrderV2 {
             return Err(SpotOrderV2MatchError::InconsistentExecutionState);
         }
         self.filled_size = next_filled_qty;
-        self.transition_to(
-            next_version,
-            self.matched_status_for(next_filled_qty),
-            None,
-            timestamp,
-        );
+        self.transition_to(next_version, self.matched_status_for(next_filled_qty), None, timestamp);
         Ok(())
     }
 
@@ -1172,10 +1127,8 @@ impl SpotOrderV2 {
             let Some(terms) = spot_order_v2_next_trade_terms(self, maker)? else {
                 break;
             };
-            let trade_suffix = trades
-                .len()
-                .checked_add(1)
-                .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
+            let trade_suffix =
+                trades.len().checked_add(1).ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
 
             let taker_fee = self
                 .fee_consume_requirement_for_trade(
@@ -1196,11 +1149,7 @@ impl SpotOrderV2 {
                 )?
                 .amount;
             let trade = SpotTrade::new(
-                concat3(
-                    input.match_id.as_str(),
-                    "-",
-                    trade_suffix.to_string().as_str(),
-                ),
+                concat3(input.match_id.as_str(), "-", trade_suffix.to_string().as_str()),
                 input.match_id.clone(),
                 self.asset,
                 self.symbol.clone(),
@@ -1225,11 +1174,7 @@ impl SpotOrderV2 {
             }
             trades.push(trade);
 
-            if self
-                .remaining_qty()
-                .ok_or(SpotOrderV2BehaviorError::OrderNotMatchable)?
-                == 0
-            {
+            if self.remaining_qty().ok_or(SpotOrderV2BehaviorError::OrderNotMatchable)? == 0 {
                 break;
             }
         }
@@ -1251,15 +1196,10 @@ impl SpotOrderV2 {
             self.status = SpotOrderStatus::Canceled;
             self.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
             self.updated_at = input.timestamp;
-            return Ok(CancelSpotOrderV2Outcome {
-                unfreeze_ledger_entry: None,
-            });
+            return Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: None });
         }
 
-        if !matches!(
-            self.status,
-            SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-        ) {
+        if !matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
             return Err(SpotOrderV2BehaviorError::OrderNotCancelable);
         }
 
@@ -1269,9 +1209,7 @@ impl SpotOrderV2 {
 
         let release_amount = self.reservation.remaining_amount;
         if release_amount == 0 {
-            return Err(SpotOrderV2BehaviorError::Reservation(
-                ReservationError::InvalidAmount,
-            ));
+            return Err(SpotOrderV2BehaviorError::Reservation(ReservationError::InvalidAmount));
         }
 
         let mut released_reservation = self.reservation.clone();
@@ -1285,9 +1223,7 @@ impl SpotOrderV2 {
             self.reservation.asset_id.clone(),
             input.balance_entity_id,
             release_amount,
-            BalanceLedgerReason::UnfreezeForCancel {
-                order_id: self.order_id,
-            },
+            BalanceLedgerReason::UnfreezeForCancel { order_id: self.order_id },
         )?;
         let next_version = self.next_version()?;
 
@@ -1299,9 +1235,7 @@ impl SpotOrderV2 {
             input.timestamp,
         );
 
-        Ok(CancelSpotOrderV2Outcome {
-            unfreeze_ledger_entry: Some(unfreeze_ledger_entry),
-        })
+        Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: Some(unfreeze_ledger_entry) })
     }
 
     /// 按 IOC 部分成交后取消剩余数量语义关闭订单。
@@ -1417,12 +1351,7 @@ impl SpotOrderV2 {
     fn no_liquidity_status_reason(&self) -> SpotOrderStatusReason {
         if matches!(
             self.order_type,
-            OrderType::Limit {
-                tif: OrderTif::Ioc
-            } | OrderType::Trigger {
-                is_market: true,
-                ..
-            }
+            OrderType::Limit { tif: OrderTif::Ioc } | OrderType::Trigger { is_market: true, .. }
         ) {
             SpotOrderStatusReason::MarketOrderNoLiquidityRejected
         } else {
@@ -1479,23 +1408,16 @@ pub fn spot_order_v2_next_trade_terms(
         return Ok(None);
     }
 
-    let maker_price = maker
-        .match_limit_price()
-        .ok_or(SpotOrderV2MatchError::MakerMustBeLimit)?;
-    let taker_remaining = taker
-        .remaining_qty()
-        .ok_or(SpotOrderV2MatchError::InconsistentExecutionState)?;
-    let maker_remaining = maker
-        .remaining_qty()
-        .ok_or(SpotOrderV2MatchError::InconsistentExecutionState)?;
+    let maker_price = maker.match_limit_price().ok_or(SpotOrderV2MatchError::MakerMustBeLimit)?;
+    let taker_remaining =
+        taker.remaining_qty().ok_or(SpotOrderV2MatchError::InconsistentExecutionState)?;
+    let maker_remaining =
+        maker.remaining_qty().ok_or(SpotOrderV2MatchError::InconsistentExecutionState)?;
     let trade_qty = taker_remaining.min(maker_remaining);
     if trade_qty == 0 {
         Ok(None)
     } else {
-        Ok(Some(SpotOrderV2TradeTerms {
-            maker_price,
-            trade_qty,
-        }))
+        Ok(Some(SpotOrderV2TradeTerms { maker_price, trade_qty }))
     }
 }
 
@@ -1524,16 +1446,8 @@ impl FieldDiff for SpotOrderV2 {
                 "",
                 option_status_reason_value(self.status_reason),
             ),
-            EntityFieldChange::new(
-                "reservation_id",
-                "",
-                self.reservation.reservation_id.clone(),
-            ),
-            EntityFieldChange::new(
-                "reservation_asset_id",
-                "",
-                self.reservation.asset_id.clone(),
-            ),
+            EntityFieldChange::new("reservation_id", "", self.reservation.reservation_id.clone()),
+            EntityFieldChange::new("reservation_asset_id", "", self.reservation.asset_id.clone()),
             EntityFieldChange::new(
                 "reservation_kind",
                 "",
@@ -1600,36 +1514,17 @@ impl FieldDiff for SpotOrderV2 {
                 "",
                 self.fee_reservation.status.as_str(),
             ),
-            EntityFieldChange::new(
-                "client_order_id",
-                "",
-                self.cloid.clone().unwrap_or_default(),
-            ),
+            EntityFieldChange::new("client_order_id", "", self.cloid.clone().unwrap_or_default()),
         ]
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = Vec::with_capacity(0);
 
-        push_change(
-            &mut changes,
-            "asset",
-            self.asset.to_string(),
-            other.asset.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "account_id",
-            &self.account_id,
-            &other.account_id,
-        );
+        push_change(&mut changes, "asset", self.asset.to_string(), other.asset.to_string());
+        push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
         push_change(&mut changes, "symbol", &self.symbol, &other.symbol);
-        push_change(
-            &mut changes,
-            "side",
-            self.side.as_str(),
-            other.side.as_str(),
-        );
+        push_change(&mut changes, "side", self.side.as_str(), other.side.as_str());
         push_change(
             &mut changes,
             "limit_price",
@@ -1667,12 +1562,7 @@ impl FieldDiff for SpotOrderV2 {
             self.group_relation.replay_value(),
             other.group_relation.replay_value(),
         );
-        push_change(
-            &mut changes,
-            "qty",
-            self.size.to_string(),
-            other.size.to_string(),
-        );
+        push_change(&mut changes, "qty", self.size.to_string(), other.size.to_string());
         push_change(
             &mut changes,
             "filled_qty",
@@ -1691,12 +1581,7 @@ impl FieldDiff for SpotOrderV2 {
             self.updated_at.to_string(),
             other.updated_at.to_string(),
         );
-        push_change(
-            &mut changes,
-            "status",
-            self.status.as_str(),
-            other.status.as_str(),
-        );
+        push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         push_change(
             &mut changes,
             "status_reason",
@@ -1805,12 +1690,7 @@ impl FieldDiff for SpotOrderV2 {
             self.cloid.clone().unwrap_or_default(),
             other.cloid.clone().unwrap_or_default(),
         );
-        push_change(
-            &mut changes,
-            "version",
-            self.version.to_string(),
-            other.version.to_string(),
-        );
+        push_change(&mut changes, "version", self.version.to_string(), other.version.to_string());
 
         changes
     }
@@ -1933,26 +1813,20 @@ impl LobOrder for SpotOrderV2 {
         self.created_at
     }
     fn is_active(&self) -> bool {
-        matches!(
-            self.status,
-            SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-        ) && self.filled_size < self.size
+        matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
+            && self.filled_size < self.size
     }
     fn from_replay_event(
         _: &common_entity::EntityReplayableEvent,
         _: u64,
     ) -> Result<Self, lob_repo_v2::LobError> {
-        Err(lob_repo_v2::LobError::Event(
-            "SpotOrderV2 replay construction is not wired".into(),
-        ))
+        Err(lob_repo_v2::LobError::Event("SpotOrderV2 replay construction is not wired".into()))
     }
     fn apply_replay_event(
         self,
         _: &common_entity::EntityReplayableEvent,
     ) -> Result<Self, lob_repo_v2::LobError> {
-        Err(lob_repo_v2::LobError::Event(
-            "SpotOrderV2 replay update is not wired".into(),
-        ))
+        Err(lob_repo_v2::LobError::Event("SpotOrderV2 replay update is not wired".into()))
     }
     fn entity_ver(&self) -> u64 {
         self.version
@@ -1978,7 +1852,7 @@ impl EntityLifecycle for SpotOrderV2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::{ReservationKind, ReservationStatus, OrderTriggerRole};
+    use crate::entity::{OrderTriggerRole, ReservationKind, ReservationStatus};
 
     fn activation_input(maker_fee_bps: u64, taker_fee_bps: u64) -> ActivatePendingSpotOrderV2Input {
         ActivatePendingSpotOrderV2Input {
@@ -2008,13 +1882,9 @@ mod tests {
 
     #[test]
     fn pending_limit_order_activation_builds_open_order_reservations() {
-        let mut order = pending_order(OrderType::Limit {
-            tif: OrderTif::Gtc,
-        });
+        let mut order = pending_order(OrderType::Limit { tif: OrderTif::Gtc });
 
-        order
-            .activate_pending(activation_input(5, 10))
-            .expect("pending limit should activate");
+        order.activate_pending(activation_input(5, 10)).expect("pending limit should activate");
 
         assert_eq!(order.status, SpotOrderStatus::Open);
         assert_eq!(order.filled_size, 0);
@@ -2022,17 +1892,11 @@ mod tests {
         assert_eq!(order.updated_at, 10);
         assert_eq!(order.reservation.asset_id, "USDT");
         assert_eq!(order.reservation.original_amount, 200);
-        assert_eq!(
-            order.reservation.reservation_kind,
-            ReservationKind::SpotBuyQuote
-        );
+        assert_eq!(order.reservation.reservation_kind, ReservationKind::SpotBuyQuote);
         assert_eq!(order.reservation.status, ReservationStatus::Active);
         assert_eq!(order.fee_reservation.asset_id, "USDT");
         assert_eq!(order.fee_reservation.original_amount, 1);
-        assert_eq!(
-            order.fee_reservation.reservation_kind,
-            ReservationKind::SpotBuyFeeQuote
-        );
+        assert_eq!(order.fee_reservation.reservation_kind, ReservationKind::SpotBuyFeeQuote);
         assert_eq!(order.fee_reservation.status, ReservationStatus::Active);
     }
 
@@ -2057,9 +1921,7 @@ mod tests {
             1,
         );
 
-        order
-            .activate_pending(activation_input(5, 10))
-            .expect("pending trigger should activate");
+        order.activate_pending(activation_input(5, 10)).expect("pending trigger should activate");
 
         assert_eq!(order.status, SpotOrderStatus::Open);
         assert_eq!(order.order_type, trigger_type);
@@ -2071,34 +1933,10 @@ mod tests {
     #[test]
     fn market_price_triggers_pending_orders_by_side_and_role() {
         let cases = [
-            (
-                OrderSide::Buy,
-                OrderTriggerRole::TakeProfit,
-                100,
-                99,
-                true,
-            ),
-            (
-                OrderSide::Buy,
-                OrderTriggerRole::StopLoss,
-                100,
-                101,
-                true,
-            ),
-            (
-                OrderSide::Sell,
-                OrderTriggerRole::TakeProfit,
-                100,
-                101,
-                true,
-            ),
-            (
-                OrderSide::Sell,
-                OrderTriggerRole::StopLoss,
-                100,
-                99,
-                true,
-            ),
+            (OrderSide::Buy, OrderTriggerRole::TakeProfit, 100, 99, true),
+            (OrderSide::Buy, OrderTriggerRole::StopLoss, 100, 101, true),
+            (OrderSide::Sell, OrderTriggerRole::TakeProfit, 100, 101, true),
+            (OrderSide::Sell, OrderTriggerRole::StopLoss, 100, 99, true),
         ];
 
         for (side, role, trigger_price, market_price, expected) in cases {
@@ -2110,11 +1948,7 @@ mod tests {
                 side,
                 1,
                 100,
-                OrderType::Trigger {
-                    is_market: false,
-                    trigger_price,
-                    tpsl: role,
-                },
+                OrderType::Trigger { is_market: false, trigger_price, tpsl: role },
                 None,
                 1,
                 1,
@@ -2146,9 +1980,7 @@ mod tests {
 
         assert!(order.is_triggered_by_market_price(100));
 
-        order.order_type = OrderType::Limit {
-            tif: OrderTif::Gtc,
-        };
+        order.order_type = OrderType::Limit { tif: OrderTif::Gtc };
         assert!(!order.is_triggered_by_market_price(100));
 
         order.order_type = OrderType::Trigger {
@@ -2156,9 +1988,7 @@ mod tests {
             trigger_price: 100,
             tpsl: OrderTriggerRole::StopLoss,
         };
-        order
-            .activate_pending(activation_input(5, 10))
-            .expect("pending trigger should activate");
+        order.activate_pending(activation_input(5, 10)).expect("pending trigger should activate");
         assert!(!order.is_triggered_by_market_price(100));
     }
 
@@ -2167,9 +1997,7 @@ mod tests {
         for tif in [OrderTif::Gtc, OrderTif::Ioc, OrderTif::Alo] {
             let mut order = pending_order(OrderType::Limit { tif });
 
-            order
-                .activate_pending(activation_input(5, 10))
-                .expect("pending tif should activate");
+            order.activate_pending(activation_input(5, 10)).expect("pending tif should activate");
 
             assert_eq!(order.status, SpotOrderStatus::Open);
             assert_eq!(order.time_in_force(), tif);
@@ -2179,9 +2007,7 @@ mod tests {
 
     #[test]
     fn crosses_maker_checks_side_and_price() {
-        let mut taker = pending_order(OrderType::Limit {
-            tif: OrderTif::Gtc,
-        });
+        let mut taker = pending_order(OrderType::Limit { tif: OrderTif::Gtc });
         let mut maker = SpotOrderV2::new_pending_limit(
             3,
             10_001,
@@ -2190,33 +2016,19 @@ mod tests {
             OrderSide::Sell,
             2,
             99,
-            OrderType::Limit {
-                tif: OrderTif::Gtc,
-            },
+            OrderType::Limit { tif: OrderTif::Gtc },
             None,
             1,
             1,
         );
 
-        taker
-            .activate_pending(activation_input(5, 10))
-            .expect("taker should activate");
-        maker
-            .activate_pending(activation_input(5, 10))
-            .expect("maker should activate");
+        taker.activate_pending(activation_input(5, 10)).expect("taker should activate");
+        maker.activate_pending(activation_input(5, 10)).expect("maker should activate");
 
-        assert!(
-            taker
-                .crosses_maker(&maker)
-                .expect("compatible maker should be checked")
-        );
+        assert!(taker.crosses_maker(&maker).expect("compatible maker should be checked"));
 
         maker.limit_price = 101;
-        assert!(
-            !taker
-                .crosses_maker(&maker)
-                .expect("maker price should be checked")
-        );
+        assert!(!taker.crosses_maker(&maker).expect("maker price should be checked"));
     }
 
     #[test]
@@ -2228,9 +2040,7 @@ mod tests {
             SpotOrderStatus::Canceled,
             SpotOrderStatus::Rejected,
         ] {
-            let mut order = pending_order(OrderType::Limit {
-                tif: OrderTif::Gtc,
-            });
+            let mut order = pending_order(OrderType::Limit { tif: OrderTif::Gtc });
             order.status = status;
             order.filled_size = match status {
                 SpotOrderStatus::PartiallyFilled => 1,

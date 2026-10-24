@@ -161,18 +161,12 @@ impl ConnectionRepo {
         if let Some(user_id) = &conn_info.user_id {
             {
                 let mut user_conns = self.user_connections.write();
-                user_conns
-                    .entry(user_id.clone())
-                    .or_default()
-                    .push(conn_info.clone());
+                user_conns.entry(user_id.clone()).or_default().push(conn_info.clone());
             }
 
             {
                 let mut user_senders = self.user_senders.write();
-                user_senders
-                    .entry(user_id.clone())
-                    .or_default()
-                    .push(conn_info.sender.clone());
+                user_senders.entry(user_id.clone()).or_default().push(conn_info.sender.clone());
             }
         }
 
@@ -350,10 +344,7 @@ impl ConnectionRepo {
                 // 添加到新用户ID的映射
                 {
                     let mut user_conns = self.user_connections.write();
-                    user_conns
-                        .entry(new_user_id.clone())
-                        .or_default()
-                        .push(conn_clone.clone());
+                    user_conns.entry(new_user_id.clone()).or_default().push(conn_clone.clone());
                 }
 
                 {

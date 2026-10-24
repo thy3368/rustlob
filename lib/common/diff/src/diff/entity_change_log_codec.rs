@@ -50,36 +50,29 @@ const VERSION: u8 = 4;
 const HEADER_SIZE: usize = 24;
 
 fn checked_window(data: &[u8], start: usize, len: usize) -> Result<&[u8], DecodeError> {
-    let end = start
-        .checked_add(len)
-        .ok_or(DecodeError::InsufficientData)?;
+    let end = start.checked_add(len).ok_or(DecodeError::InsufficientData)?;
     data.get(start..end).ok_or(DecodeError::InsufficientData)
 }
 
 fn read_u8_at(data: &[u8], index: usize) -> Result<u8, DecodeError> {
-    data.get(index)
-        .copied()
-        .ok_or(DecodeError::InsufficientData)
+    data.get(index).copied().ok_or(DecodeError::InsufficientData)
 }
 
 fn read_u16_at(data: &[u8], start: usize) -> Result<u16, DecodeError> {
-    let bytes: [u8; 2] = checked_window(data, start, 2)?
-        .try_into()
-        .map_err(|_| DecodeError::InsufficientData)?;
+    let bytes: [u8; 2] =
+        checked_window(data, start, 2)?.try_into().map_err(|_| DecodeError::InsufficientData)?;
     Ok(u16::from_le_bytes(bytes))
 }
 
 fn read_u32_at(data: &[u8], start: usize) -> Result<u32, DecodeError> {
-    let bytes: [u8; 4] = checked_window(data, start, 4)?
-        .try_into()
-        .map_err(|_| DecodeError::InsufficientData)?;
+    let bytes: [u8; 4] =
+        checked_window(data, start, 4)?.try_into().map_err(|_| DecodeError::InsufficientData)?;
     Ok(u32::from_le_bytes(bytes))
 }
 
 fn read_u64_at(data: &[u8], start: usize) -> Result<u64, DecodeError> {
-    let bytes: [u8; 8] = checked_window(data, start, 8)?
-        .try_into()
-        .map_err(|_| DecodeError::InsufficientData)?;
+    let bytes: [u8; 8] =
+        checked_window(data, start, 8)?.try_into().map_err(|_| DecodeError::InsufficientData)?;
     Ok(u64::from_le_bytes(bytes))
 }
 
@@ -88,16 +81,11 @@ fn advance(offset: usize, len: usize) -> Result<usize, DecodeError> {
 }
 
 fn write_bytes(buffer: &mut [u8], offset: &mut usize, bytes: &[u8]) -> Result<(), EncodeError> {
-    let end = offset
-        .checked_add(bytes.len())
-        .ok_or(EncodeError::DataTooLarge)?;
+    let end = offset.checked_add(bytes.len()).ok_or(EncodeError::DataTooLarge)?;
     let available = buffer.len();
     let dst = buffer
         .get_mut(*offset..end)
-        .ok_or(EncodeError::BufferTooSmall {
-            required: end,
-            available,
-        })?;
+        .ok_or(EncodeError::BufferTooSmall { required: end, available })?;
     dst.copy_from_slice(bytes);
     *offset = end;
     Ok(())
@@ -108,10 +96,7 @@ fn write_zeroes(buffer: &mut [u8], offset: &mut usize, len: usize) -> Result<(),
     let available = buffer.len();
     let dst = buffer
         .get_mut(*offset..end)
-        .ok_or(EncodeError::BufferTooSmall {
-            required: end,
-            available,
-        })?;
+        .ok_or(EncodeError::BufferTooSmall { required: end, available })?;
     dst.fill(0);
     *offset = end;
     Ok(())
@@ -151,16 +136,12 @@ pub struct ChangeLogEntrySoaEncoder {
 impl ChangeLogEntrySoaEncoder {
     /// 创建新的编码器
     pub fn new() -> Self {
-        Self {
-            soa: EntityChangeLogSoa::new(),
-        }
+        Self { soa: EntityChangeLogSoa::new() }
     }
 
     /// 创建预分配容量的编码器
     pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            soa: EntityChangeLogSoa::with_capacity(capacity),
-        }
+        Self { soa: EntityChangeLogSoa::with_capacity(capacity) }
     }
 
     /// 添加条目
@@ -413,10 +394,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
 
             offset = advance(offset, fc_size)?;
 
-            field_change_infos.push(FieldChangeInfo {
-                offset: fc_offset,
-                count: fc_count,
-            });
+            field_change_infos.push(FieldChangeInfo { offset: fc_offset, count: fc_count });
         }
 
         // 验证数据长度
@@ -519,11 +497,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
         if entry_index >= self.entry_count {
             return Err(DecodeError::IndexOutOfBounds);
         }
-        Ok(self
-            .field_change_infos
-            .get(entry_index)
-            .map(|info| info.count)
-            .unwrap_or(0))
+        Ok(self.field_change_infos.get(entry_index).map(|info| info.count).unwrap_or(0))
     }
 
     /// 获取指定条目的字段变更 SOA（需要内存拷贝）
@@ -532,10 +506,7 @@ impl<'a> ChangeLogEntrySoaDecoder<'a> {
             return Err(DecodeError::IndexOutOfBounds);
         }
 
-        let info = self
-            .field_change_infos
-            .get(entry_index)
-            .ok_or(DecodeError::IndexOutOfBounds)?;
+        let info = self.field_change_infos.get(entry_index).ok_or(DecodeError::IndexOutOfBounds)?;
         let fc_count = info.count;
         let mut offset = info.offset;
 
@@ -770,16 +741,12 @@ pub struct FieldChangeSoaEncoder {
 impl FieldChangeSoaEncoder {
     /// 创建新的编码器
     pub fn new() -> Self {
-        Self {
-            soa: FieldChangeSoa::new(),
-        }
+        Self { soa: FieldChangeSoa::new() }
     }
 
     /// 创建预分配容量的编码器
     pub fn with_capacity(field_capacity: usize) -> Self {
-        Self {
-            soa: FieldChangeSoa::with_capacity(field_capacity),
-        }
+        Self { soa: FieldChangeSoa::with_capacity(field_capacity) }
     }
 
     /// 添加字段变更
@@ -789,9 +756,7 @@ impl FieldChangeSoaEncoder {
 
     /// 从 Vec<FieldChange> 创建
     pub fn from_vec(field_changes: Vec<FieldChange>) -> Self {
-        Self {
-            soa: FieldChangeSoa::from_vec(field_changes),
-        }
+        Self { soa: FieldChangeSoa::from_vec(field_changes) }
     }
 
     /// 获取字段变更数量
@@ -1017,9 +982,7 @@ impl<'a> FieldChangeSoaDecoder<'a> {
             .field_names_offset
             .checked_add(field_index.saturating_mul(32))
             .ok_or(DecodeError::IndexOutOfBounds)?;
-        checked_window(self.data, start, 32)?
-            .try_into()
-            .map_err(|_| DecodeError::IndexOutOfBounds)
+        checked_window(self.data, start, 32)?.try_into().map_err(|_| DecodeError::IndexOutOfBounds)
     }
 
     /// 获取指定字段变更的旧值
@@ -1032,9 +995,7 @@ impl<'a> FieldChangeSoaDecoder<'a> {
             .old_values_offset
             .checked_add(field_index.saturating_mul(64))
             .ok_or(DecodeError::IndexOutOfBounds)?;
-        checked_window(self.data, start, 64)?
-            .try_into()
-            .map_err(|_| DecodeError::IndexOutOfBounds)
+        checked_window(self.data, start, 64)?.try_into().map_err(|_| DecodeError::IndexOutOfBounds)
     }
 
     /// 获取指定字段变更的新值
@@ -1047,9 +1008,7 @@ impl<'a> FieldChangeSoaDecoder<'a> {
             .new_values_offset
             .checked_add(field_index.saturating_mul(64))
             .ok_or(DecodeError::IndexOutOfBounds)?;
-        checked_window(self.data, start, 64)?
-            .try_into()
-            .map_err(|_| DecodeError::IndexOutOfBounds)
+        checked_window(self.data, start, 64)?.try_into().map_err(|_| DecodeError::IndexOutOfBounds)
     }
 
     /// 获取指定字段变更的旧值长度

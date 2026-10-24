@@ -78,9 +78,6 @@ mod tests {
             "futureAction": { "kind": "restake" }
         });
         let parsed: DelegatorDeltaWire = serde_json::from_value(value).unwrap();
-        assert_eq!(
-            parsed.extra.get("futureAction"),
-            Some(&json!({ "kind": "restake" }))
-        );
+        assert_eq!(parsed.extra.get("futureAction"), Some(&json!({ "kind": "restake" })));
     }
 }

@@ -3,10 +3,10 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    Balance, MarketRules, PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason,
-    ReservationKind, ReservationMarketKind, ReservationStatus, OrderGroupRelation,
-    OrderSide, SpotOrderStatus, SpotOrderStatusReason, OrderTif, OrderType,
-    SpotOrderV2, SpotTrade,
+    Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,
+    PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason, ReservationKind,
+    ReservationMarketKind, ReservationStatus, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2,
+    SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
 
@@ -27,20 +27,14 @@ impl InMemoryPlaceOrderOutbound {
     }
 
     pub fn from_store(store: InMemoryStore) -> Self {
-        Self {
-            store,
-            broker: None,
-        }
+        Self { store, broker: None }
     }
 
     pub fn from_store_with_broker(
         store: InMemoryStore,
         broker: InMemorySpotPipelineBroker,
     ) -> Self {
-        Self {
-            store,
-            broker: Some(broker),
-        }
+        Self { store, broker: Some(broker) }
     }
 
     pub fn seeded(
@@ -117,10 +111,10 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound
         let base_asset_id = base_asset_id_for(market_rules.symbol.as_str()).to_string();
         let quote_asset_id = quote_asset_id_for(market_rules.symbol.as_str()).to_string();
         let mut settlement_balances = state.balances.values().cloned().collect::<Vec<_>>();
-        if !state.balances.contains_key(&balance_key(
-            DEFAULT_FEE_ACCOUNT_ID,
-            quote_asset_id.as_str(),
-        )) {
+        if !state
+            .balances
+            .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
+        {
             settlement_balances.push(Balance::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
@@ -300,9 +294,7 @@ fn decode_limit_price(event: &EntityReplayableEvent) -> Result<u64, PlaceOrderOu
         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)
 }
 
-fn decode_order_type(
-    event: &EntityReplayableEvent,
-) -> Result<OrderType, PlaceOrderOutboundError> {
+fn decode_order_type(event: &EntityReplayableEvent) -> Result<OrderType, PlaceOrderOutboundError> {
     let tif = match event_string_field(event, "effective_tif")
         .or_else(|| event_string_field(event, "time_in_force"))
         .as_deref()
@@ -485,20 +477,14 @@ fn reservation_string_field(
     fee: bool,
     suffix: &str,
 ) -> Option<String> {
-    let field_name = if fee {
-        format!("fee_reservation_{suffix}")
-    } else {
-        format!("reservation_{suffix}")
-    };
+    let field_name =
+        if fee { format!("fee_reservation_{suffix}") } else { format!("reservation_{suffix}") };
     event_string_field(event, field_name.as_str())
 }
 
 fn reservation_u64_field(event: &EntityReplayableEvent, fee: bool, suffix: &str) -> Option<u64> {
-    let field_name = if fee {
-        format!("fee_reservation_{suffix}")
-    } else {
-        format!("reservation_{suffix}")
-    };
+    let field_name =
+        if fee { format!("fee_reservation_{suffix}") } else { format!("reservation_{suffix}") };
     event_u64_field(event, field_name.as_str())
 }
 
@@ -635,9 +621,7 @@ pub(crate) fn decode_created_trade(
     ))
 }
 
-fn decode_trade_side(
-    event: &EntityReplayableEvent,
-) -> Result<OrderSide, PlaceOrderOutboundError> {
+fn decode_trade_side(event: &EntityReplayableEvent) -> Result<OrderSide, PlaceOrderOutboundError> {
     match event_string_field(event, "taker_side").as_deref() {
         Some("buy") => Ok(OrderSide::Buy),
         Some("sell") => Ok(OrderSide::Sell),
@@ -653,9 +637,7 @@ pub(crate) fn apply_order_update_event(
     if !orders.contains_key(&order_id) {
         return Err(PlaceOrderOutboundError::OrderNotFound);
     }
-    let order = orders
-        .get_mut(&order_id)
-        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let order = orders.get_mut(&order_id).ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     if let Some(status) = event_string_field(event, "status") {
         order.status = decode_status_value(status.as_str())?;
     }

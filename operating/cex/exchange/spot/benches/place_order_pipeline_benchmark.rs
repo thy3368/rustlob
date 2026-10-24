@@ -69,8 +69,7 @@ fn create_sell_order_with_quantity(
 fn create_embedded_lob(maker_orders: Vec<SpotOrder>) -> EmbeddedLobRepo<SpotOrder> {
     let mut lob = EmbeddedLobRepo::new(vec![LocalLob::new(TradingPair::BtcUsdt)]);
     for maker_order in maker_orders {
-        lob.add_order(TradingPair::BtcUsdt, maker_order)
-            .expect("add maker order should succeed");
+        lob.add_order(TradingPair::BtcUsdt, maker_order).expect("add maker order should succeed");
     }
     lob
 }

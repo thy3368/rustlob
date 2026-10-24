@@ -68,24 +68,19 @@ impl ExchangeActionHandler for TwapCancelAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "twapCancel" {
-        return Err(ExchangeHttpError::contract(
-            TwapCancelContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(TwapCancelContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.t == 0 {
-        return Err(ExchangeHttpError::contract(
-            TwapCancelContractError::InvalidTwapId,
-        ));
+        return Err(ExchangeHttpError::contract(TwapCancelContractError::InvalidTwapId));
     }
     Ok(())
 }
 
 async fn execute() -> Result<reply::TwapCancelResponseWire, ExchangeHttpError> {
-    Ok(ok_status_response(
-        "twapCancel",
-        reply::TwapCancelStatusWire::Success("success"),
-    ))
+    Ok(ok_status_response("twapCancel", reply::TwapCancelStatusWire::Success("success")))
 }
 
 #[cfg(test)]
@@ -116,10 +111,7 @@ mod tests {
         .expect("request parses");
 
         let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(
-            error.to_string(),
-            "Invalid `action.t`. Expected a positive twap id."
-        );
+        assert_eq!(error.to_string(), "Invalid `action.t`. Expected a positive twap id.");
     }
 
     #[actix_web::test]

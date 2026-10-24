@@ -3069,6 +3069,7 @@ dependencies = [
 name = "example_core_entity"
 version = "0.1.0"
 dependencies = [
+ "base_types",
  "cmd_handler",
  "entity",
  "lob_repo_v2",

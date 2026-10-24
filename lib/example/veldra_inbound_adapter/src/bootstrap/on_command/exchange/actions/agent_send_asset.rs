@@ -106,9 +106,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ExchangeHttpError::contract(AgentSendAssetContractError::InvalidDestination)
     })?;
     if request.action.source_dex.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            AgentSendAssetContractError::InvalidSourceDex,
-        ));
+        return Err(ExchangeHttpError::contract(AgentSendAssetContractError::InvalidSourceDex));
     }
     if request.action.destination_dex.trim().is_empty() {
         return Err(ExchangeHttpError::contract(
@@ -116,14 +114,10 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ));
     }
     if request.action.token.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            AgentSendAssetContractError::InvalidToken,
-        ));
+        return Err(ExchangeHttpError::contract(AgentSendAssetContractError::InvalidToken));
     }
     if request.action.amount.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            AgentSendAssetContractError::InvalidAmount,
-        ));
+        return Err(ExchangeHttpError::contract(AgentSendAssetContractError::InvalidAmount));
     }
     if !request.action.from_sub_account.is_empty() {
         validate_hex_address(&request.action.from_sub_account).map_err(|_| {
@@ -131,9 +125,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         })?;
     }
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(
-            AgentSendAssetContractError::NonceMismatch,
-        ));
+        return Err(ExchangeHttpError::contract(AgentSendAssetContractError::NonceMismatch));
     }
     Ok(())
 }

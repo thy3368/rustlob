@@ -15,10 +15,7 @@ pub struct MPMCQueue {
 
 impl MPMCQueue {
     pub fn from_config(config: DefaultQueueConfig) -> Self {
-        Self {
-            topic_channels: Arc::new(RwLock::new(HashMap::new())),
-            config,
-        }
+        Self { topic_channels: Arc::new(RwLock::new(HashMap::new())), config }
     }
 
     fn should_apply_backpressure(&self, options: &Option<SendOptions>) -> bool {
@@ -109,18 +106,13 @@ impl Queue for MPMCQueue {
         topic: &str,
         options: Option<SubscribeOptions>,
     ) -> broadcast::Receiver<bytes::Bytes> {
-        let channel_config = options
-            .as_ref()
-            .map(|opts| ChannelConfig::new().with_buffer_size(opts.buffer_size));
-        self.get_or_create_channel(topic, channel_config)
-            .subscribe()
+        let channel_config =
+            options.as_ref().map(|opts| ChannelConfig::new().with_buffer_size(opts.buffer_size));
+        self.get_or_create_channel(topic, channel_config).subscribe()
     }
 
     fn subscriber_count(&self, topic: &str) -> usize {
-        self.read_channels()
-            .get(topic)
-            .map(|channel| channel.receiver_count())
-            .unwrap_or(0)
+        self.read_channels().get(topic).map(|channel| channel.receiver_count()).unwrap_or(0)
     }
 
     fn get_or_create_channel(
@@ -132,16 +124,12 @@ impl Queue for MPMCQueue {
             return existing.clone();
         }
 
-        let buffer_size = config
-            .and_then(|c| c.buffer_size)
-            .unwrap_or_else(|| self.config.buffer_size.max(1));
+        let buffer_size =
+            config.and_then(|c| c.buffer_size).unwrap_or_else(|| self.config.buffer_size.max(1));
         let (tx, _) = broadcast::channel(buffer_size.max(1));
 
         let mut channels = self.write_channels();
-        channels
-            .entry(topic.to_string())
-            .or_insert_with(|| tx.clone())
-            .clone()
+        channels.entry(topic.to_string()).or_insert_with(|| tx.clone()).clone()
     }
 
     fn topics(&self) -> Vec<String> {

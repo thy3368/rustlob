@@ -487,12 +487,7 @@ mod tests {
         };
 
         match cmd {
-            Command::LimitOrder {
-                side,
-                position_side,
-                reduce_only,
-                ..
-            } => {
+            Command::LimitOrder { side, position_side, reduce_only, .. } => {
                 assert_eq!(side, Side::Buy);
                 assert_eq!(position_side, PositionSide::Long);
                 assert!(!reduce_only);
@@ -516,12 +511,7 @@ mod tests {
         };
 
         match cmd {
-            Command::LimitOrder {
-                side,
-                position_side,
-                reduce_only,
-                ..
-            } => {
+            Command::LimitOrder { side, position_side, reduce_only, .. } => {
                 assert_eq!(side, Side::Sell);
                 assert_eq!(position_side, PositionSide::Long);
                 assert!(reduce_only);
@@ -543,12 +533,7 @@ mod tests {
         };
 
         match cmd {
-            Command::MarketOrder {
-                side,
-                position_side,
-                reduce_only,
-                ..
-            } => {
+            Command::MarketOrder { side, position_side, reduce_only, .. } => {
                 assert_eq!(side, Side::Sell);
                 assert_eq!(position_side, PositionSide::Short);
                 assert!(!reduce_only);

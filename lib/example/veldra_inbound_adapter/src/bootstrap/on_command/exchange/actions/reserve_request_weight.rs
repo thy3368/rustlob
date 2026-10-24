@@ -63,9 +63,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ));
     }
     if request.action.weight == 0 {
-        return Err(ExchangeHttpError::contract(
-            ReserveRequestWeightContractError::InvalidWeight,
-        ));
+        return Err(ExchangeHttpError::contract(ReserveRequestWeightContractError::InvalidWeight));
     }
     Ok(())
 }
@@ -100,10 +98,7 @@ mod tests {
         )
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(
-            error.to_string(),
-            "Invalid `action.weight`. Expected a positive integer."
-        );
+        assert_eq!(error.to_string(), "Invalid `action.weight`. Expected a positive integer.");
     }
 
     #[actix_web::test]

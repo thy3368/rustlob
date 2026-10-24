@@ -128,9 +128,7 @@ where
 
         // reduce_only 验证
         if reduce_only {
-            let position = self
-                .position_repo
-                .get_position_by_trader_side(trader, position_side);
+            let position = self.position_repo.get_position_by_trader_side(trader, position_side);
             match position {
                 None => {
                     return CommandResult::Error {
@@ -228,12 +226,7 @@ where
             let _ = self.order_repo.save_order(remaining_order);
         }
 
-        CommandResult::LimitOrder {
-            order_id,
-            trades,
-            remaining_quantity: remaining,
-            status,
-        }
+        CommandResult::LimitOrder { order_id, trades, remaining_quantity: remaining, status }
     }
 
     /// 撮合订单
@@ -242,41 +235,28 @@ where
         let mut remaining = order.remaining_quantity;
 
         // 收集可匹配的对手方订单信息
-        let matches: Vec<(OrderId, TraderId, Price, Quantity, PositionSide, bool)> =
-            match order.side {
-                Side::Buy => self
-                    .order_repo
-                    .get_asks()
-                    .iter()
-                    .filter(|o| o.is_active() && order.can_match(o.price))
-                    .map(|o| {
-                        (
-                            o.id,
-                            o.trader,
-                            o.price,
-                            o.remaining_quantity,
-                            o.position_side,
-                            o.reduce_only,
-                        )
-                    })
-                    .collect(),
-                Side::Sell => self
-                    .order_repo
-                    .get_bids()
-                    .iter()
-                    .filter(|o| o.is_active() && o.can_match(order.price))
-                    .map(|o| {
-                        (
-                            o.id,
-                            o.trader,
-                            o.price,
-                            o.remaining_quantity,
-                            o.position_side,
-                            o.reduce_only,
-                        )
-                    })
-                    .collect(),
-            };
+        let matches: Vec<(OrderId, TraderId, Price, Quantity, PositionSide, bool)> = match order
+            .side
+        {
+            Side::Buy => self
+                .order_repo
+                .get_asks()
+                .iter()
+                .filter(|o| o.is_active() && order.can_match(o.price))
+                .map(|o| {
+                    (o.id, o.trader, o.price, o.remaining_quantity, o.position_side, o.reduce_only)
+                })
+                .collect(),
+            Side::Sell => self
+                .order_repo
+                .get_bids()
+                .iter()
+                .filter(|o| o.is_active() && o.can_match(order.price))
+                .map(|o| {
+                    (o.id, o.trader, o.price, o.remaining_quantity, o.position_side, o.reduce_only)
+                })
+                .collect(),
+        };
 
         for (
             opposite_id,
@@ -387,10 +367,8 @@ where
         };
 
         // 先检查是否有仓位，获取ID
-        let position_id = self
-            .position_repo
-            .get_position_by_trader_side(trader, position_side)
-            .map(|p| p.id);
+        let position_id =
+            self.position_repo.get_position_by_trader_side(trader, position_side).map(|p| p.id);
 
         if let Some(pos_id) = position_id {
             if let Some(position) = self.position_repo.get_position_mut(pos_id) {

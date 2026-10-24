@@ -124,10 +124,7 @@ impl CommandUseCase3 for DepositUseCase {
         cmd: &Self::Command,
         _state: Self::GivenState,
     ) -> Result<UseCaseOutput<Self::Output>, Self::Error> {
-        let output = DepositOutput {
-            party_id: cmd.party_id.clone(),
-            accepted_amount: cmd.amount,
-        };
+        let output = DepositOutput { party_id: cmd.party_id.clone(), accepted_amount: cmd.amount };
         let mut event = EntityReplayableEvent::new_created(
             0,
             stable_entity_id(&cmd.party_id),
@@ -135,10 +132,7 @@ impl CommandUseCase3 for DepositUseCase {
         );
         event.add_field_change(string_field("party_id", &cmd.party_id));
         event.add_field_change(int_field("amount", cmd.amount));
-        Ok(UseCaseOutput {
-            output,
-            events: vec![event],
-        })
+        Ok(UseCaseOutput { output, events: vec![event] })
     }
 }
 
@@ -179,14 +173,8 @@ fn deposit_case_strategy() -> impl Strategy<Value = (DepositCmd, DepositState)> 
     (any::<u16>(), any::<u64>(), any::<bool>(), any::<u64>()).prop_map(
         |(party_suffix, amount, account_open, max_amount)| {
             (
-                DepositCmd {
-                    party_id: format!("acct-{party_suffix}"),
-                    amount,
-                },
-                DepositState {
-                    account_open,
-                    max_amount,
-                },
+                DepositCmd { party_id: format!("acct-{party_suffix}"), amount },
+                DepositState { account_open, max_amount },
             )
         },
     )
@@ -207,10 +195,7 @@ fn property_executor_respects_business_invariants()
 
         let result = executor.execute(
             &use_case,
-            CommandEnvelope {
-                meta: CommandMeta::default(),
-                command: cmd.clone(),
-            },
+            CommandEnvelope { meta: CommandMeta::default(), command: cmd.clone() },
             &outbound,
             &(),
         );
@@ -218,9 +203,7 @@ fn property_executor_respects_business_invariants()
         if cmd.amount == 0 {
             prop_assert_eq!(
                 result,
-                Err(CommandUseCaseExecutionError::Business(
-                    DepositError::ZeroAmount
-                ))
+                Err(CommandUseCaseExecutionError::Business(DepositError::ZeroAmount))
             );
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
@@ -228,9 +211,7 @@ fn property_executor_respects_business_invariants()
         } else if !state.account_open {
             prop_assert_eq!(
                 result,
-                Err(CommandUseCaseExecutionError::Business(
-                    DepositError::AccountFrozen
-                ))
+                Err(CommandUseCaseExecutionError::Business(DepositError::AccountFrozen))
             );
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);
@@ -238,9 +219,7 @@ fn property_executor_respects_business_invariants()
         } else if cmd.amount > state.max_amount {
             prop_assert_eq!(
                 result,
-                Err(CommandUseCaseExecutionError::Business(
-                    DepositError::LimitExceeded
-                ))
+                Err(CommandUseCaseExecutionError::Business(DepositError::LimitExceeded))
             );
             prop_assert_eq!(outbound.persist_calls.load(Ordering::Relaxed), 0);
             prop_assert_eq!(outbound.replay_calls.load(Ordering::Relaxed), 0);

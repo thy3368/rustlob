@@ -32,17 +32,12 @@ impl HyperliquidWsClient {
     }
 
     pub async fn send_ping(&mut self) -> Result<(), HyperliquidWsError> {
-        self.send(&WsClientMessageWire::Ping(super::wire::PingWire))
-            .await
+        self.send(&WsClientMessageWire::Ping(super::wire::PingWire)).await
     }
 
     pub async fn recv(&mut self) -> Result<WsServerMessageWire, HyperliquidWsError> {
         loop {
-            let next = self
-                .stream
-                .next()
-                .await
-                .ok_or(HyperliquidWsError::ConnectionClosed)?;
+            let next = self.stream.next().await.ok_or(HyperliquidWsError::ConnectionClosed)?;
             match next.map_err(|error| HyperliquidWsError::Frame(Box::new(error)))? {
                 Message::Text(text) => {
                     return HyperliquidWsMessageParser::parse_text(text.as_str());

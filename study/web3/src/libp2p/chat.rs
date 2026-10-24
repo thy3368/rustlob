@@ -82,11 +82,7 @@ async fn create_swarm() -> Result<libp2p::Swarm<ChatBehaviour>, Box<dyn Error>> 
     // - Yamux 多路复用
     let swarm = SwarmBuilder::with_existing_identity(local_key.clone())
         .with_tokio()
-        .with_tcp(
-            tcp::Config::default(),
-            noise::Config::new,
-            yamux::Config::default,
-        )?
+        .with_tcp(tcp::Config::default(), noise::Config::new, yamux::Config::default)?
         .with_behaviour(|key| {
             // 2.3 配置 Gossipsub（消息广播协议）
             //
@@ -139,11 +135,7 @@ async fn create_swarm() -> Result<libp2p::Swarm<ChatBehaviour>, Box<dyn Error>> 
             info!("✅ Identify 协议配置完成");
 
             // 2.6 组合所有行为
-            Ok(ChatBehaviour {
-                mdns,
-                gossipsub,
-                identify,
-            })
+            Ok(ChatBehaviour { mdns, gossipsub, identify })
         })?
         .build();
 
@@ -245,33 +237,21 @@ async fn async_main() -> Result<(), Box<dyn Error>> {
                 SwarmEvent::Behaviour(ChatBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
                     for (peer_id, _multiaddr) in list {
                         info!("👋 节点离线: {}", peer_id);
-                        swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .remove_explicit_peer(&peer_id);
+                        swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
                         println!("❌ 成员离开聊天室: {:.8}", peer_id.to_string());
                     }
                 }
                 SwarmEvent::Behaviour(ChatBehaviourEvent::Identify(
                     identify::Event::Received { peer_id, info, .. },
                 )) => {
-                    info!(
-                        "📋 收到节点信息: {} (协议版本: {})",
-                        peer_id, info.protocol_version
-                    );
+                    info!("📋 收到节点信息: {} (协议版本: {})", peer_id, info.protocol_version);
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     info!("🎧 监听地址: {}", address);
                     println!("🌐 节点地址: {}/p2p/{}", address, swarm.local_peer_id());
                 }
-                SwarmEvent::ConnectionEstablished {
-                    peer_id, endpoint, ..
-                } => {
-                    info!(
-                        "🔗 建立连接: {} ({})",
-                        peer_id,
-                        endpoint.get_remote_address()
-                    );
+                SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                    info!("🔗 建立连接: {} ({})", peer_id, endpoint.get_remote_address());
                 }
                 SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                     warn!("🔌 连接关闭: {} (原因: {:?})", peer_id, cause);
@@ -286,10 +266,7 @@ async fn async_main() -> Result<(), Box<dyn Error>> {
                 break;
             }
 
-            if let Err(e) = swarm
-                .behaviour_mut()
-                .gossipsub
-                .publish(topic.clone(), line.as_bytes())
+            if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic.clone(), line.as_bytes())
             {
                 error!("❌ 发送消息失败: {:?}", e);
             } else {

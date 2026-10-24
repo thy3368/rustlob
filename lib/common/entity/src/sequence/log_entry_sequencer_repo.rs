@@ -64,14 +64,8 @@ mod tests {
 
     #[test]
     fn propagates_repository_errors() {
-        let mut repo = MemoryRepo {
-            unavailable: true,
-            ..MemoryRepo::default()
-        };
+        let mut repo = MemoryRepo { unavailable: true, ..MemoryRepo::default() };
         assert_eq!(repo.load(), Err(RepoError::Unavailable));
-        assert_eq!(
-            repo.save(&LogEntrySequencer::new(None)),
-            Err(RepoError::Unavailable)
-        );
+        assert_eq!(repo.save(&LogEntrySequencer::new(None)), Err(RepoError::Unavailable));
     }
 }

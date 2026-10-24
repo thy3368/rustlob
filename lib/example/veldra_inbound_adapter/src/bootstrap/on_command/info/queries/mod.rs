@@ -147,76 +147,58 @@ pub async fn dispatch_info_query(
 ) -> Result<InfoQueryReply, InfoHttpError> {
     match query_type {
         "allMids" => Ok(InfoQueryReply::AllMids(all_mids::handle(body, deps).await?)),
-        "openOrders" => Ok(InfoQueryReply::OpenOrders(
-            open_orders::handle(body, deps).await?,
-        )),
-        "frontendOpenOrders" => Ok(InfoQueryReply::FrontendOpenOrders(
-            frontend_open_orders::handle(body, deps).await?,
-        )),
-        "userFills" => Ok(InfoQueryReply::UserFills(
-            user_fills::handle(body, deps).await?,
-        )),
-        "userFillsByTime" => Ok(InfoQueryReply::UserFillsByTime(
-            user_fills_by_time::handle(body, deps).await?,
-        )),
-        "userRateLimit" => Ok(InfoQueryReply::UserRateLimit(
-            user_rate_limit::handle(body, deps).await?,
-        )),
-        "orderStatus" => Ok(InfoQueryReply::OrderStatus(
-            order_status::handle(body, deps).await?,
-        )),
+        "openOrders" => Ok(InfoQueryReply::OpenOrders(open_orders::handle(body, deps).await?)),
+        "frontendOpenOrders" => {
+            Ok(InfoQueryReply::FrontendOpenOrders(frontend_open_orders::handle(body, deps).await?))
+        }
+        "userFills" => Ok(InfoQueryReply::UserFills(user_fills::handle(body, deps).await?)),
+        "userFillsByTime" => {
+            Ok(InfoQueryReply::UserFillsByTime(user_fills_by_time::handle(body, deps).await?))
+        }
+        "userRateLimit" => {
+            Ok(InfoQueryReply::UserRateLimit(user_rate_limit::handle(body, deps).await?))
+        }
+        "orderStatus" => Ok(InfoQueryReply::OrderStatus(order_status::handle(body, deps).await?)),
         "l2Book" => Ok(InfoQueryReply::L2Book(l2_book::handle(body, deps).await?)),
-        "candleSnapshot" => Ok(InfoQueryReply::CandleSnapshot(
-            candle_snapshot::handle(body, deps).await?,
-        )),
-        "maxBuilderFee" => Ok(InfoQueryReply::MaxBuilderFee(
-            max_builder_fee::handle(body, deps).await?,
-        )),
-        "historicalOrders" => Ok(InfoQueryReply::HistoricalOrders(
-            historical_orders::handle(body, deps).await?,
-        )),
-        "userTwapSliceFills" => Ok(InfoQueryReply::UserTwapSliceFills(
-            user_twap_slice_fills::handle(body, deps).await?,
-        )),
-        "subAccounts" => Ok(InfoQueryReply::SubAccounts(
-            sub_accounts::handle(body, deps).await?,
-        )),
-        "vaultDetails" => Ok(InfoQueryReply::VaultDetails(
-            vault_details::handle(body, deps).await?,
-        )),
-        "userVaultEquities" => Ok(InfoQueryReply::UserVaultEquities(
-            user_vault_equities::handle(body, deps).await?,
-        )),
-        "userRole" => Ok(InfoQueryReply::UserRole(
-            user_role::handle(body, deps).await?,
-        )),
-        "portfolio" => Ok(InfoQueryReply::Portfolio(
-            portfolio::handle(body, deps).await?,
-        )),
-        "referral" => Ok(InfoQueryReply::Referral(
-            referral::handle(body, deps).await?,
-        )),
-        "userFees" => Ok(InfoQueryReply::UserFees(
-            user_fees::handle(body, deps).await?,
-        )),
-        "delegations" => Ok(InfoQueryReply::Delegations(
-            delegations::handle(body, deps).await?,
-        )),
-        "delegatorSummary" => Ok(InfoQueryReply::DelegatorSummary(
-            delegator_summary::handle(body, deps).await?,
-        )),
-        "delegatorHistory" => Ok(InfoQueryReply::DelegatorHistory(
-            delegator_history::handle(body, deps).await?,
-        )),
-        "delegatorRewards" => Ok(InfoQueryReply::DelegatorRewards(
-            delegator_rewards::handle(body, deps).await?,
-        )),
-        "userDexAbstraction" => Ok(InfoQueryReply::UserDexAbstraction(
-            user_dex_abstraction::handle(body, deps).await?,
-        )),
-        "userAbstraction" => Ok(InfoQueryReply::UserAbstraction(
-            user_abstraction::handle(body, deps).await?,
-        )),
+        "candleSnapshot" => {
+            Ok(InfoQueryReply::CandleSnapshot(candle_snapshot::handle(body, deps).await?))
+        }
+        "maxBuilderFee" => {
+            Ok(InfoQueryReply::MaxBuilderFee(max_builder_fee::handle(body, deps).await?))
+        }
+        "historicalOrders" => {
+            Ok(InfoQueryReply::HistoricalOrders(historical_orders::handle(body, deps).await?))
+        }
+        "userTwapSliceFills" => {
+            Ok(InfoQueryReply::UserTwapSliceFills(user_twap_slice_fills::handle(body, deps).await?))
+        }
+        "subAccounts" => Ok(InfoQueryReply::SubAccounts(sub_accounts::handle(body, deps).await?)),
+        "vaultDetails" => {
+            Ok(InfoQueryReply::VaultDetails(vault_details::handle(body, deps).await?))
+        }
+        "userVaultEquities" => {
+            Ok(InfoQueryReply::UserVaultEquities(user_vault_equities::handle(body, deps).await?))
+        }
+        "userRole" => Ok(InfoQueryReply::UserRole(user_role::handle(body, deps).await?)),
+        "portfolio" => Ok(InfoQueryReply::Portfolio(portfolio::handle(body, deps).await?)),
+        "referral" => Ok(InfoQueryReply::Referral(referral::handle(body, deps).await?)),
+        "userFees" => Ok(InfoQueryReply::UserFees(user_fees::handle(body, deps).await?)),
+        "delegations" => Ok(InfoQueryReply::Delegations(delegations::handle(body, deps).await?)),
+        "delegatorSummary" => {
+            Ok(InfoQueryReply::DelegatorSummary(delegator_summary::handle(body, deps).await?))
+        }
+        "delegatorHistory" => {
+            Ok(InfoQueryReply::DelegatorHistory(delegator_history::handle(body, deps).await?))
+        }
+        "delegatorRewards" => {
+            Ok(InfoQueryReply::DelegatorRewards(delegator_rewards::handle(body, deps).await?))
+        }
+        "userDexAbstraction" => {
+            Ok(InfoQueryReply::UserDexAbstraction(user_dex_abstraction::handle(body, deps).await?))
+        }
+        "userAbstraction" => {
+            Ok(InfoQueryReply::UserAbstraction(user_abstraction::handle(body, deps).await?))
+        }
         "alignedQuoteTokenInfo" => Ok(InfoQueryReply::AlignedQuoteTokenInfo(
             aligned_quote_token_info::handle(body, deps).await?,
         )),
@@ -229,9 +211,9 @@ pub async fn dispatch_info_query(
         "allBorrowLendReserveStates" => Ok(InfoQueryReply::AllBorrowLendReserveStates(
             all_borrow_lend_reserve_states::handle(body, deps).await?,
         )),
-        "approvedBuilders" => Ok(InfoQueryReply::ApprovedBuilders(
-            approved_builders::handle(body, deps).await?,
-        )),
+        "approvedBuilders" => {
+            Ok(InfoQueryReply::ApprovedBuilders(approved_builders::handle(body, deps).await?))
+        }
         other => Err(InfoHttpError::UnsupportedQueryType(other.to_string())),
     }
 }

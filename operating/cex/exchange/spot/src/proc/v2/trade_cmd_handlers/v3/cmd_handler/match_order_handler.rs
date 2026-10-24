@@ -49,11 +49,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
     MatchOrderCmdHandler<R, P, L>
 {
     pub fn new(repo: R, publisher: P, lob: L) -> Self {
-        Self {
-            repo,
-            publisher,
-            lob: Mutex::new(lob),
-        }
+        Self { repo, publisher, lob: Mutex::new(lob) }
     }
 }
 
@@ -78,9 +74,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
             return Ok(MatchOrderStateChangedSet {
                 taker: DomainEvent::new(
                     state_set.taker.track_create().map_err(|e| {
-                        SpotApiErrorAny::Common(CommonError::Internal {
-                            message: e.to_string(),
-                        })
+                        SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                     })?,
                     state_set.taker,
                 ),
@@ -119,9 +113,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
             );
             let trade_event = DomainEvent::new(
                 trade.track_create().map_err(|e| {
-                    SpotApiErrorAny::Common(CommonError::Internal {
-                        message: e.to_string(),
-                    })
+                    SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                 })?,
                 trade,
             );
@@ -131,9 +123,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
 
         let taker_event = DomainEvent::new(
             state_set.taker.track_create().map_err(|e| {
-                SpotApiErrorAny::Common(CommonError::Internal {
-                    message: e.to_string(),
-                })
+                SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
             })?,
             state_set.taker,
         );
@@ -143,9 +133,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
             .map(|maker| {
                 Ok(DomainEvent::new(
                     maker.track_create().map_err(|e| {
-                        SpotApiErrorAny::Common(CommonError::Internal {
-                            message: e.to_string(),
-                        })
+                        SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                     })?,
                     maker,
                 ))
@@ -186,15 +174,10 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
         let taker = cmd.taker_order.clone();
         let taker_price = taker.price.unwrap_or_default();
         let mut lob = self.lob.lock().expect("match lob lock poisoned");
-        let (matched, _) = lob.match_orders(
-            taker.trading_pair,
-            taker.side,
-            taker_price,
-            taker.unfilled_qty(),
-        );
-        let makers: Vec<SpotOrder> = matched
-            .map(|v| v.into_iter().cloned().collect())
-            .unwrap_or_default();
+        let (matched, _) =
+            lob.match_orders(taker.trading_pair, taker.side, taker_price, taker.unfilled_qty());
+        let makers: Vec<SpotOrder> =
+            matched.map(|v| v.into_iter().cloned().collect()).unwrap_or_default();
 
         Ok(MatchOrderStateSet { taker, makers })
     }
@@ -223,9 +206,7 @@ impl<R: CmdRepo2, P: EventPublisher2, L: MultiSymbolLobRepo<Order = SpotOrder> +
         if let Some(ref trades) = domain_events.trades {
             for trade_event in trades {
                 repo.replay_event::<SpotTrade>(trade_event).map_err(|e| {
-                    SpotApiErrorAny::Common(CommonError::Internal {
-                        message: e.to_string(),
-                    })
+                    SpotApiErrorAny::Common(CommonError::Internal { message: e.to_string() })
                 })?;
             }
         }
@@ -306,13 +287,9 @@ mod tests {
             MockEventPublisher,
             EmbeddedLobRepo::<SpotOrder>::new(Vec::new()),
         );
-        let cmd = MatchCmd {
-            taker_order: create_order(1, OrderSide::Buy, 1.0),
-        };
+        let cmd = MatchCmd { taker_order: create_order(1, OrderSide::Buy, 1.0) };
 
-        let state = handler
-            .give(&cmd, &repo)
-            .expect("load_state_set_for_update should succeed");
+        let state = handler.give(&cmd, &repo).expect("load_state_set_for_update should succeed");
         let changes = handler.then(&cmd, state).expect("apply should succeed");
 
         assert!(changes.trades.is_none());
@@ -331,9 +308,7 @@ mod tests {
         lob.add_order(TradingPair::BtcUsdt, create_order(12, OrderSide::Sell, 1.0))
             .expect("add second maker order should succeed");
         let handler = MatchOrderCmdHandler::new(repo.clone(), MockEventPublisher, lob);
-        let cmd = MatchCmd {
-            taker_order: create_order(21, OrderSide::Buy, 2.0),
-        };
+        let cmd = MatchCmd { taker_order: create_order(21, OrderSide::Buy, 2.0) };
 
         let trades = handler
             .cmd_handle(cmd, repo.clone(), MockEventPublisher)

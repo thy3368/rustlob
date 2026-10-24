@@ -46,10 +46,7 @@ impl Default for MatchSpotOrderWithNplV3UseCase {
 
 impl<O> MatchSpotOrderWithNplV3UseCase<O> {
     pub fn new(observer: O) -> Self {
-        Self {
-            inner: MatchSpotOrderV3UseCase,
-            observer,
-        }
+        Self { inner: MatchSpotOrderV3UseCase, observer }
     }
 }
 

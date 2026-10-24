@@ -180,16 +180,14 @@ impl ExchangeActionHandler for ModifyAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "modify" {
-        return Err(ExchangeHttpError::contract(
-            ModifyContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(ModifyContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     validate_oid(&request.action.oid)?;
     if matches!(request.action.always_place, Some(false)) {
-        return Err(ExchangeHttpError::contract(
-            ModifyContractError::InvalidAlwaysPlaceFlag,
-        ));
+        return Err(ExchangeHttpError::contract(ModifyContractError::InvalidAlwaysPlaceFlag));
     }
     validate_order(&request.action.order)?;
     Ok(())
@@ -223,19 +221,13 @@ pub(crate) fn order_id_from_wire_oid(oid: &Value) -> Result<OrderId, ModifyContr
 
 fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
     if order.builder.is_some() {
-        return Err(ExchangeHttpError::contract(
-            ModifyContractError::BuilderNotSupported,
-        ));
+        return Err(ExchangeHttpError::contract(ModifyContractError::BuilderNotSupported));
     }
     if order.p.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            ModifyContractError::InvalidPrice,
-        ));
+        return Err(ExchangeHttpError::contract(ModifyContractError::InvalidPrice));
     }
     if order.s.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            ModifyContractError::InvalidSize,
-        ));
+        return Err(ExchangeHttpError::contract(ModifyContractError::InvalidSize));
     }
     if let Some(cloid) = &order.c {
         validate_cloid(cloid)
@@ -244,27 +236,19 @@ fn validate_order(order: &OrderWire) -> Result<(), ExchangeHttpError> {
     match (&order.t.limit, &order.t.trigger) {
         (Some(limit), None) => {
             if !matches!(limit.tif.as_str(), "Alo" | "Ioc" | "Gtc") {
-                return Err(ExchangeHttpError::contract(
-                    ModifyContractError::InvalidTimeInForce,
-                ));
+                return Err(ExchangeHttpError::contract(ModifyContractError::InvalidTimeInForce));
             }
         }
         (None, Some(trigger)) => {
             if trigger.trigger_px.trim().is_empty() {
-                return Err(ExchangeHttpError::contract(
-                    ModifyContractError::InvalidTriggerPrice,
-                ));
+                return Err(ExchangeHttpError::contract(ModifyContractError::InvalidTriggerPrice));
             }
             if !matches!(trigger.tpsl.as_str(), "tp" | "sl") {
-                return Err(ExchangeHttpError::contract(
-                    ModifyContractError::InvalidTriggerKind,
-                ));
+                return Err(ExchangeHttpError::contract(ModifyContractError::InvalidTriggerKind));
             }
         }
         _ => {
-            return Err(ExchangeHttpError::contract(
-                ModifyContractError::InvalidOrderType,
-            ));
+            return Err(ExchangeHttpError::contract(ModifyContractError::InvalidOrderType));
         }
     }
     Ok(())
@@ -274,9 +258,7 @@ fn modify_order_type_from_wire(
     order_type: &OrderTypeWire,
 ) -> Result<ModifySpotOrderV2OrderType, ModifyContractError> {
     match (&order_type.limit, &order_type.trigger) {
-        (Some(limit), None) => Ok(ModifySpotOrderV2OrderType::Limit {
-            tif: limit.tif.clone(),
-        }),
+        (Some(limit), None) => Ok(ModifySpotOrderV2OrderType::Limit { tif: limit.tif.clone() }),
         (None, Some(trigger)) => Ok(ModifySpotOrderV2OrderType::Trigger {
             is_market: trigger.is_market,
             trigger_price: decimal_wire_to_core_units(&trigger.trigger_px),
@@ -305,31 +287,21 @@ fn decimal_wire_to_core_units(raw: &str) -> String {
         normalized.push(ch);
     }
 
-    if normalized.is_empty() {
-        raw.to_string()
-    } else {
-        normalized
-    }
+    if normalized.is_empty() { raw.to_string() } else { normalized }
 }
 
 async fn execute(request: RequestWire) -> Result<reply::ModifyResponseWire, ExchangeHttpError> {
-    let party_id = request
-        .common
-        .vault_address
-        .unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
+    let party_id =
+        request.common.vault_address.unwrap_or_else(|| DEFAULT_EXCHANGE_PARTY_ID.to_string());
     let modify_request = ModifySpotOrderV2Request::from_wire_modify(party_id, &request.action)
         .map_err(ExchangeHttpError::contract)?;
     let nonce = request.common.nonce;
     let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request, nonce, nonce, 0, nonce);
     let status = match execute_modify_spot_order_v2(&command) {
         Ok(result) => OrderStatusWire::Resting {
-            resting: RestingOrderStatusWire {
-                oid: result.changes.updated_order.after.order_id(),
-            },
+            resting: RestingOrderStatusWire { oid: result.changes.updated_order.after.order_id() },
         },
-        Err(error) => OrderStatusWire::Error {
-            error: modify_execution_error_message(error),
-        },
+        Err(error) => OrderStatusWire::Error { error: modify_execution_error_message(error) },
     };
 
     Ok(ok_statuses_response("order", vec![status]))
@@ -391,10 +363,7 @@ mod tests {
         )
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(
-            error.to_string(),
-            "Invalid `action.a`. `a` must be omitted when false."
-        );
+        assert_eq!(error.to_string(), "Invalid `action.a`. `a` must be omitted when false.");
     }
 
     #[test]
@@ -415,9 +384,7 @@ mod tests {
         assert_eq!(command.size, "002");
         assert_eq!(
             command.order_type,
-            ModifySpotOrderV2OrderType::Limit {
-                tif: "Gtc".to_string()
-            }
+            ModifySpotOrderV2OrderType::Limit { tif: "Gtc".to_string() }
         );
     }
 
@@ -463,10 +430,7 @@ mod tests {
             command.order_id,
             OrderId::Cloid("0x1234567890abcdef1234567890abcdef".to_string())
         );
-        assert_eq!(
-            command.cloid.as_deref(),
-            Some("0xfedcba0987654321fedcba0987654321")
-        );
+        assert_eq!(command.cloid.as_deref(), Some("0xfedcba0987654321fedcba0987654321"));
         assert_eq!(
             command.order_type,
             ModifySpotOrderV2OrderType::Trigger {

@@ -8,6 +8,12 @@ pub struct Usdc(pub(crate) i128);
 // 永远非负语义，但用 i128 方便减法出负数做比较
 
 impl Usdc {
+    pub const fn new(raw: i128) -> Self {
+        Self(raw)
+    }
+    pub const fn raw(self) -> i128 {
+        self.0
+    }
     pub(crate) const SCALE: i128 = 1_000_000;
 
     // ---- 从 Decimal 构造（业务层入口） ----
@@ -15,13 +21,11 @@ impl Usdc {
     pub(crate) fn from_decimal(d: Decimal) -> Self {
         // 向下截断，对用户保守
         let scaled = (d * Decimal::from(Self::SCALE)).trunc();
-        Usdc(scaled.to_i128().unwrap_or_else(|| {
-            if scaled.is_sign_negative() {
-                i128::MIN
-            } else {
-                i128::MAX
-            }
-        }))
+        Usdc(
+            scaled
+                .to_i128()
+                .unwrap_or_else(|| if scaled.is_sign_negative() { i128::MIN } else { i128::MAX }),
+        )
     }
 
     pub(crate) fn truncate(d: Decimal) -> Self {

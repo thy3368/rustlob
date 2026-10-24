@@ -25,10 +25,7 @@ pub struct SpotHttpClient {
 
 impl SpotHttpClient {
     pub fn new(base_url: &str) -> Self {
-        Self {
-            http_client: Client::new(),
-            base_url: base_url.to_string(),
-        }
+        Self { http_client: Client::new(), base_url: base_url.to_string() }
     }
 
     /// 通用发送命令方法，接受路径参数
@@ -46,26 +43,18 @@ impl SpotHttpClient {
         println!("📡 发送HTTP请求到: {}", url);
         println!("🔧 请求命令: {:?}", cmd);
 
-        let response = self
-            .http_client
-            .post(&url)
-            .json(&cmd)
-            .send()
-            .await
-            .map_err(|e| {
-                SpotApiErrorAny::Common(CommonError::Internal {
-                    message: format!("HTTP请求失败: {}", e),
-                })
-            })?;
+        let response = self.http_client.post(&url).json(&cmd).send().await.map_err(|e| {
+            SpotApiErrorAny::Common(CommonError::Internal {
+                message: format!("HTTP请求失败: {}", e),
+            })
+        })?;
 
         let status = response.status();
         println!("📨 服务器响应状态: {}", status);
 
         if !status.is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "无法读取错误响应".to_string());
+            let error_text =
+                response.text().await.unwrap_or_else(|_| "无法读取错误响应".to_string());
             return Err(SpotApiErrorAny::Common(CommonError::Internal {
                 message: format!("服务器返回错误状态: {} - {}", status, error_text),
             }));
@@ -126,10 +115,7 @@ impl Handler<SpotUserDataListenKeyCmdAny, SpotUserDataListenKeyResAny, SpotApiEr
 
 impl Clone for SpotHttpClient {
     fn clone(&self) -> Self {
-        Self {
-            http_client: Client::new(),
-            base_url: self.base_url.clone(),
-        }
+        Self { http_client: Client::new(), base_url: self.base_url.clone() }
     }
 }
 

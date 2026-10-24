@@ -14,17 +14,9 @@ use spot_behavior::proc::behavior::v2::spot_trade_error::{CmdResp, SpotApiErrorA
 #[inline]
 fn create_json_response<T: Serialize>(
     response: CmdResp<T>,
-) -> (
-    axum::http::StatusCode,
-    [(axum::http::header::HeaderName, &'static str); 1],
-    String,
-) {
+) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
-    (
-        axum::http::StatusCode::OK,
-        [(axum::http::header::CONTENT_TYPE, "application/json")],
-        json,
-    )
+    (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
 }
 
 // ==================== 通用 Handler 处理模板 ====================
@@ -58,11 +50,7 @@ where
 /// 创建错误响应
 fn create_error_response(
     error: SpotApiErrorAny,
-) -> (
-    axum::http::StatusCode,
-    [(axum::http::header::HeaderName, &'static str); 1],
-    String,
-) {
+) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&error).unwrap();
 
     (

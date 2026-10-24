@@ -144,10 +144,7 @@ impl StateMachineV2 for PlaceMatchSpotOrderV2UseCase {
                 PlaceOnlySpotOrderV2Cmd::Single(order_cmd),
                 PlaceOnlySpotOrderV2AfterChanges::Single { created_order },
             ) => {
-                if !matches!(
-                    order_cmd.order_type,
-                    PlaceOnlySpotOrderV2OrderType::Limit { .. }
-                ) {
+                if !matches!(order_cmd.order_type, PlaceOnlySpotOrderV2OrderType::Limit { .. }) {
                     return Ok(PlaceMatchSpotOrderV2AfterChanges::SinglePlacedOnly {
                         created_order,
                     });
@@ -179,14 +176,12 @@ impl StateMachineV2 for PlaceMatchSpotOrderV2UseCase {
                         state,
                         cmd,
                     )?;
-                Ok(
-                    PlaceMatchSpotOrderV2AfterChanges::NormalTpslPlacedAndMatched {
-                        created_parent_order,
-                        created_child_orders,
-                        activation_after,
-                        match_after,
-                    },
-                )
+                Ok(PlaceMatchSpotOrderV2AfterChanges::NormalTpslPlacedAndMatched {
+                    created_parent_order,
+                    created_child_orders,
+                    activation_after,
+                    match_after,
+                })
             }
             _ => Err(PlaceMatchSpotOrderV2Error::InvalidPlaceBranch),
         }
@@ -250,10 +245,7 @@ fn compute_activate_and_match_after_for_created_taker(
     state: &PlaceMatchSpotOrderV2State,
     entry: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
 ) -> Result<
-    (
-        ActivateSpotOrderV2AfterChanges,
-        MatchSpotOrderV3AfterChanges,
-    ),
+    (ActivateSpotOrderV2AfterChanges, MatchSpotOrderV3AfterChanges),
     PlaceMatchSpotOrderV2Error,
 > {
     let activation_cmd = ActivateSpotOrderV2Cmd {
@@ -308,10 +300,7 @@ fn compute_activation_changes(
         maker_fee_bps: 0,
         taker_fee_bps: 0,
     };
-    Ok(ActivateSpotOrderV2UseCase::do_compute_state_diff(
-        activation_state,
-        activation_after,
-    )?)
+    Ok(ActivateSpotOrderV2UseCase::do_compute_state_diff(activation_state, activation_after)?)
 }
 
 fn compute_match_changes(
@@ -330,8 +319,5 @@ fn compute_match_changes(
         maker_fee_bps: 0,
         taker_fee_bps: 0,
     };
-    Ok(MatchSpotOrderV3UseCase::do_compute_state_diff(
-        match_state,
-        match_after,
-    )?)
+    Ok(MatchSpotOrderV3UseCase::do_compute_state_diff(match_state, match_after)?)
 }

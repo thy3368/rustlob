@@ -11,9 +11,6 @@ pub(crate) fn field_as_u64(event: &EntityReplayableEvent, field_name: &str) -> O
             return None;
         }
 
-        std::str::from_utf8(change.new_value_bytes())
-            .ok()?
-            .parse::<u64>()
-            .ok()
+        std::str::from_utf8(change.new_value_bytes()).ok()?.parse::<u64>().ok()
     })
 }

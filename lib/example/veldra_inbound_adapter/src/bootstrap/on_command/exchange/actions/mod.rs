@@ -308,9 +308,7 @@ mod tests {
                 s: "0.02".to_string(),
                 r: false,
                 t: ExchangeOrderTypeWire {
-                    limit: Some(ExchangeLimitOrderTypeWire {
-                        tif: "Gtc".to_string(),
-                    }),
+                    limit: Some(ExchangeLimitOrderTypeWire { tif: "Gtc".to_string() }),
                     trigger: None,
                 },
                 c: None,
@@ -344,9 +342,7 @@ mod tests {
                 s: "0.02".to_string(),
                 r: false,
                 t: ExchangeOrderTypeWire {
-                    limit: Some(ExchangeLimitOrderTypeWire {
-                        tif: "Gtc".to_string(),
-                    }),
+                    limit: Some(ExchangeLimitOrderTypeWire { tif: "Gtc".to_string() }),
                     trigger: None,
                 },
                 c: Some("0x1234567890abcdef1234567890abcdef".to_string()),

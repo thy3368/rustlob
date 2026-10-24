@@ -47,11 +47,7 @@ pub fn validate_signature(r: &str, s: &str, v: u64) -> Result<(), SharedFieldErr
 }
 
 pub fn validate_hyperliquid_chain(value: &str) -> Result<(), ()> {
-    if matches!(value, "Mainnet" | "Testnet") {
-        Ok(())
-    } else {
-        Err(())
-    }
+    if matches!(value, "Mainnet" | "Testnet") { Ok(()) } else { Err(()) }
 }
 
 pub fn validate_signature_chain_id(value: &str) -> Result<(), ()> {

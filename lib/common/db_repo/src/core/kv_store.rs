@@ -55,9 +55,8 @@ pub trait RkyvKvStoreExt: KvStore {
     where
         T: for<'a> Serialize<HighSerializer<rkyv::util::AlignedVec, ArenaHandle<'a>, Error>>,
     {
-        let bytes = to_bytes::<Error>(value).map_err(|e| StorageError::Codec {
-            source: Box::new(e),
-        })?;
+        let bytes =
+            to_bytes::<Error>(value).map_err(|e| StorageError::Codec { source: Box::new(e) })?;
         self.put(key, bytes.as_slice())
     }
 
@@ -71,9 +70,8 @@ pub trait RkyvKvStoreExt: KvStore {
             return Ok(None);
         };
 
-        let value = from_bytes::<T, Error>(&bytes).map_err(|e| StorageError::Codec {
-            source: Box::new(e),
-        })?;
+        let value = from_bytes::<T, Error>(&bytes)
+            .map_err(|e| StorageError::Codec { source: Box::new(e) })?;
         Ok(Some(value))
     }
 }

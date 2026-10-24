@@ -126,9 +126,6 @@ mod tests {
             "spotState": { "balances": [], "newField": "future" }
         });
         let parsed: SubAccountWire = serde_json::from_value(value).unwrap();
-        assert_eq!(
-            parsed.spot_state.extra.get("newField"),
-            Some(&json!("future"))
-        );
+        assert_eq!(parsed.spot_state.extra.get("newField"), Some(&json!("future")));
     }
 }

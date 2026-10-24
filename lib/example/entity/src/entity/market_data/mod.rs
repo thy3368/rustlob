@@ -169,10 +169,7 @@ impl SpotKlineAggregator {
                 unique_intervals.push(interval);
             }
         }
-        Self {
-            intervals: unique_intervals,
-            candles: HashMap::new(),
-        }
+        Self { intervals: unique_intervals, candles: HashMap::new() }
     }
 
     /// 返回当前聚合器维护的周期。
@@ -188,12 +185,7 @@ impl SpotKlineAggregator {
         qty: u64,
         executed_at_ms: u64,
     ) -> Result<Vec<KlineUpdate>, KlineAggregationError> {
-        let trade = SpotKlineTradeInput {
-            symbol: symbol.into(),
-            price,
-            qty,
-            executed_at_ms,
-        };
+        let trade = SpotKlineTradeInput { symbol: symbol.into(), price, qty, executed_at_ms };
         self.update_trade(&trade)
     }
 
@@ -296,16 +288,10 @@ mod tests {
     #[test]
     fn all_standard_intervals_create_a_candle_from_the_first_trade() {
         let mut aggregator = SpotKlineAggregator::new();
-        let updates = aggregator
-            .update("BTCUSDT", 100, 2, 1_717_171_717_000)
-            .unwrap();
+        let updates = aggregator.update("BTCUSDT", 100, 2, 1_717_171_717_000).unwrap();
 
         assert_eq!(updates.len(), 6);
-        assert!(
-            updates
-                .iter()
-                .all(|update| matches!(update, KlineUpdate::Updated(_)))
-        );
+        assert!(updates.iter().all(|update| matches!(update, KlineUpdate::Updated(_))));
         assert_eq!(aggregator.len(), 6);
     }
 
@@ -340,10 +326,7 @@ mod tests {
         assert!(matches!(updates[0], KlineUpdate::Closed(_)));
         assert!(matches!(updates[1], KlineUpdate::Updated(_)));
         assert_eq!(
-            aggregator
-                .current_candle("BTCUSDT", KlineInterval::OneMinute)
-                .unwrap()
-                .open,
+            aggregator.current_candle("BTCUSDT", KlineInterval::OneMinute).unwrap().open,
             120
         );
     }
@@ -355,17 +338,11 @@ mod tests {
         aggregator.update("ETHUSDT", 200, 3, 60_000).unwrap();
 
         assert_eq!(
-            aggregator
-                .current_candle("BTCUSDT", KlineInterval::OneMinute)
-                .unwrap()
-                .volume,
+            aggregator.current_candle("BTCUSDT", KlineInterval::OneMinute).unwrap().volume,
             2
         );
         assert_eq!(
-            aggregator
-                .current_candle("ETHUSDT", KlineInterval::OneMinute)
-                .unwrap()
-                .volume,
+            aggregator.current_candle("ETHUSDT", KlineInterval::OneMinute).unwrap().volume,
             3
         );
     }
@@ -373,9 +350,7 @@ mod tests {
     #[test]
     fn integer_values_are_not_converted_to_floating_point() {
         let mut aggregator = SpotKlineAggregator::with_intervals([KlineInterval::OneMinute]);
-        let updates = aggregator
-            .update("BTCUSDT", u64::MAX - 1, 2, 60_000)
-            .unwrap();
+        let updates = aggregator.update("BTCUSDT", u64::MAX - 1, 2, 60_000).unwrap();
         let KlineUpdate::Updated(candle) = &updates[0] else {
             panic!("first trade must update the active window");
         };
@@ -388,14 +363,8 @@ mod tests {
     fn invalid_trade_inputs_return_explicit_errors() {
         let mut aggregator = SpotKlineAggregator::new();
 
-        assert_eq!(
-            aggregator.update("", 100, 1, 1),
-            Err(KlineAggregationError::EmptySymbol)
-        );
-        assert_eq!(
-            aggregator.update("BTCUSDT", 0, 1, 1),
-            Err(KlineAggregationError::ZeroPrice)
-        );
+        assert_eq!(aggregator.update("", 100, 1, 1), Err(KlineAggregationError::EmptySymbol));
+        assert_eq!(aggregator.update("BTCUSDT", 0, 1, 1), Err(KlineAggregationError::ZeroPrice));
         assert_eq!(
             aggregator.update("BTCUSDT", 100, 0, 1),
             Err(KlineAggregationError::ZeroQuantity)

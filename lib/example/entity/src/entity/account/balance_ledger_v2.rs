@@ -385,17 +385,9 @@ impl FieldDiff for BalanceLedgerV2 {
             EntityFieldChange::new("frozen_delta", "", self.derived_frozen_delta().to_string()),
             EntityFieldChange::new("on_command", "", self.operation.as_str()),
             EntityFieldChange::new("command_amount", "", self.amount.to_string()),
-            EntityFieldChange::new(
-                "before_available",
-                "",
-                option_u64_value(self.before_available),
-            ),
+            EntityFieldChange::new("before_available", "", option_u64_value(self.before_available)),
             EntityFieldChange::new("before_frozen", "", option_u64_value(self.before_frozen)),
-            EntityFieldChange::new(
-                "after_available",
-                "",
-                option_u64_value(self.after_available),
-            ),
+            EntityFieldChange::new("after_available", "", option_u64_value(self.after_available)),
             EntityFieldChange::new("after_frozen", "", option_u64_value(self.after_frozen)),
             EntityFieldChange::new("reason", "", self.reason.as_str()),
             EntityFieldChange::new(
@@ -426,11 +418,7 @@ impl FieldDiff for BalanceLedgerV2 {
                     .map(|purpose| purpose.as_str())
                     .unwrap_or_default(),
             ),
-            EntityFieldChange::new(
-                "reason_position_ids",
-                "",
-                self.reason.position_ids().join(","),
-            ),
+            EntityFieldChange::new("reason_position_ids", "", self.reason.position_ids().join(",")),
         ]
     }
 

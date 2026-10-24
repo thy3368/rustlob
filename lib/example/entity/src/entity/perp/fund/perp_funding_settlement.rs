@@ -115,9 +115,7 @@ impl HyperliquidPerpFundingSettlement {
             position_ids: vec![self.position_id.clone()],
         };
 
-        let funding_fee = self
-            .funding_fee_abs()
-            .ok_or(BalanceLedgerEntryV2Error::InvalidAmount)?;
+        let funding_fee = self.funding_fee_abs().ok_or(BalanceLedgerEntryV2Error::InvalidAmount)?;
         if self.is_payment() {
             BalanceLedgerEntry::debit_available(
                 entry_id,
@@ -143,11 +141,7 @@ impl HyperliquidPerpFundingSettlement {
 impl FieldDiff for HyperliquidPerpFundingSettlement {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            EntityFieldChange::new(
-                "funding_settlement_id",
-                "",
-                self.funding_settlement_id.clone(),
-            ),
+            EntityFieldChange::new("funding_settlement_id", "", self.funding_settlement_id.clone()),
             EntityFieldChange::new("funding_batch_id", "", self.funding_batch_id.clone()),
             EntityFieldChange::new("account_id", "", self.account_id.clone()),
             EntityFieldChange::new("position_id", "", self.position_id.clone()),
@@ -157,17 +151,11 @@ impl FieldDiff for HyperliquidPerpFundingSettlement {
             EntityFieldChange::new("oracle_price", "", self.oracle_price.to_string()),
             EntityFieldChange::new("funding_rate_e8", "", self.funding_rate_e8.to_string()),
             EntityFieldChange::new("signed_usdc_delta", "", self.signed_usdc_delta.to_string()),
-            EntityFieldChange::new(
-                "source_hash",
-                "",
-                self.source_hash.clone().unwrap_or_default(),
-            ),
+            EntityFieldChange::new("source_hash", "", self.source_hash.clone().unwrap_or_default()),
             EntityFieldChange::new(
                 "n_samples",
                 "",
-                self.n_samples
-                    .map(|n_samples| n_samples.to_string())
-                    .unwrap_or_default(),
+                self.n_samples.map(|n_samples| n_samples.to_string()).unwrap_or_default(),
             ),
         ]
     }

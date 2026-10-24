@@ -37,13 +37,8 @@ fn entry(payload: PlaceHyperliquidPerpOrderCmd) -> LogEntry<PlaceHyperliquidPerp
 fn compute_after_changes_and_events(
     cmd: &PlaceHyperliquidPerpOrderCmd,
     state: PlaceHyperliquidPerpOrderState,
-) -> (
-    PlaceHyperliquidPerpOrderChanges,
-    Vec<cmd_handler::EntityReplayableEvent>,
-) {
-    let changes = use_case()
-        .compute_state_changed(&entry(cmd.clone()), &state)
-        .unwrap();
+) -> (PlaceHyperliquidPerpOrderChanges, Vec<cmd_handler::EntityReplayableEvent>) {
+    let changes = use_case().compute_state_changed(&entry(cmd.clone()), &state).unwrap();
     let events = changes.to_replayable_events().unwrap();
     (changes, events)
 }
@@ -57,35 +52,19 @@ fn assert_single_balance_pair(
 ) {
     assert_eq!(changes.updated_margin_balances.len(), 1);
     let pair = &changes.updated_margin_balances[0];
-    assert_balance_snapshot(
-        &pair.before,
-        expected_before_available,
-        expected_before_frozen,
-        4,
-    );
-    assert_balance_snapshot(
-        &pair.after,
-        expected_after_available,
-        expected_after_frozen,
-        5,
-    );
+    assert_balance_snapshot(&pair.before, expected_before_available, expected_before_frozen, 4);
+    assert_balance_snapshot(&pair.after, expected_after_available, expected_after_frozen, 5);
 }
 
 fn assert_freeze_ledger_entry_matches_balance_pair(changes: &PlaceHyperliquidPerpOrderChanges) {
-    let reservation = changes
-        .created_order
-        .reservation
-        .as_ref()
-        .expect("open order must record reservation");
+    let reservation =
+        changes.created_order.reservation.as_ref().expect("open order must record reservation");
     let ledger_entry = changes
         .created_balance_ledger_entry
         .as_ref()
         .expect("open order must create freeze ledger entry");
 
-    assert_eq!(
-        ledger_entry.operation,
-        crate::entity::BalanceLedgerOperation::Freeze
-    );
+    assert_eq!(ledger_entry.operation, crate::entity::BalanceLedgerOperation::Freeze);
     assert_eq!(ledger_entry.amount, reservation.original_amount);
     assert_eq!(
         ledger_entry.reason,
@@ -103,10 +82,7 @@ fn assert_no_margin_ledger_or_balance_pair(changes: &PlaceHyperliquidPerpOrderCh
 
 fn assert_balance_ledger_created_event(event: &cmd_handler::EntityReplayableEvent) {
     assert_eq!(event.change_type, 0);
-    assert_eq!(
-        event.entity_type,
-        <crate::entity::BalanceLedgerV2 as Entity>::entity_type()
-    );
+    assert_eq!(event.entity_type, <crate::entity::BalanceLedgerV2 as Entity>::entity_type());
 }
 
 fn use_case() -> PlaceHyperliquidPerpOrderUseCase {
@@ -130,26 +106,18 @@ fn limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
 }
 
 fn sell_limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
-    PlaceHyperliquidPerpOrderCmd {
-        is_buy: false,
-        ..limit_cmd()
-    }
+    PlaceHyperliquidPerpOrderCmd { is_buy: false, ..limit_cmd() }
 }
 
 fn market_cmd() -> PlaceHyperliquidPerpOrderCmd {
     PlaceHyperliquidPerpOrderCmd {
-        execution: PlaceHyperliquidPerpOrderExecution::Market {
-            aggressive_price: 111,
-        },
+        execution: PlaceHyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
         ..limit_cmd()
     }
 }
 
 fn sell_market_cmd() -> PlaceHyperliquidPerpOrderCmd {
-    PlaceHyperliquidPerpOrderCmd {
-        is_buy: false,
-        ..market_cmd()
-    }
+    PlaceHyperliquidPerpOrderCmd { is_buy: false, ..market_cmd() }
 }
 
 fn state() -> PlaceHyperliquidPerpOrderState {
@@ -166,10 +134,7 @@ fn state() -> PlaceHyperliquidPerpOrderState {
             4,
         ),
         margin_asset_id: "USDC".to_string(),
-        market_rules: MarketRules {
-            symbol: "BTC-PERP".to_string(),
-            min_qty: 1,
-        },
+        market_rules: MarketRules { symbol: "BTC-PERP".to_string(), min_qty: 1 },
         position: PerpPosition::empty_slot(
             "position-1".to_string(),
             "acct-1".to_string(),
@@ -201,14 +166,8 @@ fn assert_balance_snapshot(
     expected_frozen: u64,
     expected_version: u64,
 ) {
-    assert_eq!(
-        balance.account_id,
-        common_entity::stable_string_entity_id("acct-1")
-    );
-    assert_eq!(
-        balance.asset_id,
-        common_entity::stable_string_entity_id("USDC")
-    );
+    assert_eq!(balance.account_id, common_entity::stable_string_entity_id("acct-1"));
+    assert_eq!(balance.asset_id, common_entity::stable_string_entity_id("USDC"));
     assert_eq!(balance.available, expected_available);
     assert_eq!(balance.frozen, expected_frozen);
     assert_eq!(balance.version, expected_version);
@@ -258,29 +217,14 @@ fn assert_order_created_event(
     expected_reduce_only: bool,
 ) {
     assert_eq!(event.change_type, 0);
-    assert_eq!(
-        event.entity_type,
-        <HyperliquidPerpOrder as Entity>::entity_type()
-    );
+    assert_eq!(event.entity_type, <HyperliquidPerpOrder as Entity>::entity_type());
     assert_eq!(event_field(event, "order_id"), Some("42"));
     assert_eq!(event_field(event, "side"), Some(expected_side));
     assert_eq!(event_field(event, "execution"), Some(expected_execution));
-    assert_eq!(
-        event_field(event, "time_in_force"),
-        Some(expected_time_in_force)
-    );
-    assert_eq!(
-        event_field(event, "qty"),
-        Some(expected_qty.to_string().as_str())
-    );
-    assert_eq!(
-        event_field(event, "price"),
-        Some(expected_price.to_string().as_str())
-    );
-    assert_eq!(
-        event_field(event, "reduce_only"),
-        Some(expected_reduce_only.to_string().as_str())
-    );
+    assert_eq!(event_field(event, "time_in_force"), Some(expected_time_in_force));
+    assert_eq!(event_field(event, "qty"), Some(expected_qty.to_string().as_str()));
+    assert_eq!(event_field(event, "price"), Some(expected_price.to_string().as_str()));
+    assert_eq!(event_field(event, "reduce_only"), Some(expected_reduce_only.to_string().as_str()));
 }
 
 fn assert_balance_updated_event(
@@ -290,14 +234,8 @@ fn assert_balance_updated_event(
 ) {
     assert_eq!(event.change_type, 1);
     assert_eq!(event.entity_type, <Balance as Entity>::entity_type());
-    assert_eq!(
-        event_field(event, "available"),
-        Some(expected_available.to_string().as_str())
-    );
-    assert_eq!(
-        event_field(event, "frozen"),
-        Some(expected_frozen.to_string().as_str())
-    );
+    assert_eq!(event_field(event, "available"), Some(expected_available.to_string().as_str()));
+    assert_eq!(event_field(event, "frozen"), Some(expected_frozen.to_string().as_str()));
 }
 
 #[test]
@@ -324,16 +262,10 @@ fn flat_account_buys_limit_order_and_freezes_margin_for_each_supported_tif() {
 
         // arrange
         let cmd = PlaceHyperliquidPerpOrderCmd {
-            execution: PlaceHyperliquidPerpOrderExecution::Limit {
-                price: 101,
-                time_in_force,
-            },
+            execution: PlaceHyperliquidPerpOrderExecution::Limit { price: 101, time_in_force },
             ..limit_cmd()
         };
-        assert_eq!(
-            use_case().validate_state_given(&entry(cmd.clone()), &state()),
-            Ok(())
-        );
+        assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &state()), Ok(()));
 
         // act
         let (changes, events) = compute_after_changes_and_events(&cmd, state());
@@ -374,10 +306,7 @@ fn flat_account_sells_limit_order_and_freezes_full_order_margin() {
 
     // arrange
     let cmd = sell_limit_cmd();
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &state()),
-        Ok(())
-    );
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &state()), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, state());
@@ -418,10 +347,7 @@ fn flat_account_buys_market_order_and_projects_market_ioc_with_aggressive_price(
 
     // arrange
     let cmd = market_cmd();
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &state()),
-        Ok(())
-    );
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &state()), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, state());
@@ -430,9 +356,7 @@ fn flat_account_buys_market_order_and_projects_market_ioc_with_aggressive_price(
     assert_order_snapshot(
         &changes.created_order,
         HyperliquidPerpOrderSide::Buy,
-        HyperliquidPerpOrderExecution::Market {
-            aggressive_price: 111,
-        },
+        HyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
         HyperliquidPerpOrderTimeInForce::Ioc,
         3,
         false,
@@ -464,10 +388,7 @@ fn flat_account_sells_market_order_and_projects_market_ioc_with_aggressive_price
 
     // arrange
     let cmd = sell_market_cmd();
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &state()),
-        Ok(())
-    );
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &state()), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, state());
@@ -476,9 +397,7 @@ fn flat_account_sells_market_order_and_projects_market_ioc_with_aggressive_price
     assert_order_snapshot(
         &changes.created_order,
         HyperliquidPerpOrderSide::Sell,
-        HyperliquidPerpOrderExecution::Market {
-            aggressive_price: 111,
-        },
+        HyperliquidPerpOrderExecution::Market { aggressive_price: 111 },
         HyperliquidPerpOrderTimeInForce::Ioc,
         3,
         false,
@@ -509,14 +428,8 @@ fn long_position_buys_same_side_and_freezes_full_new_order_margin() {
 
     // arrange
     let cmd = limit_cmd();
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(5),
-        ..state()
-    };
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &long_state),
-        Ok(())
-    );
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &long_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, long_state);
@@ -556,14 +469,8 @@ fn short_position_sells_same_side_and_freezes_full_new_order_margin() {
 
     // arrange
     let cmd = sell_limit_cmd();
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(-5),
-        ..state()
-    };
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &short_state),
-        Ok(())
-    );
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &short_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
@@ -604,14 +511,8 @@ fn long_position_places_sell_reduce_only_order_without_freezing_margin() {
     // arrange
     let mut cmd = sell_limit_cmd();
     cmd.reduce_only = true;
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(5),
-        ..state()
-    };
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &long_state),
-        Ok(())
-    );
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &long_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, long_state);
@@ -649,14 +550,8 @@ fn short_position_places_buy_reduce_only_order_without_freezing_margin() {
     // arrange
     let mut cmd = limit_cmd();
     cmd.reduce_only = true;
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(-5),
-        ..state()
-    };
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &short_state),
-        Ok(())
-    );
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &short_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
@@ -694,14 +589,8 @@ fn long_position_places_opposite_sell_that_closes_without_new_margin() {
 
     // arrange
     let cmd = sell_limit_cmd();
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(5),
-        ..state()
-    };
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &long_state),
-        Ok(())
-    );
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &long_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, long_state);
@@ -741,14 +630,8 @@ fn long_position_places_opposite_sell_that_exactly_closes_without_new_margin() {
     let mut cmd = sell_limit_cmd();
     cmd.size = 5;
     cmd.reduce_only = false;
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(5),
-        ..state()
-    };
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &long_state),
-        Ok(())
-    );
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &long_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, long_state);
@@ -785,10 +668,7 @@ fn long_position_rejects_single_opposite_sell_flip_until_split_workflow_handles_
     // arrange
     let mut cmd = sell_limit_cmd();
     cmd.size = 8;
-    let long_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(5),
-        ..state()
-    };
+    let long_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(5), ..state() };
     assert_eq!(
         use_case().validate_state_given(&entry(cmd.clone()), &long_state),
         Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)
@@ -814,14 +694,8 @@ fn short_position_places_opposite_buy_that_closes_without_new_margin() {
 
     // arrange
     let cmd = limit_cmd();
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(-5),
-        ..state()
-    };
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &short_state),
-        Ok(())
-    );
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &short_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
@@ -861,14 +735,8 @@ fn short_position_places_opposite_buy_that_exactly_closes_without_new_margin() {
     let mut cmd = limit_cmd();
     cmd.size = 5;
     cmd.reduce_only = false;
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(-5),
-        ..state()
-    };
-    assert_eq!(
-        use_case().validate_state_given(&entry(cmd.clone()), &short_state),
-        Ok(())
-    );
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
+    assert_eq!(use_case().validate_state_given(&entry(cmd.clone()), &short_state), Ok(()));
 
     // act
     let (changes, events) = compute_after_changes_and_events(&cmd, short_state);
@@ -905,10 +773,7 @@ fn short_position_rejects_single_opposite_buy_flip_until_split_workflow_handles_
     // arrange
     let mut cmd = limit_cmd();
     cmd.size = 8;
-    let short_state = PlaceHyperliquidPerpOrderState {
-        position: non_flat_position(-5),
-        ..state()
-    };
+    let short_state = PlaceHyperliquidPerpOrderState { position: non_flat_position(-5), ..state() };
     assert_eq!(
         use_case().validate_state_given(&entry(cmd.clone()), &short_state),
         Err(PlaceHyperliquidPerpOrderError::FlipOrderRequiresSplit)

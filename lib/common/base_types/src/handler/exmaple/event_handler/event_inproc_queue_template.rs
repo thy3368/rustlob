@@ -35,9 +35,7 @@ pub struct InProcEventQueue {
 
 impl InProcEventQueue {
     pub fn new() -> Self {
-        Self {
-            queue: VecDeque::new(),
-        }
+        Self { queue: VecDeque::new() }
     }
 
     pub fn push(&mut self, event: InProcEventEnvelope) {
@@ -107,9 +105,7 @@ pub fn run_full_event_chain_via_inproc_queue() -> Result<SettlementResult, Event
         }
     }
 
-    Err(EventHandlerError(
-        "in-process queue ended without settlement result".into(),
-    ))
+    Err(EventHandlerError("in-process queue ended without settlement result".into()))
 }
 
 #[cfg(test)]

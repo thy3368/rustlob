@@ -12,14 +12,9 @@ fn take_ownership(data: Data) {
 } // data 被丢弃
 
 fn main() {
-    let my_data = Data {
-        value: "hello".to_string(),
-        value2: "hello".to_string(),
-    };
+    let my_data = Data { value: "hello".to_string(), value2: "hello".to_string() };
 
-    let mut my_data2 = Data2 {
-        value: "hello".to_string(),
-    };
+    let mut my_data2 = Data2 { value: "hello".to_string() };
 
     my_data2.value = my_data.value;
 

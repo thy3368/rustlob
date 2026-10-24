@@ -137,19 +137,13 @@ impl SpotOrderSoa {
     /// 批量检查订单是否已完全成交
     #[inline]
     pub fn batch_is_filled(&self, indices: &[usize]) -> Vec<bool> {
-        indices
-            .iter()
-            .map(|&idx| self.unfilled_qtys[idx] == 0)
-            .collect()
+        indices.iter().map(|&idx| self.unfilled_qtys[idx] == 0).collect()
     }
 
     /// 批量检查订单是否有未成交数量
     #[inline]
     pub fn batch_is_active(&self, indices: &[usize]) -> Vec<bool> {
-        indices
-            .iter()
-            .map(|&idx| self.unfilled_qtys[idx] > 0)
-            .collect()
+        indices.iter().map(|&idx| self.unfilled_qtys[idx] > 0).collect()
     }
 
     /// 批量检查是否为市价单
@@ -185,10 +179,8 @@ impl SpotOrderSoa {
         assert_eq!(indices.len(), filled_qtys.len());
         assert_eq!(indices.len(), fill_prices.len());
 
-        for ((&idx, &filled_qty), &fill_price) in indices
-            .iter()
-            .zip(filled_qtys.iter())
-            .zip(fill_prices.iter())
+        for ((&idx, &filled_qty), &fill_price) in
+            indices.iter().zip(filled_qtys.iter()).zip(fill_prices.iter())
         {
             self.filled_qtys[idx] += filled_qty;
             self.unfilled_qtys[idx] -= filled_qty;

@@ -95,16 +95,12 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ExchangeHttpError::contract(ApproveBuilderFeeContractError::InvalidSignatureChainId)
     })?;
     if request.action.max_fee_rate.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            ApproveBuilderFeeContractError::InvalidMaxFeeRate,
-        ));
+        return Err(ExchangeHttpError::contract(ApproveBuilderFeeContractError::InvalidMaxFeeRate));
     }
     validate_hex_address(&request.action.builder)
         .map_err(|_| ExchangeHttpError::contract(ApproveBuilderFeeContractError::InvalidBuilder))?;
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(
-            ApproveBuilderFeeContractError::NonceMismatch,
-        ));
+        return Err(ExchangeHttpError::contract(ApproveBuilderFeeContractError::NonceMismatch));
     }
     Ok(())
 }

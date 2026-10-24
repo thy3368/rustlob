@@ -182,10 +182,7 @@ impl StateMachineV2 for PlaceActivateV2UseCase {
                 });
             }
         }
-        Ok(PlaceActivateV2AfterChanges {
-            place_after,
-            activated_after,
-        })
+        Ok(PlaceActivateV2AfterChanges { place_after, activated_after })
     }
 }
 
@@ -247,11 +244,7 @@ fn update_working_state(
             balances_after,
             ..
         }
-        | MatchSpotOrderV3AfterChanges::Filled {
-            maker_orders_after,
-            balances_after,
-            ..
-        }
+        | MatchSpotOrderV3AfterChanges::Filled { maker_orders_after, balances_after, .. }
         | MatchSpotOrderV3AfterChanges::CanceledAfterPartialFill {
             maker_orders_after,
             balances_after,
@@ -260,9 +253,8 @@ fn update_working_state(
     };
     if let Some(updated_makers) = maker_orders_after {
         for updated in updated_makers {
-            if let Some(existing) = makers
-                .iter_mut()
-                .find(|order| order.order_id() == updated.order_id())
+            if let Some(existing) =
+                makers.iter_mut().find(|order| order.order_id() == updated.order_id())
             {
                 *existing = updated.clone();
             } else {

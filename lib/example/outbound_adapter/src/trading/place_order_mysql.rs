@@ -213,18 +213,9 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
                         "account_id",
                         optional_string_param(event_string_field_mysql(event, "account_id")),
                     ),
-                    (
-                        "asset",
-                        optional_u64_param(event_u64_field_mysql(event, "asset")),
-                    ),
-                    (
-                        "symbol",
-                        optional_string_param(event_string_field_mysql(event, "symbol")),
-                    ),
-                    (
-                        "side",
-                        optional_string_param(event_string_field_mysql(event, "side")),
-                    ),
+                    ("asset", optional_u64_param(event_u64_field_mysql(event, "asset"))),
+                    ("symbol", optional_string_param(event_string_field_mysql(event, "symbol"))),
+                    ("side", optional_string_param(event_string_field_mysql(event, "side"))),
                     (
                         "execution",
                         optional_string_param(event_string_field_mysql(event, "execution")),
@@ -233,30 +224,18 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
                         "time_in_force",
                         optional_string_param(event_string_field_mysql(event, "time_in_force")),
                     ),
-                    (
-                        "qty",
-                        optional_u64_param(event_u64_field_mysql(event, "qty")),
-                    ),
-                    (
-                        "price",
-                        optional_u64_param(event_u64_field_mysql(event, "price")),
-                    ),
+                    ("qty", optional_u64_param(event_u64_field_mysql(event, "qty"))),
+                    ("price", optional_u64_param(event_u64_field_mysql(event, "price"))),
                     (
                         "available_base",
                         optional_u64_param(event_u64_field_mysql(event, "available")),
                     ),
-                    (
-                        "frozen_base",
-                        optional_u64_param(event_u64_field_mysql(event, "frozen")),
-                    ),
+                    ("frozen_base", optional_u64_param(event_u64_field_mysql(event, "frozen"))),
                     (
                         "available_quote",
                         optional_u64_param(event_u64_field_mysql(event, "available")),
                     ),
-                    (
-                        "frozen_quote",
-                        optional_u64_param(event_u64_field_mysql(event, "frozen")),
-                    ),
+                    ("frozen_quote", optional_u64_param(event_u64_field_mysql(event, "frozen"))),
                 ]),
             )
             .map_err(map_mysql_error)?;

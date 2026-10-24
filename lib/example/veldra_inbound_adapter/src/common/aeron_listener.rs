@@ -120,10 +120,7 @@ pub enum AeronListenerConfigError {
     #[error("{0} contains invalid UTF-8")]
     InvalidUnicode(&'static str),
     #[error("{variable} must be a valid signed 32-bit integer, got {value:?}")]
-    InvalidInteger {
-        variable: &'static str,
-        value: String,
-    },
+    InvalidInteger { variable: &'static str, value: String },
     #[error("{variable} must be greater than zero, got {value}")]
     NonPositiveFragmentLimit { variable: &'static str, value: i32 },
 }
@@ -144,11 +141,7 @@ where
     #[error(
         "Aeron fragment is outside its buffer: offset={offset}, length={length}, capacity={capacity}"
     )]
-    InvalidFragmentBounds {
-        offset: Index,
-        length: Index,
-        capacity: Index,
-    },
+    InvalidFragmentBounds { offset: Index, length: Index, capacity: Index },
     #[error("failed to decode Aeron fragment as EntityReplayableEvent: {0}")]
     Decode(#[source] serde_json::Error),
     #[error("failed to handle Aeron replayable event: {0:?}")]
@@ -170,9 +163,7 @@ where
     H::Error: Debug,
 {
     let event = decode_entity_replayable_event(payload).map_err(AeronListenerError::Decode)?;
-    handler
-        .handle(&event)
-        .map_err(AeronListenerError::EventHandler)
+    handler.handle(&event).map_err(AeronListenerError::EventHandler)
 }
 
 pub fn run_aeron_listener<H>(
@@ -183,9 +174,7 @@ where
     H: EntityReplayableEventHandler,
     H::Error: Debug,
 {
-    config
-        .validate()
-        .map_err(AeronListenerError::Configuration)?;
+    config.validate().map_err(AeronListenerError::Configuration)?;
 
     let channel = CString::new(config.channel.as_str()).map_err(|_| {
         AeronListenerError::Configuration(AeronListenerConfigError::ChannelContainsNul)
@@ -218,9 +207,8 @@ where
 
     loop {
         let fragments_read = {
-            let mut subscription = subscription
-                .lock()
-                .map_err(|_| AeronListenerError::SubscriptionLock)?;
+            let mut subscription =
+                subscription.lock().map_err(|_| AeronListenerError::SubscriptionLock)?;
             subscription.poll(&mut fragment_handler, config.fragment_limit)
         };
 
@@ -259,11 +247,7 @@ where
 {
     let capacity = buffer.capacity();
     let (Ok(offset), Ok(length)) = (usize::try_from(offset), usize::try_from(length)) else {
-        return Err(AeronListenerError::InvalidFragmentBounds {
-            offset,
-            length,
-            capacity,
-        });
+        return Err(AeronListenerError::InvalidFragmentBounds { offset, length, capacity });
     };
     let Some(end) = offset.checked_add(length) else {
         return Err(AeronListenerError::InvalidFragmentBounds {
@@ -272,14 +256,11 @@ where
             capacity,
         });
     };
-    buffer
-        .as_slice()
-        .get(offset..end)
-        .ok_or(AeronListenerError::InvalidFragmentBounds {
-            offset: offset as Index,
-            length: length as Index,
-            capacity,
-        })
+    buffer.as_slice().get(offset..end).ok_or(AeronListenerError::InvalidFragmentBounds {
+        offset: offset as Index,
+        length: length as Index,
+        capacity,
+    })
 }
 
 fn read_env(name: &'static str) -> Result<Option<String>, AeronListenerConfigError> {

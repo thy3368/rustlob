@@ -279,10 +279,8 @@ impl ProductFeeConfig {
 
         // 2. 应用VIP折扣
         if let Some(vip_level) = user_vip_level {
-            if let Some(vip_config) = self
-                .product_vip_levels
-                .iter()
-                .find(|vip| vip.level_id == vip_level)
+            if let Some(vip_config) =
+                self.product_vip_levels.iter().find(|vip| vip.level_id == vip_level)
             {
                 base_fee *= 1.0 - vip_config.fee_discount;
             }
@@ -316,15 +314,12 @@ pub struct CexFeeEntity {
 impl CexFeeEntity {
     // 创建新的手续费实体
     pub fn new() -> Self {
-        Self {
-            product_fee_configs: HashMap::new(),
-        }
+        Self { product_fee_configs: HashMap::new() }
     }
 
     /// 添加产品费率配置
     pub fn add_product_config(&mut self, config: ProductFeeConfig) {
-        self.product_fee_configs
-            .insert(config.instrument_type, config);
+        self.product_fee_configs.insert(config.instrument_type, config);
     }
 
     /// 获取产品的基础费率配置
@@ -348,11 +343,10 @@ impl CexFeeEntity {
         is_market_maker: bool,
     ) -> Result<FeeCalculationResult, FeeError> {
         let product_config =
-            self.get_product_config(instrument_type)
-                .ok_or(FeeError::CalculationError(format!(
-                    "Product type {:?} not configured",
-                    instrument_type
-                )))?;
+            self.get_product_config(instrument_type).ok_or(FeeError::CalculationError(format!(
+                "Product type {:?} not configured",
+                instrument_type
+            )))?;
 
         product_config.calculate_trading_fee(
             fee_type,

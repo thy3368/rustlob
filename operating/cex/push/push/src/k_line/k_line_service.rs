@@ -32,10 +32,7 @@ impl KLineBehaviorV2Imp {
             }
         });
 
-        Self {
-            aggregator: Arc::new(std::sync::Mutex::new(aggregator)),
-            queue,
-        }
+        Self { aggregator: Arc::new(std::sync::Mutex::new(aggregator)), queue }
     }
 
     /// 处理单个交易变更日志
@@ -56,10 +53,8 @@ impl KLineBehaviorV2Imp {
 
     /// 批量处理交易变更日志（性能优化）
     pub fn handle_events(&self, change_logs: &[ChangeLog]) {
-        let trades: Vec<(u64, f64, f64)> = change_logs
-            .iter()
-            .filter_map(Self::extract_trade_data)
-            .collect();
+        let trades: Vec<(u64, f64, f64)> =
+            change_logs.iter().filter_map(Self::extract_trade_data).collect();
 
         if trades.is_empty() {
             return;
@@ -83,23 +78,17 @@ impl KLineBehaviorV2Imp {
     fn extract_trade_data(change_log: &ChangeLog) -> Option<(u64, f64, f64)> {
         let fields_map: std::collections::HashMap<&str, &str> = match change_log.change_type() {
             diff::ChangeType::Created { fields }
-            | diff::ChangeType::Updated {
-                changed_fields: fields,
-            } => fields
-                .iter()
-                .map(|f| (f.field_name.as_ref(), f.new_value.as_str()))
-                .collect(),
+            | diff::ChangeType::Updated { changed_fields: fields } => {
+                fields.iter().map(|f| (f.field_name.as_ref(), f.new_value.as_str())).collect()
+            }
             diff::ChangeType::Deleted => {
                 return None;
             }
         };
 
         let price: f64 = fields_map.get("price")?.parse().ok()?;
-        let volume: f64 = fields_map
-            .get("volume")
-            .or_else(|| fields_map.get("amount"))?
-            .parse()
-            .ok()?;
+        let volume: f64 =
+            fields_map.get("volume").or_else(|| fields_map.get("amount"))?.parse().ok()?;
 
         Some((*change_log.timestamp(), price, volume))
     }

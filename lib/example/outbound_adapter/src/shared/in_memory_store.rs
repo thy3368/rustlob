@@ -50,9 +50,7 @@ impl Default for InMemoryStore {
 
 impl InMemoryStore {
     pub fn new(asset: u32) -> Self {
-        Self {
-            state: Arc::new(Mutex::new(StoreState::new(asset))),
-        }
+        Self { state: Arc::new(Mutex::new(StoreState::new(asset))) }
     }
 
     pub fn seed_balances(
@@ -69,36 +67,27 @@ impl InMemoryStore {
 
     pub fn seed_balance(&self, balance: Balance) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state
-            .balances
-            .insert(balance_key(balance.account_id, balance.asset_id), balance);
+        state.balances.insert(balance_key(balance.account_id, balance.asset_id), balance);
         Ok(())
     }
 
     pub fn seed_market_rules(&self, market_rules: MarketRules) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state
-            .market_rules_by_symbol
-            .insert(market_rules.symbol.clone(), market_rules);
+        state.market_rules_by_symbol.insert(market_rules.symbol.clone(), market_rules);
         Ok(())
     }
 
     pub fn seed_order(&self, order: SpotOrderV2) -> Result<(), StoreError> {
         let order_id = order.order_id;
         let mut state = self.lock_state()?;
-        state
-            .lob
-            .insert_order(order.clone())
-            .map_err(|_| StoreError::StoreUnavailable)?;
+        state.lob.insert_order(order.clone()).map_err(|_| StoreError::StoreUnavailable)?;
         state.orders.insert(order_id, order);
         Ok(())
     }
 
     pub fn seed_reservation(&self, reservation: Reservation) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state
-            .reservations
-            .insert(reservation.reservation_id.clone(), reservation);
+        state.reservations.insert(reservation.reservation_id.clone(), reservation);
         Ok(())
     }
 

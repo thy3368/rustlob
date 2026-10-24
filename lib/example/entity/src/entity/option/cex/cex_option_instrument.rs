@@ -128,18 +128,8 @@ impl FieldDiff for CexOptionInstrument {
             &self.underlying_asset,
             &other.underlying_asset,
         );
-        push_change(
-            &mut changes,
-            "quote_asset",
-            &self.quote_asset,
-            &other.quote_asset,
-        );
-        push_change(
-            &mut changes,
-            "settle_asset",
-            &self.settle_asset,
-            &other.settle_asset,
-        );
+        push_change(&mut changes, "quote_asset", &self.quote_asset, &other.quote_asset);
+        push_change(&mut changes, "settle_asset", &self.settle_asset, &other.settle_asset);
         push_change(
             &mut changes,
             "expiry_time",
@@ -158,12 +148,7 @@ impl FieldDiff for CexOptionInstrument {
             self.option_type.as_str(),
             other.option_type.as_str(),
         );
-        push_change(
-            &mut changes,
-            "status",
-            self.status.as_str(),
-            other.status.as_str(),
-        );
+        push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         changes
     }
 }

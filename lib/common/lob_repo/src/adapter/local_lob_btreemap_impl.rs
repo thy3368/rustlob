@@ -42,10 +42,7 @@ struct OrderNode<O: LobOrder> {
 
 impl<O: LobOrder> OrderNode<O> {
     fn new(order: O) -> Self {
-        Self {
-            order,
-            next_idx: None,
-        }
+        Self { order, next_idx: None }
     }
 }
 
@@ -177,8 +174,7 @@ impl<O: LobOrder> LocalLobBTreeMap<O> {
     /// 获取指定价格级别的第一个订单索引
     #[inline]
     fn get_first_order_at_price(&self, price: Price, side: OrderSide) -> Option<usize> {
-        self.get_price_point(price, side)
-            .and_then(|pp| pp.first_order_idx)
+        self.get_price_point(price, side).and_then(|pp| pp.first_order_idx)
     }
 
     /// 将订单链接到价格级别的链表尾部
@@ -416,11 +412,7 @@ impl<O: LobOrder> SymbolLob for LocalLobBTreeMap<O> {
             }
         }
 
-        if matched_orders.is_empty() {
-            (None, quantity)
-        } else {
-            (Some(matched_orders), remaining)
-        }
+        if matched_orders.is_empty() { (None, quantity) } else { (Some(matched_orders), remaining) }
     }
 
     fn add_order(&mut self, order: Self::Order) -> Result<(), LobError> {

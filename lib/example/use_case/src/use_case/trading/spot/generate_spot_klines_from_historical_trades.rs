@@ -61,10 +61,7 @@ pub enum GenerateSpotKlinesFromHistoricalTradesError {
     TradeSymbolMismatch { trade_id: String },
     /// 成交时间不在命令的半开时间范围内。
     #[error("trade {trade_id} executed_at_ms is outside the requested range")]
-    TradeOutsideRange {
-        trade_id: String,
-        executed_at_ms: u64,
-    },
+    TradeOutsideRange { trade_id: String, executed_at_ms: u64 },
     /// 聚合 K 线时发生整数溢出。
     #[error("arithmetic overflow while generating spot klines")]
     ArithmeticOverflow,
@@ -84,10 +81,7 @@ impl ReplayableChanges for GenerateSpotKlinesFromHistoricalTradesChanges {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-        self.created_klines
-            .iter()
-            .map(Entity::track_create_event)
-            .collect()
+        self.created_klines.iter().map(Entity::track_create_event).collect()
     }
 }
 
@@ -120,26 +114,20 @@ impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
     ) -> Result<(), Self::Error> {
         for trade in &state.trades {
             if trade.asset != cmd.asset {
-                return Err(
-                    GenerateSpotKlinesFromHistoricalTradesError::TradeAssetMismatch {
-                        trade_id: trade.trade_id.clone(),
-                    },
-                );
+                return Err(GenerateSpotKlinesFromHistoricalTradesError::TradeAssetMismatch {
+                    trade_id: trade.trade_id.clone(),
+                });
             }
             if trade.symbol != cmd.symbol {
-                return Err(
-                    GenerateSpotKlinesFromHistoricalTradesError::TradeSymbolMismatch {
-                        trade_id: trade.trade_id.clone(),
-                    },
-                );
+                return Err(GenerateSpotKlinesFromHistoricalTradesError::TradeSymbolMismatch {
+                    trade_id: trade.trade_id.clone(),
+                });
             }
             if !(cmd.range_start_ms..cmd.range_end_ms).contains(&trade.created_at) {
-                return Err(
-                    GenerateSpotKlinesFromHistoricalTradesError::TradeOutsideRange {
-                        trade_id: trade.trade_id.clone(),
-                        executed_at_ms: trade.created_at,
-                    },
-                );
+                return Err(GenerateSpotKlinesFromHistoricalTradesError::TradeOutsideRange {
+                    trade_id: trade.trade_id.clone(),
+                    executed_at_ms: trade.created_at,
+                });
             }
         }
         Ok(())
@@ -152,9 +140,7 @@ impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut trades = state.trades.clone();
         trades.sort_by(|left, right| {
-            left.created_at
-                .cmp(&right.created_at)
-                .then_with(|| left.trade_id.cmp(&right.trade_id))
+            left.created_at.cmp(&right.created_at).then_with(|| left.trade_id.cmp(&right.trade_id))
         });
 
         let mut buckets = BTreeMap::<u64, KlineAccumulator>::new();
@@ -171,10 +157,7 @@ impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
             match buckets.get_mut(&open_time_ms) {
                 Some(bucket) => bucket.add(&trade, notional_quote)?,
                 None => {
-                    buckets.insert(
-                        open_time_ms,
-                        KlineAccumulator::first(&trade, notional_quote),
-                    );
+                    buckets.insert(open_time_ms, KlineAccumulator::first(&trade, notional_quote));
                 }
             }
         }

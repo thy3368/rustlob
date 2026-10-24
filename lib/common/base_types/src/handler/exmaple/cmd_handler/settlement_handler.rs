@@ -49,13 +49,8 @@ impl
         _cmd: &SettlementCmd,
         _state_set: SettlementState,
     ) -> Result<ChangeSet<SettlementResult, SettlementLog>, HandlerError> {
-        let result = SettlementResult {
-            balance_changes: vec![],
-        };
-        Ok(ChangeSet {
-            writes: result,
-            changelogs: vec![],
-        })
+        let result = SettlementResult { balance_changes: vec![] };
+        Ok(ChangeSet { writes: result, changelogs: vec![] })
     }
 }
 
@@ -76,10 +71,7 @@ impl
         &self,
         _cmd: &SettlementCmd,
     ) -> Result<SettlementState, HandlerError> {
-        Ok(SettlementState {
-            trades: vec![],
-            accounts: vec![],
-        })
+        Ok(SettlementState { trades: vec![], accounts: vec![] })
     }
 
     fn validate_command_in_lock(
@@ -113,14 +105,9 @@ mod tests {
     #[test]
     fn test_settlement_handler() {
         let handler = SettlementHandler::new();
-        let cmd = SettlementCmd {
-            settlement_id: "s1".into(),
-            trade_ids: vec!["trade_1".into()],
-        };
+        let cmd = SettlementCmd { settlement_id: "s1".into(), trade_ids: vec!["trade_1".into()] };
 
-        let result = handler.cmd_handle(cmd, |_, _| SettlementResult {
-            balance_changes: vec![],
-        });
+        let result = handler.cmd_handle(cmd, |_, _| SettlementResult { balance_changes: vec![] });
         assert!(result.is_ok());
     }
 }

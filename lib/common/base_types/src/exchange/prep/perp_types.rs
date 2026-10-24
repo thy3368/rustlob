@@ -184,11 +184,7 @@ impl PrepPosition {
 
         let base_fee = self.mark_price * self.quantity * funding_rate;
 
-        if self.position_side == PositionSide::Long {
-            -base_fee
-        } else {
-            base_fee
-        }
+        if self.position_side == PositionSide::Long { -base_fee } else { base_fee }
     }
 
     #[allow(dead_code)]
@@ -216,11 +212,7 @@ impl PrepPosition {
             }
         };
 
-        Some(if liq_price.is_sign_negative() {
-            Price::ZERO
-        } else {
-            liq_price
-        })
+        Some(if liq_price.is_sign_negative() { Price::ZERO } else { liq_price })
     }
 
     #[allow(dead_code)]
@@ -263,11 +255,8 @@ impl PrepPosition {
 
         // 更新持仓数量和均价
         self.quantity = total_qty;
-        self.entry_price = if total_qty > Quantity::ZERO {
-            total_cost / total_qty
-        } else {
-            Price::ZERO
-        };
+        self.entry_price =
+            if total_qty > Quantity::ZERO { total_cost / total_qty } else { Price::ZERO };
 
         // 更新标记价格
         self.mark_price = new_price;
@@ -350,11 +339,7 @@ impl PrepPosition {
             }
         };
 
-        Some(if liq_price.is_sign_negative() {
-            Price::ZERO
-        } else {
-            liq_price
-        })
+        Some(if liq_price.is_sign_negative() { Price::ZERO } else { liq_price })
     }
 
     /// 更新已实现盈亏

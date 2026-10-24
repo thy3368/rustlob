@@ -36,11 +36,7 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let height = if cli.height == "latest" {
-        None
-    } else {
-        Some(cli.height.parse::<u64>()?)
-    };
+    let height = if cli.height == "latest" { None } else { Some(cli.height.parse::<u64>()?) };
 
     let client = HyperliquidClient::new()?;
 

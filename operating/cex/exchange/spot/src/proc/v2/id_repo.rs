@@ -2,10 +2,7 @@ use id_generator::generator::IdGenerator;
 use once_cell::sync::Lazy;
 
 static ORDER_ID_GEN: Lazy<IdGenerator> = Lazy::new(|| {
-    let node_id = std::env::var("NODE_ID")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
+    let node_id = std::env::var("NODE_ID").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
     IdGenerator::new(node_id)
 });
 

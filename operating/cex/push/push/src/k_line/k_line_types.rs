@@ -45,15 +45,7 @@ pub struct WindowStatsUpdate {
 
 impl OHLC {
     pub fn new(timestamp: u64, price: f64, volume: f64) -> Self {
-        Self {
-            open: price,
-            high: price,
-            low: price,
-            close: price,
-            volume,
-            timestamp,
-            count: 1,
-        }
+        Self { open: price, high: price, low: price, close: price, volume, timestamp, count: 1 }
     }
 
     pub fn update(&mut self, price: f64, volume: f64) {
@@ -94,11 +86,7 @@ impl TradeDataSoA {
             volumes.push(v);
         }
 
-        Self {
-            timestamps,
-            prices,
-            volumes,
-        }
+        Self { timestamps, prices, volumes }
     }
 }
 

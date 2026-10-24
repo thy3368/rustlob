@@ -393,15 +393,14 @@ impl CexOptionOrder {
             None
         };
 
-        let fee_hold = input
-            .fee_amount
-            .filter(|amount| *amount > 0)
-            .map(|fee_amount| CexOptionFeeHoldRequirement {
+        let fee_hold = input.fee_amount.filter(|amount| *amount > 0).map(|fee_amount| {
+            CexOptionFeeHoldRequirement {
                 account_id: input.account_id.clone(),
                 order_id: input.order_id.clone(),
                 asset_id: input.instrument.quote_asset.clone(),
                 fee_amount,
-            });
+            }
+        });
 
         let order = Self::new(
             input.order_id,
@@ -415,12 +414,7 @@ impl CexOptionOrder {
             input.client_order_id,
         );
 
-        Ok(PlaceCexOptionOrderOutcome {
-            order,
-            premium_hold,
-            fee_hold,
-            short_margin_hold,
-        })
+        Ok(PlaceCexOptionOrderOutcome { order, premium_hold, fee_hold, short_margin_hold })
     }
 
     /// 返回带指定执行状态的订单快照。
@@ -441,10 +435,7 @@ impl CexOptionOrder {
 
     /// 返回订单是否仍在开放生命周期中。
     pub fn is_open(&self) -> bool {
-        matches!(
-            self.status,
-            CexOptionOrderStatus::Open | CexOptionOrderStatus::PartiallyFilled
-        )
+        matches!(self.status, CexOptionOrderStatus::Open | CexOptionOrderStatus::PartiallyFilled)
     }
 
     /// 返回订单是否处于终态。
@@ -459,18 +450,12 @@ impl CexOptionOrder {
 
     /// 返回订单当前是否允许撤销。
     pub fn is_cancelable(&self) -> bool {
-        self.is_open()
-            && self
-                .remaining_quantity()
-                .is_some_and(|quantity| quantity > 0)
+        self.is_open() && self.remaining_quantity().is_some_and(|quantity| quantity > 0)
     }
 
     /// 返回订单当前是否可进入撮合。
     pub fn is_matchable(&self) -> bool {
-        self.is_open()
-            && self
-                .remaining_quantity()
-                .is_some_and(|quantity| quantity > 0)
+        self.is_open() && self.remaining_quantity().is_some_and(|quantity| quantity > 0)
     }
 
     /// 返回生命周期状态和成交数量是否一致。
@@ -531,30 +516,15 @@ impl FieldDiff for CexOptionOrder {
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = Vec::with_capacity(0);
-        push_change(
-            &mut changes,
-            "account_id",
-            &self.account_id,
-            &other.account_id,
-        );
-        push_change(
-            &mut changes,
-            "instrument_id",
-            &self.instrument_id,
-            &other.instrument_id,
-        );
+        push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
+        push_change(&mut changes, "instrument_id", &self.instrument_id, &other.instrument_id);
         push_change(
             &mut changes,
             "order_side",
             self.order_side.as_str(),
             other.order_side.as_str(),
         );
-        push_change(
-            &mut changes,
-            "execution",
-            self.execution.as_str(),
-            other.execution.as_str(),
-        );
+        push_change(&mut changes, "execution", self.execution.as_str(), other.execution.as_str());
         push_change(
             &mut changes,
             "time_in_force",
@@ -585,12 +555,7 @@ impl FieldDiff for CexOptionOrder {
             self.reduce_only.to_string(),
             other.reduce_only.to_string(),
         );
-        push_change(
-            &mut changes,
-            "status",
-            self.status.as_str(),
-            other.status.as_str(),
-        );
+        push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
         push_change(
             &mut changes,
             "client_order_id",

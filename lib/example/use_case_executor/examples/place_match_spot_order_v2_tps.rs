@@ -4,9 +4,9 @@ use std::time::{Duration, Instant};
 
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, Balance, MarketRules, PlaceOnlySpotOrderV2Cmd,
-    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, OrderSide, OrderTif,
-    OrderType, SpotOrderV2,
+    ActivatePendingSpotOrderV2Input, Balance, MarketRules, OrderSide, OrderTif, OrderType,
+    PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
+    SpotOrderV2,
 };
 use example_outbound_adapter::InMemoryPlaceOrderOutbound;
 use use_case_executor::trading::spot::place_match_spot_order_v2_executor::execute_place_match_spot_order_v2_with_outbound;
@@ -23,9 +23,7 @@ fn sell_order(id: u64) -> Result<SpotOrderV2, Box<dyn std::error::Error>> {
         OrderSide::Sell,
         1,
         100,
-        OrderType::Limit {
-            tif: OrderTif::Gtc,
-        },
+        OrderType::Limit { tif: OrderTif::Gtc },
         None,
         0,
         1,
@@ -58,10 +56,7 @@ fn outbound() -> Result<InMemoryPlaceOrderOutbound, Box<dyn std::error::Error>> 
             0,
             1,
         ),
-        MarketRules {
-            symbol: "BTCUSDT".into(),
-            min_qty: 1,
-        },
+        MarketRules { symbol: "BTCUSDT".into(), min_qty: 1 },
     )?;
     out.seed_balance(Balance::new(
         stable_string_entity_id("seller"),
@@ -148,10 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     tps.sort_by(f64::total_cmp);
-    println!(
-        "median_tps={:.2} rounds={ROUNDS} orders_per_round={N}",
-        tps[ROUNDS / 2]
-    );
+    println!("median_tps={:.2} rounds={ROUNDS} orders_per_round={N}", tps[ROUNDS / 2]);
     println!("scope=single-threaded in-memory 1000-order-per-round link throughput");
     Ok(())
 }

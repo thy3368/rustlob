@@ -107,9 +107,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ));
     }
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(
-            UserSetAbstractionContractError::NonceMismatch,
-        ));
+        return Err(ExchangeHttpError::contract(UserSetAbstractionContractError::NonceMismatch));
     }
     Ok(())
 }

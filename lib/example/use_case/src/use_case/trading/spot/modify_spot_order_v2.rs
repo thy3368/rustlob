@@ -13,9 +13,7 @@ use crate::entity::account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2,
 };
 use crate::entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError};
-use crate::entity::{
-    Balance, ReservationError, OrderSide, SpotOrderStatus, OrderTif, OrderType,
-};
+use crate::entity::{Balance, OrderSide, OrderTif, OrderType, ReservationError, SpotOrderStatus};
 use crate::support::concat3;
 
 /// 定位一个已经存在的订单。
@@ -36,11 +34,7 @@ pub enum ModifySpotOrderV2OrderType {
     /// 普通限价单。
     Limit { tif: String },
     /// 条件单。
-    Trigger {
-        is_market: bool,
-        trigger_price: String,
-        trigger_role: String,
-    },
+    Trigger { is_market: bool, trigger_price: String, trigger_role: String },
 }
 
 /// 现货订单完整替换命令。
@@ -152,11 +146,7 @@ impl ReplayableChanges for ModifySpotOrderV2Changes {
             .saturating_add(self.created_balance_ledger_entries.len())
             .saturating_add(self.created_balance_ledger_entries.len());
         let mut events = Vec::with_capacity(event_capacity);
-        events.push(
-            self.updated_order
-                .after
-                .track_update_event_from(&self.updated_order.before)?,
-        );
+        events.push(self.updated_order.after.track_update_event_from(&self.updated_order.before)?);
         events.extend(balance_replay_events_from_ledger_entries(
             &self.updated_balances,
             &self.created_balance_ledger_entries,
@@ -313,11 +303,7 @@ fn lookup_matches_order(lookup: &OrderId, order: &SpotOrderV2) -> bool {
 }
 
 fn side_from_command(cmd: &ModifySpotOrderV2Cmd) -> OrderSide {
-    if cmd.is_buy {
-        OrderSide::Buy
-    } else {
-        OrderSide::Sell
-    }
+    if cmd.is_buy { OrderSide::Buy } else { OrderSide::Sell }
 }
 
 fn parsed_limit_command(
@@ -395,16 +381,12 @@ fn adjust_reservation_balance(
     ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), ModifySpotOrderV2Error> {
     let (old_reservation, new_reservation, label) = match slot {
-        ReservationSlot::Principal => (
-            &order_before.reservation,
-            &order_after.reservation,
-            "principal",
-        ),
-        ReservationSlot::Fee => (
-            &order_before.fee_reservation,
-            &order_after.fee_reservation,
-            "fee",
-        ),
+        ReservationSlot::Principal => {
+            (&order_before.reservation, &order_after.reservation, "principal")
+        }
+        ReservationSlot::Fee => {
+            (&order_before.fee_reservation, &order_after.fee_reservation, "fee")
+        }
     };
     let old_remaining = old_reservation.remaining_amount;
     let new_remaining = new_reservation.remaining_amount;
@@ -420,9 +402,7 @@ fn adjust_reservation_balance(
                 .checked_sub(old_remaining)
                 .ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?,
             "freeze",
-            BalanceLedgerReason::ModifySpotOrderFreeze {
-                order_id: order_before.order_id(),
-            },
+            BalanceLedgerReason::ModifySpotOrderFreeze { order_id: order_before.order_id() },
         )
     } else {
         (
@@ -431,15 +411,10 @@ fn adjust_reservation_balance(
                 .checked_sub(new_remaining)
                 .ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?,
             "unfreeze",
-            BalanceLedgerReason::ModifySpotOrderUnfreeze {
-                order_id: order_before.order_id(),
-            },
+            BalanceLedgerReason::ModifySpotOrderUnfreeze { order_id: order_before.order_id() },
         )
     };
-    let entry_id = format!(
-        "balance-ledger:{}:modify:{label}:{action}",
-        order_before.order_id()
-    );
+    let entry_id = format!("balance-ledger:{}:modify:{label}:{action}", order_before.order_id());
     let entry = apply_balance_ledger_entry(operation, entry_id, balance, amount, reason)?;
     ledger_entries.push(entry);
     Ok(())
@@ -505,18 +480,13 @@ fn merge_balance_pairs(
     let mut pairs = Vec::new();
     for after_balance in after {
         let balance_id = after_balance.business_entity_id();
-        let before_balance = before_map
-            .get(&balance_id)
-            .cloned()
-            .ok_or(ModifySpotOrderV2Error::BalanceNotFound)?;
+        let before_balance =
+            before_map.get(&balance_id).cloned().ok_or(ModifySpotOrderV2Error::BalanceNotFound)?;
         if !seen.insert(balance_id) {
             return Err(ModifySpotOrderV2Error::BalanceNotFound);
         }
         if before_balance != after_balance {
-            pairs.push(UpdatedEntityPair {
-                before: before_balance,
-                after: after_balance,
-            });
+            pairs.push(UpdatedEntityPair { before: before_balance, after: after_balance });
         }
     }
     Ok(pairs)
@@ -535,11 +505,7 @@ fn balance_replay_events_from_ledger_entries(
     let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
         let Some(before) = current_balances
-            .get(&concat3(
-                &entry.account_id.to_string(),
-                ":",
-                &entry.asset_id.to_string(),
-            ))
+            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
             .cloned()
         else {
             return Err(EntityError::Custom(
@@ -570,9 +536,7 @@ fn balance_replay_events_from_ledger_entries(
         let next_version = before
             .version
             .checked_add(1)
-            .ok_or(EntityError::VersionOverflow {
-                version: before.version,
-            })?;
+            .ok_or(EntityError::VersionOverflow { version: before.version })?;
         let after = Balance::new_with_snapshot_facts(
             before.party_id,
             before.account_id,
@@ -585,12 +549,7 @@ fn balance_replay_events_from_ledger_entries(
         );
         events.push(after.track_update_event_from(&before)?);
         current_balances.insert(
-            concat3(
-                &entry.account_id.to_string(),
-                ":",
-                &entry.asset_id.to_string(),
-            )
-            .clone(),
+            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
             after,
         );
     }

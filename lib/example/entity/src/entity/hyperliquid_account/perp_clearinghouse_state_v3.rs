@@ -84,10 +84,7 @@ impl PerpClearinghouseStateV3 {
 
     /// 找某个币的仓位
     fn position_of(&self, coin: &str) -> Option<&PerpPositionV2> {
-        self.asset_positions
-            .iter()
-            .find(|p| p.position.coin() == coin)
-            .map(|p| &p.position)
+        self.asset_positions.iter().find(|p| p.position.coin() == coin).map(|p| &p.position)
     }
 }
 

@@ -65,9 +65,9 @@ impl ExchangeActionHandler for CWithdrawAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "cWithdraw" {
-        return Err(ExchangeHttpError::contract(
-            CWithdrawContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(CWithdrawContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -79,14 +79,10 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(ExchangeHttpError::contract(
-            CWithdrawContractError::VaultAddressNotSupported,
-        ));
+        return Err(ExchangeHttpError::contract(CWithdrawContractError::VaultAddressNotSupported));
     }
     if request.common.expires_after.is_some() {
-        return Err(ExchangeHttpError::contract(
-            CWithdrawContractError::ExpiresAfterNotSupported,
-        ));
+        return Err(ExchangeHttpError::contract(CWithdrawContractError::ExpiresAfterNotSupported));
     }
     validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
         ExchangeHttpError::contract(CWithdrawContractError::InvalidHyperliquidChain)
@@ -95,9 +91,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ExchangeHttpError::contract(CWithdrawContractError::InvalidSignatureChainId)
     })?;
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(
-            CWithdrawContractError::NonceMismatch,
-        ));
+        return Err(ExchangeHttpError::contract(CWithdrawContractError::NonceMismatch));
     }
     Ok(())
 }

@@ -25,9 +25,7 @@ impl TradeService {
     /// 创建新的交易服务实例
     pub fn new() -> Self {
         let processor = UsdsMFutureTradeBehaviorImpl {};
-        Self {
-            processor: Arc::new(Mutex::new(processor)),
-        }
+        Self { processor: Arc::new(Mutex::new(processor)) }
     }
 
     /// 处理交易请求 - 使用服务层
@@ -75,27 +73,15 @@ pub async fn handle(
 /// 创建 JSON 响应
 fn create_json_response(
     response: CmdResp<UsdsMFutureTradeRes>,
-) -> (
-    axum::http::StatusCode,
-    [(axum::http::header::HeaderName, &'static str); 1],
-    String,
-) {
+) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let json = serde_json::to_string(&response).unwrap();
-    (
-        axum::http::StatusCode::OK,
-        [(axum::http::header::CONTENT_TYPE, "application/json")],
-        json,
-    )
+    (axum::http::StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/json")], json)
 }
 
 /// 创建错误响应
 fn create_error_response(
     error_msg: &str,
-) -> (
-    axum::http::StatusCode,
-    [(axum::http::header::HeaderName, &'static str); 1],
-    String,
-) {
+) -> (axum::http::StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
     let response = TradeResponse {
         success: false,
         message: "Request failed".to_string(),

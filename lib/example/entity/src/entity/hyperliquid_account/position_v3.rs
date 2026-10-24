@@ -69,9 +69,7 @@ impl PositionV3 {
         let eq = self.backing_equity(cross_equity);
         let mm = self.mm_required(mark);
         if eq < mm {
-            HealthStatus::Liquidate {
-                deficit: Usdc::from_decimal(mm - eq),
-            }
+            HealthStatus::Liquidate { deficit: Usdc::from_decimal(mm - eq) }
         } else if eq < mm * Decimal::new(2, 0) {
             HealthStatus::Warning
         } else {
@@ -121,9 +119,7 @@ impl HealthStatus {
         if ratio < Decimal::new(667, 3) {
             HealthStatus::BackstopZone
         } else if equity < mm {
-            HealthStatus::Liquidate {
-                deficit: Usdc(mm.0 - equity.0),
-            }
+            HealthStatus::Liquidate { deficit: Usdc(mm.0 - equity.0) }
         } else if ratio < Decimal::new(2, 0) {
             HealthStatus::Warning
         } else {

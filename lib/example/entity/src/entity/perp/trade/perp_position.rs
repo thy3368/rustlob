@@ -333,9 +333,9 @@ impl PerpPosition {
             .ok_or(HyperliquidPerpPositionError::InconsistentState)?;
         let signed_fee = i128::from(funding_fee);
         let signed_usdc_delta = match direction {
-            HyperliquidPerpFundingDirection::Pay => signed_fee
-                .checked_neg()
-                .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?,
+            HyperliquidPerpFundingDirection::Pay => {
+                signed_fee.checked_neg().ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?
+            }
             HyperliquidPerpFundingDirection::Receive => signed_fee,
         };
 
@@ -417,12 +417,9 @@ impl PerpPosition {
             return Err(HyperliquidPerpPositionError::InvalidLeverage);
         }
 
-        let required_margin = required_position_margin(
-            signed_size_delta.unsigned_abs(),
-            trade_price,
-            leverage_value,
-        )
-        .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
+        let required_margin =
+            required_position_margin(signed_size_delta.unsigned_abs(), trade_price, leverage_value)
+                .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
         let position = Self::new(
             position_key,
             account_id,
@@ -504,12 +501,7 @@ impl PerpPosition {
             .checked_sub(signed_size_delta.unsigned_abs())
             .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)?;
         let signed_size = signed_qty(next_qty, self.signed_size.signum())?;
-        self.apply_trade_state(
-            signed_size,
-            self.entry_px,
-            realized_pnl_delta,
-            before_margin,
-        )
+        self.apply_trade_state(signed_size, self.entry_px, realized_pnl_delta, before_margin)
     }
 
     /// 可 BDD 规格化的聚合根行为：反向全平，成交数量必须刚好等于当前仓位数量。
@@ -572,8 +564,7 @@ impl PerpPosition {
     }
 
     fn current_required_margin(&self) -> Result<u64, HyperliquidPerpPositionError> {
-        self.local_initial_margin_required()
-            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
+        self.local_initial_margin_required().ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
     }
 
     fn realized_pnl_for_close_qty(
@@ -651,12 +642,7 @@ impl FieldDiff for PerpPosition {
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let mut changes = Vec::with_capacity(0);
 
-        push_change(
-            &mut changes,
-            "account_id",
-            &self.account_id,
-            &other.account_id,
-        );
+        push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
         push_change(
             &mut changes,
             "perp_asset_id",
@@ -745,11 +731,7 @@ pub fn required_position_margin(qty: u64, price: u64, leverage: u64) -> Option<u
     let notional = qty.checked_mul(price)?;
     let quotient = notional.checked_div(leverage)?;
     let remainder = notional.checked_rem(leverage)?;
-    if remainder == 0 {
-        Some(quotient)
-    } else {
-        quotient.checked_add(1)
-    }
+    if remainder == 0 { Some(quotient) } else { quotient.checked_add(1) }
 }
 
 fn derive_position_status(signed_size: i64, version: u64) -> HyperliquidPerpPositionStatus {
@@ -768,9 +750,9 @@ fn signed_qty(qty: u64, sign: i64) -> Result<i64, HyperliquidPerpPositionError> 
     let qty = i64::try_from(qty).map_err(|_| HyperliquidPerpPositionError::ArithmeticOverflow)?;
     match sign.cmp(&0) {
         std::cmp::Ordering::Greater => Ok(qty),
-        std::cmp::Ordering::Less => qty
-            .checked_neg()
-            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow),
+        std::cmp::Ordering::Less => {
+            qty.checked_neg().ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
+        }
         std::cmp::Ordering::Equal => Ok(0),
     }
 }
@@ -789,9 +771,7 @@ fn next_entity_version(version: u64) -> Result<u64, HyperliquidPerpPositionError
     if version == 0 {
         Ok(1)
     } else {
-        version
-            .checked_add(1)
-            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
+        version.checked_add(1).ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
     }
 }
 
@@ -861,10 +841,7 @@ mod tests {
         assert!(position.trades_asset(0));
         assert!(position.trades_symbol("BTC-PERP"));
         assert!(position.is_flat());
-        assert_eq!(
-            position.lifecycle_status(),
-            HyperliquidPerpPositionStatus::EmptySlot
-        );
+        assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::EmptySlot);
         assert!(!position.is_funding_eligible());
         assert_eq!(position.required_margin(), Some(0));
         assert_eq!(position.margin_mode, HyperliquidPerpMarginMode::Cross);
@@ -981,18 +958,9 @@ mod tests {
 
         assert!(long.is_funding_eligible());
         assert_eq!(long.funding_notional(60_000), Some(120_000));
-        assert_eq!(
-            long.funding_direction(10_000),
-            Some(HyperliquidPerpFundingDirection::Pay)
-        );
-        assert_eq!(
-            short.funding_direction(10_000),
-            Some(HyperliquidPerpFundingDirection::Receive)
-        );
-        assert_eq!(
-            long.funding_direction(-10_000),
-            Some(HyperliquidPerpFundingDirection::Receive)
-        );
+        assert_eq!(long.funding_direction(10_000), Some(HyperliquidPerpFundingDirection::Pay));
+        assert_eq!(short.funding_direction(10_000), Some(HyperliquidPerpFundingDirection::Receive));
+        assert_eq!(long.funding_direction(-10_000), Some(HyperliquidPerpFundingDirection::Receive));
         assert_eq!(long.funding_fee(60_000, 10_000), Some(12));
         assert_eq!(long.funding_fee(60_000, 0), Some(0));
         assert_eq!(long.margin_mode, HyperliquidPerpMarginMode::Cross);
@@ -1009,10 +977,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            settlement.funding_settlement_id,
-            "funding-batch-1-position-1"
-        );
+        assert_eq!(settlement.funding_settlement_id, "funding-batch-1-position-1");
         assert_eq!(settlement.funding_batch_id, "funding-batch-1");
         assert_eq!(settlement.account_id, "trader-1");
         assert_eq!(settlement.position_id, "position-1");
@@ -1194,16 +1159,10 @@ mod tests {
         assert_eq!(position.qty(), 3);
         assert_eq!(position.entry_px, 100);
         assert_eq!(position.required_margin(), Some(30));
-        assert_eq!(
-            position.lifecycle_status(),
-            HyperliquidPerpPositionStatus::Open
-        );
+        assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
         assert_eq!(position.cumulative_realized_pnl, 0);
         assert_eq!(position.version, 1);
-        assert_eq!(
-            slot.lifecycle_status(),
-            HyperliquidPerpPositionStatus::EmptySlot
-        );
+        assert_eq!(slot.lifecycle_status(), HyperliquidPerpPositionStatus::EmptySlot);
         assert_eq!(outcome.realized_pnl_delta, 0);
         assert_eq!(outcome.required_margin_delta, 30);
     }
@@ -1240,10 +1199,7 @@ mod tests {
         assert_eq!(closed.qty(), 0);
         assert_eq!(closed.entry_px, 0);
         assert_eq!(closed.required_margin(), Some(0));
-        assert_eq!(
-            closed.lifecycle_status(),
-            HyperliquidPerpPositionStatus::Closed
-        );
+        assert_eq!(closed.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
         assert_eq!(closed.cumulative_realized_pnl, -20);
         assert_eq!(close.required_margin_delta, -20);
     }
@@ -1258,10 +1214,7 @@ mod tests {
 
         assert_eq!(position.leverage, 10);
         assert_eq!(position.required_margin(), Some(30));
-        assert_eq!(
-            position.lifecycle_status(),
-            HyperliquidPerpPositionStatus::Open
-        );
+        assert_eq!(position.lifecycle_status(), HyperliquidPerpPositionStatus::Open);
         assert_eq!(position.version, 3);
         assert_eq!(outcome.required_margin_delta, -30);
     }
@@ -1302,10 +1255,7 @@ mod tests {
         let empty_outcome = empty
             .apply_leverage_setting("trader-1", 7, HyperliquidPerpMarginMode::Cross, 20)
             .unwrap();
-        assert_eq!(
-            empty.lifecycle_status(),
-            HyperliquidPerpPositionStatus::Closed
-        );
+        assert_eq!(empty.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
         assert_eq!(empty.required_margin(), Some(0));
         assert_eq!(empty_outcome.required_margin_delta, 0);
 
@@ -1324,10 +1274,7 @@ mod tests {
         let closed_outcome = closed
             .apply_leverage_setting("trader-1", 7, HyperliquidPerpMarginMode::Cross, 20)
             .unwrap();
-        assert_eq!(
-            closed.lifecycle_status(),
-            HyperliquidPerpPositionStatus::Closed
-        );
+        assert_eq!(closed.lifecycle_status(), HyperliquidPerpPositionStatus::Closed);
         assert_eq!(closed.required_margin(), Some(0));
         assert_eq!(closed_outcome.required_margin_delta, 0);
     }

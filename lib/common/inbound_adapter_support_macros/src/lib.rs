@@ -66,10 +66,7 @@ impl Parse for HttpEndpointArgs {
             summary: summary
                 .ok_or_else(|| Error::new(proc_macro2::Span::call_site(), "missing `summary`"))?,
             error_response_schema: error_response_schema.ok_or_else(|| {
-                Error::new(
-                    proc_macro2::Span::call_site(),
-                    "missing `error_response_schema`",
-                )
+                Error::new(proc_macro2::Span::call_site(), "missing `error_response_schema`")
             })?,
             error_codes: error_codes.ok_or_else(|| {
                 Error::new(proc_macro2::Span::call_site(), "missing `error_codes`")
@@ -152,10 +149,7 @@ fn extract_request_type(input_fn: &ItemFn) -> Result<Type> {
         }
     }
 
-    Err(Error::new_spanned(
-        &input_fn.sig.inputs,
-        "expected one handler argument of type `Json<T>`",
-    ))
+    Err(Error::new_spanned(&input_fn.sig.inputs, "expected one handler argument of type `Json<T>`"))
 }
 
 fn extract_response_type(input_fn: &ItemFn) -> Result<Type> {
@@ -167,17 +161,11 @@ fn extract_response_type(input_fn: &ItemFn) -> Result<Type> {
     };
 
     let Type::Path(result_path) = ty.as_ref() else {
-        return Err(Error::new_spanned(
-            ty,
-            "expected `Result<Json<T>, E>` return type",
-        ));
+        return Err(Error::new_spanned(ty, "expected `Result<Json<T>, E>` return type"));
     };
 
     let Some(result_segment) = result_path.path.segments.last() else {
-        return Err(Error::new_spanned(
-            result_path,
-            "missing result path segment",
-        ));
+        return Err(Error::new_spanned(result_path, "missing result path segment"));
     };
 
     if result_segment.ident != "Result" {
@@ -188,17 +176,11 @@ fn extract_response_type(input_fn: &ItemFn) -> Result<Type> {
     }
 
     let syn::PathArguments::AngleBracketed(args) = &result_segment.arguments else {
-        return Err(Error::new_spanned(
-            result_segment,
-            "expected generic `Result<Json<T>, E>`",
-        ));
+        return Err(Error::new_spanned(result_segment, "expected generic `Result<Json<T>, E>`"));
     };
 
     let Some(GenericArgument::Type(ok_type)) = args.args.first() else {
-        return Err(Error::new_spanned(
-            args,
-            "expected `Result<Json<T>, E>` ok type",
-        ));
+        return Err(Error::new_spanned(args, "expected `Result<Json<T>, E>` ok type"));
     };
 
     let Some(inner) = extract_json_inner_type(ok_type) else {
@@ -252,10 +234,7 @@ mod tests {
         assert_eq!(args.method.value(), "POST");
         assert_eq!(args.path.value(), "/orders");
         assert_eq!(args.summary.value(), "Submit a spot order request.");
-        assert_eq!(
-            args.error_response_schema.value(),
-            "ExampleHttpErrorResponse"
-        );
+        assert_eq!(args.error_response_schema.value(), "ExampleHttpErrorResponse");
         assert_eq!(args.error_codes.len(), 2);
         assert_eq!(args.error_codes[0].0.base10_parse::<u16>()?, 400);
         assert_eq!(args.error_codes[0].1.value(), "invalid_qty");

@@ -89,18 +89,12 @@ fn cancel_error_status_wire_serializes_as_error_object() {
 
     let actual = serde_json::to_value(status).expect("cancel status serializes");
 
-    assert_eq!(
-        actual,
-        json!({ "error": "Order was never placed, already canceled, or filled." })
-    );
+    assert_eq!(actual, json!({ "error": "Order was never placed, already canceled, or filled." }));
 }
 
 async fn post_exchange_status_and_json(payload: Value) -> (StatusCode, Value) {
     let app = actix_test::init_service(App::new().service(build_exchange_scope())).await;
-    let request = actix_test::TestRequest::post()
-        .uri("/exchange")
-        .set_json(payload)
-        .to_request();
+    let request = actix_test::TestRequest::post().uri("/exchange").set_json(payload).to_request();
     let response = actix_test::call_service(&app, request).await;
     let status = response.status();
     let body = actix_test::read_body_json(response).await;

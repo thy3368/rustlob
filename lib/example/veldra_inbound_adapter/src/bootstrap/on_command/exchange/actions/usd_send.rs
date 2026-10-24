@@ -69,9 +69,9 @@ impl ExchangeActionHandler for UsdSendAction {
 
 fn validate(request: &UsdSendRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "usdSend" {
-        return Err(ExchangeHttpError::contract(
-            UsdSendContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(UsdSendContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -83,9 +83,7 @@ fn validate(request: &UsdSendRequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(ExchangeHttpError::contract(
-            UsdSendContractError::ExpiresAfterNotSupported,
-        ));
+        return Err(ExchangeHttpError::contract(UsdSendContractError::ExpiresAfterNotSupported));
     }
     validate_hyperliquid_chain(&request.action.hyperliquid_chain)
         .map_err(|_| ExchangeHttpError::contract(UsdSendContractError::InvalidHyperliquidChain))?;
@@ -94,14 +92,10 @@ fn validate(request: &UsdSendRequestWire) -> Result<(), ExchangeHttpError> {
     validate_hex_address(&request.action.destination)
         .map_err(|_| ExchangeHttpError::contract(UsdSendContractError::InvalidDestination))?;
     if request.action.amount.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            UsdSendContractError::InvalidAmount,
-        ));
+        return Err(ExchangeHttpError::contract(UsdSendContractError::InvalidAmount));
     }
     if request.action.time != request.common.nonce {
-        return Err(ExchangeHttpError::contract(
-            UsdSendContractError::NonceMismatch,
-        ));
+        return Err(ExchangeHttpError::contract(UsdSendContractError::NonceMismatch));
     }
     Ok(())
 }

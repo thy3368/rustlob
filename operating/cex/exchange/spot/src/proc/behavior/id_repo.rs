@@ -5,37 +5,25 @@ pub struct IdRepo {}
 
 /// Order ID生成器全局实例
 static ORDER_ID_GEN: Lazy<IdGenerator> = Lazy::new(|| {
-    let node_id = std::env::var("NODE_ID")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
+    let node_id = std::env::var("NODE_ID").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
     IdGenerator::new(node_id)
 });
 
 /// Trade ID生成器全局实例
 static TRADE_ID_GEN: Lazy<IdGenerator> = Lazy::new(|| {
-    let node_id = std::env::var("NODE_ID")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
+    let node_id = std::env::var("NODE_ID").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
     IdGenerator::new(node_id)
 });
 
 /// Event ID生成器全局实例
 static EVENT_ID_GEN: Lazy<IdGenerator> = Lazy::new(|| {
-    let node_id = std::env::var("NODE_ID")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
+    let node_id = std::env::var("NODE_ID").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
     IdGenerator::new(node_id)
 });
 
 /// Trans ID生成器全局实例
 static TRANS_ID_GEN: Lazy<IdGenerator> = Lazy::new(|| {
-    let node_id = std::env::var("NODE_ID")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
+    let node_id = std::env::var("NODE_ID").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
     IdGenerator::new(node_id)
 });
 

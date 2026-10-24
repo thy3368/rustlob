@@ -25,10 +25,7 @@ where
 {
     /// 创建查询处理器
     pub fn new(snapshot_repo: S, incremental_repo: I) -> Self {
-        Self {
-            snapshot_repo,
-            incremental_repo,
-        }
+        Self { snapshot_repo, incremental_repo }
     }
 }
 
@@ -46,9 +43,7 @@ where
         self.snapshot_repo
             .query_level1(query.symbol_id, query.sequence)
             .map(|snapshot| Level1QueryResult { snapshot })
-            .ok_or(MarketDataQueryError::EmptyOrderBook {
-                symbol_id: query.symbol_id,
-            })
+            .ok_or(MarketDataQueryError::EmptyOrderBook { symbol_id: query.symbol_id })
     }
 
     /// 处理 Level 1 批量查询
@@ -63,10 +58,7 @@ where
             }
         }
 
-        Level1BatchQueryResult {
-            snapshots,
-            failed_symbols,
-        }
+        Level1BatchQueryResult { snapshots, failed_symbols }
     }
 
     // ========================================================================
@@ -76,8 +68,7 @@ where
     /// 处理 Level 2 查询
     fn query_level2(&self, query: QueryLevel2) -> Level2QueryResult {
         let snapshot =
-            self.snapshot_repo
-                .query_level2(query.symbol_id, query.sequence, query.depth);
+            self.snapshot_repo.query_level2(query.symbol_id, query.sequence, query.depth);
 
         Level2QueryResult { snapshot }
     }
@@ -88,9 +79,7 @@ where
 
     /// 处理 Level 3 查询
     fn query_level3(&self, query: QueryLevel3) -> Level3QueryResult {
-        let snapshot = self
-            .snapshot_repo
-            .query_level3(query.symbol_id, query.sequence);
+        let snapshot = self.snapshot_repo.query_level3(query.symbol_id, query.sequence);
 
         Level3QueryResult { snapshot }
     }
@@ -120,10 +109,8 @@ where
         )?;
 
         // 获取最新序列号，判断是否还有更多数据
-        let latest_sequence = self
-            .incremental_repo
-            .get_latest_sequence(query.symbol_id)
-            .unwrap_or(query.to_sequence);
+        let latest_sequence =
+            self.incremental_repo.get_latest_sequence(query.symbol_id).unwrap_or(query.to_sequence);
 
         let has_more = query.to_sequence < latest_sequence;
 

@@ -33,10 +33,7 @@ impl SpotUserDataWebSocketStreamClient {
     /// let client = SpotUserDataWebSocketStreamClient::new("ws://localhost:8084");
     /// ```
     pub fn new(server_addr: impl Into<String>) -> Self {
-        Self {
-            server_addr: server_addr.into(),
-            connection: Arc::new(Mutex::new(None)),
-        }
+        Self { server_addr: server_addr.into(), connection: Arc::new(Mutex::new(None)) }
     }
 
     /// 连接到用户数据 WebSocket 服务器

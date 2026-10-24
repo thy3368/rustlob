@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2MatchError};
 
 use super::support::{MatchSpotOrderV4Error, validate_all_reservations_for_order, zip_pairs};
-use crate::entity::{SpotOrderStatus, OrderTif, spot as spot_entity};
+use crate::entity::{OrderTif, SpotOrderStatus, spot as spot_entity};
 use crate::support::concat2;
 use crate::{MatchSpotOrderV2Input, SpotTrade};
 
@@ -75,11 +75,7 @@ impl ReplayableChanges for MatchSpotOrderV4Changes {
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
         match self {
             Self::Resting => Ok(Vec::with_capacity(0)),
-            Self::PartiallyFilled {
-                updated_taker_order,
-                updated_maker_orders,
-                created_trades,
-            }
+            Self::PartiallyFilled { updated_taker_order, updated_maker_orders, created_trades }
             | Self::Filled {
                 filled_taker_order: updated_taker_order,
                 updated_maker_orders,
@@ -90,12 +86,8 @@ impl ReplayableChanges for MatchSpotOrderV4Changes {
                 updated_maker_orders,
                 created_trades,
             } => replay_events(updated_taker_order, updated_maker_orders, created_trades),
-            Self::Rejected {
-                rejected_taker_order,
-            } => Ok(vec![
-                rejected_taker_order
-                    .after
-                    .track_update_event_from(&rejected_taker_order.before)?,
+            Self::Rejected { rejected_taker_order } => Ok(vec![
+                rejected_taker_order.after.track_update_event_from(&rejected_taker_order.before)?,
             ]),
         }
     }
@@ -107,15 +99,9 @@ fn replay_events(
     created_trades: &[SpotTrade],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut events = Vec::with_capacity(
-        1_usize
-            .saturating_add(created_trades.len())
-            .saturating_add(updated_maker_orders.len()),
+        1_usize.saturating_add(created_trades.len()).saturating_add(updated_maker_orders.len()),
     );
-    events.push(
-        updated_taker_order
-            .after
-            .track_update_event_from(&updated_taker_order.before)?,
-    );
+    events.push(updated_taker_order.after.track_update_event_from(&updated_taker_order.before)?);
     for trade in created_trades {
         events.push(trade.track_create_event()?);
     }
@@ -208,14 +194,14 @@ impl StateMachineV2Diff for MatchSpotOrderV4UseCase {
     ) -> Result<Self::StateDiff, Self::Error> {
         match after {
             MatchSpotOrderV4AfterChanges::Resting => Ok(MatchSpotOrderV4Changes::Resting),
-            MatchSpotOrderV4AfterChanges::Rejected {
-                rejected_taker_order_after,
-            } => Ok(MatchSpotOrderV4Changes::Rejected {
-                rejected_taker_order: UpdatedEntityPair {
-                    before: state.taker_order,
-                    after: rejected_taker_order_after,
-                },
-            }),
+            MatchSpotOrderV4AfterChanges::Rejected { rejected_taker_order_after } => {
+                Ok(MatchSpotOrderV4Changes::Rejected {
+                    rejected_taker_order: UpdatedEntityPair {
+                        before: state.taker_order,
+                        after: rejected_taker_order_after,
+                    },
+                })
+            }
             MatchSpotOrderV4AfterChanges::PartiallyFilled {
                 taker_order_after,
                 maker_orders_after,
@@ -322,9 +308,7 @@ fn compute_match_after(
             }
 
             taker_after.reject_as_bad_alo_at_version(timestamp, version)?;
-            Ok(MatchSpotOrderV4AfterChanges::Rejected {
-                rejected_taker_order_after: taker_after,
-            })
+            Ok(MatchSpotOrderV4AfterChanges::Rejected { rejected_taker_order_after: taker_after })
         }
     }
 }
@@ -338,8 +322,7 @@ fn finish_match_after(
     version: u64,
 ) -> Result<MatchSpotOrderV4AfterChanges, MatchSpotOrderV4Error> {
     let total_taker_fill = created_trades.iter().try_fold(0_u64, |acc, trade| {
-        acc.checked_add(trade.size)
-            .ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)
+        acc.checked_add(trade.size).ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)
     })?;
     let taker_reservation_after_match = taker_after.reservation.clone();
     let taker_fee_reservation_after_match = taker_after.fee_reservation.clone();
@@ -364,12 +347,12 @@ fn finish_match_after(
             maker_orders_after,
             created_trades,
         }),
-        SpotOrderStatus::Rejected => Ok(MatchSpotOrderV4AfterChanges::Rejected {
-            rejected_taker_order_after: taker_after,
-        }),
-        SpotOrderStatus::Open | SpotOrderStatus::Pending => Err(MatchSpotOrderV4Error::OrderMatch(
-            SpotOrderV2MatchError::NoTradesMatched,
-        )),
+        SpotOrderStatus::Rejected => {
+            Ok(MatchSpotOrderV4AfterChanges::Rejected { rejected_taker_order_after: taker_after })
+        }
+        SpotOrderStatus::Open | SpotOrderStatus::Pending => {
+            Err(MatchSpotOrderV4Error::OrderMatch(SpotOrderV2MatchError::NoTradesMatched))
+        }
     }
 }
 
@@ -378,16 +361,11 @@ fn build_matched_pairs(
     taker_order_after: SpotOrderV2,
     maker_orders_after: Vec<SpotOrderV2>,
 ) -> Result<
-    (
-        UpdatedEntityPair<SpotOrderV2>,
-        Vec<UpdatedEntityPair<SpotOrderV2>>,
-    ),
+    (UpdatedEntityPair<SpotOrderV2>, Vec<UpdatedEntityPair<SpotOrderV2>>),
     MatchSpotOrderV4Error,
 > {
-    let updated_taker_order = UpdatedEntityPair {
-        before: state.taker_order,
-        after: taker_order_after,
-    };
+    let updated_taker_order =
+        UpdatedEntityPair { before: state.taker_order, after: taker_order_after };
     let updated_maker_orders = zip_pairs(state.maker_orders, maker_orders_after)?;
     Ok((updated_taker_order, updated_maker_orders))
 }
@@ -396,21 +374,14 @@ impl MatchSpotOrderV4Changes {
     pub fn taker_order_after(&self) -> Option<&SpotOrderV2> {
         match self {
             Self::Resting => None,
-            Self::PartiallyFilled {
-                updated_taker_order,
-                ..
-            }
-            | Self::Filled {
-                filled_taker_order: updated_taker_order,
-                ..
-            }
+            Self::PartiallyFilled { updated_taker_order, .. }
+            | Self::Filled { filled_taker_order: updated_taker_order, .. }
             | Self::CanceledAfterPartialFill {
-                canceled_taker_order: updated_taker_order,
-                ..
+                canceled_taker_order: updated_taker_order, ..
             }
-            | Self::Rejected {
-                rejected_taker_order: updated_taker_order,
-            } => Some(&updated_taker_order.after),
+            | Self::Rejected { rejected_taker_order: updated_taker_order } => {
+                Some(&updated_taker_order.after)
+            }
         }
     }
 

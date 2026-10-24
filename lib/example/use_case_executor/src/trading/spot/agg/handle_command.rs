@@ -94,9 +94,7 @@ mod tests {
             is_buy: true,
             price: "100".to_owned(),
             size: "1".to_owned(),
-            order_type: ModifySpotOrderV2OrderType::Limit {
-                tif: "gtc".to_owned(),
-            },
+            order_type: ModifySpotOrderV2OrderType::Limit { tif: "gtc".to_owned() },
             cloid: None,
         })
     }
@@ -111,9 +109,7 @@ mod tests {
                 is_buy: true,
                 price: "100".to_owned(),
                 size: "1".to_owned(),
-                order_type: PlaceOnlySpotOrderV2OrderType::Limit {
-                    tif: "ioc".to_owned(),
-                },
+                order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "ioc".to_owned() },
                 reduce_only: false,
                 cloid: None,
                 base_asset_id: "BTC".to_owned(),

@@ -424,9 +424,8 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
 
         for change in self.created_field_changes() {
             let field_type = Self::replay_field_type(change.field_name.as_ref());
-            event.add_field_change(ReplayFieldChange::from_entity_field_change(
-                &change, field_type,
-            ));
+            event
+                .add_field_change(ReplayFieldChange::from_entity_field_change(&change, field_type));
         }
 
         Ok(event)
@@ -487,9 +486,8 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
 
         for change in changes {
             let field_type = Self::replay_field_type(change.field_name.as_ref());
-            event.add_field_change(ReplayFieldChange::from_entity_field_change(
-                &change, field_type,
-            ));
+            event
+                .add_field_change(ReplayFieldChange::from_entity_field_change(&change, field_type));
         }
 
         Ok(event)
@@ -516,9 +514,7 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
 
 #[inline]
 fn increment_version(version: u64) -> Result<u64, EntityError> {
-    version
-        .checked_add(1)
-        .ok_or(EntityError::VersionOverflow { version })
+    version.checked_add(1).ok_or(EntityError::VersionOverflow { version })
 }
 
 #[inline]

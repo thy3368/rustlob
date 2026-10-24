@@ -171,9 +171,7 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     }
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.leverage < 1 {
-        return Err(ExchangeHttpError::contract(
-            UpdateLeverageContractError::InvalidLeverage,
-        ));
+        return Err(ExchangeHttpError::contract(UpdateLeverageContractError::InvalidLeverage));
     }
     Ok(())
 }
@@ -200,35 +198,24 @@ where
         lsn, logical_ts, client_id, request_id, payload,
     );
 
-    use_case
-        .check_command(&cmd)
-        .map_err(UpdateLeverageExecutionError::Business)?;
+    use_case.check_command(&cmd).map_err(UpdateLeverageExecutionError::Business)?;
     let state = outbound
         .load_given_state(cmd.payload())
         .map_err(UpdateLeverageExecutionError::LoadState)?;
-    use_case
-        .validate_state_given(&cmd, &state)
-        .map_err(UpdateLeverageExecutionError::Business)?;
+    use_case.validate_state_given(&cmd, &state).map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
         .compute_state_changed_only(&cmd, &state)
         .map_err(UpdateLeverageExecutionError::Business)?;
-    let mut events = changes
-        .to_replayable_events()
-        .map_err(UpdateLeverageExecutionError::ProjectEvents)?;
+    let mut events =
+        changes.to_replayable_events().map_err(UpdateLeverageExecutionError::ProjectEvents)?;
     for event in &mut events {
         event.lsn = cmd.lsn();
         event.logical_ts = cmd.logical_ts();
     }
 
-    outbound
-        .persist(&events)
-        .map_err(UpdateLeverageExecutionError::Persist)?;
-    outbound
-        .replay(&events)
-        .map_err(UpdateLeverageExecutionError::Replay)?;
-    outbound
-        .publish(&events)
-        .map_err(UpdateLeverageExecutionError::Publish)?;
+    outbound.persist(&events).map_err(UpdateLeverageExecutionError::Persist)?;
+    outbound.replay(&events).map_err(UpdateLeverageExecutionError::Replay)?;
+    outbound.publish(&events).map_err(UpdateLeverageExecutionError::Publish)?;
 
     Ok(changes)
 }
@@ -330,11 +317,7 @@ mod tests {
         let changes = execute_update_perp_leverage(&request, 1, 1, 0, 1, &outbound)
             .expect("cross leverage update should execute");
 
-        let seen_cmd = outbound
-            .seen_cmd
-            .borrow()
-            .clone()
-            .expect("on_command should be observed");
+        let seen_cmd = outbound.seen_cmd.borrow().clone().expect("on_command should be observed");
         assert_eq!(
             seen_cmd,
             UpdateHyperliquidPerpLeverageCmd {
@@ -349,16 +332,11 @@ mod tests {
         assert_eq!(changes.changed_leverage_setting.before.version, 1);
         assert_eq!(changes.changed_leverage_setting.after.version, 2);
 
-        let events = changes
-            .to_replayable_events()
-            .expect("events should project");
+        let events = changes.to_replayable_events().expect("events should project");
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());
         assert_eq!(events[0].field_changes.len(), 1);
-        assert_eq!(
-            events[0].field_changes[0].field_name_as_str().ok(),
-            Some("leverage")
-        );
+        assert_eq!(events[0].field_changes[0].field_name_as_str().ok(), Some("leverage"));
         assert_eq!(events[0].field_changes[0].old_value_bytes(), b"4");
         assert_eq!(events[0].field_changes[0].new_value_bytes(), b"9");
     }
@@ -482,25 +460,19 @@ mod tests {
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("persist");
-            self.event_batches
-                .borrow_mut()
-                .push(("persist", events.to_vec()));
+            self.event_batches.borrow_mut().push(("persist", events.to_vec()));
             Ok(())
         }
 
         fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("replay");
-            self.event_batches
-                .borrow_mut()
-                .push(("replay", events.to_vec()));
+            self.event_batches.borrow_mut().push(("replay", events.to_vec()));
             Ok(())
         }
 
         fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("publish");
-            self.event_batches
-                .borrow_mut()
-                .push(("publish", events.to_vec()));
+            self.event_batches.borrow_mut().push(("publish", events.to_vec()));
             Ok(())
         }
     }

@@ -52,23 +52,15 @@ pub enum OrderType {
     /// 普通限价单；所谓市价意图由 IOC 加激进限价表达。
     Limit { tif: OrderTif },
     /// 条件单；触发后进入 GTC 限价或 IOC 激进限价生命周期。
-    Trigger {
-        is_market: bool,
-        trigger_price: u64,
-        tpsl: OrderTriggerRole,
-    },
+    Trigger { is_market: bool, trigger_price: u64, tpsl: OrderTriggerRole },
 }
 
 impl OrderType {
     pub const fn effective_tif(self) -> OrderTif {
         match self {
             Self::Limit { tif } => tif,
-            Self::Trigger {
-                is_market: true, ..
-            } => OrderTif::Ioc,
-            Self::Trigger {
-                is_market: false, ..
-            } => OrderTif::Gtc,
+            Self::Trigger { is_market: true, .. } => OrderTif::Ioc,
+            Self::Trigger { is_market: false, .. } => OrderTif::Gtc,
         }
     }
 
@@ -79,12 +71,8 @@ impl OrderType {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Limit { .. } => "limit",
-            Self::Trigger {
-                is_market: true, ..
-            } => "trigger_market",
-            Self::Trigger {
-                is_market: false, ..
-            } => "trigger_limit",
+            Self::Trigger { is_market: true, .. } => "trigger_market",
+            Self::Trigger { is_market: false, .. } => "trigger_limit",
         }
     }
 }

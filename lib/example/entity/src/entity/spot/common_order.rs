@@ -32,7 +32,6 @@ pub struct CommonOrder {
 
     // /// 是否仅允许减少既有敞口。实体保存意图，不在订单内模拟仓位。 perp特有
     // pub reduce_only: bool,
-
     /// 冻结费 spot 特有
     pub taker_max_fee: u64,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。

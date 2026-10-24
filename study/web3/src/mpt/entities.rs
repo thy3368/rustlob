@@ -17,22 +17,13 @@ pub enum Node {
     Empty,
 
     /// 叶子节点 (partial_path, value)
-    Leaf {
-        partial_path: Vec<u8>,
-        value: Vec<u8>,
-    },
+    Leaf { partial_path: Vec<u8>, value: Vec<u8> },
 
     /// 扩展节点 (partial_path, next_node_hash)
-    Extension {
-        partial_path: Vec<u8>,
-        next_node_hash: [u8; 32],
-    },
+    Extension { partial_path: Vec<u8>, next_node_hash: [u8; 32] },
 
     /// 分支节点 (16 children hashes, optional value)
-    Branch {
-        children: Box<[Option<[u8; 32]>; 16]>,
-        value: Option<Vec<u8>>,
-    },
+    Branch { children: Box<[Option<[u8; 32]>; 16]>, value: Option<Vec<u8>> },
 }
 
 impl Node {
@@ -43,26 +34,17 @@ impl Node {
 
     /// 创建叶子节点
     pub fn leaf(partial_path: Vec<u8>, value: Vec<u8>) -> Self {
-        Node::Leaf {
-            partial_path,
-            value,
-        }
+        Node::Leaf { partial_path, value }
     }
 
     /// 创建扩展节点
     pub fn extension(partial_path: Vec<u8>, next_node_hash: [u8; 32]) -> Self {
-        Node::Extension {
-            partial_path,
-            next_node_hash,
-        }
+        Node::Extension { partial_path, next_node_hash }
     }
 
     /// 创建分支节点
     pub fn branch(children: [Option<[u8; 32]>; 16], value: Option<Vec<u8>>) -> Self {
-        Node::Branch {
-            children: Box::new(children),
-            value,
-        }
+        Node::Branch { children: Box::new(children), value }
     }
 
     /// 检查节点是否为空
@@ -137,11 +119,7 @@ impl Path {
 
     /// 查找与另一个路径的公共前缀长度
     pub fn common_prefix_len(&self, other: &Path) -> usize {
-        self.nibbles
-            .iter()
-            .zip(other.nibbles.iter())
-            .take_while(|(a, b)| a == b)
-            .count()
+        self.nibbles.iter().zip(other.nibbles.iter()).take_while(|(a, b)| a == b).count()
     }
 }
 
@@ -219,12 +197,7 @@ impl MerkleProof {
         value: Option<Vec<u8>>,
         nodes: Vec<Node>,
     ) -> Self {
-        Self {
-            root_hash,
-            key,
-            value,
-            nodes,
-        }
+        Self { root_hash, key, value, nodes }
     }
 
     /// 验证证明是否有效
@@ -262,14 +235,8 @@ impl MerkleProof {
         for node in &self.nodes {
             size += match node {
                 Node::Empty => 1,
-                Node::Leaf {
-                    partial_path,
-                    value,
-                } => 1 + partial_path.len() + value.len(),
-                Node::Extension {
-                    partial_path,
-                    next_node_hash: _,
-                } => 1 + partial_path.len() + 32,
+                Node::Leaf { partial_path, value } => 1 + partial_path.len() + value.len(),
+                Node::Extension { partial_path, next_node_hash: _ } => 1 + partial_path.len() + 32,
                 Node::Branch { children, value } => {
                     1 + children.iter().filter(|c| c.is_some()).count() * 32
                         + value.as_ref().map_or(0, |v| v.len())

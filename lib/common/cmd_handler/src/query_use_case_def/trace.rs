@@ -40,12 +40,7 @@ where
 
     let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
     if trace_enabled {
-        tracing::trace!(
-            phase,
-            operation,
-            status = "start",
-            "query use case phase started"
-        );
+        tracing::trace!(phase, operation, status = "start", "query use case phase started");
     }
     let start = Instant::now();
     let result = f();

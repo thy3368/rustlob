@@ -40,11 +40,7 @@ pub struct KLineAggregator {
 impl KLineAggregator {
     // 发送K线更新事件
     fn send_event(&self, window: TimeWindow, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent {
-            window,
-            ohlc,
-            is_new_window,
-        };
+        let event = KLineUpdateEvent { window, ohlc, is_new_window };
 
         let handlers = self.event_handlers.read();
         for handler in handlers.iter() {
@@ -192,8 +188,7 @@ impl KLineAgg for KLineAggregator {
     fn process_trade(&self, timestamp: u64, price: f64, volume: f64) -> Result<(), String> {
         // 原子计数器
         self.total_trades.fetch_add(1, Ordering::Relaxed);
-        self.total_volume
-            .fetch_add(volume as u64, Ordering::Relaxed);
+        self.total_volume.fetch_add(volume as u64, Ordering::Relaxed);
 
         // 并行更新所有时间窗口
         self.update_window(0, timestamp, price, volume)?; // 1s
@@ -270,9 +265,6 @@ impl KLineAgg for KLineAggregator {
         (first.open, high, low, last.close, total_volume)
     }
     fn get_total_stats(&self) -> (u64, u64) {
-        (
-            self.total_trades.load(Ordering::Relaxed),
-            self.total_volume.load(Ordering::Relaxed),
-        )
+        (self.total_trades.load(Ordering::Relaxed), self.total_volume.load(Ordering::Relaxed))
     }
 }

@@ -119,16 +119,12 @@ impl FieldChange {
 
     /// 获取旧值切片
     pub fn old_value_bytes(&self) -> &[u8] {
-        self.old_value
-            .get(..self.old_value_len as usize)
-            .unwrap_or(&[])
+        self.old_value.get(..self.old_value_len as usize).unwrap_or(&[])
     }
 
     /// 获取新值切片
     pub fn new_value_bytes(&self) -> &[u8] {
-        self.new_value
-            .get(..self.new_value_len as usize)
-            .unwrap_or(&[])
+        self.new_value.get(..self.new_value_len as usize).unwrap_or(&[])
     }
 
     /// 检查是否有旧值
@@ -211,15 +207,7 @@ impl EntityReplayableEvent {
         entity_id: i64,
         entity_type: u8,
     ) -> Self {
-        Self::new(
-            timestamp,
-            sequence,
-            old_version,
-            new_version,
-            entity_id,
-            entity_type,
-            1,
-        )
+        Self::new(timestamp, sequence, old_version, new_version, entity_id, entity_type, 1)
     }
 
     /// 创建 Deleted 事件（需要指定版本转换）
@@ -231,15 +219,7 @@ impl EntityReplayableEvent {
         entity_id: i64,
         entity_type: u8,
     ) -> Self {
-        Self::new(
-            timestamp,
-            sequence,
-            old_version,
-            new_version,
-            entity_id,
-            entity_type,
-            2,
-        )
+        Self::new(timestamp, sequence, old_version, new_version, entity_id, entity_type, 2)
     }
 
     /// 验证版本号是否匹配（用于乐观锁）
@@ -520,8 +500,7 @@ impl EntityChangeLogSoa {
         self.entity_ids.push(entity_id);
         self.entity_types.push(entity_type);
         self.change_types.push(change_type);
-        self.field_changes
-            .push(FieldChangeSoa::from_vec(field_changes));
+        self.field_changes.push(FieldChangeSoa::from_vec(field_changes));
     }
 
     /// 从 AOS 条目添加
@@ -535,8 +514,7 @@ impl EntityChangeLogSoa {
         self.entity_ids.push(entry.entity_id);
         self.entity_types.push(entry.entity_type);
         self.change_types.push(entry.change_type);
-        self.field_changes
-            .push(FieldChangeSoa::from_vec(entry.field_changes));
+        self.field_changes.push(FieldChangeSoa::from_vec(entry.field_changes));
     }
 
     /// 获取条目数量

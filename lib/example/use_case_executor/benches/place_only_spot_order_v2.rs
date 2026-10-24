@@ -25,9 +25,7 @@ fn limit_command(order_id: u64) -> PlaceOnlySpotOrderV2Cmd {
         is_buy: true,
         price: "100".to_string(),
         size: "2".to_string(),
-        order_type: PlaceOnlySpotOrderV2OrderType::Limit {
-            tif: "gtc".to_string(),
-        },
+        order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "gtc".to_string() },
         reduce_only: false,
         cloid: Some("bench-cloid".to_string()),
         base_asset_id: "BTC".to_string(),

@@ -77,11 +77,8 @@ impl HyperliquidClient {
         let status = response.status();
         let raw_text = response.text().await?;
 
-        let filename = format!(
-            "block_{}_{}.json",
-            height,
-            chrono::Utc::now().format("%Y%m%d_%H%M%S")
-        );
+        let filename =
+            format!("block_{}_{}.json", height, chrono::Utc::now().format("%Y%m%d_%H%M%S"));
         std::fs::write(&filename, &raw_text)?;
         eprintln!("[DEBUG] Saved to {}", filename);
         if !status.is_success() {

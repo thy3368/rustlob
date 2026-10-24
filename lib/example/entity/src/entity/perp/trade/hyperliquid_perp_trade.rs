@@ -39,15 +39,13 @@ pub struct HyperliquidPerpTrade {
     /// 成交数量。
     pub qty: u64,
 
-    pub closed_pnl: Usdc,        // 本次平仓实现盈亏（费前，开仓为 0）
-    pub fee: Usdc,               // 正=用户付平台，负=maker 返佣
+    pub closed_pnl: Usdc, // 本次平仓实现盈亏（费前，开仓为 0）
+    pub fee: Usdc,        // 正=用户付平台，负=maker 返佣
 
     // ── 上下文 ──
     pub margin_mode: MarginMode,
     pub liquidation: Option<LiqMarker>, // 强平标记
-    
-    
-    
+
     // /// 订单创建时间，单位为 Unix 纳秒。
     // pub created_at: u64,
     // /// 订单最后更新时间，单位为 Unix 纳秒。
@@ -478,8 +476,7 @@ fn abs_i64_to_u64(value: i64) -> Option<u64> {
 fn signed_trade_qty(qty: u64, sign: i64) -> Result<i64, HyperliquidPerpPositionError> {
     let qty = i64::try_from(qty).map_err(|_| HyperliquidPerpPositionError::ArithmeticOverflow)?;
     if sign.is_negative() {
-        qty.checked_neg()
-            .ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
+        qty.checked_neg().ok_or(HyperliquidPerpPositionError::ArithmeticOverflow)
     } else {
         Ok(qty)
     }
@@ -664,9 +661,7 @@ mod tests {
         let mut maker_position = position("loser", -2, 80);
         maker_position.cumulative_realized_pnl = 25;
 
-        let settlement = trade
-            .settle_into_positions(&taker_position, &maker_position)
-            .unwrap();
+        let settlement = trade.settle_into_positions(&taker_position, &maker_position).unwrap();
 
         assert!(settlement.taker_position_after.is_short());
         assert_eq!(settlement.taker_position_after.qty(), 3);
@@ -757,11 +752,7 @@ mod tests {
                 .transfers_for_purpose(SettlementTransferPurpose::PerpRealizedPnlTransfer)
                 .is_empty()
         );
-        assert!(
-            voucher
-                .transfers_for_purpose(SettlementTransferPurpose::TradingFee)
-                .is_empty()
-        );
+        assert!(voucher.transfers_for_purpose(SettlementTransferPurpose::TradingFee).is_empty());
     }
 
     #[test]

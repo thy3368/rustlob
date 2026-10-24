@@ -119,19 +119,13 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidSignatureChainId)
     })?;
     if request.action.token.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            SendToEvmWithDataContractError::InvalidToken,
-        ));
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidToken));
     }
     if request.action.amount.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            SendToEvmWithDataContractError::InvalidAmount,
-        ));
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidAmount));
     }
     if request.action.source_dex.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            SendToEvmWithDataContractError::InvalidSourceDex,
-        ));
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidSourceDex));
     }
     if request.action.destination_recipient.trim().is_empty() {
         return Err(ExchangeHttpError::contract(
@@ -144,14 +138,10 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ));
     }
     if request.action.data.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(
-            SendToEvmWithDataContractError::InvalidData,
-        ));
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::InvalidData));
     }
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(
-            SendToEvmWithDataContractError::NonceMismatch,
-        ));
+        return Err(ExchangeHttpError::contract(SendToEvmWithDataContractError::NonceMismatch));
     }
     Ok(())
 }

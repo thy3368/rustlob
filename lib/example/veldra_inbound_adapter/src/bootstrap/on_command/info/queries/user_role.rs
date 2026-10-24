@@ -27,10 +27,7 @@ pub async fn handle(
 }
 
 pub(crate) fn stub_response() -> reply::ResponseWire {
-    UserRoleResponseWire {
-        role: "user".to_string(),
-        data: None,
-    }
+    UserRoleResponseWire { role: "user".to_string(), data: None }
 }
 
 #[cfg(test)]

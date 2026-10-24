@@ -565,10 +565,7 @@ pub enum UsdsMFutureTradeStreamCmdError {
     /// 序列化/反序列化错误
     SerializationError(String),
     /// 比率限制超出
-    RateLimitExceeded {
-        limit_type: String,
-        retry_after: i64,
-    },
+    RateLimitExceeded { limit_type: String, retry_after: i64 },
     /// API错误
     ApiError { code: i32, msg: String },
     /// 未知错误

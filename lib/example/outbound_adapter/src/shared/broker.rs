@@ -50,35 +50,23 @@ pub struct InMemorySpotPipelineBroker {
 
 impl SpotPipelineBroker for InMemorySpotPipelineBroker {
     fn publish(&self, message: SpotPipelineMessage) -> Result<(), SpotPipelineBrokerError> {
-        let mut queue = self
-            .queue
-            .lock()
-            .map_err(|_| SpotPipelineBrokerError::Unavailable)?;
+        let mut queue = self.queue.lock().map_err(|_| SpotPipelineBrokerError::Unavailable)?;
         queue.push_back(message);
         Ok(())
     }
 
     fn pop(&self) -> Result<Option<SpotPipelineMessage>, SpotPipelineBrokerError> {
-        let mut queue = self
-            .queue
-            .lock()
-            .map_err(|_| SpotPipelineBrokerError::Unavailable)?;
+        let mut queue = self.queue.lock().map_err(|_| SpotPipelineBrokerError::Unavailable)?;
         Ok(queue.pop_front())
     }
 
     fn len(&self) -> Result<usize, SpotPipelineBrokerError> {
-        let queue = self
-            .queue
-            .lock()
-            .map_err(|_| SpotPipelineBrokerError::Unavailable)?;
+        let queue = self.queue.lock().map_err(|_| SpotPipelineBrokerError::Unavailable)?;
         Ok(queue.len())
     }
 
     fn is_empty(&self) -> Result<bool, SpotPipelineBrokerError> {
-        let queue = self
-            .queue
-            .lock()
-            .map_err(|_| SpotPipelineBrokerError::Unavailable)?;
+        let queue = self.queue.lock().map_err(|_| SpotPipelineBrokerError::Unavailable)?;
         Ok(queue.is_empty())
     }
 }

@@ -72,22 +72,13 @@ impl<P: Serialize + DeserializeOwned> RewalLogEntryRepo<P> {
             let record: StoredRecord<P> = decode_record(&event.payload)?;
             if let Some(previous) = tail_lsn {
                 if record.lsn <= previous {
-                    return Err(RewalLogEntryRepoError::LsnOrder {
-                        previous,
-                        next: record.lsn,
-                    });
+                    return Err(RewalLogEntryRepoError::LsnOrder { previous, next: record.lsn });
                 }
             }
             index.insert(record.lsn, event.lsn);
             tail_lsn = Some(record.lsn);
         }
-        Ok(Self {
-            wal,
-            index,
-            tail_lsn,
-            uncertain_write: false,
-            marker: PhantomData,
-        })
+        Ok(Self { wal, index, tail_lsn, uncertain_write: false, marker: PhantomData })
     }
 }
 
@@ -188,9 +179,7 @@ fn decode_record<P: DeserializeOwned>(
 ) -> Result<StoredRecord<P>, RewalLogEntryRepoError> {
     let record: StoredRecord<P> = bincode::deserialize(bytes)?;
     if record.version != RECORD_VERSION {
-        return Err(RewalLogEntryRepoError::CorruptRecord(
-            "unsupported record version",
-        ));
+        return Err(RewalLogEntryRepoError::CorruptRecord("unsupported record version"));
     }
     Ok(record)
 }
@@ -204,23 +193,17 @@ fn check_wal_frames(data: &[u8]) -> Result<(), RewalLogEntryRepoError> {
             return if b"EWAL".starts_with(&tail[..tail.len().min(4)]) || tail.starts_with(b"EWAL") {
                 Ok(())
             } else {
-                Err(RewalLogEntryRepoError::CorruptRecord(
-                    "invalid frame header",
-                ))
+                Err(RewalLogEntryRepoError::CorruptRecord("invalid frame header"))
             };
         }
         if &tail[..4] != b"EWAL" {
             return Err(RewalLogEntryRepoError::CorruptRecord("invalid frame magic"));
         }
         if u16::from_le_bytes([tail[4], tail[5]]) != 2 {
-            return Err(RewalLogEntryRepoError::CorruptRecord(
-                "unsupported frame version",
-            ));
+            return Err(RewalLogEntryRepoError::CorruptRecord("unsupported frame version"));
         }
         let size = u32::from_le_bytes(
-            tail[20..24]
-                .try_into()
-                .map_err(|_| RewalLogEntryRepoError::IncompleteTail)?,
+            tail[20..24].try_into().map_err(|_| RewalLogEntryRepoError::IncompleteTail)?,
         ) as usize;
         if size < 28 {
             return Err(RewalLogEntryRepoError::CorruptRecord("invalid frame size"));
@@ -262,12 +245,8 @@ mod tests {
         let path = path();
         let mut repo = RewalLogEntryRepo::<String>::open(&path).unwrap();
         assert!(repo.read_from(0, 10).unwrap().is_empty());
-        assert!(matches!(
-            repo.append_batch(vec![]),
-            Err(RewalLogEntryRepoError::EmptyBatch)
-        ));
-        repo.append_batch(vec![entry(4, "a"), entry(8, "non-copy")])
-            .unwrap();
+        assert!(matches!(repo.append_batch(vec![]), Err(RewalLogEntryRepoError::EmptyBatch)));
+        repo.append_batch(vec![entry(4, "a"), entry(8, "non-copy")]).unwrap();
         assert!(matches!(
             repo.append(entry(8, "duplicate")),
             Err(RewalLogEntryRepoError::LsnOrder { .. })
@@ -281,10 +260,7 @@ mod tests {
         drop(repo);
 
         let mut repo = RewalLogEntryRepo::<String>::open(&path).unwrap();
-        assert_eq!(
-            repo.read_from(0, 10).unwrap(),
-            vec![entry(4, "a"), entry(8, "non-copy")]
-        );
+        assert_eq!(repo.read_from(0, 10).unwrap(), vec![entry(4, "a"), entry(8, "non-copy")]);
         repo.append(entry(12, "later")).unwrap();
         assert_eq!(repo.read_from(9, 10).unwrap(), vec![entry(12, "later")]);
         drop(repo);

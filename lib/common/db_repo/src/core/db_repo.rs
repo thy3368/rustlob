@@ -65,20 +65,14 @@ impl PageRequest {
     /// 获取下一页的分页请求
     #[inline]
     pub fn next_page(&self) -> Self {
-        Self {
-            page: self.page + 1,
-            page_size: self.page_size,
-        }
+        Self { page: self.page + 1, page_size: self.page_size }
     }
 
     /// 获取上一页的分页请求
     #[inline]
     pub fn prev_page(&self) -> Option<Self> {
         if self.page > 0 {
-            Some(Self {
-                page: self.page - 1,
-                page_size: self.page_size,
-            })
+            Some(Self { page: self.page - 1, page_size: self.page_size })
         } else {
             None
         }
@@ -129,12 +123,7 @@ pub struct PageResult<T> {
 impl<T> PageResult<T> {
     /// 创建新的分页结果
     pub fn new(content: Vec<T>, total_elements: u64, page: u64, page_size: u64) -> Self {
-        Self {
-            content,
-            total_elements,
-            page,
-            page_size,
-        }
+        Self { content, total_elements, page, page_size }
     }
 
     /// 获取总分页数
@@ -707,12 +696,7 @@ pub trait QueryRepo: Send + Sync {
         page_req: PageRequest,
     ) -> Result<PageResult<Self::E>, RepoError> {
         // 默认实现：返回空结果
-        Ok(PageResult::new(
-            Vec::new(),
-            0,
-            page_req.page,
-            page_req.page_size,
-        ))
+        Ok(PageResult::new(Vec::new(), 0, page_req.page, page_req.page_size))
     }
 
     /// 基于游标的分页查询（可选优化）

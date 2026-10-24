@@ -85,10 +85,7 @@ impl InProcMatchStageActor {
         receiver: Receiver<PlaceOrderAcceptedEvent>,
         trade_sender: Sender<TradeCreatedEvent>,
     ) -> Self {
-        Self {
-            receiver,
-            dispatcher: InProcMatchStageDispatcher::new(trade_sender),
-        }
+        Self { receiver, dispatcher: InProcMatchStageDispatcher::new(trade_sender) }
     }
 }
 
@@ -113,10 +110,7 @@ pub struct InProcSettlementStageActor {
 
 impl InProcSettlementStageActor {
     pub fn new(receiver: Receiver<TradeCreatedEvent>) -> Self {
-        Self {
-            receiver,
-            dispatcher: InProcSettlementStageDispatcher::new(),
-        }
+        Self { receiver, dispatcher: InProcSettlementStageDispatcher::new() }
     }
 
     pub fn into_result(self) -> Option<SettlementResult> {
@@ -156,9 +150,7 @@ pub fn run_event_actor_with_inproc_channel() -> Result<SettlementResult, EventHa
         })
     });
 
-    match_stage_sender
-        .send(first_event)
-        .map_err(|err| EventHandlerError(err.to_string()))?;
+    match_stage_sender.send(first_event).map_err(|err| EventHandlerError(err.to_string()))?;
     drop(match_stage_sender);
 
     match_stage_join_handle

@@ -16,10 +16,7 @@ impl std::fmt::Display for VmRuntimeError {
             VmRuntimeError::UnregisteredVmKind(vm_kind) => {
                 write!(f, "unregistered VM runtime: {vm_kind:?}")
             }
-            VmRuntimeError::UnsupportedCapability {
-                vm_kind,
-                capability,
-            } => {
+            VmRuntimeError::UnsupportedCapability { vm_kind, capability } => {
                 write!(f, "unsupported VM capability {capability} for {vm_kind:?}")
             }
             VmRuntimeError::ExecutionFailed(message) => write!(f, "VM execution failed: {message}"),
@@ -44,9 +41,7 @@ pub struct VmRegistry<Tx> {
 
 impl<Tx> VmRegistry<Tx> {
     pub fn new() -> Self {
-        Self {
-            runtimes: HashMap::new(),
-        }
+        Self { runtimes: HashMap::new() }
     }
 
     pub fn register_runtime(

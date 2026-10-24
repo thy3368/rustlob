@@ -56,9 +56,5 @@ fn benchmark_kline_aggregator2(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    benches,
-    benchmark_kline_aggregator,
-    benchmark_kline_aggregator2,
-);
+criterion_group!(benches, benchmark_kline_aggregator, benchmark_kline_aggregator2,);
 criterion_main!(benches);

@@ -51,9 +51,9 @@ impl ExchangeActionHandler for ClaimRewardsAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "claimRewards" {
-        return Err(ExchangeHttpError::contract(
-            ClaimRewardsContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(ClaimRewardsContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -108,10 +108,7 @@ mod tests {
         )
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(
-            error.to_string(),
-            "`expiresAfter` is not supported for `claimRewards`."
-        );
+        assert_eq!(error.to_string(), "`expiresAfter` is not supported for `claimRewards`.");
     }
 
     #[actix_web::test]

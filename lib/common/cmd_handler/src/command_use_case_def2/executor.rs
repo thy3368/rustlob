@@ -128,12 +128,11 @@ impl CommandUseCaseExecutor2 {
 
         let execution =
             (|| -> CommandExecution<Vec<EntityReplayableEvent>, U::Error, OB::Error> {
-                let ((), pre_check_ns) = trace_phase(
-                    "pre_check",
-                    "workflow.pre_check_command(&on_command)",
-                    || use_case.pre_check_command(&command),
-                )
-                .map_err(CommandUseCaseExecutionError::Business)?;
+                let ((), pre_check_ns) =
+                    trace_phase("pre_check", "workflow.pre_check_command(&on_command)", || {
+                        use_case.pre_check_command(&command)
+                    })
+                    .map_err(CommandUseCaseExecutionError::Business)?;
                 let (state, load_state_ns) =
                     trace_phase("load_state", "outbound.load_state(&on_command)", || {
                         outbound.load_state(&command)
@@ -169,15 +168,13 @@ impl CommandUseCaseExecutor2 {
                         )
                     })?;
                 let ((), replay_domain_events_ns) =
-                    trace_phase("replay", "outbound.replay(&events)", || {
-                        outbound.replay(&events)
-                    })
-                    .map_err(|error| {
-                        CommandUseCaseExecutionError::outbound(
-                            CommandUseCaseOutboundPhase::Replay,
-                            error,
-                        )
-                    })?;
+                    trace_phase("replay", "outbound.replay(&events)", || outbound.replay(&events))
+                        .map_err(|error| {
+                            CommandUseCaseExecutionError::outbound(
+                                CommandUseCaseOutboundPhase::Replay,
+                                error,
+                            )
+                        })?;
                 let ((), publish_domain_events_ns) =
                     trace_phase("publish", "outbound.publish(&events)", || {
                         outbound.publish(&events)
@@ -331,12 +328,11 @@ impl CommandUseCaseExecutor3 {
         }
 
         let execution = (|| -> CommandExecution<UseCaseOutput<U::Output>, U::Error, OB::Error> {
-            let ((), pre_check_ns) = trace_phase(
-                "pre_check",
-                "workflow.pre_check_command(&on_command)",
-                || use_case.pre_check_command(&command),
-            )
-            .map_err(CommandUseCaseExecutionError::Business)?;
+            let ((), pre_check_ns) =
+                trace_phase("pre_check", "workflow.pre_check_command(&on_command)", || {
+                    use_case.pre_check_command(&command)
+                })
+                .map_err(CommandUseCaseExecutionError::Business)?;
             let (state, load_state_ns) =
                 trace_phase("load_state", "outbound.load_state(&on_command)", || {
                     outbound.load_state(&command)
@@ -534,12 +530,11 @@ impl CommandUseCaseExecutor4 {
 
         let execution =
             (|| -> CommandExecution<UseCaseChanges<U::Changes>, U::Error, OB::Error> {
-                let ((), pre_check_ns) = trace_phase(
-                    "pre_check",
-                    "workflow.pre_check_command(&on_command)",
-                    || use_case.pre_check_command(&command),
-                )
-                .map_err(CommandUseCaseExecutionError::Business)?;
+                let ((), pre_check_ns) =
+                    trace_phase("pre_check", "workflow.pre_check_command(&on_command)", || {
+                        use_case.pre_check_command(&command)
+                    })
+                    .map_err(CommandUseCaseExecutionError::Business)?;
                 let (state, load_state_ns) =
                     trace_phase("load_state", "outbound.load_state(&on_command)", || {
                         outbound.load_state(&command)
@@ -582,15 +577,13 @@ impl CommandUseCaseExecutor4 {
                         )
                     })?;
                 let ((), replay_domain_events_ns) =
-                    trace_phase("replay", "outbound.replay(&events)", || {
-                        outbound.replay(&events)
-                    })
-                    .map_err(|error| {
-                        CommandUseCaseExecutionError::outbound(
-                            CommandUseCaseOutboundPhase::Replay,
-                            error,
-                        )
-                    })?;
+                    trace_phase("replay", "outbound.replay(&events)", || outbound.replay(&events))
+                        .map_err(|error| {
+                            CommandUseCaseExecutionError::outbound(
+                                CommandUseCaseOutboundPhase::Replay,
+                                error,
+                            )
+                        })?;
                 let ((), publish_domain_events_ns) =
                     trace_phase("publish", "outbound.publish(&events)", || {
                         outbound.publish(&events)

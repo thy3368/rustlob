@@ -94,9 +94,9 @@ impl ExchangeActionHandler for UserOutcomeAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "userOutcome" {
-        return Err(ExchangeHttpError::contract(
-            UserOutcomeContractError::UnexpectedActionType(request.action.type_.clone()),
-        ));
+        return Err(ExchangeHttpError::contract(UserOutcomeContractError::UnexpectedActionType(
+            request.action.type_.clone(),
+        )));
     }
     validate_common_fields(
         request.common.nonce,
@@ -127,36 +127,26 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     .filter(|present| *present)
     .count();
     if variant_count != 1 {
-        return Err(ExchangeHttpError::contract(
-            UserOutcomeContractError::InvalidVariant,
-        ));
+        return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidVariant));
     }
     if let Some(split) = &request.action.split_outcome {
         if split.amount.trim().is_empty() {
-            return Err(ExchangeHttpError::contract(
-                UserOutcomeContractError::InvalidAmount,
-            ));
+            return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidAmount));
         }
     }
     if let Some(merge) = &request.action.merge_outcome {
         if matches!(merge.amount.as_deref(), Some(amount) if amount.trim().is_empty()) {
-            return Err(ExchangeHttpError::contract(
-                UserOutcomeContractError::InvalidAmount,
-            ));
+            return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidAmount));
         }
     }
     if let Some(merge) = &request.action.merge_question {
         if matches!(merge.amount.as_deref(), Some(amount) if amount.trim().is_empty()) {
-            return Err(ExchangeHttpError::contract(
-                UserOutcomeContractError::InvalidAmount,
-            ));
+            return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidAmount));
         }
     }
     if let Some(negate) = &request.action.negate_outcome {
         if negate.amount.trim().is_empty() {
-            return Err(ExchangeHttpError::contract(
-                UserOutcomeContractError::InvalidAmount,
-            ));
+            return Err(ExchangeHttpError::contract(UserOutcomeContractError::InvalidAmount));
         }
     }
     Ok(())

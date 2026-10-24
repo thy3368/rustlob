@@ -64,15 +64,13 @@ pub fn build_http_openapi(
     descriptors: &[HttpApiDescriptor],
     schema_components: Map<String, Value>,
 ) -> Value {
-    let paths = descriptors
-        .iter()
-        .fold(Map::new(), |mut paths, descriptor| {
-            let method_name = descriptor.method.to_ascii_lowercase();
-            let mut method = Map::new();
-            method.insert(method_name, http_operation(descriptor));
-            paths.insert(descriptor.path.to_string(), Value::Object(method));
-            paths
-        });
+    let paths = descriptors.iter().fold(Map::new(), |mut paths, descriptor| {
+        let method_name = descriptor.method.to_ascii_lowercase();
+        let mut method = Map::new();
+        method.insert(method_name, http_operation(descriptor));
+        paths.insert(descriptor.path.to_string(), Value::Object(method));
+        paths
+    });
 
     object([
         ("openapi", string_value("3.1.0")),
@@ -85,10 +83,7 @@ pub fn build_http_openapi(
             ]),
         ),
         ("paths", Value::Object(paths)),
-        (
-            "components",
-            object([("schemas", Value::Object(schema_components))]),
-        ),
+        ("components", object([("schemas", Value::Object(schema_components))])),
     ])
 }
 
@@ -99,20 +94,14 @@ pub fn build_cli_schema(
     descriptors: &[CliApiDescriptor],
     schema_components: Map<String, Value>,
 ) -> Value {
-    let commands = descriptors
-        .iter()
-        .map(cli_command_schema_entry)
-        .collect::<Vec<_>>();
+    let commands = descriptors.iter().map(cli_command_schema_entry).collect::<Vec<_>>();
 
     object([
         ("schema_version", string_value(schema_version)),
         ("service", string_value(service)),
         ("summary", string_value(summary)),
         ("commands", Value::Array(commands)),
-        (
-            "components",
-            object([("schemas", Value::Object(schema_components))]),
-        ),
+        ("components", object([("schemas", Value::Object(schema_components))])),
     ])
 }
 
@@ -165,14 +154,7 @@ pub fn cli_arg(
     default: Option<Value>,
     summary: &'static str,
 ) -> CliArgDescriptor {
-    CliArgDescriptor {
-        name,
-        position,
-        value_type,
-        required,
-        default,
-        summary,
-    }
+    CliArgDescriptor { name, position, value_type, required, default, summary }
 }
 
 pub fn cli_error(category: &'static str, code: &'static str) -> CliErrorCodeDescriptor {
@@ -180,10 +162,7 @@ pub fn cli_error(category: &'static str, code: &'static str) -> CliErrorCodeDesc
 }
 
 pub fn schema_ref(schema_name: &str) -> Value {
-    object([(
-        "$ref",
-        string_value(format!("#/components/schemas/{schema_name}")),
-    )])
+    object([("$ref", string_value(format!("#/components/schemas/{schema_name}")))])
 }
 
 pub fn object_schema(required: &[&str], properties: Vec<(&str, Value)>) -> Value {
@@ -220,17 +199,11 @@ fn http_operation(descriptor: &HttpApiDescriptor) -> Value {
     let mut responses = Map::new();
     responses.insert(
         "200".to_string(),
-        response_schema(
-            "Successful use case response.",
-            descriptor.success_response_schema_name,
-        ),
+        response_schema("Successful use case response.", descriptor.success_response_schema_name),
     );
 
-    for status_code in descriptor
-        .error_codes
-        .iter()
-        .map(|error| error.status_code)
-        .collect::<BTreeSet<_>>()
+    for status_code in
+        descriptor.error_codes.iter().map(|error| error.status_code).collect::<BTreeSet<_>>()
     {
         responses.insert(
             status_code.to_string(),
@@ -248,10 +221,7 @@ fn http_operation(descriptor: &HttpApiDescriptor) -> Value {
             "requestBody",
             object([
                 ("required", Value::Bool(true)),
-                (
-                    "content",
-                    json_content_schema(descriptor.request_schema_name),
-                ),
+                ("content", json_content_schema(descriptor.request_schema_name)),
             ]),
         ),
         ("responses", Value::Object(responses)),
@@ -266,15 +236,9 @@ fn cli_command_schema_entry(descriptor: &CliApiDescriptor) -> Value {
         ("usage", string_value(descriptor.usage)),
         ("summary", string_value(descriptor.summary)),
         ("args", cli_args(&descriptor.args)),
-        (
-            "command_schema_name",
-            string_value(descriptor.command_schema_name),
-        ),
+        ("command_schema_name", string_value(descriptor.command_schema_name)),
         ("command_schema", schema_ref(descriptor.command_schema_name)),
-        (
-            "stdout_schema_name",
-            string_value(descriptor.stdout_schema_name),
-        ),
+        ("stdout_schema_name", string_value(descriptor.stdout_schema_name)),
         ("stdout_schema", schema_ref(descriptor.stdout_schema_name)),
         ("error_codes", cli_error_codes(&descriptor.error_codes)),
         ("defaults", descriptor.defaults.clone()),
@@ -302,10 +266,7 @@ fn string_array<'a>(values: impl IntoIterator<Item = &'a str>) -> Value {
 }
 
 fn json_content_schema(schema_name: &str) -> Value {
-    object([(
-        "application/json",
-        object([("schema", schema_ref(schema_name))]),
-    )])
+    object([("application/json", object([("schema", schema_ref(schema_name))]))])
 }
 
 fn response_schema(description: impl Into<String>, schema_name: &str) -> Value {
@@ -343,10 +304,7 @@ fn cli_args(args: &[CliArgDescriptor]) -> Value {
                     Value::Object(map) => map,
                     _ => Map::new(),
                 };
-                value.insert(
-                    "default".to_string(),
-                    arg.default.clone().unwrap_or(Value::Null),
-                );
+                value.insert("default".to_string(), arg.default.clone().unwrap_or(Value::Null));
                 Value::Object(value)
             })
             .collect(),

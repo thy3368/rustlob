@@ -24,9 +24,7 @@ fn parse_query_type_probe(body: &[u8]) -> Result<InfoRequestTypeProbe, InfoHttpE
 }
 
 fn reply_to_http(reply: InfoQueryReply) -> Result<HttpResponse, InfoHttpError> {
-    let value = reply
-        .into_json_value()
-        .map_err(InfoHttpError::SerializeReply)?;
+    let value = reply.into_json_value().map_err(InfoHttpError::SerializeReply)?;
     Ok(HttpResponse::Ok().json(value))
 }
 
@@ -105,10 +103,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let body: Value = actix_test::read_body_json(response).await;
-        assert_eq!(
-            body,
-            json!({ "status": "err", "error": "Malformed JSON body." })
-        );
+        assert_eq!(body, json!({ "status": "err", "error": "Malformed JSON body." }));
     }
 
     #[actix_web::test]
@@ -137,17 +132,10 @@ mod tests {
         let app = actix_test::init_service(App::new().service(build_info_scope())).await;
 
         for case in query_contract_cases() {
-            let request = actix_test::TestRequest::post()
-                .uri("/info")
-                .set_json(case.request)
-                .to_request();
+            let request =
+                actix_test::TestRequest::post().uri("/info").set_json(case.request).to_request();
             let response = actix_test::call_service(&app, request).await;
-            assert_eq!(
-                response.status(),
-                StatusCode::OK,
-                "case `{}`",
-                case.query_type
-            );
+            assert_eq!(response.status(), StatusCode::OK, "case `{}`", case.query_type);
             let body: Value = actix_test::read_body_json(response).await;
             assert_eq!(body, case.expected_response, "case `{}`", case.query_type);
         }

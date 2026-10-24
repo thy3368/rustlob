@@ -74,10 +74,7 @@ mod tests {
     fn maps_shape_error_to_invalid_json_shape() {
         let missing_field_error = parse_json_request::<ProbeWire, ProbeError>(br#"{}"#)
             .expect_err("missing field should fail");
-        assert!(matches!(
-            missing_field_error,
-            ProbeError::InvalidJsonShape(_)
-        ));
+        assert!(matches!(missing_field_error, ProbeError::InvalidJsonShape(_)));
 
         let wrong_type_error =
             parse_json_request::<ProbeWire, ProbeError>(br#"{ "value": "bad" }"#)

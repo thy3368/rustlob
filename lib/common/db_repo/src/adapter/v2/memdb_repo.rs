@@ -17,11 +17,7 @@ struct StoredEntity {
 
 impl StoredEntity {
     fn new<E: Entity>(entity_id: String, sequence: u64, entity: E) -> Self {
-        Self {
-            entity_id,
-            sequence,
-            entity: Box::new(entity),
-        }
+        Self { entity_id, sequence, entity: Box::new(entity) }
     }
 
     fn clone_as<E: Entity>(&self) -> Option<E> {
@@ -37,10 +33,10 @@ struct TypeStore {
 
 impl TypeStore {
     fn insert<E: Entity>(&mut self, entity_id: String, sequence: u64, entity: E) {
-        if let Some(previous) = self.by_id.insert(
-            entity_id.clone(),
-            StoredEntity::new(entity_id.clone(), sequence, entity),
-        ) {
+        if let Some(previous) = self
+            .by_id
+            .insert(entity_id.clone(), StoredEntity::new(entity_id.clone(), sequence, entity))
+        {
             self.by_sequence.remove(&previous.sequence);
         }
         self.by_sequence.insert(sequence, entity_id);
@@ -53,9 +49,7 @@ impl TypeStore {
     }
 
     fn get<E: Entity>(&self, entity_id: &str) -> Option<E> {
-        self.by_id
-            .get(entity_id)
-            .and_then(StoredEntity::clone_as::<E>)
+        self.by_id.get(entity_id).and_then(StoredEntity::clone_as::<E>)
     }
 
     fn get_by_sequence<E: Entity>(&self, sequence: u64) -> Option<E> {
@@ -128,17 +122,13 @@ impl MemdbRepo {
 
 impl Clone for MemdbRepo {
     fn clone(&self) -> Self {
-        Self {
-            stores: Arc::clone(&self.stores),
-        }
+        Self { stores: Arc::clone(&self.stores) }
     }
 }
 
 impl Default for MemdbRepo {
     fn default() -> Self {
-        Self {
-            stores: Arc::new(RwLock::new(HashMap::new())),
-        }
+        Self { stores: Arc::new(RwLock::new(HashMap::new())) }
     }
 }
 
@@ -312,9 +302,7 @@ impl QueryRepo2 for MemdbRepo {
             let mut items: Vec<(u64, E)> = sequences
                 .into_iter()
                 .filter_map(|sequence| {
-                    store
-                        .get_by_sequence::<E>(sequence)
-                        .map(|entity| (sequence, entity))
+                    store.get_by_sequence::<E>(sequence).map(|entity| (sequence, entity))
                 })
                 .filter(|(_, entity)| {
                     entity_id.is_empty() || entity.entity_id().to_string() == entity_id
@@ -329,10 +317,7 @@ impl QueryRepo2 for MemdbRepo {
         });
 
         let next_cursor = items.last().map(|(sequence, _)| sequence.to_string());
-        Ok((
-            items.into_iter().map(|(_, entity)| entity).collect(),
-            next_cursor,
-        ))
+        Ok((items.into_iter().map(|(_, entity)| entity).collect(), next_cursor))
     }
 }
 
@@ -362,11 +347,7 @@ mod tests {
 
         fn diff(&self, other: &Self) -> Vec<FieldChange> {
             if self.value != other.value {
-                vec![FieldChange::new(
-                    "value",
-                    self.value.clone(),
-                    other.value.clone(),
-                )]
+                vec![FieldChange::new("value", self.value.clone(), other.value.clone())]
             } else {
                 Vec::new()
             }
@@ -425,10 +406,7 @@ mod tests {
                 sequence,
                 sequence,
             ),
-            TestEntity {
-                id: id.to_string(),
-                value: value.to_string(),
-            },
+            TestEntity { id: id.to_string(), value: value.to_string() },
         )
     }
 
@@ -439,9 +417,7 @@ mod tests {
             "entity-1",
             "alpha",
             1,
-            ChangeType::Created {
-                fields: vec![FieldChange::new("value", "", "alpha")],
-            },
+            ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
         );
 
         repo.replay_event(&created).unwrap();
@@ -451,10 +427,7 @@ mod tests {
             repo.find_by_id::<TestEntity>("entity-1").unwrap(),
             Some(created.object().clone())
         );
-        assert_eq!(
-            repo.find_by_sequence::<TestEntity>(1).unwrap(),
-            Some(created.object().clone())
-        );
+        assert_eq!(repo.find_by_sequence::<TestEntity>(1).unwrap(), Some(created.object().clone()));
     }
 
     #[test]
@@ -464,9 +437,7 @@ mod tests {
             "entity-1",
             "alpha",
             1,
-            ChangeType::Created {
-                fields: vec![FieldChange::new("value", "", "alpha")],
-            },
+            ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
         ))
         .unwrap();
 
@@ -480,21 +451,9 @@ mod tests {
         ))
         .unwrap();
 
-        assert_eq!(
-            repo.find_by_id::<TestEntity>("entity-1")
-                .unwrap()
-                .unwrap()
-                .value,
-            "beta"
-        );
+        assert_eq!(repo.find_by_id::<TestEntity>("entity-1").unwrap().unwrap().value, "beta");
         assert!(repo.find_by_sequence::<TestEntity>(1).unwrap().is_none());
-        assert_eq!(
-            repo.find_by_sequence::<TestEntity>(2)
-                .unwrap()
-                .unwrap()
-                .value,
-            "beta"
-        );
+        assert_eq!(repo.find_by_sequence::<TestEntity>(2).unwrap().unwrap().value, "beta");
     }
 
     #[test]
@@ -504,14 +463,11 @@ mod tests {
             "entity-1",
             "alpha",
             1,
-            ChangeType::Created {
-                fields: vec![FieldChange::new("value", "", "alpha")],
-            },
+            ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
         ))
         .unwrap();
 
-        repo.replay_event(&test_event("entity-1", "alpha", 2, ChangeType::Deleted))
-            .unwrap();
+        repo.replay_event(&test_event("entity-1", "alpha", 2, ChangeType::Deleted)).unwrap();
 
         assert_eq!(repo.count().unwrap(), 0);
         assert!(repo.find_by_id::<TestEntity>("entity-1").unwrap().is_none());
@@ -526,30 +482,20 @@ mod tests {
                 "entity-1",
                 "alpha",
                 1,
-                ChangeType::Created {
-                    fields: vec![FieldChange::new("value", "", "alpha")],
-                },
+                ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
             ),
             test_event(
                 "entity-2",
                 "beta",
                 2,
-                ChangeType::Created {
-                    fields: vec![FieldChange::new("value", "", "beta")],
-                },
+                ChangeType::Created { fields: vec![FieldChange::new("value", "", "beta")] },
             ),
         ];
 
         repo.replay_from_sequence(&events, 2).unwrap();
 
         assert!(repo.find_by_id::<TestEntity>("entity-1").unwrap().is_none());
-        assert_eq!(
-            repo.find_by_id::<TestEntity>("entity-2")
-                .unwrap()
-                .unwrap()
-                .value,
-            "beta"
-        );
+        assert_eq!(repo.find_by_id::<TestEntity>("entity-2").unwrap().unwrap().value, "beta");
     }
 
     #[test]
@@ -596,30 +542,19 @@ mod tests {
             .unwrap();
         }
 
-        let condition = TestEntity {
-            id: String::new(),
-            value: String::new(),
-        };
-        let (forward_items, next_cursor) = repo
-            .find_by_cursor(condition.clone(), None, 2, true)
-            .unwrap();
+        let condition = TestEntity { id: String::new(), value: String::new() };
+        let (forward_items, next_cursor) =
+            repo.find_by_cursor(condition.clone(), None, 2, true).unwrap();
         assert_eq!(
-            forward_items
-                .iter()
-                .map(|e| e.value.as_str())
-                .collect::<Vec<_>>(),
+            forward_items.iter().map(|e| e.value.as_str()).collect::<Vec<_>>(),
             vec!["v1", "v2"]
         );
         assert_eq!(next_cursor, Some("2".to_string()));
 
-        let (backward_items, prev_cursor) = repo
-            .find_by_cursor(condition, Some("4".to_string()), 2, false)
-            .unwrap();
+        let (backward_items, prev_cursor) =
+            repo.find_by_cursor(condition, Some("4".to_string()), 2, false).unwrap();
         assert_eq!(
-            backward_items
-                .iter()
-                .map(|e| e.value.as_str())
-                .collect::<Vec<_>>(),
+            backward_items.iter().map(|e| e.value.as_str()).collect::<Vec<_>>(),
             vec!["v2", "v3"]
         );
         assert_eq!(prev_cursor, Some("3".to_string()));
@@ -632,21 +567,15 @@ mod tests {
             "entity-1",
             "alpha",
             1,
-            ChangeType::Created {
-                fields: vec![FieldChange::new("value", "", "alpha")],
-            },
+            ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
         ))
         .unwrap();
 
-        let condition = TestEntity {
-            id: "entity-1".to_string(),
-            value: "ignored".to_string(),
-        };
+        let condition = TestEntity { id: "entity-1".to_string(), value: "ignored".to_string() };
         let one = repo.find_one_by_condition(condition.clone()).unwrap();
         let all = repo.find_all_by_condition(condition.clone()).unwrap();
-        let paged = repo
-            .find_all_by_condition_paginated(condition, PageRequest::new(0, 10))
-            .unwrap();
+        let paged =
+            repo.find_all_by_condition_paginated(condition, PageRequest::new(0, 10)).unwrap();
 
         assert_eq!(one.unwrap().value, "alpha");
         assert_eq!(all.len(), 1);
@@ -661,21 +590,13 @@ mod tests {
             ChangeLog::new(
                 "entity-1".to_string(),
                 "OtherEntity".to_string(),
-                ChangeType::Created {
-                    fields: vec![FieldChange::new("value", "", "alpha")],
-                },
+                ChangeType::Created { fields: vec![FieldChange::new("value", "", "alpha")] },
                 1,
                 1,
             ),
-            TestEntity {
-                id: "entity-1".to_string(),
-                value: "alpha".to_string(),
-            },
+            TestEntity { id: "entity-1".to_string(), value: "alpha".to_string() },
         );
 
-        assert!(matches!(
-            repo.replay_event(&event),
-            Err(RepoError::DeserializationFailed(_))
-        ));
+        assert!(matches!(repo.replay_event(&event), Err(RepoError::DeserializationFailed(_))));
     }
 }

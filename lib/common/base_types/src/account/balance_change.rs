@@ -331,13 +331,11 @@ impl BalanceChangeLog {
         self.timestamps
             .iter()
             .enumerate()
-            .filter_map(|(idx, &ts)| {
-                if ts.0 >= start.0 && ts.0 <= end.0 {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
+            .filter_map(
+                |(idx, &ts)| {
+                    if ts.0 >= start.0 && ts.0 <= end.0 { Some(idx) } else { None }
+                },
+            )
             .collect()
     }
 }

@@ -35,19 +35,12 @@ impl<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> KafkaSettlementEventActor<
 
         let consumer = create_kafka_consumer(&kafka_config)?;
 
-        Ok(Self {
-            consumer,
-            handler,
-            config,
-            topic,
-        })
+        Ok(Self { consumer, handler, config, topic })
     }
 
     #[inline]
     fn into_internal_error(message: impl Into<String>) -> SpotApiErrorAny {
-        SpotApiErrorAny::Common(CommonError::Internal {
-            message: message.into(),
-        })
+        SpotApiErrorAny::Common(CommonError::Internal { message: message.into() })
     }
 
     #[inline]

@@ -27,9 +27,7 @@ struct UnsafeCellWrapper<T> {
 impl<T> UnsafeCellWrapper<T> {
     #[inline(always)]
     pub fn new(value: T) -> Self {
-        UnsafeCellWrapper {
-            inner: UnsafeCell::new(value),
-        }
+        UnsafeCellWrapper { inner: UnsafeCell::new(value) }
     }
 
     #[inline(always)]

@@ -88,10 +88,7 @@ mod tests {
 
     impl FakeModifyOutbound {
         fn sink_calls(&self) -> Vec<ObservedSinkCall> {
-            self.sink_calls
-                .lock()
-                .map(|calls| calls.clone())
-                .unwrap_or_default()
+            self.sink_calls.lock().map(|calls| calls.clone()).unwrap_or_default()
         }
     }
 
@@ -110,9 +107,7 @@ mod tests {
                 OrderSide::Buy,
                 2,
                 10_000,
-                OrderType::Limit {
-                    tif: OrderTif::Gtc,
-                },
+                OrderType::Limit { tif: OrderTif::Gtc },
                 Some("original-cloid".to_owned()),
                 0,
                 1,
@@ -175,10 +170,7 @@ mod tests {
             self.sink_calls
                 .lock()
                 .map_err(|_| FakeModifyOutboundError)?
-                .push(ObservedSinkCall {
-                    phase,
-                    events: events.to_vec(),
-                });
+                .push(ObservedSinkCall { phase, events: events.to_vec() });
             Ok(())
         }
     }
@@ -191,9 +183,7 @@ mod tests {
             is_buy: true,
             price: "12000".to_owned(),
             size: "3".to_owned(),
-            order_type: ModifySpotOrderV2OrderType::Limit {
-                tif: "gtc".to_owned(),
-            },
+            order_type: ModifySpotOrderV2OrderType::Limit { tif: "gtc".to_owned() },
             cloid: None,
         }
     }
@@ -204,9 +194,9 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(ExecutionError::LoadState(
-                DefaultSpotOrderV2ModifyOutboundError::StateUnavailable,
-            )),
+            Err(
+                ExecutionError::LoadState(DefaultSpotOrderV2ModifyOutboundError::StateUnavailable,)
+            ),
         );
     }
 
@@ -219,23 +209,12 @@ mod tests {
         let changes = &result.changes;
         assert_eq!(changes.updated_order.before.order_id(), 1);
         assert_eq!(changes.updated_order.after.order_id(), 1);
-        assert_eq!(
-            changes.updated_order.after.version,
-            changes.updated_order.before.version + 1
-        );
+        assert_eq!(changes.updated_order.after.version, changes.updated_order.before.version + 1);
         assert_eq!(changes.updated_order.after.order_price(), 12_000);
         assert_eq!(changes.updated_order.after.qty(), 3);
-        assert_eq!(
-            changes.updated_order.after.cloid.as_deref(),
-            Some("original-cloid")
-        );
+        assert_eq!(changes.updated_order.after.cloid.as_deref(), Some("original-cloid"));
         assert_eq!(changes.created_balance_ledger_entries.len(), 2);
-        assert!(
-            changes
-                .created_balance_ledger_entries
-                .iter()
-                .all(|entry| entry.amount > 0)
-        );
+        assert!(changes.created_balance_ledger_entries.iter().all(|entry| entry.amount > 0));
         assert!(!changes.updated_balances.is_empty());
 
         assert_eq!(result.events.len(), 5);
@@ -244,12 +223,7 @@ mod tests {
         assert!(result.events[2].is_updated());
         assert!(result.events[3].is_created());
         assert!(result.events[4].is_created());
-        assert!(
-            result
-                .events
-                .iter()
-                .all(|event| event.lsn == event.previous_lsn + 1)
-        );
+        assert!(result.events.iter().all(|event| event.lsn == event.previous_lsn + 1));
 
         let sink_calls = outbound.sink_calls();
         assert_eq!(sink_calls.len(), 3);

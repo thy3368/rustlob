@@ -58,12 +58,9 @@ impl WebSocketServer {
         tracing::info!("👤 User data stream: ws://localhost:8084/ws/user_data");
 
         tokio::spawn(async move {
-            axum::serve(
-                ws_listener,
-                ws_app.into_make_service_with_connect_info::<SocketAddr>(),
-            )
-            .await
-            .unwrap();
+            axum::serve(ws_listener, ws_app.into_make_service_with_connect_info::<SocketAddr>())
+                .await
+                .unwrap();
         });
 
         Ok(())

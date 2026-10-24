@@ -5,11 +5,11 @@ use cmd_handler::command_use_case_def2::{StateSink, StateSource};
 use common_entity::{Entity, stable_string_entity_id};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    Balance, MarketRules, PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State,
-    PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason,
-    ReservationKind, ReservationMarketKind, ReservationStatus, OrderGroupRelation,
-    OrderSide, SpotOrderStatus, SpotOrderStatusReason, OrderTif, OrderType,
-    SpotOrderV2, SpotTrade,
+    Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,
+    PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
+    PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason, ReservationKind,
+    ReservationMarketKind, ReservationStatus, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2,
+    SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
 
@@ -75,9 +75,7 @@ impl InMemoryRaftCluster {
         events: &[EntityReplayableEvent],
     ) -> Result<u64, PlaceOrderOutboundError> {
         if self.leader() != node_id {
-            return Err(PlaceOrderOutboundError::Raft(
-                "proposal sent to non-leader".into(),
-            ));
+            return Err(PlaceOrderOutboundError::Raft("proposal sent to non-leader".into()));
         }
         let next = self
             .committed_index()
@@ -124,22 +122,12 @@ impl InMemoryPlaceOrderRaftOutbound {
     }
     pub fn from_cluster(cluster: InMemoryRaftCluster, node_id: u64) -> Self {
         let store = cluster.store(node_id).cloned().unwrap_or_default();
-        Self {
-            store,
-            broker: None,
-            cluster,
-            node_id,
-        }
+        Self { store, broker: None, cluster, node_id }
     }
 
     pub fn from_store(store: InMemoryStore) -> Self {
         let cluster = InMemoryRaftCluster::new(1, 1);
-        Self {
-            store,
-            broker: None,
-            cluster,
-            node_id: 0,
-        }
+        Self { store, broker: None, cluster, node_id: 0 }
     }
 
     pub fn from_store_with_broker(
@@ -147,12 +135,7 @@ impl InMemoryPlaceOrderRaftOutbound {
         broker: InMemorySpotPipelineBroker,
     ) -> Self {
         let cluster = InMemoryRaftCluster::new(1, 1);
-        Self {
-            store,
-            broker: Some(broker),
-            cluster,
-            node_id: 0,
-        }
+        Self { store, broker: Some(broker), cluster, node_id: 0 }
     }
 
     pub fn seeded(
@@ -196,9 +179,7 @@ impl InMemoryPlaceOrderRaftOutbound {
                 && event_string_field(event, "caused_by_order_id").is_some()
             {
                 let reservation = decode_created_reservation(event)?;
-                state
-                    .reservations
-                    .insert(reservation.reservation_id.clone(), reservation);
+                state.reservations.insert(reservation.reservation_id.clone(), reservation);
                 continue;
             }
 
@@ -312,10 +293,10 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutb
         let base_asset_id = base_asset_id_for(market_rules.symbol.as_str()).to_string();
         let quote_asset_id = quote_asset_id_for(market_rules.symbol.as_str()).to_string();
         let mut settlement_balances = state.balances.values().cloned().collect::<Vec<_>>();
-        if !state.balances.contains_key(&balance_key(
-            DEFAULT_FEE_ACCOUNT_ID,
-            quote_asset_id.as_str(),
-        )) {
+        if !state
+            .balances
+            .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
+        {
             settlement_balances.push(Balance::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
@@ -388,10 +369,10 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutboun
         let base_asset_id = base_asset_id_for(market_rules.symbol.as_str()).to_string();
         let quote_asset_id = quote_asset_id_for(market_rules.symbol.as_str()).to_string();
         let mut settlement_balances = state.balances.values().cloned().collect::<Vec<_>>();
-        if !state.balances.contains_key(&balance_key(
-            DEFAULT_FEE_ACCOUNT_ID,
-            quote_asset_id.as_str(),
-        )) {
+        if !state
+            .balances
+            .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
+        {
             settlement_balances.push(Balance::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
@@ -401,21 +382,17 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutboun
                 1,
             ));
         }
-        if !state.balances.contains_key(&balance_key(
-            order_cmd.party_id.as_str(),
-            base_asset_id.as_str(),
-        )) || !state.balances.contains_key(&balance_key(
-            order_cmd.party_id.as_str(),
-            quote_asset_id.as_str(),
-        )) {
+        if !state
+            .balances
+            .contains_key(&balance_key(order_cmd.party_id.as_str(), base_asset_id.as_str()))
+            || !state
+                .balances
+                .contains_key(&balance_key(order_cmd.party_id.as_str(), quote_asset_id.as_str()))
+        {
             return Err(PlaceOrderOutboundError::BalanceNotFound);
         }
 
-        let taker_side = if order_cmd.is_buy {
-            OrderSide::Buy
-        } else {
-            OrderSide::Sell
-        };
+        let taker_side = if order_cmd.is_buy { OrderSide::Buy } else { OrderSide::Sell };
         let maker_orders = state
             .lob
             .match_orders(u64::MAX, u64::MAX, taker_side)
@@ -468,17 +445,15 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderRaftOutbound 
             let asset = event_u64_field(event, "asset")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)? as u32;
             broker
-                .publish(SpotPipelineMessage::SpotOrderPlaced(
-                    SpotOrderPlacedMessage {
-                        match_id: order_id.clone(),
-                        order_id,
-                        party_id,
-                        symbol,
-                        asset,
-                        trace_id: None,
-                        command_id: None,
-                    },
-                ))
+                .publish(SpotPipelineMessage::SpotOrderPlaced(SpotOrderPlacedMessage {
+                    match_id: order_id.clone(),
+                    order_id,
+                    party_id,
+                    symbol,
+                    asset,
+                    trace_id: None,
+                    command_id: None,
+                }))
                 .map_err(|_| PlaceOrderOutboundError::BrokerPublishFailed)?;
         }
         Ok(())
@@ -499,9 +474,7 @@ fn decode_limit_price(event: &EntityReplayableEvent) -> Result<u64, PlaceOrderOu
         .ok_or(PlaceOrderOutboundError::EventDecodeFailed)
 }
 
-fn decode_order_type(
-    event: &EntityReplayableEvent,
-) -> Result<OrderType, PlaceOrderOutboundError> {
+fn decode_order_type(event: &EntityReplayableEvent) -> Result<OrderType, PlaceOrderOutboundError> {
     let tif = match event_string_field(event, "effective_tif")
         .or_else(|| event_string_field(event, "time_in_force"))
         .as_deref()
@@ -684,20 +657,14 @@ fn reservation_string_field(
     fee: bool,
     suffix: &str,
 ) -> Option<String> {
-    let field_name = if fee {
-        format!("fee_reservation_{suffix}")
-    } else {
-        format!("reservation_{suffix}")
-    };
+    let field_name =
+        if fee { format!("fee_reservation_{suffix}") } else { format!("reservation_{suffix}") };
     event_string_field(event, field_name.as_str())
 }
 
 fn reservation_u64_field(event: &EntityReplayableEvent, fee: bool, suffix: &str) -> Option<u64> {
-    let field_name = if fee {
-        format!("fee_reservation_{suffix}")
-    } else {
-        format!("reservation_{suffix}")
-    };
+    let field_name =
+        if fee { format!("fee_reservation_{suffix}") } else { format!("reservation_{suffix}") };
     event_u64_field(event, field_name.as_str())
 }
 
@@ -834,9 +801,7 @@ fn decode_created_trade(
     ))
 }
 
-fn decode_trade_side(
-    event: &EntityReplayableEvent,
-) -> Result<OrderSide, PlaceOrderOutboundError> {
+fn decode_trade_side(event: &EntityReplayableEvent) -> Result<OrderSide, PlaceOrderOutboundError> {
     match event_string_field(event, "taker_side").as_deref() {
         Some("buy") => Ok(OrderSide::Buy),
         Some("sell") => Ok(OrderSide::Sell),
@@ -852,9 +817,7 @@ fn apply_order_update_event(
     if !orders.contains_key(&order_id) {
         return Err(PlaceOrderOutboundError::OrderNotFound);
     }
-    let order = orders
-        .get_mut(&order_id)
-        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
+    let order = orders.get_mut(&order_id).ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
     if let Some(status) = event_string_field(event, "status") {
         order.status = decode_status_value(status.as_str())?;
     }

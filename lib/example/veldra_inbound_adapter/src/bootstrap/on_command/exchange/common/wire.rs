@@ -93,10 +93,7 @@ pub fn ok_status_response<TStatus>(
 ) -> ExchangeResponseWire<ExchangeStatusDataWire<TStatus>> {
     ExchangeResponseWire {
         status: "ok",
-        response: ExchangeResponseEnvelopeWire {
-            type_,
-            data: ExchangeStatusDataWire { status },
-        },
+        response: ExchangeResponseEnvelopeWire { type_, data: ExchangeStatusDataWire { status } },
     }
 }
 
@@ -123,9 +120,7 @@ mod tests {
             status: "ok",
             response: ExchangeResponseEnvelopeWire {
                 type_: "order",
-                data: ExchangeStatusesDataWire {
-                    statuses: vec!["success"],
-                },
+                data: ExchangeStatusesDataWire { statuses: vec!["success"] },
             },
         };
 

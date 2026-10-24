@@ -29,12 +29,7 @@ pub struct ApiErrorResponse {
 
 impl ApiErrorResponse {
     pub fn new(code: &'static str, message: impl Into<String>) -> Self {
-        Self {
-            error: ApiErrorBody {
-                code: code.to_string(),
-                message: message.into(),
-            },
-        }
+        Self { error: ApiErrorBody { code: code.to_string(), message: message.into() } }
     }
 }
 
@@ -52,12 +47,7 @@ pub struct HttpInboundError {
 
 impl HttpInboundError {
     pub fn new(status_code: u16, code: &'static str, message: impl Into<String>) -> Self {
-        Self {
-            status_code,
-            code,
-            message: message.into(),
-            source: None,
-        }
+        Self { status_code, code, message: message.into(), source: None }
     }
 
     pub fn from_execution_error_with<BE, OE, F>(
@@ -105,9 +95,7 @@ impl std::fmt::Display for HttpInboundError {
 
 impl std::error::Error for HttpInboundError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source
-            .as_ref()
-            .map(|error| error.as_ref() as &(dyn std::error::Error + 'static))
+        self.source.as_ref().map(|error| error.as_ref() as &(dyn std::error::Error + 'static))
     }
 }
 
@@ -233,9 +221,7 @@ impl std::fmt::Display for CliInboundError {
 
 impl std::error::Error for CliInboundError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source
-            .as_ref()
-            .map(|error| error.as_ref() as &(dyn std::error::Error + 'static))
+        self.source.as_ref().map(|error| error.as_ref() as &(dyn std::error::Error + 'static))
     }
 }
 
@@ -347,10 +333,7 @@ mod tests {
             );
 
         assert_eq!(error.status_code(), 500);
-        assert_eq!(
-            error.to_string(),
-            "outbound_replay_failed: test store unavailable"
-        );
+        assert_eq!(error.to_string(), "outbound_replay_failed: test store unavailable");
     }
 
     #[test]
@@ -406,10 +389,7 @@ mod tests {
             );
 
         assert_eq!(error.exit_code(), 1);
-        assert_eq!(
-            error.to_string(),
-            "runtime event_project_failed: no replayable events"
-        );
+        assert_eq!(error.to_string(), "runtime event_project_failed: no replayable events");
     }
 
     fn stub_event_project_error() -> EventProjectError {
