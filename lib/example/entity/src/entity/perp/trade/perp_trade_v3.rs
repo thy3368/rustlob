@@ -2,9 +2,20 @@ use rust_decimal::Decimal;
 
 use crate::spot::common_trade::TradeBase;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerpTradeKind {
+    Normal,
+    Liquidation,
+    InsuranceFundTransfer,
+    Adl,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpTradeV3 {
     pub trade_base: TradeBase,
+
+    pub kind: PerpTradeKind,
+    pub reference_id: Option<String>,
 
     pub taker_start_position: Decimal,
 
@@ -19,7 +30,7 @@ pub struct PerpTradeV3 {
     // pub liquidation: Option<LiqMarker>, // 强平标记
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LiqMarker {
     pub method: LiqMethod, // Market / Backstop
     pub mark_px: Decimal,

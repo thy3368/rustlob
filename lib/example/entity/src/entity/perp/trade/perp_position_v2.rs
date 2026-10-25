@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::perp::fund::funding_payment::FundingPayment;
-use crate::perp::trade::perp_trade_v3::PerpTradeV3;
+use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MarginModeV2 {
@@ -379,17 +379,20 @@ fn validate_margin(
 
 impl PerpPositionV2 {
     pub fn apply_trade2(&mut self, trade: &PerpTradeV3) -> Result<Decimal, PerpPositionV2Error> {
+        if trade.kind == PerpTradeKind::InsuranceFundTransfer {
+            return Err(PerpPositionV2Error::InvalidState);
+        }
         if self.asset_id() != trade.trade_base.asset {
             return Err(PerpPositionV2Error::InvalidState);
         }
-        let (signed_quantity, closed_pnl, fee) = if self.user_id == trade.taker_user {
+        let (signed_quantity, closed_pnl, fee) = if self.user_id == trade.trade_base.taker_user {
             let signed = match trade.trade_base.taker_side {
                 crate::OrderSide::Buy => Some(trade.trade_base.size),
                 crate::OrderSide::Sell => Decimal::ZERO.checked_sub(trade.trade_base.size),
             }
             .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
             (signed, trade.taker_closed_pnl, trade.trade_base.taker_fee)
-        } else if self.user_id == trade.maker_user {
+        } else if self.user_id == trade.trade_base.maker_user {
             let signed = match trade.trade_base.taker_side {
                 crate::OrderSide::Buy => Decimal::ZERO.checked_sub(trade.trade_base.size),
                 crate::OrderSide::Sell => Some(trade.trade_base.size),
