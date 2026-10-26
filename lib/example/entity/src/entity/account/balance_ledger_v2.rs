@@ -1,7 +1,6 @@
-use common_entity::UpdatedEntityPair;
 use common_entity::{
     AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff,
-    FinancialClassification, FourColorArchetype,
+    FinancialClassification, FourColorArchetype, UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

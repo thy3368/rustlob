@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use common_entity::UpdatedEntityPair;
-use common_entity::{Entity, EntityReplayableEvent};
+use common_entity::{Entity, EntityReplayableEvent, UpdatedEntityPair};
 use example_core_entity::common_entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;

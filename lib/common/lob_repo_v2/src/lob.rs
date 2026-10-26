@@ -24,8 +24,7 @@ pub trait AssetLobV2 {
 
     // price_tick_size: Decimal, // 价格最小步长
     // size_tick_size: Decimal,  // 数量最小步长
-    
-    
+
     fn match_orders(
         &self,
         price: u64,

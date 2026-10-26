@@ -1,11 +1,10 @@
 use actix_web::{HttpResponse, ResponseError};
 use axum::response::{IntoResponse, Response};
-use common_entity::EntityReplayableEvent;
 use common_entity::{
-    CommandEnvelope, StateMachineV2, CommandUseCaseExecutionError, CommandUseCaseExecutor4,
-    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, ExecutionError, UseCaseReplyMapper,
+    CommandEnvelope, CommandUseCaseExecutionError, CommandUseCaseExecutor4, CommandUseCaseOutbound,
+    CommandUseCaseOutboundPhase, EntityError, EntityReplayableEvent, ExecutionError,
+    StateMachineV2, UseCaseReplyMapper,
 };
-use common_entity::EntityError;
 use example_core_use_case::{
     DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, WithdrawQuoteCmd,
     WithdrawQuoteError, WithdrawQuoteState, WithdrawQuoteUseCase,
@@ -265,9 +264,9 @@ pub(crate) fn find_last_u64_field(
 pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
-    use common_entity::EntityReplayableEvent;
-    use common_entity::{CommandUseCaseOutbound, StateSink, StateSource};
-    use common_entity::LogEntry;
+    use common_entity::{
+        CommandUseCaseOutbound, EntityReplayableEvent, LogEntry, StateSink, StateSource,
+    };
     use example_core_use_case::{
         Balance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
         PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, WithdrawQuoteCmd,

@@ -1,7 +1,6 @@
-use common_entity::EntityReplayableEvent;
 use common_entity::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
-    UseCaseReplyMapper,
+    EntityReplayableEvent, UseCaseReplyMapper,
 };
 use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteState};
 use serde::Serialize;

@@ -7,8 +7,16 @@ trait LocalQueryUseCase {
     type Error;
     fn role(&self) -> &'static str;
     fn pre_check_query(&self, query: &Self::Query) -> Result<(), Self::Error>;
-    fn validate_against_read_model(&self, query: &Self::Query, read_model: &Self::ReadModel) -> Result<(), Self::Error>;
-    fn compute_view(&self, query: &Self::Query, read_model: Self::ReadModel) -> Result<Self::View, Self::Error>;
+    fn validate_against_read_model(
+        &self,
+        query: &Self::Query,
+        read_model: &Self::ReadModel,
+    ) -> Result<(), Self::Error>;
+    fn compute_view(
+        &self,
+        query: &Self::Query,
+        read_model: Self::ReadModel,
+    ) -> Result<Self::View, Self::Error>;
 }
 
 use crate::{

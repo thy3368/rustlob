@@ -1,9 +1,8 @@
 //! 运行：`cargo run -p use_case_executor --example place_only_spot_order_v2`
 
-use common_entity::EntityReplayableEvent;
 use common_entity::{
-    EntityChangeType, LogEntry, LogEntrySequenceError, LogEntrySequencer, SequenceExhausted,
-    SingleThreadSequencer,
+    EntityChangeType, EntityReplayableEvent, LogEntry, LogEntrySequenceError, LogEntrySequencer,
+    SequenceExhausted, SingleThreadSequencer,
 };
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,

@@ -1,8 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use common_entity::EntityReplayableEvent;
-use common_entity::{StateSink, StateSource};
-use common_entity::stable_string_entity_id;
+use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id};
 use example_core_use_case::{
     Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase, OrderSide, OrderTif, OrderType, SpotOrderV2,

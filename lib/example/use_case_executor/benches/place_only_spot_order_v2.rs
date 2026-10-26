@@ -5,8 +5,7 @@
     reason = "benchmark setup and measurement code intentionally keeps the hot loop minimal."
 )]
 
-use common_entity::EntityReplayableEvent;
-use common_entity::{LogEntry, LogEntrySequencer};
+use common_entity::{EntityReplayableEvent, LogEntry, LogEntrySequencer};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,

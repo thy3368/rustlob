@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use common_entity::EntityReplayableEvent;
-use common_entity::{StateSink, StateSource};
-use common_entity::{Entity, stable_string_entity_id};
+use common_entity::{
+    Entity, EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id,
+};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,

@@ -1,7 +1,8 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::CommandUseCaseOutbound;
-use common_entity::stable_string_entity_id;
-use example_core_use_case::{Balance, WithdrawQuoteCmd, WithdrawQuoteState};
+use common_entity::{
+    EntityReplayableEvent, LogEntry, StateMachineV2Diff, StateSink, StateSource,
+    stable_string_entity_id,
+};
+use example_core_use_case::{Balance, WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteUseCase};
 use mysql::prelude::Queryable;
 
 use crate::shared::{
@@ -21,12 +22,13 @@ impl MySqlWithdrawQuoteOutbound {
     }
 }
 
-impl CommandUseCaseOutbound for MySqlWithdrawQuoteOutbound {
-    type Command = WithdrawQuoteCmd;
-    type State = WithdrawQuoteState;
+impl StateSource<WithdrawQuoteUseCase> for MySqlWithdrawQuoteOutbound {
     type Error = WithdrawQuoteOutboundError;
 
-    fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
+    fn load_given_state(
+        &self,
+        cmd: &LogEntry<WithdrawQuoteCmd>,
+    ) -> Result<WithdrawQuoteState, Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
 
         let account_row: Option<(String, u64, u64)> = conn
@@ -55,6 +57,10 @@ impl CommandUseCaseOutbound for MySqlWithdrawQuoteOutbound {
             },
         })
     }
+}
+
+impl StateSink<WithdrawQuoteUseCase> for MySqlWithdrawQuoteOutbound {
+    type Error = WithdrawQuoteOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;

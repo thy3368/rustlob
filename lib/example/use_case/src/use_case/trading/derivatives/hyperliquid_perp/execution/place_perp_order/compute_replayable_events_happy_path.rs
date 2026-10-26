@@ -1,5 +1,4 @@
-use common_entity::ReplayableChanges;
-use common_entity::{LogEntry, StateMachineV2};
+use common_entity::{LogEntry, ReplayableChanges, StateMachineV2};
 
 use super::*;
 

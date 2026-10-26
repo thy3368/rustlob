@@ -1,7 +1,7 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::{EventProjectError, ReplayableChanges};
-use common_entity::StateMachineV2;
-use example_core_use_case::common_entity::{HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode};
+use common_entity::{EntityReplayableEvent, EventProjectError, ReplayableChanges, StateMachineV2};
+use example_core_use_case::common_entity::{
+    HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode,
+};
 use example_core_use_case::{
     UpdateHyperliquidPerpLeverageChanges, UpdateHyperliquidPerpLeverageCmd,
     UpdateHyperliquidPerpLeverageError, UpdateHyperliquidPerpLeverageState,

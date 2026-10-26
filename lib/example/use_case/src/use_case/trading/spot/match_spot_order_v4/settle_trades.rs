@@ -1,6 +1,6 @@
-use common_entity::UpdatedEntityPair;
 use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
+    UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::SpotOrderV2;

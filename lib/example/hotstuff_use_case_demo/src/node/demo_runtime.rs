@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use common_entity::EntityReplayableEvent;
-use common_entity::{StateSink, StateSource};
-use common_entity::LogEntry;
+use common_entity::{EntityReplayableEvent, LogEntry, StateSink, StateSource};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,

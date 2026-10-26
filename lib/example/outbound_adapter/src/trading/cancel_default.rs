@@ -1,5 +1,4 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::{StateSink, StateSource};
+use common_entity::{EntityReplayableEvent, StateSink, StateSource};
 use example_core_use_case::{
     CancelSpotOrderV2Cmd, CancelSpotOrderV2State, CancelSpotOrderV2UseCase,
 };

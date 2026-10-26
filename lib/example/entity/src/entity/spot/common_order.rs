@@ -28,11 +28,8 @@ pub struct CommonOrder {
 
     pub tif: OrderTif,
 
-
     // "triggerCondition": "N/A",
     // "children": [],
-
-
 
     // order.isPositionTpsl*
     // boolean

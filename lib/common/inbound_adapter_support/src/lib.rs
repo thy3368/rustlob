@@ -4,9 +4,7 @@ use actix_web::{HttpResponse, ResponseError};
 use anyhow::Error as AnyError;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use common_entity::{
-    CommandUseCaseExecutionError, CommandUseCaseOutboundPhase,
-};
+use common_entity::{CommandUseCaseExecutionError, CommandUseCaseOutboundPhase};
 pub use descriptor::{
     CliApiDescriptor, CliArgDescriptor, CliErrorCodeDescriptor, HttpApiDescriptor,
     HttpErrorCodeDescriptor, InboundApiDescriptor, build_api_manifest, build_cli_schema,

@@ -1,5 +1,4 @@
-use common_entity::{ExecutionError, ExecutionResult};
-use common_entity::LogEntry;
+use common_entity::{ExecutionError, ExecutionResult, LogEntry};
 use example_core_use_case::{
     CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd, CancelSpotOrderV2Error,
     ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd, ModifySpotOrderV2Error,

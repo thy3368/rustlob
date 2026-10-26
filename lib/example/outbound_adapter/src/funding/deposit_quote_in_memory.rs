@@ -1,6 +1,5 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::CommandUseCaseOutbound;
-use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState};
+use common_entity::{EntityReplayableEvent, LogEntry, StateMachineV2Diff, StateSink, StateSource};
+use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
 
 use crate::shared::{
     DepositQuoteOutboundError, InMemoryStore, balance_key, event_identity_field, event_u64_field,
@@ -17,12 +16,13 @@ impl InMemoryDepositQuoteOutbound {
     }
 }
 
-impl CommandUseCaseOutbound for InMemoryDepositQuoteOutbound {
-    type Command = DepositQuoteCmd;
-    type State = DepositQuoteState;
+impl StateSource<DepositQuoteUseCase> for InMemoryDepositQuoteOutbound {
     type Error = DepositQuoteOutboundError;
 
-    fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
+    fn load_given_state(
+        &self,
+        cmd: &LogEntry<DepositQuoteCmd>,
+    ) -> Result<DepositQuoteState, Self::Error> {
         let state = self.store.lock_state()?;
         let quote_balance = state
             .balances
@@ -32,6 +32,10 @@ impl CommandUseCaseOutbound for InMemoryDepositQuoteOutbound {
 
         Ok(DepositQuoteState { quote_balance })
     }
+}
+
+impl StateSink<DepositQuoteUseCase> for InMemoryDepositQuoteOutbound {
+    type Error = DepositQuoteOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         let mut state = self.store.lock_state()?;

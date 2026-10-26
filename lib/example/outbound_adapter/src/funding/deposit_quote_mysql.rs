@@ -1,7 +1,8 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::CommandUseCaseOutbound;
-use common_entity::stable_string_entity_id;
-use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState};
+use common_entity::{
+    EntityReplayableEvent, LogEntry, StateMachineV2Diff, StateSink, StateSource,
+    stable_string_entity_id,
+};
+use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
 use mysql::prelude::Queryable;
 
 use crate::shared::{
@@ -21,12 +22,13 @@ impl MySqlDepositQuoteOutbound {
     }
 }
 
-impl CommandUseCaseOutbound for MySqlDepositQuoteOutbound {
-    type Command = DepositQuoteCmd;
-    type State = DepositQuoteState;
+impl StateSource<DepositQuoteUseCase> for MySqlDepositQuoteOutbound {
     type Error = DepositQuoteOutboundError;
 
-    fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
+    fn load_given_state(
+        &self,
+        cmd: &LogEntry<DepositQuoteCmd>,
+    ) -> Result<DepositQuoteState, Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
 
         let account_row: Option<(String, u64, u64)> = conn
@@ -55,6 +57,10 @@ impl CommandUseCaseOutbound for MySqlDepositQuoteOutbound {
             },
         })
     }
+}
+
+impl StateSink<DepositQuoteUseCase> for MySqlDepositQuoteOutbound {
+    type Error = DepositQuoteOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;

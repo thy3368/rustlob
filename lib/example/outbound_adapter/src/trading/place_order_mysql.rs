@@ -1,6 +1,4 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::{StateSink, StateSource};
-use common_entity::stable_string_entity_id;
+use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     Balance, MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource,

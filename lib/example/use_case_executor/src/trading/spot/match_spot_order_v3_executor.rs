@@ -40,9 +40,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use common_entity::EntityReplayableEvent;
-    use common_entity::{StateSink, StateSource};
-    use common_entity::stable_string_entity_id;
+    use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id};
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
         MatchSpotOrderV3UseCase, OrderSide, OrderTif, OrderType, SpotOrderStatus, SpotOrderV2,

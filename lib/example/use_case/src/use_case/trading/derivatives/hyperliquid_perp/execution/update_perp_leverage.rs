@@ -1,6 +1,7 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
-use common_entity::{Entity, LogEntry, StateMachineV2};
+use common_entity::{
+    Entity, EntityReplayableEvent, EventProjectError, LogEntry, ReplayableChanges, StateMachineV2,
+    UpdatedEntityPair,
+};
 use thiserror::Error;
 
 use crate::common_entity::{
@@ -206,8 +207,7 @@ fn map_leverage_setting_error(
 
 #[cfg(test)]
 mod tests {
-    use common_entity::ReplayableChanges;
-    use common_entity::{LogEntry, StateMachineV2};
+    use common_entity::{LogEntry, ReplayableChanges, StateMachineV2};
 
     use super::*;
     use crate::common_entity::HyperliquidPerpPositionStatus;

@@ -1,15 +1,16 @@
-use common_entity::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
-use common_entity::EntityReplayableEvent;
-use common_entity::{action_type, Entity, LogEntry, StateMachineV2};
+use common_entity::{
+    Entity, EntityReplayableEvent, EventProjectError, LogEntry, ReplayableChanges, StateMachineV2,
+    UpdatedEntityPair, action_type,
+};
 use example_core_entity::OrderSide;
 use thiserror::Error;
 
-use crate::common_entity::{
-    required_position_margin, Balance, BalanceLedgerV2, HyperliquidPerpOrder,
-    HyperliquidPerpOrderExecution, HyperliquidPerpOrderTimeInForce, PerpPosition,
-    PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent,
-};
 use crate::MarketRules;
+use crate::common_entity::{
+    Balance, BalanceLedgerV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
+    HyperliquidPerpOrderTimeInForce, PerpPosition, PlaceHyperliquidPerpOrderInput,
+    PlaceHyperliquidPerpOrderIntent, required_position_margin,
+};
 
 /// Hyperliquid perp 下单可能返回的业务错误。
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

@@ -44,8 +44,7 @@ mod tests {
     use std::fmt;
     use std::sync::{Arc, Mutex};
 
-    use common_entity::EntityReplayableEvent;
-    use common_entity::stable_string_entity_id;
+    use common_entity::{EntityReplayableEvent, stable_string_entity_id};
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, ModifySpotOrderV2OrderType,
         ModifySpotOrderV2State, OrderId, OrderSide, OrderTif, OrderType, SpotOrderV2,

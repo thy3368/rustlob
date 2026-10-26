@@ -1,6 +1,5 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::CommandUseCaseOutbound;
-use example_core_use_case::{Balance, WithdrawQuoteCmd, WithdrawQuoteState};
+use common_entity::{EntityReplayableEvent, LogEntry, StateMachineV2Diff, StateSink, StateSource};
+use example_core_use_case::{Balance, WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteUseCase};
 
 use crate::shared::{
     InMemoryStore, WithdrawQuoteOutboundError, balance_key, event_identity_field, event_u64_field,
@@ -17,12 +16,13 @@ impl InMemoryWithdrawQuoteOutbound {
     }
 }
 
-impl CommandUseCaseOutbound for InMemoryWithdrawQuoteOutbound {
-    type Command = WithdrawQuoteCmd;
-    type State = WithdrawQuoteState;
+impl StateSource<WithdrawQuoteUseCase> for InMemoryWithdrawQuoteOutbound {
     type Error = WithdrawQuoteOutboundError;
 
-    fn load_state(&self, cmd: &Self::Command) -> Result<Self::State, Self::Error> {
+    fn load_given_state(
+        &self,
+        cmd: &LogEntry<WithdrawQuoteCmd>,
+    ) -> Result<WithdrawQuoteState, Self::Error> {
         let state = self.store.lock_state()?;
         let quote_balance = state
             .balances
@@ -32,6 +32,10 @@ impl CommandUseCaseOutbound for InMemoryWithdrawQuoteOutbound {
 
         Ok(WithdrawQuoteState { quote_balance })
     }
+}
+
+impl StateSink<WithdrawQuoteUseCase> for InMemoryWithdrawQuoteOutbound {
+    type Error = WithdrawQuoteOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         let mut state = self.store.lock_state()?;

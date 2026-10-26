@@ -1,6 +1,6 @@
-use common_entity::EntityReplayableEvent;
-use common_entity::{StateSink, StateSource};
-use common_entity::{Entity, stable_string_entity_id};
+use common_entity::{
+    Entity, EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id,
+};
 use example_core_use_case::{
     Balance, OrderSide, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
     PlaceOnlySpotOrderV2Cmd, SpotOrderV2, SpotTrade,
