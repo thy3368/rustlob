@@ -1,7 +1,7 @@
-use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, ReplayableChanges, UpdatedEntityPair,
+use common_entity::{
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff, UpdatedEntityPair,
 };
-use common_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -34,9 +34,7 @@ pub struct WithdrawQuoteChanges {
 }
 
 impl ReplayableChanges for WithdrawQuoteChanges {
-    fn to_replayable_events(
-        &self,
-    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         Ok(vec![
             self.updated_quote_balance
                 .after
@@ -48,17 +46,13 @@ impl ReplayableChanges for WithdrawQuoteChanges {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WithdrawQuoteUseCase;
 
-impl CommandUseCase4 for WithdrawQuoteUseCase {
-    type Command = WithdrawQuoteCmd;
-    type GivenState = WithdrawQuoteState;
+impl StateMachineV2 for WithdrawQuoteUseCase {
+    type Command = LogEntry<WithdrawQuoteCmd>;
+    type StateGiven = WithdrawQuoteState;
     type Error = WithdrawQuoteError;
-    type Changes = WithdrawQuoteChanges;
+    type StateChanged = WithdrawQuoteChanges;
 
-    fn role(&self) -> &'static str {
-        "Treasury"
-    }
-
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.amount == 0 {
             return Err(WithdrawQuoteError::InvalidAmount);
         }
@@ -66,10 +60,10 @@ impl CommandUseCase4 for WithdrawQuoteUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         if state.quote_balance.available < cmd.amount {
             return Err(WithdrawQuoteError::InsufficientQuoteBalance);
@@ -78,12 +72,12 @@ impl CommandUseCase4 for WithdrawQuoteUseCase {
         Ok(())
     }
 
-    fn compute_changes(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Self::Changes, Self::Error> {
-        let quote_balance_before = state.quote_balance;
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
+        let quote_balance_before = state.quote_balance.clone();
         let mut quote_balance_after = quote_balance_before.clone();
         quote_balance_after.debit_available(cmd.amount).map_err(map_balance_error)?;
 
@@ -93,6 +87,21 @@ impl CommandUseCase4 for WithdrawQuoteUseCase {
                 after: quote_balance_after,
             },
         })
+    }
+}
+
+impl WithdrawQuoteUseCase {
+    pub const fn role(&self) -> &'static str {
+        "Treasury"
+    }
+}
+impl StateMachineV2Diff for WithdrawQuoteUseCase {
+    type StateDiff = WithdrawQuoteChanges;
+    fn do_compute_state_diff(
+        _: WithdrawQuoteState,
+        changed: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        Ok(changed)
     }
 }
 
@@ -147,8 +156,13 @@ mod tests {
     #[test]
     fn pre_check_rejects_zero_amount() {
         let use_case = WithdrawQuoteUseCase;
-        let result = use_case
-            .pre_check_command(&WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 0 });
+        let result = use_case.check_command(&common_entity::LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 0 },
+        ));
 
         assert_eq!(result, Err(WithdrawQuoteError::InvalidAmount));
     }
@@ -156,10 +170,14 @@ mod tests {
     #[test]
     fn validate_against_state_rejects_insufficient_balance() {
         let use_case = WithdrawQuoteUseCase;
-        let result = use_case.validate_against_state(
-            &WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 2_000 },
-            &sample_state(),
+        let command = common_entity::LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 2_000 },
         );
+        let result = use_case.validate_state_given(&command, &sample_state());
 
         assert_eq!(result, Err(WithdrawQuoteError::InsufficientQuoteBalance));
     }
@@ -167,10 +185,14 @@ mod tests {
     #[test]
     fn compute_replayable_events_updates_available_quote() -> Result<(), WithdrawQuoteError> {
         let use_case = WithdrawQuoteUseCase;
-        let changes = use_case.compute_changes(
-            &WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
-            sample_state(),
-        )?;
+        let command = common_entity::LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
+        );
+        let changes = use_case.compute_state_diff(&command, sample_state())?;
         let events =
             changes.to_replayable_events().map_err(|_| WithdrawQuoteError::ArithmeticOverflow)?;
 

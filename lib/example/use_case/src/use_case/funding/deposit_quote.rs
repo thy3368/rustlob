@@ -1,7 +1,7 @@
-use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, ReplayableChanges, UpdatedEntityPair,
+use common_entity::{
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff, UpdatedEntityPair,
 };
-use common_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -32,9 +32,7 @@ pub struct DepositQuoteChanges {
 }
 
 impl ReplayableChanges for DepositQuoteChanges {
-    fn to_replayable_events(
-        &self,
-    ) -> Result<Vec<common_entity::EntityReplayableEvent>, EventProjectError> {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         Ok(vec![
             self.updated_quote_balance
                 .after
@@ -46,17 +44,13 @@ impl ReplayableChanges for DepositQuoteChanges {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DepositQuoteUseCase;
 
-impl CommandUseCase4 for DepositQuoteUseCase {
-    type Command = DepositQuoteCmd;
-    type GivenState = DepositQuoteState;
+impl StateMachineV2 for DepositQuoteUseCase {
+    type Command = LogEntry<DepositQuoteCmd>;
+    type StateGiven = DepositQuoteState;
     type Error = DepositQuoteError;
-    type Changes = DepositQuoteChanges;
+    type StateChanged = DepositQuoteChanges;
 
-    fn role(&self) -> &'static str {
-        "Treasury"
-    }
-
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.amount == 0 {
             return Err(DepositQuoteError::InvalidAmount);
         }
@@ -64,20 +58,20 @@ impl CommandUseCase4 for DepositQuoteUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_state_given(
         &self,
         _cmd: &Self::Command,
-        _state: &Self::GivenState,
+        _state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn compute_changes(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Self::Changes, Self::Error> {
-        let quote_balance_before = state.quote_balance;
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
+        let quote_balance_before = state.quote_balance.clone();
         let mut quote_balance_after = quote_balance_before.clone();
         quote_balance_after.credit_available(cmd.amount).map_err(map_balance_error)?;
 
@@ -87,6 +81,21 @@ impl CommandUseCase4 for DepositQuoteUseCase {
                 after: quote_balance_after,
             },
         })
+    }
+}
+
+impl DepositQuoteUseCase {
+    pub const fn role(&self) -> &'static str {
+        "Treasury"
+    }
+}
+impl StateMachineV2Diff for DepositQuoteUseCase {
+    type StateDiff = DepositQuoteChanges;
+    fn do_compute_state_diff(
+        _: DepositQuoteState,
+        changed: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        Ok(changed)
     }
 }
 
@@ -140,8 +149,13 @@ mod tests {
     #[test]
     fn pre_check_rejects_zero_amount() {
         let use_case = DepositQuoteUseCase;
-        let result = use_case
-            .pre_check_command(&DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 0 });
+        let result = use_case.check_command(&common_entity::LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 0 },
+        ));
 
         assert_eq!(result, Err(DepositQuoteError::InvalidAmount));
     }
@@ -149,10 +163,14 @@ mod tests {
     #[test]
     fn compute_replayable_events_updates_available_quote() -> Result<(), DepositQuoteError> {
         let use_case = DepositQuoteUseCase;
-        let changes = use_case.compute_changes(
-            &DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
-            sample_state(),
-        )?;
+        let command = common_entity::LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
+        );
+        let changes = use_case.compute_state_diff(&command, sample_state())?;
         let events =
             changes.to_replayable_events().map_err(|_| DepositQuoteError::ArithmeticOverflow)?;
 

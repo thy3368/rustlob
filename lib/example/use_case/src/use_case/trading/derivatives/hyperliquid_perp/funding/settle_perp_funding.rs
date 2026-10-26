@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, HashSet};
 
-use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, ReplayableChanges, UpdatedEntityPair,
+use common_entity::{
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff, UpdatedEntityPair,
 };
-use cmd_handler::EntityReplayableEvent;
-use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
@@ -115,7 +114,7 @@ pub struct SettleHyperliquidPerpFundingChanges {
 }
 
 impl ReplayableChanges for SettleHyperliquidPerpFundingChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         let mut events = Vec::with_capacity(0);
         for settlement in &self.created_settlements {
             events.push(settlement.track_create_event()?);
@@ -130,17 +129,13 @@ impl ReplayableChanges for SettleHyperliquidPerpFundingChanges {
     }
 }
 
-impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
-    type Command = SettleHyperliquidPerpFundingCmd;
-    type GivenState = SettleHyperliquidPerpFundingState;
+impl StateMachineV2 for SettleHyperliquidPerpFundingUseCase {
+    type Command = LogEntry<SettleHyperliquidPerpFundingCmd>;
+    type StateGiven = SettleHyperliquidPerpFundingState;
     type Error = SettleHyperliquidPerpFundingError;
-    type Changes = SettleHyperliquidPerpFundingChanges;
+    type StateChanged = SettleHyperliquidPerpFundingChanges;
 
-    fn role(&self) -> &'static str {
-        "ClearingHouse"
-    }
-
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
             return Err(SettleHyperliquidPerpFundingError::InvalidPartyId);
         }
@@ -159,10 +154,10 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         validate_common(cmd, state)?;
         match state.margin_mode {
@@ -173,11 +168,12 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
         }
     }
 
-    fn compute_changes(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Self::Changes, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
+        let state = state.clone();
         let outcome = match state.margin_mode {
             HyperliquidPerpMarginMode::Cross => derive_cross_outcome(cmd, &state)?,
             HyperliquidPerpMarginMode::Isolated => {
@@ -244,6 +240,21 @@ impl CommandUseCase4 for SettleHyperliquidPerpFundingUseCase {
             changed_margin_balances,
             created_balance_ledger_entries,
         })
+    }
+}
+
+impl SettleHyperliquidPerpFundingUseCase {
+    pub const fn role(&self) -> &'static str {
+        "ClearingHouse"
+    }
+}
+impl StateMachineV2Diff for SettleHyperliquidPerpFundingUseCase {
+    type StateDiff = SettleHyperliquidPerpFundingChanges;
+    fn do_compute_state_diff(
+        _: SettleHyperliquidPerpFundingState,
+        changed: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        Ok(changed)
     }
 }
 

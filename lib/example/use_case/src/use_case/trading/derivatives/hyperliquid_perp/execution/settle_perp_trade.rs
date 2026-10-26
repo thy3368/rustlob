@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, ReplayableChanges, UpdatedEntityPair,
+use common_entity::{
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff, UpdatedEntityPair,
 };
-use common_entity::Entity;
 use thiserror::Error;
 
 use crate::entity::{
@@ -113,7 +112,7 @@ pub struct SettleHyperliquidPerpTradeChanges {
 }
 
 impl ReplayableChanges for SettleHyperliquidPerpTradeChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         let mut events = Vec::with_capacity(0);
         for voucher in &self.created_vouchers {
             events.push(voucher.track_create_event()?);
@@ -132,17 +131,13 @@ impl ReplayableChanges for SettleHyperliquidPerpTradeChanges {
     }
 }
 
-impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
-    type Command = SettleHyperliquidPerpTradeCmd;
-    type GivenState = SettleHyperliquidPerpTradeState;
+impl StateMachineV2 for SettleHyperliquidPerpTradeUseCase {
+    type Command = LogEntry<SettleHyperliquidPerpTradeCmd>;
+    type StateGiven = SettleHyperliquidPerpTradeState;
     type Error = SettleHyperliquidPerpTradeError;
-    type Changes = SettleHyperliquidPerpTradeChanges;
+    type StateChanged = SettleHyperliquidPerpTradeChanges;
 
-    fn role(&self) -> &'static str {
-        "ClearingHouse"
-    }
-
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
             return Err(SettleHyperliquidPerpTradeError::InvalidPartyId);
         }
@@ -155,10 +150,10 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         validate_trade_ids_match(cmd, state)?;
         ensure_not_settled(state)?;
@@ -166,11 +161,11 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
         validate_balances_can_apply(state, &outcome.balance_deltas)
     }
 
-    fn compute_changes(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Self::Changes, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
         let outcome = derive_settlement_outcome(cmd, &state)?;
         validate_balances_can_apply(&state, &outcome.balance_deltas)?;
 
@@ -221,6 +216,21 @@ impl CommandUseCase4 for SettleHyperliquidPerpTradeUseCase {
             changed_positions,
             changed_margin_balances,
         })
+    }
+}
+
+impl SettleHyperliquidPerpTradeUseCase {
+    pub const fn role(&self) -> &'static str {
+        "ClearingHouse"
+    }
+}
+impl StateMachineV2Diff for SettleHyperliquidPerpTradeUseCase {
+    type StateDiff = SettleHyperliquidPerpTradeChanges;
+    fn do_compute_state_diff(
+        _: SettleHyperliquidPerpTradeState,
+        changed: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        Ok(changed)
     }
 }
 

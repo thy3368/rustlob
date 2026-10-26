@@ -1,8 +1,7 @@
-use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, ReplayableChanges, UpdatedEntityPair,
+use common_entity::{
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff, UpdatedEntityPair,
 };
-use cmd_handler::EntityReplayableEvent;
-use common_entity::Entity;
 use example_core_entity::OrderSide;
 use thiserror::Error;
 
@@ -100,7 +99,7 @@ pub struct MatchHyperliquidPerpOrderChanges {
 }
 
 impl ReplayableChanges for MatchHyperliquidPerpOrderChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         let mut events = Vec::with_capacity(0);
         for (trade, maker_order) in self.created_trades.iter().zip(&self.updated_maker_orders) {
             events.push(trade.track_create_event()?);
@@ -115,17 +114,13 @@ impl ReplayableChanges for MatchHyperliquidPerpOrderChanges {
     }
 }
 
-impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
-    type Command = MatchHyperliquidPerpOrderCmd;
-    type GivenState = MatchHyperliquidPerpOrderState;
+impl StateMachineV2 for MatchHyperliquidPerpOrderUseCase {
+    type Command = LogEntry<MatchHyperliquidPerpOrderCmd>;
+    type StateGiven = MatchHyperliquidPerpOrderState;
     type Error = MatchHyperliquidPerpOrderError;
-    type Changes = MatchHyperliquidPerpOrderChanges;
+    type StateChanged = MatchHyperliquidPerpOrderChanges;
 
-    fn role(&self) -> &'static str {
-        "MatchingEngine"
-    }
-
-    fn pre_check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.party_id.is_empty() {
             return Err(MatchHyperliquidPerpOrderError::InvalidPartyId);
         }
@@ -138,10 +133,10 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
-    fn validate_against_state(
+    fn validate_state_given(
         &self,
         cmd: &Self::Command,
-        state: &Self::GivenState,
+        state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         let taker = &state.taker_order;
         if taker.order_id != cmd.taker_order_id {
@@ -174,11 +169,12 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
         Ok(())
     }
 
-    fn compute_changes(
+    fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
-        state: Self::GivenState,
-    ) -> Result<Self::Changes, Self::Error> {
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
+        let state = state.clone();
         let mut taker_order_after = state.taker_order.clone();
         let mut taker_remaining = remaining_qty(&taker_order_after)?;
         let mut total_taker_fill = 0_u64;
@@ -271,6 +267,21 @@ impl CommandUseCase4 for MatchHyperliquidPerpOrderUseCase {
                 after: taker_order_after,
             },
         })
+    }
+}
+
+impl MatchHyperliquidPerpOrderUseCase {
+    pub const fn role(&self) -> &'static str {
+        "MatchingEngine"
+    }
+}
+impl StateMachineV2Diff for MatchHyperliquidPerpOrderUseCase {
+    type StateDiff = MatchHyperliquidPerpOrderChanges;
+    fn do_compute_state_diff(
+        _: MatchHyperliquidPerpOrderState,
+        changed: Self::StateChanged,
+    ) -> Result<Self::StateDiff, Self::Error> {
+        Ok(changed)
     }
 }
 
