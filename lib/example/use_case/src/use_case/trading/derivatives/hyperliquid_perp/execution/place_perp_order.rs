@@ -1,10 +1,10 @@
-use entity::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
-use entity::EntityReplayableEvent;
+use common_entity::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
+use common_entity::EntityReplayableEvent;
 use common_entity::{action_type, Entity, LogEntry, StateMachineV2};
 use example_core_entity::OrderSide;
 use thiserror::Error;
 
-use crate::entity::{
+use crate::common_entity::{
     required_position_margin, Balance, BalanceLedgerV2, HyperliquidPerpOrder,
     HyperliquidPerpOrderExecution, HyperliquidPerpOrderTimeInForce, PerpPosition,
     PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent,
@@ -367,17 +367,17 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
 }
 
 fn map_margin_ledger_error(
-    error: crate::entity::BalanceLedgerEntryV2Error,
+    error: crate::common_entity::BalanceLedgerEntryV2Error,
 ) -> PlaceHyperliquidPerpOrderError {
     match error {
-        crate::entity::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
+        crate::common_entity::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
             PlaceHyperliquidPerpOrderError::InsufficientMarginBalance
         }
-        crate::entity::BalanceLedgerEntryV2Error::InvalidAmount
-        | crate::entity::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
-        | crate::entity::BalanceLedgerEntryV2Error::ArithmeticOverflow
-        | crate::entity::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
-        | crate::entity::BalanceLedgerEntryV2Error::AlreadyApplied => {
+        crate::common_entity::BalanceLedgerEntryV2Error::InvalidAmount
+        | crate::common_entity::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
+        | crate::common_entity::BalanceLedgerEntryV2Error::ArithmeticOverflow
+        | crate::common_entity::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
+        | crate::common_entity::BalanceLedgerEntryV2Error::AlreadyApplied => {
             PlaceHyperliquidPerpOrderError::ArithmeticOverflow
         }
     }

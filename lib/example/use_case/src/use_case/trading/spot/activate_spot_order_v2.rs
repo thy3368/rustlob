@@ -1,15 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
-use entity::UpdatedEntityPair;
+use common_entity::UpdatedEntityPair;
 use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
-use crate::entity::account::balance_ledger_v2::{BalanceLedgerEntryV2Error, BalanceLedgerV2};
-use crate::entity::{
+use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
+use crate::common_entity::account::balance_ledger_v2::{BalanceLedgerEntryV2Error, BalanceLedgerV2};
+use crate::common_entity::{
     ActivatePendingSpotOrderV2Input, Balance, Reservation, SpotOrderV2, SpotOrderV2BehaviorError,
 };
 use crate::support::{concat2, concat3};

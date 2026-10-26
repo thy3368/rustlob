@@ -32,5 +32,5 @@
 //! - `CompleteHyperliquidPerpAdlExecution`：完成执行并落结果凭证，或把 ADL 路径推进到穷尽
 //! - `CloseHyperliquidPerpLiquidation`：把强平会话显式推进到 `Closed | Exhausted`
 //!
-//! 当前这组 mutation 已统一按 `CommandUseCase4` 建模：
+//! 当前这组 mutation 已统一按 `StateMachineV2` 建模：
 //! `Changes` 是业务第一真相，事件只从 `Changes` 投影。

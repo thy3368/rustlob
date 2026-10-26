@@ -1,4 +1,4 @@
-use entity::{ExecutionCommandSpec, ExecutionError};
+use common_entity::{ExecutionCommandSpec, ExecutionError};
 use common_entity::LogEntry;
 pub use example_core_use_case::CancelSpotOrderV2Lookup;
 use example_core_use_case::{CancelSpotOrderV2Cmd, CancelSpotOrderV2UseCase};

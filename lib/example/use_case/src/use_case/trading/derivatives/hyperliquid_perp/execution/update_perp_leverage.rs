@@ -1,9 +1,9 @@
-use entity::EntityReplayableEvent;
-use entity::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
+use common_entity::EntityReplayableEvent;
+use common_entity::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
 use common_entity::{Entity, LogEntry, StateMachineV2};
 use thiserror::Error;
 
-use crate::entity::{
+use crate::common_entity::{
     HyperliquidPerpLeverageSetting, HyperliquidPerpLeverageSettingError, HyperliquidPerpMarginMode,
     HyperliquidPerpPositionError, PerpPosition,
 };
@@ -206,11 +206,11 @@ fn map_leverage_setting_error(
 
 #[cfg(test)]
 mod tests {
-    use entity::ReplayableChanges;
+    use common_entity::ReplayableChanges;
     use common_entity::{LogEntry, StateMachineV2};
 
     use super::*;
-    use crate::entity::HyperliquidPerpPositionStatus;
+    use crate::common_entity::HyperliquidPerpPositionStatus;
 
     fn entry(
         payload: UpdateHyperliquidPerpLeverageCmd,

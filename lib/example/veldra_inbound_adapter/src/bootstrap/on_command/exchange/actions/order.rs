@@ -1,4 +1,4 @@
-use entity::ExecutionError;
+use common_entity::ExecutionError;
 use example_core_use_case::{
     MatchSpotOrderV3Changes, PlaceMatchSpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
@@ -529,7 +529,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use entity::UpdatedEntityPair;
+    use common_entity::UpdatedEntityPair;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, ActivateSpotOrderV2Changes, OrderSide, OrderTif,
         OrderType, SpotOrderV2, SpotTrade,

@@ -1,4 +1,4 @@
-use entity::{
+use common_entity::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{

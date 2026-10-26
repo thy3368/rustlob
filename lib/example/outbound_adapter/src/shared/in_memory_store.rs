@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use entity::EntityReplayableEvent;
+use common_entity::EntityReplayableEvent;
 use example_core_use_case::{Balance, MarketRules, Reservation, SpotOrderV2, SpotTrade};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 

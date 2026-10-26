@@ -1,5 +1,5 @@
-use entity::EntityReplayableEvent;
-use entity::{
+use common_entity::EntityReplayableEvent;
+use common_entity::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use common_entity::{LogEntry, ReplayableChanges, StateMachineV2Diff};
@@ -57,8 +57,8 @@ pub fn compute_place_only_spot_order_v2_business(
 mod tests {
     use std::sync::Mutex;
 
-    use entity::EntityReplayableEvent;
-    use entity::{StateSink, StateSource};
+    use common_entity::EntityReplayableEvent;
+    use common_entity::{StateSink, StateSource};
     use common_entity::Entity;
     use example_core_use_case::{
         OrderGroupRelation, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,

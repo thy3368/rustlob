@@ -1,4 +1,4 @@
-use entity::ExecutionCommandSpec;
+use common_entity::ExecutionCommandSpec;
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use use_case_executor::trading::spot::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2_with_outbound;
@@ -133,7 +133,7 @@ async fn execute(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use entity::{StateSink, StateSource};
+    use common_entity::{StateSink, StateSource};
     use example_core_use_case::{
         CancelSpotOrderV2Cmd, CancelSpotOrderV2State, CancelSpotOrderV2UseCase,
     };
@@ -233,21 +233,21 @@ mod tests {
 
         fn persist(
             &self,
-            _events: &[entity::EntityReplayableEvent],
+            _events: &[common_entity::EntityReplayableEvent],
         ) -> Result<(), Self::Error> {
             Ok(())
         }
 
         fn replay(
             &self,
-            _events: &[entity::EntityReplayableEvent],
+            _events: &[common_entity::EntityReplayableEvent],
         ) -> Result<(), Self::Error> {
             Ok(())
         }
 
         fn publish(
             &self,
-            _events: &[entity::EntityReplayableEvent],
+            _events: &[common_entity::EntityReplayableEvent],
         ) -> Result<(), Self::Error> {
             Ok(())
         }

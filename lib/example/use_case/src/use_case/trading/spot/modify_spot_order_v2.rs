@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use entity::UpdatedEntityPair;
+use common_entity::UpdatedEntityPair;
 use common_entity::{
     Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     StateMachineV2Diff,
@@ -8,12 +8,12 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
-use crate::entity::account::balance_ledger_v2::{
+use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
+use crate::common_entity::account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2,
 };
-use crate::entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError};
-use crate::entity::{Balance, OrderSide, OrderTif, OrderType, ReservationError, SpotOrderStatus};
+use crate::common_entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError};
+use crate::common_entity::{Balance, OrderSide, OrderTif, OrderType, ReservationError, SpotOrderStatus};
 use crate::support::concat3;
 
 /// 定位一个已经存在的订单。

@@ -1,5 +1,5 @@
-use entity::EntityReplayableEvent;
-use entity::CommandUseCaseOutbound;
+use common_entity::EntityReplayableEvent;
+use common_entity::CommandUseCaseOutbound;
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState};
 use mysql::prelude::Queryable;

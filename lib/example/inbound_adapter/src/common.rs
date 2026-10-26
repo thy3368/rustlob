@@ -1,8 +1,8 @@
 use actix_web::{HttpResponse, ResponseError};
 use axum::response::{IntoResponse, Response};
-use entity::EntityReplayableEvent;
-use entity::{
-    CommandEnvelope, CommandUseCase4, CommandUseCaseExecutionError, CommandUseCaseExecutor4,
+use common_entity::EntityReplayableEvent;
+use common_entity::{
+    CommandEnvelope, StateMachineV2, CommandUseCaseExecutionError, CommandUseCaseExecutor4,
     CommandUseCaseOutbound, CommandUseCaseOutboundPhase, ExecutionError, UseCaseReplyMapper,
 };
 use common_entity::EntityError;
@@ -177,7 +177,7 @@ pub(crate) fn execute_with_mapper<U, OB, M>(
     mapper: &M,
 ) -> Result<M::Reply, CommandUseCaseExecutionError<U::Error, OB::Error>>
 where
-    U: CommandUseCase4,
+    U: StateMachineV2,
     OB: ?Sized + Send + Sync + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
     M: UseCaseReplyMapper,
     OB::Error: 'static,
@@ -265,8 +265,8 @@ pub(crate) fn find_last_u64_field(
 pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
-    use entity::EntityReplayableEvent;
-    use entity::{CommandUseCaseOutbound, StateSink, StateSource};
+    use common_entity::EntityReplayableEvent;
+    use common_entity::{CommandUseCaseOutbound, StateSink, StateSource};
     use common_entity::LogEntry;
     use example_core_use_case::{
         Balance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,

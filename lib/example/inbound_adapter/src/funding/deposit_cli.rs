@@ -1,5 +1,5 @@
-use entity::EntityReplayableEvent;
-use entity::{
+use common_entity::EntityReplayableEvent;
+use common_entity::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };

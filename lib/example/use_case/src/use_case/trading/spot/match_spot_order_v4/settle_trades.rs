@@ -1,4 +1,4 @@
-use entity::UpdatedEntityPair;
+use common_entity::UpdatedEntityPair;
 use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
 };
@@ -11,8 +11,8 @@ use super::support::{
     settle_matched_trades, validate_all_reservations_for_order, zip_pairs,
 };
 use crate::SpotTrade;
-use crate::entity::account::balance_ledger_v2::BalanceLedgerV2;
-use crate::entity::{Balance, SettlementTransferVoucher, spot as spot_entity};
+use crate::common_entity::account::balance_ledger_v2::BalanceLedgerV2;
+use crate::common_entity::{Balance, SettlementTransferVoucher, spot as spot_entity};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettleSpotTradesV4Cmd {

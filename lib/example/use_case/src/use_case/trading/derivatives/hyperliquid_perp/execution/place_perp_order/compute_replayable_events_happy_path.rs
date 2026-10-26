@@ -1,4 +1,4 @@
-use entity::ReplayableChanges;
+use common_entity::ReplayableChanges;
 use common_entity::{LogEntry, StateMachineV2};
 
 use super::*;
@@ -37,7 +37,7 @@ fn entry(payload: PlaceHyperliquidPerpOrderCmd) -> LogEntry<PlaceHyperliquidPerp
 fn compute_after_changes_and_events(
     cmd: &PlaceHyperliquidPerpOrderCmd,
     state: PlaceHyperliquidPerpOrderState,
-) -> (PlaceHyperliquidPerpOrderChanges, Vec<entity::EntityReplayableEvent>) {
+) -> (PlaceHyperliquidPerpOrderChanges, Vec<common_entity::EntityReplayableEvent>) {
     let changes = use_case().compute_state_changed(&entry(cmd.clone()), &state).unwrap();
     let events = changes.to_replayable_events().unwrap();
     (changes, events)
@@ -64,11 +64,11 @@ fn assert_freeze_ledger_entry_matches_balance_pair(changes: &PlaceHyperliquidPer
         .as_ref()
         .expect("open order must create freeze ledger entry");
 
-    assert_eq!(ledger_entry.operation, crate::entity::BalanceLedgerOperation::Freeze);
+    assert_eq!(ledger_entry.operation, crate::common_entity::BalanceLedgerOperation::Freeze);
     assert_eq!(ledger_entry.amount, reservation.original_amount);
     assert_eq!(
         ledger_entry.reason,
-        crate::entity::BalanceLedgerReason::FreezeForOrder {
+        crate::common_entity::BalanceLedgerReason::FreezeForOrder {
             order_id: changes.created_order.order_id
         }
     );
@@ -80,9 +80,9 @@ fn assert_no_margin_ledger_or_balance_pair(changes: &PlaceHyperliquidPerpOrderCh
     assert!(changes.updated_margin_balances.is_empty());
 }
 
-fn assert_balance_ledger_created_event(event: &entity::EntityReplayableEvent) {
+fn assert_balance_ledger_created_event(event: &common_entity::EntityReplayableEvent) {
     assert_eq!(event.change_type, 0);
-    assert_eq!(event.entity_type, <crate::entity::BalanceLedgerV2 as Entity>::entity_type());
+    assert_eq!(event.entity_type, <crate::common_entity::BalanceLedgerV2 as Entity>::entity_type());
 }
 
 fn use_case() -> PlaceHyperliquidPerpOrderUseCase {
@@ -154,7 +154,7 @@ fn non_flat_position(signed_size: i64) -> PerpPosition {
         signed_size,
         100,
         5,
-        crate::entity::HyperliquidPerpMarginMode::Cross,
+        crate::common_entity::HyperliquidPerpMarginMode::Cross,
         0,
         4,
     )
@@ -196,7 +196,7 @@ fn assert_order_snapshot(
 }
 
 fn event_field<'a>(
-    event: &'a entity::EntityReplayableEvent,
+    event: &'a common_entity::EntityReplayableEvent,
     field_name: &str,
 ) -> Option<&'a str> {
     event.field_changes.iter().find_map(|change| {
@@ -208,7 +208,7 @@ fn event_field<'a>(
 }
 
 fn assert_order_created_event(
-    event: &entity::EntityReplayableEvent,
+    event: &common_entity::EntityReplayableEvent,
     expected_side: &str,
     expected_execution: &str,
     expected_time_in_force: &str,
@@ -228,7 +228,7 @@ fn assert_order_created_event(
 }
 
 fn assert_balance_updated_event(
-    event: &entity::EntityReplayableEvent,
+    event: &common_entity::EntityReplayableEvent,
     expected_available: u64,
     expected_frozen: u64,
 ) {

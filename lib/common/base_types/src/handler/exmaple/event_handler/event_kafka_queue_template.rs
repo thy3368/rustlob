@@ -13,12 +13,12 @@
 use std::collections::VecDeque;
 
 use crate::handler::event_handler::EventHandler;
-use crate::handler::exmaple::cmd_handler::match_handler::MatchOutput;
-use crate::handler::exmaple::cmd_handler::place_order_handler::{
+use crate::handler::exmaple::common_entity::match_handler::MatchOutput;
+use crate::handler::exmaple::common_entity::place_order_handler::{
     OrderSide, OrderType, PlaceOrderAcceptedEvent, PlaceOrderCmd, PlaceOrderEvent,
     PlaceOrderHandler, PlaceOrderOutput, PlaceOrderResult,
 };
-use crate::handler::exmaple::cmd_handler::settlement_handler::{
+use crate::handler::exmaple::common_entity::settlement_handler::{
     SettlementHandler, SettlementResult,
 };
 use crate::handler::exmaple::event_handler::event_template::{
@@ -32,7 +32,7 @@ pub const TOPIC_TRADE_CREATED: &str = "trades.created";
 
 pub enum KafkaPayload {
     PlaceOrderAccepted(PlaceOrderAcceptedEvent),
-    TradeCreated(crate::handler::exmaple::cmd_handler::match_handler::TradeCreatedEvent),
+    TradeCreated(crate::handler::exmaple::common_entity::match_handler::TradeCreatedEvent),
 }
 
 pub struct KafkaRecord {
@@ -62,7 +62,7 @@ impl MockKafkaBroker {
 pub fn run_full_event_chain_via_kafka_queue() -> Result<SettlementResult, EventHandlerError> {
     let place_order_handler = PlaceOrderHandler::new();
     let place_order_event_handler = PlaceOrderEventHandler::new(
-        crate::handler::exmaple::cmd_handler::match_handler::MatchHandler::new(),
+        crate::handler::exmaple::common_entity::match_handler::MatchHandler::new(),
     );
     let trade_event_handler = TradeEventHandler::new(SettlementHandler::new());
 
@@ -81,7 +81,7 @@ pub fn run_full_event_chain_via_kafka_queue() -> Result<SettlementResult, EventH
         .cmd_handle(cmd, |writes, _| PlaceOrderOutput {
             result: PlaceOrderResult {
                 order_id: writes.result.order_id.clone(),
-                status: crate::handler::exmaple::cmd_handler::example_types::OrderStatus::Open,
+                status: crate::handler::exmaple::common_entity::example_types::OrderStatus::Open,
                 balance_change: None,
             },
             events: writes

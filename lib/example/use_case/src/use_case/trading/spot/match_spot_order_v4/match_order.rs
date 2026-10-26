@@ -1,4 +1,4 @@
-use entity::UpdatedEntityPair;
+use common_entity::UpdatedEntityPair;
 use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
 };
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2MatchError};
 
 use super::support::{MatchSpotOrderV4Error, validate_all_reservations_for_order, zip_pairs};
-use crate::entity::{OrderTif, SpotOrderStatus, spot as spot_entity};
+use crate::common_entity::{OrderTif, SpotOrderStatus, spot as spot_entity};
 use crate::support::concat2;
 use crate::{MatchSpotOrderV2Input, SpotTrade};
 

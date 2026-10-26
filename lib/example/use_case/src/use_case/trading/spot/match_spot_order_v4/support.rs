@@ -1,17 +1,17 @@
 use std::collections::{HashMap, HashSet};
 
-use entity::UpdatedEntityPair;
+use common_entity::UpdatedEntityPair;
 use common_entity::{Entity, EntityReplayableEvent};
-use example_core_entity::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
+use example_core_entity::common_entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;
 
 use crate::SpotTrade;
-use crate::entity::account::balance_ledger_reason::BalanceLedgerReason;
-use crate::entity::account::balance_ledger_v2::{
+use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
+use crate::common_entity::account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2,
 };
-use crate::entity::{
+use crate::common_entity::{
     Balance, OrderSide, Reservation, ReservationCloseReason, ReservationKind,
     ReservationMarketKind, SettlementTransferVoucher, spot as spot_entity,
 };

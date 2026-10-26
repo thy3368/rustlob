@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use entity::{StateSink, StateSource};
+use common_entity::{StateSink, StateSource};
 use example_core_use_case::{ActivateMatchSpotOrderV2UseCase, PendingTriggerSpotOrderSource};
 use use_case_executor::trading::spot::on_event::{
     SpotTradeCreatedEventError, SpotTradeCreatedEventHandler, TriggerPendingSpotOrdersOnTradeError,

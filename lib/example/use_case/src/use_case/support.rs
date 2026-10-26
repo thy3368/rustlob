@@ -1,5 +1,5 @@
 #[cfg(test)]
-use entity::EntityReplayableEvent;
+use common_entity::EntityReplayableEvent;
 
 pub const ACCOUNT_ENTITY_TYPE: u8 = 1;
 pub const ORDER_ENTITY_TYPE: u8 = 2;

@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+common_entity = { package = "entity", path = "../entity" }
 actix-web = "4"
 anyhow = "1"
 axum = "0.7"

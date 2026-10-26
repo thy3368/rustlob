@@ -86,7 +86,7 @@ infra
 ```text
 inbound_adapter -> core
 outbound_adapter -> core
-core -> cmd_handler
+core -> common_entity
 ```
 
 ### call flow view

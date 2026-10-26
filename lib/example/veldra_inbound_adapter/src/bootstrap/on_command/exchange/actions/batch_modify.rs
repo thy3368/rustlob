@@ -1,4 +1,4 @@
-use entity::{ExecutionCommandSpec, ExecutionError};
+use common_entity::{ExecutionCommandSpec, ExecutionError};
 use example_core_use_case::{ModifySpotOrderV2OrderType, OrderId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

@@ -4,8 +4,8 @@ use actix_web::{HttpResponse, Scope, web};
 use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
-use entity::EntityReplayableEvent;
-use entity::{
+use common_entity::EntityReplayableEvent;
+use common_entity::{
     CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
     UseCaseReplyMapper,
 };

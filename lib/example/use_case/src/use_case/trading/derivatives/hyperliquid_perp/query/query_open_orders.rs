@@ -1,5 +1,15 @@
-use cmd_handler::query_use_case_def::QueryUseCase;
 use thiserror::Error;
+
+trait LocalQueryUseCase {
+    type Query;
+    type ReadModel;
+    type View;
+    type Error;
+    fn role(&self) -> &'static str;
+    fn pre_check_query(&self, query: &Self::Query) -> Result<(), Self::Error>;
+    fn validate_against_read_model(&self, query: &Self::Query, read_model: &Self::ReadModel) -> Result<(), Self::Error>;
+    fn compute_view(&self, query: &Self::Query, read_model: Self::ReadModel) -> Result<Self::View, Self::Error>;
+}
 
 use crate::{
     HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
@@ -69,7 +79,7 @@ pub enum QueryHyperliquidPerpOpenOrdersError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct QueryHyperliquidPerpOpenOrdersUseCase;
 
-impl QueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
+impl LocalQueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
     type Query = QueryHyperliquidPerpOpenOrders;
     type ReadModel = QueryHyperliquidPerpOpenOrdersReadModel;
     type View = Vec<HyperliquidPerpOpenOrderView>;

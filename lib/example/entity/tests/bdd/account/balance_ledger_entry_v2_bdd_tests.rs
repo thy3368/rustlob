@@ -1,4 +1,4 @@
-use entity::UpdatedEntityPair;
+use common_entity::UpdatedEntityPair;
 use common_entity::{AggregateRole, Entity, FinancialClassification};
 use example_core_entity::{
     Balance, BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,

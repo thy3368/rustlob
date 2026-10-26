@@ -1,4 +1,4 @@
-use entity::{ExecutionError, ExecutionResult};
+use common_entity::{ExecutionError, ExecutionResult};
 use common_entity::LogEntry;
 use example_core_use_case::{
     CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd, CancelSpotOrderV2Error,
@@ -67,7 +67,7 @@ pub fn handler(commands: Vec<LogEntry<SpotBlockCommand>>) -> Vec<SpotBlockComman
 
 #[cfg(test)]
 mod tests {
-    use entity::ExecutionError;
+    use common_entity::ExecutionError;
     use example_core_use_case::{
         CancelSpotOrderV2Lookup, ModifySpotOrderV2OrderType, OrderId, PlaceOnlySpotOrderV2OrderCmd,
         PlaceOnlySpotOrderV2OrderType,
