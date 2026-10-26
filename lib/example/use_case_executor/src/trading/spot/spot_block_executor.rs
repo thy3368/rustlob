@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{
+use entity::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{SpotBlockChanges, SpotBlockCmd, SpotBlockError, SpotBlockUseCase};
@@ -37,7 +37,7 @@ mod tests {
     use std::fmt;
     use std::sync::{Arc, Mutex};
 
-    use cmd_handler::EntityReplayableEvent;
+    use entity::EntityReplayableEvent;
     use common_entity::stable_string_entity_id;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,

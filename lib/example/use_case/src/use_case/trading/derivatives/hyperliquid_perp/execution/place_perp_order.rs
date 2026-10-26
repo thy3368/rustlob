@@ -1,5 +1,5 @@
-use cmd_handler::command_use_case_def2::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
-use cmd_handler::EntityReplayableEvent;
+use entity::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
+use entity::EntityReplayableEvent;
 use common_entity::{action_type, Entity, LogEntry, StateMachineV2};
 use example_core_entity::OrderSide;
 use thiserror::Error;

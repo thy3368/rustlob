@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use cmd_handler::command_use_case_def2::UpdatedEntityPair;
+use entity::UpdatedEntityPair;
 use common_entity::{Entity, EntityReplayableEvent};
 use example_core_entity::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};

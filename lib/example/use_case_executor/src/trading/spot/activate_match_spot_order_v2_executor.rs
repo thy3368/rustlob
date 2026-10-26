@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{
+use entity::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{

@@ -1,5 +1,5 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{
+use entity::EntityReplayableEvent;
+use entity::{
     ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
 };
 use common_entity::{LogEntry, ReplayableChanges, StateMachineV2Diff};
@@ -57,8 +57,8 @@ pub fn compute_place_only_spot_order_v2_business(
 mod tests {
     use std::sync::Mutex;
 
-    use cmd_handler::EntityReplayableEvent;
-    use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+    use entity::EntityReplayableEvent;
+    use entity::{StateSink, StateSource};
     use common_entity::Entity;
     use example_core_use_case::{
         OrderGroupRelation, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,

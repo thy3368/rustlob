@@ -5,7 +5,7 @@
     reason = "benchmark setup and measurement code intentionally keeps the hot loop minimal."
 )]
 
-use cmd_handler::EntityReplayableEvent;
+use entity::EntityReplayableEvent;
 use common_entity::{LogEntry, LogEntrySequencer};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use example_core_use_case::{

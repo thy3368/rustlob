@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{ExecutionCommandSpec, ExecutionError};
+use entity::{ExecutionCommandSpec, ExecutionError};
 use example_core_use_case::{ModifySpotOrderV2OrderType, OrderId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

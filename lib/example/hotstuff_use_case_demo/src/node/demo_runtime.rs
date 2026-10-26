@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+use entity::EntityReplayableEvent;
+use entity::{StateSink, StateSource};
 use common_entity::LogEntry;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
@@ -186,7 +186,7 @@ impl SpotOrderApp {
 impl SpotBlockExecutionSummary {
     fn from_result(
         requests: &[SpotBlockCommand],
-        result: &cmd_handler::command_use_case_def2::ExecutionResult<SpotBlockChanges>,
+        result: &entity::ExecutionResult<SpotBlockChanges>,
     ) -> Self {
         let applied_count = result
             .changes

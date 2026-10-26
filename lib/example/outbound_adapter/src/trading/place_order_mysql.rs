@@ -1,5 +1,5 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{StateSink, StateSource};
+use entity::EntityReplayableEvent;
+use entity::{StateSink, StateSource};
 use common_entity::stable_string_entity_id;
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,

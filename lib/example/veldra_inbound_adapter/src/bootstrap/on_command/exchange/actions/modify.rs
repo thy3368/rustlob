@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::{ExecutionCommandSpec, ExecutionError};
+use entity::{ExecutionCommandSpec, ExecutionError};
 use common_entity::LogEntry;
 use example_core_use_case::{
     ModifySpotOrderV2Cmd, ModifySpotOrderV2OrderType, ModifySpotOrderV2UseCase, OrderId,

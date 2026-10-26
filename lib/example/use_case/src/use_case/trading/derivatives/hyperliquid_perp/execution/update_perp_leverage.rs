@@ -1,5 +1,5 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
+use entity::EntityReplayableEvent;
+use entity::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
 use common_entity::{Entity, LogEntry, StateMachineV2};
 use thiserror::Error;
 
@@ -206,7 +206,7 @@ fn map_leverage_setting_error(
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::ReplayableChanges;
+    use entity::ReplayableChanges;
     use common_entity::{LogEntry, StateMachineV2};
 
     use super::*;

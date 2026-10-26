@@ -1,4 +1,4 @@
-use cmd_handler::EntityReplayableEvent;
+use entity::EntityReplayableEvent;
 
 pub(crate) fn event_string_field(
     event: &EntityReplayableEvent,

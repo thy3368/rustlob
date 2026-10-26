@@ -1,7 +1,7 @@
 use actix_web::{HttpResponse, ResponseError};
 use axum::response::{IntoResponse, Response};
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{
+use entity::EntityReplayableEvent;
+use entity::{
     CommandEnvelope, CommandUseCase4, CommandUseCaseExecutionError, CommandUseCaseExecutor4,
     CommandUseCaseOutbound, CommandUseCaseOutboundPhase, ExecutionError, UseCaseReplyMapper,
 };
@@ -265,8 +265,8 @@ pub(crate) fn find_last_u64_field(
 pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
-    use cmd_handler::EntityReplayableEvent;
-    use cmd_handler::command_use_case_def2::{CommandUseCaseOutbound, StateSink, StateSource};
+    use entity::EntityReplayableEvent;
+    use entity::{CommandUseCaseOutbound, StateSink, StateSource};
     use common_entity::LogEntry;
     use example_core_use_case::{
         Balance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,

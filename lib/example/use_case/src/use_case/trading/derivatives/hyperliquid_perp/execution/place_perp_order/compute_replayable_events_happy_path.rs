@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::ReplayableChanges;
+use entity::ReplayableChanges;
 use common_entity::{LogEntry, StateMachineV2};
 
 use super::*;
@@ -37,7 +37,7 @@ fn entry(payload: PlaceHyperliquidPerpOrderCmd) -> LogEntry<PlaceHyperliquidPerp
 fn compute_after_changes_and_events(
     cmd: &PlaceHyperliquidPerpOrderCmd,
     state: PlaceHyperliquidPerpOrderState,
-) -> (PlaceHyperliquidPerpOrderChanges, Vec<cmd_handler::EntityReplayableEvent>) {
+) -> (PlaceHyperliquidPerpOrderChanges, Vec<entity::EntityReplayableEvent>) {
     let changes = use_case().compute_state_changed(&entry(cmd.clone()), &state).unwrap();
     let events = changes.to_replayable_events().unwrap();
     (changes, events)
@@ -80,7 +80,7 @@ fn assert_no_margin_ledger_or_balance_pair(changes: &PlaceHyperliquidPerpOrderCh
     assert!(changes.updated_margin_balances.is_empty());
 }
 
-fn assert_balance_ledger_created_event(event: &cmd_handler::EntityReplayableEvent) {
+fn assert_balance_ledger_created_event(event: &entity::EntityReplayableEvent) {
     assert_eq!(event.change_type, 0);
     assert_eq!(event.entity_type, <crate::entity::BalanceLedgerV2 as Entity>::entity_type());
 }
@@ -196,7 +196,7 @@ fn assert_order_snapshot(
 }
 
 fn event_field<'a>(
-    event: &'a cmd_handler::EntityReplayableEvent,
+    event: &'a entity::EntityReplayableEvent,
     field_name: &str,
 ) -> Option<&'a str> {
     event.field_changes.iter().find_map(|change| {
@@ -208,7 +208,7 @@ fn event_field<'a>(
 }
 
 fn assert_order_created_event(
-    event: &cmd_handler::EntityReplayableEvent,
+    event: &entity::EntityReplayableEvent,
     expected_side: &str,
     expected_execution: &str,
     expected_time_in_force: &str,
@@ -228,7 +228,7 @@ fn assert_order_created_event(
 }
 
 fn assert_balance_updated_event(
-    event: &cmd_handler::EntityReplayableEvent,
+    event: &entity::EntityReplayableEvent,
     expected_available: u64,
     expected_frozen: u64,
 ) {

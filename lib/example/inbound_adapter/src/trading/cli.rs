@@ -1,5 +1,5 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{
+use entity::EntityReplayableEvent;
+use entity::{
     ExecutionError, StateMachineExecutor, StateSink, StateSource, UseCaseReplyMapper,
 };
 use common_entity::LogEntry;

@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::UpdatedEntityPair;
+use entity::UpdatedEntityPair;
 use common_entity::{AggregateRole, Entity, FinancialClassification};
 use example_core_entity::{
     Balance, BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,

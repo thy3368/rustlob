@@ -1,5 +1,5 @@
-use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{ExecutionError, ExecutionResult, StateSink, StateSource};
+use entity::EntityReplayableEvent;
+use entity::{ExecutionError, ExecutionResult, StateSink, StateSource};
 use common_entity::{Entity, EntityReplayableEventHandler, ReplayEventFieldParseError};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Changes, ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error,
@@ -135,7 +135,7 @@ pub enum TriggerPendingSpotOrdersOnTradeError<OutboundError> {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::EntityReplayableEvent;
+    use entity::EntityReplayableEvent;
     use common_entity::{Entity, ReplayFieldChange, stable_string_entity_id};
     use example_core_use_case::{
         Balance, MarketRules, OrderSide, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderV2,

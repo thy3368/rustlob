@@ -1,4 +1,4 @@
-use cmd_handler::command_use_case_def2::ExecutionError;
+use entity::ExecutionError;
 use example_core_use_case::{
     MatchSpotOrderV3Changes, PlaceMatchSpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
     PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
@@ -529,7 +529,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::UpdatedEntityPair;
+    use entity::UpdatedEntityPair;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, ActivateSpotOrderV2Changes, OrderSide, OrderTif,
         OrderType, SpotOrderV2, SpotTrade,

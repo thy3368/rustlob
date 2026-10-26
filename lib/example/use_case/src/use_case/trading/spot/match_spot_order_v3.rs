@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use cmd_handler::command_use_case_def2::UpdatedEntityPair;
+use entity::UpdatedEntityPair;
 use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
 };
