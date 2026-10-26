@@ -43,7 +43,7 @@ pub use perp::trade::hyperliquid_perp_leverage_setting::{
 };
 pub use perp::trade::hyperliquid_perp_order::{
     HyperliquidPerpOrder, HyperliquidPerpOrderBehaviorError, HyperliquidPerpOrderExecution,
-    HyperliquidPerpOrderSide, HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
+     HyperliquidPerpOrderStatus, HyperliquidPerpOrderTimeInForce,
     PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent,
     PlaceHyperliquidPerpOrderOutcome,
 };
@@ -55,11 +55,13 @@ pub use perp::trade::perp_position::{
     HyperliquidPerpPositionLeverageOutcome, HyperliquidPerpPositionStatus,
     HyperliquidPerpPositionTradeOutcome, PerpPosition, required_position_margin,
 };
+pub use perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 pub use reservation::{
     AssetReservation, MarginReservation, Reservation, ReservationCloseReason, ReservationError,
     ReservationKind, ReservationMarketKind, ReservationStatus,
 };
 use spot as spot_entity;
+pub use spot::common_trade::TradeBase;
 pub use spot::spot_kline::SpotKline;
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{

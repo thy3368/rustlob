@@ -2,6 +2,7 @@ pub mod balance;
 pub mod balance_ledger_reason;
 pub mod balance_ledger_v2;
 pub mod spot_account;
+pub mod tick;
 
 pub use balance::BalanceError;
 pub use balance_ledger_reason::BalanceLedgerReason;
