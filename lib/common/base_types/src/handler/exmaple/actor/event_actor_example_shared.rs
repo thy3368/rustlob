@@ -1,4 +1,4 @@
-use crate::handler::exmaple::common_entity::place_order_handler::{
+use crate::handler::exmaple::cmd_handler::place_order_handler::{
     OrderSide, OrderType, PlaceOrderAcceptedEvent, PlaceOrderCmd, PlaceOrderEvent,
     PlaceOrderHandler, PlaceOrderOutput, PlaceOrderResult,
 };
@@ -24,7 +24,7 @@ pub fn build_first_place_order_event() -> Result<PlaceOrderAcceptedEvent, EventH
         .cmd_handle(cmd, |writes, _| PlaceOrderOutput {
             result: PlaceOrderResult {
                 order_id: writes.result.order_id.clone(),
-                status: crate::handler::exmaple::common_entity::example_types::OrderStatus::Open,
+                status: crate::handler::exmaple::cmd_handler::example_types::OrderStatus::Open,
                 balance_change: None,
             },
             events: writes

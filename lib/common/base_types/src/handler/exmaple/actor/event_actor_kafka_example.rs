@@ -7,11 +7,11 @@ use std::thread;
 use crate::handler::event_actor::EventRecvActor;
 use crate::handler::event_handler::EventHandler;
 use crate::handler::exmaple::actor::event_actor_example_shared::build_first_place_order_event;
-use crate::handler::exmaple::common_entity::match_handler::{
+use crate::handler::exmaple::cmd_handler::match_handler::{
     MatchHandler, MatchOutput, TradeCreatedEvent,
 };
-use crate::handler::exmaple::common_entity::place_order_handler::PlaceOrderAcceptedEvent;
-use crate::handler::exmaple::common_entity::settlement_handler::{
+use crate::handler::exmaple::cmd_handler::place_order_handler::PlaceOrderAcceptedEvent;
+use crate::handler::exmaple::cmd_handler::settlement_handler::{
     SettlementHandler, SettlementResult,
 };
 use crate::handler::exmaple::event_handler::event_template::{
