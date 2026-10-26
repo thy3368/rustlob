@@ -1,16 +1,15 @@
+use cmd_handler::command_use_case_def2::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{
-    EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
-};
-use common_entity::{Entity, LogEntry, StateMachineV2, action_type};
+use common_entity::{action_type, Entity, LogEntry, StateMachineV2};
+use example_core_entity::OrderSide;
 use thiserror::Error;
 
-use crate::MarketRules;
 use crate::entity::{
-    Balance, BalanceLedgerV2, HyperliquidPerpOrder, HyperliquidPerpOrderExecution,
-    HyperliquidPerpOrderSide, HyperliquidPerpOrderTimeInForce, PerpPosition,
-    PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent, required_position_margin,
+    required_position_margin, Balance, BalanceLedgerV2, HyperliquidPerpOrder,
+    HyperliquidPerpOrderExecution, HyperliquidPerpOrderTimeInForce, PerpPosition,
+    PlaceHyperliquidPerpOrderInput, PlaceHyperliquidPerpOrderIntent,
 };
+use crate::MarketRules;
 
 /// Hyperliquid perp 下单可能返回的业务错误。
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -143,14 +142,8 @@ impl PlaceHyperliquidPerpOrderCmd {
         Ok(self.size)
     }
 
-    const fn side(&self) -> HyperliquidPerpOrderSide {
-        if self.is_buy { HyperliquidPerpOrderSide::Buy } else { HyperliquidPerpOrderSide::Sell }
-    }
-}
-
-impl IssuedByParty for PlaceHyperliquidPerpOrderCmd {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
+    const fn side(&self) -> OrderSide {
+        if self.is_buy { OrderSide::Buy } else { OrderSide::Sell }
     }
 }
 
@@ -399,20 +392,20 @@ enum DerivedPerpOrderIntent {
 }
 
 fn derive_place_intent(
-    order_side: HyperliquidPerpOrderSide,
+    order_side: OrderSide,
     size: u64,
     position: &PerpPosition,
 ) -> Result<DerivedPerpOrderIntent, PlaceHyperliquidPerpOrderError> {
     if position.is_flat() {
         return Ok(DerivedPerpOrderIntent::Open);
     }
-    if (order_side == HyperliquidPerpOrderSide::Buy && position.is_long())
-        || (order_side == HyperliquidPerpOrderSide::Sell && position.is_short())
+    if (order_side == OrderSide::Buy && position.is_long())
+        || (order_side == OrderSide::Sell && position.is_short())
     {
         return Ok(DerivedPerpOrderIntent::Increase);
     }
-    if (order_side == HyperliquidPerpOrderSide::Buy && position.is_short())
-        || (order_side == HyperliquidPerpOrderSide::Sell && position.is_long())
+    if (order_side == OrderSide::Buy && position.is_short())
+        || (order_side == OrderSide::Sell && position.is_long())
     {
         return match size.cmp(&position.qty()) {
             std::cmp::Ordering::Less => Ok(DerivedPerpOrderIntent::Reduce),
@@ -429,8 +422,8 @@ fn validate_reduce_only(
     cmd: &PlaceHyperliquidPerpOrderCmd,
     position: &PerpPosition,
 ) -> Result<(), PlaceHyperliquidPerpOrderError> {
-    let reduces_position = (cmd.side() == HyperliquidPerpOrderSide::Buy && position.is_short())
-        || (cmd.side() == HyperliquidPerpOrderSide::Sell && position.is_long());
+    let reduces_position = (cmd.side() == OrderSide::Buy && position.is_short())
+        || (cmd.side() == OrderSide::Sell && position.is_long());
     if !reduces_position || cmd.size > position.qty() {
         return Err(PlaceHyperliquidPerpOrderError::InvalidReduceOnly);
     }

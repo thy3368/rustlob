@@ -1,4 +1,4 @@
-use crate::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseReplyMapper3};
+use crate::command_use_case_def2::{CommandUseCase3, UseCaseReplyMapper3};
 
 mod bad;
 mod good;
@@ -14,7 +14,7 @@ fn good_case_shows_preferred_use_case_shape() -> Result<(), good::PlaceOrderErro
     let use_case = good::PlaceOrderUseCase;
 
     assert_eq!(use_case.role(), "Trader");
-    assert_eq!(cmd.party_id(), Some("acct-1"));
+    assert_eq!(cmd.party_id, "acct-1");
     assert!(use_case.validate_against_state(&cmd, &state).is_ok());
     let output = use_case.compute_output_and_events(&cmd, state)?;
     let reply = good::PlaceOrderReplyMapper.map(output);
@@ -30,7 +30,6 @@ fn bad_case_shows_common_use_case_design_smells() -> Result<(), bad::SubmitError
     let result = use_case.compute_output_and_events(&cmd, state)?;
 
     assert_eq!(use_case.role(), "OrderCheckingEngine");
-    assert_eq!(cmd.party_id(), None);
     assert!(result.output.accepted);
     assert_eq!(result.events.len(), 1);
     assert_eq!(result.events[0].field_changes[0].new_value_bytes(), b"accepted");

@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges, StateMachineV2,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     StateMachineV2Diff,
 };
 use thiserror::Error;
@@ -71,12 +71,6 @@ pub enum PlaceActivateV2Error {
 /// 并立即激活价格条件已满足的待触发订单。
 pub struct PlaceActivateV2Cmd {
     pub order: PlaceOnlySpotOrderV2Cmd,
-}
-
-impl IssuedByParty for PlaceActivateV2Cmd {
-    fn party_id(&self) -> Option<&str> {
-        self.order.party_id()
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]

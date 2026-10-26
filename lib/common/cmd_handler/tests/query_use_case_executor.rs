@@ -1,6 +1,5 @@
 use std::fmt;
 
-use cmd_handler::command_use_case_def2::IssuedByParty;
 use cmd_handler::query_use_case_def::{
     ObserveQueryUseCaseLatency, QueryEnvelope, QueryMeta, QueryUseCase, QueryUseCaseExecutionError,
     QueryUseCaseExecutor, QueryUseCaseLatencyMetrics, QueryUseCaseOutbound,
@@ -12,12 +11,6 @@ use parking_lot::Mutex;
 struct StubQuery {
     party_id: String,
     symbol: String,
-}
-
-impl IssuedByParty for StubQuery {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

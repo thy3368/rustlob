@@ -7,9 +7,8 @@ use super::trace::{
 };
 use super::{
     CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCase3, CommandUseCase4,
-    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, IssuedByParty,
-    ObserveHandlerLatency, ReplayableChanges, UseCaseChanges, UseCaseOutput, UseCaseReplyMapper,
-    UseCaseReplyMapper3,
+    CommandUseCaseOutbound, CommandUseCaseOutboundPhase, EventProjectError, ObserveHandlerLatency,
+    ReplayableChanges, UseCaseChanges, UseCaseOutput, UseCaseReplyMapper, UseCaseReplyMapper3,
 };
 use crate::HandlerLatencyMetrics;
 
@@ -59,7 +58,7 @@ where
 pub struct CommandUseCaseExecutor2;
 
 impl CommandUseCaseExecutor2 {
-    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta, command: &U::Command) -> tracing::Span
+    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta) -> tracing::Span
     where
         U: CommandUseCase2,
         O: ?Sized
@@ -84,7 +83,6 @@ impl CommandUseCaseExecutor2 {
             outbound = std::any::type_name::<O>(),
             trace_id = trace_field_or_placeholder(meta.trace_id.as_deref()),
             command_id = trace_field_or_placeholder(meta.command_id.as_deref()),
-            party_id = trace_field_or_placeholder(command.party_id()),
         )
     }
 
@@ -119,7 +117,7 @@ impl CommandUseCaseExecutor2 {
         let CommandEnvelope { meta, command } = envelope;
         let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
         let total_start = Instant::now();
-        let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &command);
+        let execution_span = Self::trace_span::<U, OB>(use_case, &meta);
         let _execution_guard = execution_span.enter();
 
         if trace_enabled {
@@ -207,7 +205,6 @@ impl CommandUseCaseExecutor2 {
                     trace_command_use_case_completed!(
                         use_case_command_summary::<U>(),
                         use_case.role(),
-                        command.party_id(),
                         std::any::type_name::<OB>(),
                         metrics
                     );
@@ -220,7 +217,6 @@ impl CommandUseCaseExecutor2 {
                     trace_command_use_case_failed!(
                         use_case_command_summary::<U>(),
                         use_case.role(),
-                        command.party_id(),
                         std::any::type_name::<OB>(),
                         total_start.elapsed().as_nanos(),
                         error
@@ -261,7 +257,7 @@ impl CommandUseCaseExecutor2 {
 pub struct CommandUseCaseExecutor3;
 
 impl CommandUseCaseExecutor3 {
-    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta, command: &U::Command) -> tracing::Span
+    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta) -> tracing::Span
     where
         U: CommandUseCase3,
         O: ?Sized
@@ -287,7 +283,6 @@ impl CommandUseCaseExecutor3 {
             outbound = std::any::type_name::<O>(),
             trace_id = trace_field_or_placeholder(meta.trace_id.as_deref()),
             command_id = trace_field_or_placeholder(meta.command_id.as_deref()),
-            party_id = trace_field_or_placeholder(command.party_id()),
         )
     }
 
@@ -320,7 +315,7 @@ impl CommandUseCaseExecutor3 {
         let CommandEnvelope { meta, command } = envelope;
         let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
         let total_start = Instant::now();
-        let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &command);
+        let execution_span = Self::trace_span::<U, OB>(use_case, &meta);
         let _execution_guard = execution_span.enter();
 
         if trace_enabled {
@@ -409,7 +404,6 @@ impl CommandUseCaseExecutor3 {
                     trace_command_use_case_completed!(
                         use_case_command_summary::<U>(),
                         use_case.role(),
-                        command.party_id(),
                         std::any::type_name::<OB>(),
                         metrics
                     );
@@ -422,7 +416,6 @@ impl CommandUseCaseExecutor3 {
                     trace_command_use_case_failed!(
                         use_case_command_summary::<U>(),
                         use_case.role(),
-                        command.party_id(),
                         std::any::type_name::<OB>(),
                         total_start.elapsed().as_nanos(),
                         error
@@ -461,7 +454,7 @@ impl CommandUseCaseExecutor3 {
 pub struct CommandUseCaseExecutor4;
 
 impl CommandUseCaseExecutor4 {
-    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta, command: &U::Command) -> tracing::Span
+    fn trace_span<U, O>(use_case: &U, meta: &CommandMeta) -> tracing::Span
     where
         U: CommandUseCase4,
         O: ?Sized
@@ -487,7 +480,6 @@ impl CommandUseCaseExecutor4 {
             outbound = std::any::type_name::<O>(),
             trace_id = trace_field_or_placeholder(meta.trace_id.as_deref()),
             command_id = trace_field_or_placeholder(meta.command_id.as_deref()),
-            party_id = trace_field_or_placeholder(command.party_id()),
         )
     }
 
@@ -521,7 +513,7 @@ impl CommandUseCaseExecutor4 {
         let CommandEnvelope { meta, command } = envelope;
         let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
         let total_start = Instant::now();
-        let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &command);
+        let execution_span = Self::trace_span::<U, OB>(use_case, &meta);
         let _execution_guard = execution_span.enter();
 
         if trace_enabled {
@@ -616,7 +608,6 @@ impl CommandUseCaseExecutor4 {
                     trace_command_use_case_completed!(
                         use_case_command_summary::<U>(),
                         use_case.role(),
-                        command.party_id(),
                         std::any::type_name::<OB>(),
                         metrics
                     );
@@ -629,7 +620,6 @@ impl CommandUseCaseExecutor4 {
                     trace_command_use_case_failed!(
                         use_case_command_summary::<U>(),
                         use_case.role(),
-                        command.party_id(),
                         std::any::type_name::<OB>(),
                         total_start.elapsed().as_nanos(),
                         error

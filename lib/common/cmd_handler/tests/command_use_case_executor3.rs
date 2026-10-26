@@ -3,7 +3,7 @@ use std::fmt;
 use cmd_handler::HandlerLatencyMetrics;
 use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCase3, CommandUseCaseExecutionError,
-    CommandUseCaseExecutor3, CommandUseCaseOutbound, CommandUseCaseOutboundPhase, IssuedByParty,
+    CommandUseCaseExecutor3, CommandUseCaseOutbound, CommandUseCaseOutboundPhase,
     ObserveHandlerLatency, UseCaseOutput, UseCaseReplyMapper3,
 };
 use common_entity::EntityReplayableEvent;
@@ -13,12 +13,6 @@ use parking_lot::Mutex;
 struct StubCommand {
     party_id: String,
     event_count: u64,
-}
-
-impl IssuedByParty for StubCommand {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

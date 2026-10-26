@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use cmd_handler::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCase2, CommandUseCaseExecutor2, CommandUseCaseOutbound,
-    IssuedByParty,
 };
 use cmd_handler::{EntityReplayableEvent, build_dual_trace_subscriber};
 use parking_lot::{Mutex, MutexGuard};
@@ -19,12 +18,6 @@ struct StubCommand {
     account_id: String,
     symbol: String,
     quantity: u64,
-}
-
-impl IssuedByParty for StubCommand {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.account_id.as_str())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -325,7 +318,7 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs()
 
     assert_eq!(use_case_event.trace_id.as_deref(), Some("trace-chain-001"));
     assert_eq!(use_case_event.status.as_deref(), Some("ok"));
-    assert_eq!(string_value(&use_case_event.request, "party_id"), Some("acct-007"));
+    assert_eq!(string_value(&use_case_event.request, "party_id"), None);
     assert_eq!(string_value(&use_case_event.response, "result"), Some("ok"));
     assert_eq!(u64_value(&use_case_event.response, "domain_event_count"), Some(2));
 
@@ -383,9 +376,9 @@ fn use_case_trace_chain_reaches_outbound_in_minimal_and_full_logs()
         "parent_span_id=",
         "trace_id=\"trace-chain-001\"",
         "command_id=\"cmd-chain-001\"",
-        "party_id=\"acct-007\"",
     ] {
         assert!(full_trace.contains(expected), "expected full trace to contain `{expected}`");
     }
+    assert!(!full_trace.contains("party_id="));
     Ok(())
 }

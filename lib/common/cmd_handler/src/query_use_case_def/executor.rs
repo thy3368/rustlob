@@ -6,8 +6,6 @@ use super::{
     ObserveQueryUseCaseLatency, QueryEnvelope, QueryMeta, QueryUseCase, QueryUseCaseLatencyMetrics,
     QueryUseCaseOutbound, QueryUseCaseOutboundPhase,
 };
-use crate::command_use_case_def2::IssuedByParty;
-
 type QueryExecution<T, BusinessError, OutboundError> = Result<
     (T, QueryUseCaseLatencyMetrics),
     QueryUseCaseExecutionError<BusinessError, OutboundError>,
@@ -46,7 +44,7 @@ where
 pub struct QueryUseCaseExecutor;
 
 impl QueryUseCaseExecutor {
-    fn trace_span<U, O>(use_case: &U, meta: &QueryMeta, query: &U::Query) -> tracing::Span
+    fn trace_span<U, O>(use_case: &U, meta: &QueryMeta) -> tracing::Span
     where
         U: QueryUseCase,
         O: ?Sized + Send + Sync + QueryUseCaseOutbound<Query = U::Query, ReadModel = U::ReadModel>,
@@ -67,7 +65,6 @@ impl QueryUseCaseExecutor {
             outbound_error_type = std::any::type_name::<O::Error>(),
             outbound = std::any::type_name::<O>(),
             trace_id = trace_field_or_placeholder(meta.trace_id.as_deref()),
-            party_id = trace_field_or_placeholder(query.party_id()),
         )
     }
 
@@ -95,7 +92,7 @@ impl QueryUseCaseExecutor {
         let QueryEnvelope { meta, query } = envelope;
         let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
         let total_start = Instant::now();
-        let execution_span = Self::trace_span::<U, OB>(use_case, &meta, &query);
+        let execution_span = Self::trace_span::<U, OB>(use_case, &meta);
         let _execution_guard = execution_span.enter();
 
         if trace_enabled {
@@ -147,7 +144,6 @@ impl QueryUseCaseExecutor {
                     trace_query_use_case_completed!(
                         use_case_query_summary::<U>(),
                         use_case.role(),
-                        query.party_id(),
                         std::any::type_name::<OB>(),
                         metrics
                     );
@@ -160,7 +156,6 @@ impl QueryUseCaseExecutor {
                     trace_query_use_case_failed!(
                         use_case_query_summary::<U>(),
                         use_case.role(),
-                        query.party_id(),
                         std::any::type_name::<OB>(),
                         total_start.elapsed().as_nanos(),
                         error

@@ -1,5 +1,3 @@
-use crate::command_use_case_def2::IssuedByParty;
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct QueryMeta {
     /// Tracing correlation id for spans/logs across service hops.
@@ -16,7 +14,7 @@ pub struct QueryEnvelope<Q> {
 /// 只定义业务输入、读模型校验与业务视图产出。
 pub trait QueryUseCase: Send + Sync {
     /// 对应 cqrs 的 query
-    type Query: IssuedByParty;
+    type Query;
 
     /// 对应 clean 架构里查询侧输入到 use case 的业务读模型。
     type ReadModel;

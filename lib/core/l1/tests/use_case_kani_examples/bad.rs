@@ -1,4 +1,4 @@
-use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::use_case_def2::CommandUseCase2;
 use cmd_handler::{EntityReplayableEvent, ReplayFieldChange};
 use kani::Arbitrary;
 
@@ -33,8 +33,6 @@ fn event_accepted(events: &[EntityReplayableEvent]) -> Option<bool> {
 struct SubmitCmd {
     trace_id: u64,
 }
-
-impl IssuedByParty for SubmitCmd {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary)]
 struct SubmitState {

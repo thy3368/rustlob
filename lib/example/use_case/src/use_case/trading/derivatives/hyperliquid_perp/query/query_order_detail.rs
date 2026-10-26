@@ -1,4 +1,3 @@
-use cmd_handler::command_use_case_def2::IssuedByParty;
 use cmd_handler::query_use_case_def::QueryUseCase;
 use thiserror::Error;
 
@@ -14,12 +13,6 @@ pub struct QueryHyperliquidPerpOrderDetail {
     pub party_id: String,
     /// Hyperliquid perp `oid`。
     pub order_id: u64,
-}
-
-impl IssuedByParty for QueryHyperliquidPerpOrderDetail {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 /// 查询单张 Hyperliquid perp 委托单详情时需要的已加载读模型。

@@ -87,7 +87,7 @@ macro_rules! trace_query_use_case_started {
 }
 
 macro_rules! trace_query_use_case_completed {
-    ($query_summary:expr, $role:expr, $party_id:expr, $outbound_type:expr, $metrics:expr) => {
+    ($query_summary:expr, $role:expr, $outbound_type:expr, $metrics:expr) => {
         tracing::trace!(
             call_stack = true,
             layer = "workflow",
@@ -96,7 +96,6 @@ macro_rules! trace_query_use_case_completed {
             phase = "total",
             request_query_summary = %$query_summary,
             request_role = %$role,
-            request_party_id = $party_id.as_deref().unwrap_or("-"),
             request_outbound = %$outbound_type,
             response_result = "ok",
             status = "ok",
@@ -111,7 +110,6 @@ macro_rules! trace_query_use_case_failed {
     (
         $query_summary:expr,
         $role:expr,
-        $party_id:expr,
         $outbound_type:expr,
         $total_elapsed_ns:expr,
         $error:expr
@@ -124,7 +122,6 @@ macro_rules! trace_query_use_case_failed {
             phase = "total",
             request_query_summary = %$query_summary,
             request_role = %$role,
-            request_party_id = $party_id.as_deref().unwrap_or("-"),
             request_outbound = %$outbound_type,
             response_result = "err",
             status = "err",

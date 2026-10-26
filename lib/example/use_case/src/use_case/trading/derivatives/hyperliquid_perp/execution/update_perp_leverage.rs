@@ -1,7 +1,5 @@
 use cmd_handler::EntityReplayableEvent;
-use cmd_handler::command_use_case_def2::{
-    EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
-};
+use cmd_handler::command_use_case_def2::{EventProjectError, ReplayableChanges, UpdatedEntityPair};
 use common_entity::{Entity, LogEntry, StateMachineV2};
 use thiserror::Error;
 
@@ -23,12 +21,6 @@ pub struct UpdateHyperliquidPerpLeverageCmd {
     pub is_cross: bool,
     /// 目标杠杆值。
     pub leverage: u64,
-}
-
-impl IssuedByParty for UpdateHyperliquidPerpLeverageCmd {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 /// 更新 Hyperliquid perp 杠杆配置所需的已加载状态。

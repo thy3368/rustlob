@@ -1,8 +1,6 @@
 use thiserror::Error;
 
-use crate::command_use_case_def2::{
-    CommandUseCase3, IssuedByParty, UseCaseOutput, UseCaseReplyMapper3,
-};
+use crate::command_use_case_def2::{CommandUseCase3, UseCaseOutput, UseCaseReplyMapper3};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
 const PLACE_ORDER_ENTITY_TYPE: u8 = 1;
@@ -52,12 +50,6 @@ pub struct PlaceOrderCmd {
     pub party_id: String,
     pub symbol: String,
     pub qty: u64,
-}
-
-impl IssuedByParty for PlaceOrderCmd {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

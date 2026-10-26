@@ -1,5 +1,5 @@
 use cmd_handler::command_use_case_def2::{
-    CommandUseCase4, EventProjectError, IssuedByParty, ReplayableChanges, UpdatedEntityPair,
+    CommandUseCase4, EventProjectError, ReplayableChanges, UpdatedEntityPair,
 };
 use common_entity::Entity;
 use serde::{Deserialize, Serialize};
@@ -11,12 +11,6 @@ use crate::entity::{Balance, BalanceError};
 pub struct DepositQuoteCmd {
     pub party_id: String,
     pub amount: u64,
-}
-
-impl IssuedByParty for DepositQuoteCmd {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

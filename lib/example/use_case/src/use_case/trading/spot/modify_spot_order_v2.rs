@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use cmd_handler::command_use_case_def2::UpdatedEntityPair;
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
-    StateMachineV2, StateMachineV2Diff,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -58,12 +58,6 @@ pub struct ModifySpotOrderV2Cmd {
     ///
     /// 为空时由后续业务逻辑保留原订单的 client order id。
     pub cloid: Option<String>,
-}
-
-impl IssuedByParty for ModifySpotOrderV2Cmd {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 /// 现货改单所需的 authoritative 状态快照。

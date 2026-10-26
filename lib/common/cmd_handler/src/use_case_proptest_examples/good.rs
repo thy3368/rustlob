@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::command_use_case_def2::{
     CommandEnvelope, CommandMeta, CommandUseCase3, CommandUseCaseExecutionError,
-    CommandUseCaseExecutor3, CommandUseCaseOutbound, IssuedByParty, UseCaseOutput,
+    CommandUseCaseExecutor3, CommandUseCaseOutbound, UseCaseOutput,
 };
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
@@ -55,12 +55,6 @@ fn event_field<'a>(event: &'a EntityReplayableEvent, name: &str) -> Option<&'a s
 struct DepositCmd {
     party_id: String,
     amount: u64,
-}
-
-impl IssuedByParty for DepositCmd {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

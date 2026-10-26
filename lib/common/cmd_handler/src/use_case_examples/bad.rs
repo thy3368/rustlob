@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use crate::command_use_case_def2::{CommandUseCase3, UseCaseOutput};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
 const SUBMIT_ENTITY_TYPE: u8 = 2;
@@ -31,8 +31,6 @@ pub struct SubmitCmd {
     pub trace_id: String,
     pub symbol: String,
 }
-
-impl IssuedByParty for SubmitCmd {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SubmitError {

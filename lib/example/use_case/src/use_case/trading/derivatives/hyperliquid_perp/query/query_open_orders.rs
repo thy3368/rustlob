@@ -1,4 +1,3 @@
-use cmd_handler::command_use_case_def2::IssuedByParty;
 use cmd_handler::query_use_case_def::QueryUseCase;
 use thiserror::Error;
 
@@ -14,12 +13,6 @@ pub struct QueryHyperliquidPerpOpenOrders {
     pub party_id: String,
     /// 可选合约过滤；为空时表示查询该账户全部开放单。
     pub symbol: Option<String>,
-}
-
-impl IssuedByParty for QueryHyperliquidPerpOpenOrders {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 /// 查询 Hyperliquid perp 开放单列表时需要的已加载读模型。

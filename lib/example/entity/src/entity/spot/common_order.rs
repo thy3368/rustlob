@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{OrderGroupRelation, OrderSide, OrderType, SpotOrderStatus};
+use crate::{OrderGroupRelation, OrderSide, OrderTif, OrderType, SpotOrderStatus};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommonOrder {
@@ -13,18 +13,35 @@ pub struct CommonOrder {
     pub asset: u32,
 
     /// 交易对展示名，例如 `BTCUSDT`。业务身份以 `asset` 为准。
-    pub symbol: String,
+    pub pair: String,
     /// 买卖方向。
     pub side: OrderSide,
     /// Hyperliquid `p` 字段；market 意图同样保存其激进限价。
-    pub limit_price: u64,
+    pub limit_px: u64,
     /// 以 base asset 计价的下单数量。
     pub size: u64,
     /// 已成交数量。
-    pub filled_size: u64,
+    pub orig_size: u64,
 
     /// 统一的 Hyperliquid 订单类型事实。
     pub order_type: OrderType,
+
+    pub tif: OrderTif,
+
+
+    // "triggerCondition": "N/A",
+    // "children": [],
+
+
+
+    // order.isPositionTpsl*
+    // boolean
+    // Whether this is a position take-profit or stop-loss order.
+    pub is_position_tpsl: bool,
+    pub reduce_only: bool,
+    pub is_trigger: bool,
+    pub trigger_px: u64,
+
     /// `normalTpsl` 父子关系；历史订单反序列化时默认为独立订单。
     pub group_relation: OrderGroupRelation,
     /// 本地生命周期状态。

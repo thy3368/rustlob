@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 
 use common_entity::{
-    Entity, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
 };
 use thiserror::Error;
 
@@ -23,12 +22,6 @@ pub struct GenerateSpotKlinesFromHistoricalTradesCmd {
     pub range_start_ms: u64,
     /// 不包含的历史时间范围终点，单位毫秒。
     pub range_end_ms: u64,
-}
-
-impl IssuedByParty for GenerateSpotKlinesFromHistoricalTradesCmd {
-    fn party_id(&self) -> Option<&str> {
-        Some(self.party_id.as_str())
-    }
 }
 
 /// 生成历史现货 K 线时加载的成交事实。

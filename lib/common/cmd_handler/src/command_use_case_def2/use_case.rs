@@ -1,4 +1,4 @@
-use common_entity::{EntityError, EntityReplayableEvent, IssuedByParty};
+use common_entity::{EntityError, EntityReplayableEvent};
 
 /// V3 use case 的标准业务产出：
 /// `output` 是当前用例内部可复用的强类型业务中间结果，
@@ -55,7 +55,7 @@ pub struct CommandEnvelope<C> {
 /// 只定义业务输入、业务校验与可重放事件产出。
 pub trait CommandUseCase2: Send + Sync {
     /// 对应cqrs的 on_command
-    type Command: IssuedByParty;
+    type Command;
 
     /// 对应clean 架构的 entity , 从数据库/内存/文件等
     type GivenState;
@@ -64,7 +64,6 @@ pub trait CommandUseCase2: Send + Sync {
     type Error: std::error::Error;
 
     /// 对应四色建模的 role。
-    /// 语义上：`party_id()` 标识哪个业务主体，以这个 role 下达当前 on_command。
     fn role(&self) -> &'static str {
         "UnknownActor用来做权限控制和追溯"
     }
@@ -101,7 +100,7 @@ pub trait CommandUseCase2: Send + Sync {
 /// - 不提供通用 `events -> typed_output` 的框架恢复能力
 pub trait CommandUseCase3: Send + Sync {
     /// 对应 cqrs 的 on_command。
-    type Command: IssuedByParty;
+    type Command;
 
     /// 对应 clean 架构中当前 use case 已加载的 GivenState。
     type GivenState;
@@ -149,7 +148,7 @@ pub trait CommandUseCase3: Send + Sync {
 /// executor 统一把 changes 投影为 replayable events。
 pub trait CommandUseCase4: Send + Sync {
     /// 对应 cqrs 的 on_command。
-    type Command: IssuedByParty;
+    type Command;
 
     /// 对应 clean 架构中当前 use case 已加载的 GivenState。
     type GivenState;

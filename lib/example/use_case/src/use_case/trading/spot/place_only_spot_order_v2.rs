@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
-    StateMachineV2, StateMachineV2Diff,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -40,15 +40,6 @@ pub struct PlaceOnlySpotOrderV2OrderCmd {
 pub enum PlaceOnlySpotOrderV2Cmd {
     Single(PlaceOnlySpotOrderV2OrderCmd),
     NormalTpsl { parent: PlaceOnlySpotOrderV2OrderCmd, children: Vec<PlaceOnlySpotOrderV2OrderCmd> },
-}
-
-impl IssuedByParty for PlaceOnlySpotOrderV2Cmd {
-    fn party_id(&self) -> Option<&str> {
-        match self {
-            Self::Single(order) => Some(order.party_id.as_str()),
-            Self::NormalTpsl { parent, .. } => Some(parent.party_id.as_str()),
-        }
-    }
 }
 
 pub type PlaceOnlySpotOrderV2State = ();

@@ -39,7 +39,7 @@ pub use use_case::state_machine_v2::StateMachineV2 as MultiAggregateUseCaseUnche
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
 pub use use_case::state_machine_v2::StateMachineV2Diff as MultiAggregateUseCaseBeforeAfter;
 pub use use_case::state_machine_v2::{StateMachineV2, StateMachineV2Diff};
-pub use use_case::support::{IssuedByParty, ReplayableChanges, UpdatedEntityPair};
+pub use use_case::support::{ReplayableChanges, UpdatedEntityPair};
 
 /// Error raised while tracking entity state into replayable events.
 #[derive(Debug, Clone, PartialEq, Eq)]

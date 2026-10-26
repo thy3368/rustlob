@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, IssuedByParty, LogEntry, ReplayableChanges,
-    StateMachineV2, StateMachineV2Diff,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    StateMachineV2Diff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -34,12 +34,6 @@ pub enum SpotBlockCommand {
     Modify(ModifySpotOrderV2Cmd),
     PlaceMatch(PlaceOnlySpotOrderV2Cmd),
 }
-
-// impl IssuedByParty for SpotBlockCmd {
-//     fn party_id(&self) -> Option<&str> {
-//         shared_party_id(&self.commands)
-//     }
-// }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotBlockState {

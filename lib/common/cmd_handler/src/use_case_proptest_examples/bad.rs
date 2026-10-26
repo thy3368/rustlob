@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 use thiserror::Error;
 
-use crate::command_use_case_def2::{CommandUseCase3, IssuedByParty, UseCaseOutput};
+use crate::command_use_case_def2::{CommandUseCase3, UseCaseOutput};
 use crate::{EntityReplayableEvent, ReplayFieldChange};
 
 const SUBMIT_ENTITY_TYPE: u8 = 4;
@@ -39,8 +39,6 @@ fn event_accepted(events: &[EntityReplayableEvent]) -> Option<bool> {
 struct SubmitCmd {
     trace_id: String,
 }
-
-impl IssuedByParty for SubmitCmd {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 enum SubmitError {

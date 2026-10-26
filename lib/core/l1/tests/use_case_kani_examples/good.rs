@@ -1,4 +1,4 @@
-use cmd_handler::use_case_def2::{CommandUseCase2, IssuedByParty};
+use cmd_handler::use_case_def2::CommandUseCase2;
 use cmd_handler::{EntityReplayableEvent, ReplayFieldChange};
 use kani::Arbitrary;
 
@@ -42,12 +42,6 @@ fn event_u64_field(event: &EntityReplayableEvent, name: &str) -> Option<u64> {
 struct WithdrawCmd {
     party_suffix: u8,
     amount: u64,
-}
-
-impl IssuedByParty for WithdrawCmd {
-    fn party_id(&self) -> Option<&str> {
-        None
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary)]
@@ -137,10 +131,7 @@ fn prove_withdraw_use_case_emits_amount_consistent_event() {
 
 #[kani::proof]
 fn prove_withdraw_use_case_rejects_zero_amount_before_state_matters() {
-    let cmd = WithdrawCmd {
-        party_suffix: kani::any(),
-        amount: 0,
-    };
+    let cmd = WithdrawCmd { party_suffix: kani::any(), amount: 0 };
     let state: WithdrawState = kani::any();
     let use_case = WithdrawUseCase;
 
