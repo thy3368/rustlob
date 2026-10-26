@@ -69,13 +69,14 @@ impl HttpInboundError {
                 source: Some(AnyError::new(error)),
             },
             phase => {
-                let code = match phase { ExecutionError::LoadState(_) => "outbound_load_state_failed", ExecutionError::Persist(_) => "outbound_persist_failed", ExecutionError::Replay(_) => "outbound_replay_failed", ExecutionError::Publish(_) => "outbound_publish_failed", _ => "event_project_failed" };
-                Self {
-                    status_code: 500,
-                    code,
-                    message: format!("{phase:?}"),
-                    source: None,
-                }
+                let code = match phase {
+                    ExecutionError::LoadState(_) => "outbound_load_state_failed",
+                    ExecutionError::Persist(_) => "outbound_persist_failed",
+                    ExecutionError::Replay(_) => "outbound_replay_failed",
+                    ExecutionError::Publish(_) => "outbound_publish_failed",
+                    _ => "event_project_failed",
+                };
+                Self { status_code: 500, code, message: format!("{phase:?}"), source: None }
             }
         }
     }
@@ -185,7 +186,13 @@ impl CliInboundError {
             },
             phase => Self {
                 category: CliInboundErrorCategory::Outbound,
-                code: match phase { ExecutionError::LoadState(_) => "outbound_load_state_failed", ExecutionError::Persist(_) => "outbound_persist_failed", ExecutionError::Replay(_) => "outbound_replay_failed", ExecutionError::Publish(_) => "outbound_publish_failed", _ => "event_project_failed" },
+                code: match phase {
+                    ExecutionError::LoadState(_) => "outbound_load_state_failed",
+                    ExecutionError::Persist(_) => "outbound_persist_failed",
+                    ExecutionError::Replay(_) => "outbound_replay_failed",
+                    ExecutionError::Publish(_) => "outbound_publish_failed",
+                    _ => "event_project_failed",
+                },
                 message: format!("{phase:?}"),
                 exit_code: 4,
                 source: None,

@@ -1,9 +1,8 @@
 use actix_web::{HttpResponse, ResponseError};
 use axum::response::{IntoResponse, Response};
 use common_entity::{
-    EntityError, EntityReplayableEvent,
-    ExecutionError, LogEntry, StateMachineExecutor, StateMachineV2Diff, StateSink, StateSource,
-    
+    EntityError, EntityReplayableEvent, ExecutionError, LogEntry, StateMachineExecutor,
+    StateMachineV2Diff, StateSink, StateSource,
 };
 use example_core_use_case::{
     DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, WithdrawQuoteCmd,
@@ -15,7 +14,10 @@ pub use inbound_adapter_support::{
     outbound_phase_code,
 };
 
-pub(crate) trait InboundReplyMapper { type Reply; fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply; }
+pub(crate) trait InboundReplyMapper {
+    type Reply;
+    fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply;
+}
 
 pub trait ExampleBusinessErrorMapping: std::error::Error {
     fn inbound_error_code(&self) -> &'static str;
@@ -178,10 +180,7 @@ pub(crate) fn execute_deposit_quote_with_mapper<OB, M>(
     mapper: &M,
 ) -> Result<
     M::Reply,
-    ExecutionError<
-        DepositQuoteError,
-        <OB as StateSource<DepositQuoteUseCase>>::Error,
-    >,
+    ExecutionError<DepositQuoteError, <OB as StateSource<DepositQuoteUseCase>>::Error>,
 >
 where
     OB: ?Sized
@@ -201,10 +200,7 @@ pub(crate) fn execute_withdraw_quote_with_mapper<OB, M>(
     mapper: &M,
 ) -> Result<
     M::Reply,
-    ExecutionError<
-        WithdrawQuoteError,
-        <OB as StateSource<WithdrawQuoteUseCase>>::Error,
-    >,
+    ExecutionError<WithdrawQuoteError, <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
 >
 where
     OB: ?Sized

@@ -26,6 +26,7 @@ pub use account::balance_ledger_v2::{
     BalanceLedgerV2,
 };
 pub use account::{AccountStatus, SpotAccount};
+pub use common::common_trade::TradeBase;
 pub use hyperliquid_account::{
     MarginSummary, PerpAssetRiskRule, PerpClearinghouseState, PerpClearinghouseStateCalcError,
     PerpClearinghouseStateCalcInput, PerpCollateralSnapshot, PerpMarketMark,
@@ -62,7 +63,6 @@ pub use reservation::{
     ReservationKind, ReservationMarketKind, ReservationStatus,
 };
 use spot as spot_entity;
-pub use common::common_trade::TradeBase;
 pub use spot::spot_kline::SpotKline;
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{

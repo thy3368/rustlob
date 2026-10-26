@@ -11,7 +11,8 @@ use example_core_use_case::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteU
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
-    HttpInboundError, InboundReplyMapper, execute_withdraw_quote_with_mapper, find_string_field, find_u64_field,
+    HttpInboundError, InboundReplyMapper, execute_withdraw_quote_with_mapper, find_string_field,
+    find_u64_field,
 };
 
 pub trait WithdrawQuoteOutboundAccess {
@@ -72,10 +73,7 @@ pub fn handle_withdraw_quote_http<OB>(
     outbound: &OB,
 ) -> Result<
     WithdrawQuoteHttpResponse,
-    ExecutionError<
-        WithdrawQuoteError,
-        <OB as StateSource<WithdrawQuoteUseCase>>::Error,
-    >,
+    ExecutionError<WithdrawQuoteError, <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
 >
 where
     OB: ?Sized

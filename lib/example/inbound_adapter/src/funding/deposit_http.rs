@@ -11,7 +11,8 @@ use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteUseC
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
-    HttpInboundError, InboundReplyMapper, execute_deposit_quote_with_mapper, find_string_field, find_u64_field,
+    HttpInboundError, InboundReplyMapper, execute_deposit_quote_with_mapper, find_string_field,
+    find_u64_field,
 };
 
 pub trait DepositQuoteOutboundAccess {
@@ -72,10 +73,7 @@ pub fn handle_deposit_quote_http<OB>(
     outbound: &OB,
 ) -> Result<
     DepositQuoteHttpResponse,
-    ExecutionError<
-        DepositQuoteError,
-        <OB as StateSource<DepositQuoteUseCase>>::Error,
-    >,
+    ExecutionError<DepositQuoteError, <OB as StateSource<DepositQuoteUseCase>>::Error>,
 >
 where
     OB: ?Sized

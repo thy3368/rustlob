@@ -5,8 +5,8 @@ use example_core_use_case::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteU
 use serde::Serialize;
 
 use crate::common::{
-    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, InboundReplyMapper, execute_withdraw_quote_with_mapper,
-    find_string_field, find_u64_field,
+    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, InboundReplyMapper,
+    execute_withdraw_quote_with_mapper, find_string_field, find_u64_field,
 };
 
 pub const WITHDRAW_QUOTE_CLI_BIN: &str = "cli_withdraw_demo";
@@ -135,10 +135,7 @@ pub fn run_withdraw_quote_cli<OB>(
     outbound: &OB,
 ) -> Result<
     WithdrawQuoteCliResponse,
-    ExecutionError<
-        WithdrawQuoteError,
-        <OB as StateSource<WithdrawQuoteUseCase>>::Error,
-    >,
+    ExecutionError<WithdrawQuoteError, <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
 >
 where
     OB: ?Sized

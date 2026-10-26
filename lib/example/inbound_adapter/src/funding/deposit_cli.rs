@@ -5,8 +5,8 @@ use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteUseC
 use serde::Serialize;
 
 use crate::common::{
-    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, InboundReplyMapper, execute_deposit_quote_with_mapper,
-    find_string_field, find_u64_field,
+    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, InboundReplyMapper,
+    execute_deposit_quote_with_mapper, find_string_field, find_u64_field,
 };
 
 pub const DEPOSIT_QUOTE_CLI_BIN: &str = "cli_deposit_demo";
@@ -134,10 +134,7 @@ pub fn run_deposit_quote_cli<OB>(
     outbound: &OB,
 ) -> Result<
     DepositQuoteCliResponse,
-    ExecutionError<
-        DepositQuoteError,
-        <OB as StateSource<DepositQuoteUseCase>>::Error,
-    >,
+    ExecutionError<DepositQuoteError, <OB as StateSource<DepositQuoteUseCase>>::Error>,
 >
 where
     OB: ?Sized

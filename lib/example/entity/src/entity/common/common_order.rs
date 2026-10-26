@@ -1,7 +1,21 @@
 use base_types::UserId;
 use serde::{Deserialize, Serialize};
 
-use crate::{OrderGroupRelation, OrderSide, OrderTif, OrderType, SpotOrderStatus};
+use crate::{OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CommonOrderExecution {
+    Limit,
+    Market,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CommonOrderTrigger {
+    #[default]
+    None,
+    TakeProfit,
+    StopLoss,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommonOrder {
@@ -25,30 +39,22 @@ pub struct CommonOrder {
     pub size: u64,
     /// 下单数量。
     pub orig_size: u64,
-
-    /// 统一的 Hyperliquid 订单类型事实。
-    pub order_type: OrderType,
-
+    /// 订单如何执行。
+    pub execution: CommonOrderExecution,
+    /// 限价单有效方式；市价单固定按 IOC 执行。
     pub tif: OrderTif,
-
-    // "triggerCondition": "N/A",
-    // "children": [],
-
-    // order.isPositionTpsl*
-    // boolean
-    // Whether this is a position take-profit or stop-loss order.
-    pub is_position_tpsl: bool,
-    pub reduce_only: bool,
-    pub is_trigger: bool,
-    pub trigger_px: u64,
-
+    /// 订单何时触发。
+    pub trigger: CommonOrderTrigger,
+    /// TP/SL 触发价格；普通订单必须为空。
+    pub trigger_px: Option<u64>,
     /// `normalTpsl` 父子关系；历史订单反序列化时默认为独立订单。
     pub group_relation: OrderGroupRelation,
+    /// 是否为仓单
+    pub is_position_tpsl: bool,
+    /// 是否仅允许减少既有敞口。实体保存意图，不在订单内模拟仓位。 perp特有
+    pub reduce_only: bool,
     /// 本地生命周期状态。
     pub status: SpotOrderStatus,
-
-    // /// 是否仅允许减少既有敞口。实体保存意图，不在订单内模拟仓位。 perp特有
-    // pub reduce_only: bool,
     /// 冻结费 spot 特有
     pub taker_max_fee: u64,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
@@ -59,4 +65,45 @@ pub struct CommonOrder {
     pub updated_at: u64,
     /// 当前订单实体版本，用于生成可重放更新事件。
     pub version: u64,
+}
+
+impl CommonOrder {
+    pub fn effective_tif(&self) -> OrderTif {
+        match self.execution {
+            CommonOrderExecution::Market => OrderTif::Ioc,
+            CommonOrderExecution::Limit => self.tif,
+        }
+    }
+    pub fn is_trigger(&self) -> bool {
+        self.trigger != CommonOrderTrigger::None
+    }
+    pub fn trigger_role(&self) -> Option<crate::OrderTriggerRole> {
+        match self.trigger {
+            CommonOrderTrigger::None => None,
+            CommonOrderTrigger::TakeProfit => Some(crate::OrderTriggerRole::TakeProfit),
+            CommonOrderTrigger::StopLoss => Some(crate::OrderTriggerRole::StopLoss),
+        }
+    }
+    pub fn has_consistent_execution_facts(&self) -> bool {
+        let trigger_is_valid = match self.trigger {
+            CommonOrderTrigger::None => self.trigger_px.is_none(),
+            CommonOrderTrigger::TakeProfit | CommonOrderTrigger::StopLoss => {
+                self.trigger_px.is_some_and(|px| px > 0)
+            }
+        };
+        let group_is_valid = match &self.group_relation {
+            OrderGroupRelation::Standalone => {
+                !self.is_position_tpsl || self.trigger != CommonOrderTrigger::None
+            }
+            OrderGroupRelation::NormalTpslParent => {
+                !self.is_position_tpsl && self.trigger == CommonOrderTrigger::None
+            }
+            OrderGroupRelation::NormalTpslChild { .. } => {
+                !self.is_position_tpsl && self.trigger != CommonOrderTrigger::None
+            }
+        };
+        trigger_is_valid
+            && group_is_valid
+            && (self.execution != CommonOrderExecution::Market || self.limit_px > 0)
+    }
 }
