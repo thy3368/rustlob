@@ -7,7 +7,7 @@
 本文件只保留能被以下代码直接支撑的事实：
 
 - `lib/common/entity/src/entity.rs`
-- `lib/common/entity/src/command_use_case_v6.rs`
+- `lib/common/entity/src/use_case/state_machine_v2.rs`
 
 如果需要更强的架构政策、建模偏好或工程约束，应引用独立的 architecture policy 文档或 skill，
 不要把那些规则伪装成这两个 trait 的代码事实。
@@ -16,29 +16,29 @@
 
 - `lib/common/entity/src/entity.rs`
   - `Entity` trait 是 `entity / aggregate / MI metadata / replay version` 语义事实源。
-- `lib/common/entity/src/command_use_case_v6.rs`
-  - `CommandUseCase6` trait 是 command-style `use case` 契约事实源。
+- `lib/common/entity/src/use_case/state_machine_v2.rs`
+  - `StateMachineV2` 与 `StateMachineV2Diff` 是 command-style `use case` 契约事实源。
 
-## Use Case Facts From `CommandUseCase6`
+## Use Case Facts From Current State Machine Traits
 
 - `use case` 的当前业务输入是 `Command`。
-- `Command` 必须实现 `IssuedByParty + CommandWithGivenState`。
-- `use case` 的唯一业务真相是 `Changes`。
-- `Changes` 必须实现 `ReplayableChanges`。
+- `Command` 必须实现 `LogEntryMetadata`。
+- `StateChanged` 是 after truth；需要 replay/persist 时，`StateDiff` 是 before/after truth。
+- `StateDiff` 必须实现 `ReplayableChanges`。
 - `use case` 的职责是：
-  - `command + loaded authoritative state -> changes`
-- `pre_check_command(...)` 只做不依赖状态的快速校验。
-- `validate_against_state(...)` 只做基于已加载 authoritative state 的业务校验。
-- `compute_before_after_changes(...)` 是确定性业务推导核心。
-- `compute_before_after_changes(...)` 内应显式匹配 `Command / GivenState / Changes` 分支。
+  - `command + loaded authoritative state -> state changed -> optional state diff`
+- `check_command(...)` 只做不依赖状态的快速校验。
+- `validate_state_given(...)` 只做基于已加载 authoritative state 的业务校验。
+- `compute_state_changed_only(...)` 是 after truth 的确定性业务推导核心。
+- `do_compute_state_diff(...)` 将 owned before truth 与 after truth 合并为 replayable changes。
 - 分支错配时必须返回明确业务错误。
 - `use case` 应调用聚合根对外公开的业务方法，完成一次业务目标推导。
 - 若一次业务目标需要多个聚合协作，应由 `use case` 在 `Command + GivenState -> Changes` 编排层
   分别驱动多个聚合根。
 - 聚合间协作不应下放到任一聚合根或聚合成员内部去直接访问、装载、调用或导航其它聚合。
-- `ReplayableChanges::to_replayable_events()` 从 `Changes` 投影后续可持久化、可回放、可发布的事实。
+- `ReplayableChanges::to_replayable_events()` 从 `StateDiff` 投影后续可持久化、可回放、可发布的事实。
 
-`CommandUseCase6` 注释明确说它不负责：
+`StateMachineV2` 注释明确说它不负责：
 
 - DB 访问或其他状态加载
 - replayable events 的发布或持久化执行
@@ -100,9 +100,9 @@
 
 ## Boundary Rules Directly Supported By Facts
 
-- `use case` 的编排形状是 `Command + GivenState -> Changes`。
+- `use case` 的编排形状是 `Command + StateGiven -> StateChanged`，需要 replay 时再形成 `StateDiff`。
 - `use case` 通过聚合根公开业务方法完成业务目标推导。
-- 若涉及多个聚合，协作层次仍留在 `use case` 的 `Command + GivenState -> Changes` 编排内。
+- 若涉及多个聚合，协作层次仍留在 `use case` 的 command/state 编排内。
 - `AggregateRoot` 表达该实体统一承担本聚合对外业务入口与一致性边界。
 - `AggregateMember` 表达该实体只在聚合内部存在，不是 `use case` 的主业务入口。
 - `AggregateMember` 不应直接承担跨聚合访问或协作。
@@ -114,7 +114,7 @@
 ## Boundary Policy References
 
 以下规则是 use case / entity 边界上的 architecture policy，不是 `Entity` 或
-`CommandUseCase6` trait 本身的代码事实。方法分类和 admission 细则见
+`StateMachineV2` trait 本身的代码事实。方法分类和 admission 细则见
 `.agents/skills/shared/entity_method_constraints.md`。
 
 - `use case` 可编排单据流/单据链，例如
@@ -135,7 +135,7 @@
 - 构造器必须优先 `pub(crate)`
 - 禁止公开内部集合
 - `helper/query method` 是否应成为主交互面
-- 任何超出 `Entity` / `CommandUseCase6` 注释与签名的风格化 OO 规则
+- 任何超出 `Entity` / `StateMachineV2` 注释与签名的风格化 OO 规则
 
 若后续仍需要这些规范，应放到独立 architecture policy 文档，而不是继续写进 shared
 constraints。当前 `Entity` 对 `use case` API 收敛的架构政策落点见：

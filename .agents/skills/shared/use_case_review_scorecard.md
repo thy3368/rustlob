@@ -15,7 +15,7 @@ Use this rubric to score a RustLOB use case.
 - `0`: depends directly on repositories, clients, SDK types, or framework details
 
 ### 1.3 Responsibility focus: 15
-- `15`: `pre_check_command`, `validate_against_state`, `compute_changes`, and `to_replayable_events()` are sharply separated
+- `15`: `check_command`, `validate_state_given`, `compute_state_changed`, optional `compute_state_diff`, and `to_replayable_events()` are sharply separated
 - `8`: some duplication or mixed concerns, but still understandable
 - `0`: validation, state loading, mutation, and side effects are tangled
 
@@ -108,7 +108,7 @@ Minimal Refactor
 Subtract aggressively when you see these:
 - use case calls repository, client, HTTP, or DB directly
 - use case returns transport replies instead of strong typed business changes
-- use case directly assembles replayable events in `compute_changes()` instead of projecting from `Changes`
+- use case directly assembles replayable events in `compute_state_changed()` instead of projecting them from `StateDiff`
 - `Changes` is only `Vec<EntityReplayableEvent>` with a business name wrapper
 - state type is just a bag of adapters
 - one method both validates and persists

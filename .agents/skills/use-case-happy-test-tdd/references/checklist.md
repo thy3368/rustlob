@@ -1,10 +1,10 @@
 # Happy Path Spec Test Checklist
 
-Use this checklist before finishing a `compute_changes()` happy-path test file.
+Use this checklist before finishing a `compute_state_changed()` happy-path test file.
 
 ## Read Path
 
-- Read the actual `compute_changes()` implementation first.
+- Read the actual `compute_state_changed_only()` implementation first.
 - Read the `Changes` type and `to_replayable_events()` projection logic.
 - Read the related command, given state, error, and entity methods.
 - Read existing helpers and test terminology before inventing new names.
@@ -50,9 +50,9 @@ Use this checklist before finishing a `compute_changes()` happy-path test file.
 
 ## Scope Discipline
 
-- The file only covers happy-path `compute_changes()` and relevant `to_replayable_events()` contracts.
-- `pre_check_command()` tests are elsewhere.
-- `validate_against_state()` tests are elsewhere.
+- The file only covers happy-path `compute_state_changed()` and relevant `compute_state_diff()` / `to_replayable_events()` contracts.
+- `check_command()` tests are elsewhere.
+- `validate_state_given()` tests are elsewhere.
 - Property-test concerns are elsewhere.
 
 ## Final Quality Bar

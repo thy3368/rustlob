@@ -4,7 +4,7 @@ Use `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/exec
 
 ## What Makes It A Good Reference
 
-It does not treat the test file as a bag of fixtures. It treats the file as a compact business spec for `compute_changes()` first, then `to_replayable_events()` where event projection is part of the contract.
+It does not treat the test file as a bag of fixtures. It treats the file as a compact business spec for `compute_state_changed()` first, then `compute_state_diff()` and `to_replayable_events()` where replay projection is part of the contract.
 
 The file has five important layers:
 1. file header
@@ -102,7 +102,7 @@ Those are mechanics. The comments should explain why this scenario exists.
 
 ## 6. Changes First, Event Order Second
 
-For `CommandUseCase4`, the first assertion target is `Changes`:
+For `StateMachineV2`, the first assertion target is `StateChanged`; replayable cases then assert `StateMachineV2Diff::StateDiff`:
 - created trades
 - updated maker/taker entities
 - before/after snapshots
@@ -123,7 +123,7 @@ If a scenario emits more than one event and order matters, assert it directly.
 
 ## 8. How To Reuse This Pattern On Another Use Case
 
-When you move to another `compute_changes` implementation:
+When you move to another `compute_state_changed` implementation:
 1. read the use case and entity methods
 2. read the `Changes` type and `to_replayable_events()` projection
 3. identify scenario axes

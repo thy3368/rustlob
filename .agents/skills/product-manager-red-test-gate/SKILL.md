@@ -71,13 +71,12 @@ fn update_leverage_changes_existing_position_risk_state(
     let given = given_user_has_btc_perp_position_with_leverage(before_leverage);
     let command = command_update_leverage_to(after_leverage);
 
-    let changes = UpdatePerpLeverageUseCase::default()
-        .compute_changes(command, given)
+    let changed = UpdatePerpLeverageUseCase::default()
+        .compute_state_changed(&command, &given)
         .expect("合法杠杆调整应该成功");
 
-    assert!(changes.contains_leverage_changed_to(after_leverage));
-    assert!(changes.contains_position_risk_recalculated());
-    assert!(changes.to_replayable_events().is_ok());
+    assert!(changed.contains_leverage_changed_to(after_leverage));
+    assert!(changed.contains_position_risk_recalculated());
 }
 ```
 

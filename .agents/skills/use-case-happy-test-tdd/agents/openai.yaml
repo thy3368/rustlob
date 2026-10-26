@@ -1,4 +1,4 @@
 interface:
   display_name: "Use Case Happy Test TDD"
   short_description: "Write happy specs or TDD one missing matrix cell"
-  default_prompt: "Use $use-case-happy-test-tdd for RustLOB CommandUseCase4 happy-path work. For spec-only requests, read real code, build the happy-path business matrix, add business-sentence Rule/Given/When/Then tests, and assert Changes before replayable-event projection without repairing production code unless asked. For review, gap, TDD, repair, or fix requests, reconstruct the matrix, emit the fixed five-part scorecard, choose one highest-value missing cell, write the failing spec test first, make the minimal core business repair, and verify that exact cell is closed."
+  default_prompt: "Use $use-case-happy-test-tdd for RustLOB StateMachineV2 happy-path work. Build the business matrix, assert StateChanged before optional StateDiff and replay projection, and in repair mode close one highest-value missing cell with a failing test followed by the minimal core repair."

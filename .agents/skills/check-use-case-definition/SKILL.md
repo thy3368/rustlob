@@ -1,28 +1,26 @@
 ---
 name: check-use-case-definition
-description: Check whether RustLOB `CommandUseCase3` use cases are correctly defined as business use cases. Use when Codex should run the offline checker script, score files or directories, or explain why a use case failed the business-definition rubric.
+description: Check whether RustLOB `StateMachineV2` implementations are defined as business use cases, score files or directories, and explain rubric failures.
 ---
 
 # Check Use Case Definition
 
-Use this skill for RustLOB `CommandUseCase3` business-definition checks. Prefer the offline checker script over freeform scoring.
+Run the offline checker before giving a freeform verdict:
 
-## Workflow
+```bash
+python3 .agents/skills/check-use-case-definition/scripts/check_use_case_business_definition.py <path ...>
+python3 .agents/skills/check-use-case-definition/scripts/check_use_case_business_definition.py --all
+```
 
-1. Run the checker first.
-- Explicit targets: `python3 scripts/check_use_case_business_definition.py <path ...>`
-- Whole repo: `python3 scripts/check_use_case_business_definition.py --all`
-- Machine-readable output: add `--json`
-- The skill-local script delegates directly to the repository checker at `scripts/check_use_case_business_definition.py`, preserving CLI arguments and exit codes.
+Add `--json` for machine-readable output. Exit code `2` means invalid input or no matching implementation; resolve that before judging the design. Exit code `1` means at least one use case has findings.
 
-2. Treat the script as the primary judge.
-- The rubric source is `.agents/skills/shared/use_case_review_scorecard.md`.
-- Do not invent a second scoring rule in the response.
+The checker evaluates:
 
-3. When a use case fails:
-- Explain the outcome from the script's `Findings`.
-- Turn `Minimal Refactor` into the concrete next actions you recommend.
-- Keep the explanation aligned with `Layer Mapping`, `四色建模 Mapping`, `Identity Semantics`, and `Score`.
+- business command identity
+- separation of `check_command`, `validate_state_given`, and `compute_state_changed_only`
+- typed `StateChanged`
+- optional `StateMachineV2Diff` and `ReplayableChanges`
+- entity/use-case boundaries
+- absence of adapter, database, persistence, publish, and transport concerns in core
 
-4. When the script exits `2`:
-- Fix the path, readability, or parse issue before giving a design verdict.
+Use `.agents/skills/shared/use_case_review_scorecard.md` as the rubric. Preserve these response sections because callers depend on them: `Layer Mapping`, `四色建模 Mapping`, `Identity Semantics`, `Score`, `Findings`, and `Minimal Refactor`.

@@ -97,7 +97,7 @@ Read code in this order:
 1. Read the use case group `mod.rs`.
    Identify declared group boundary, main MI, secondary MIs, module exports, and files that exist but are not wired into the group.
 2. Read each relevant use case file.
-   Inspect `Command`, `GivenState`, `Changes`, `validate_against_state`, `compute_changes`, and `ReplayableChanges` / replayable event conversion. Treat comments and type names as claims, then verify whether fields and change records provide evidence.
+   Inspect `Command`, `StateGiven`, `StateChanged`, `validate_state_given`, `compute_state_changed`, optional `StateDiff`, and replayable event conversion. Treat comments and type names as claims, then verify whether fields and change records provide evidence.
 3. Read the referenced entity files.
    Classify fields as explicit causal pointers (`caused_by`, `due_to`, `*_caused_by_*`, `source_*_id` with documented causal semantics), ordinary ID traces (`*_id`, `order_id`, `position_id`, `user_id`), status/lifecycle fields, quantities/balances, and append-only business facts.
 4. Reconstruct the code-evidenced chain.

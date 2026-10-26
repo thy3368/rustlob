@@ -21,7 +21,7 @@ This skill only targets core business design. Do not use it to demonstrate routi
 2. Use case BDD
    - Test command-style use cases as `command + authoritative state -> changes/events`.
    - Validate the business target, MI causal chain, document chain, conservation rules, and terminal facts.
-   - Prefer `compute_changes(...)` and `ReplayableChanges::to_replayable_events()` surfaces when available.
+   - Prefer `compute_state_changed(...)`, optional `compute_state_diff(...)`, and `ReplayableChanges::to_replayable_events()` surfaces when available.
 
 ## Read First
 
@@ -59,9 +59,9 @@ Start from the real use case implementation, not from an imagined API. Identify 
 
 Write scenarios around the business contract:
 
-- `pre_check_command` rejects malformed command facts that do not require state.
-- `validate_against_state` rejects commands that conflict with authoritative state.
-- `compute_changes` emits the minimal business `Changes` needed to express the successful decision.
+- `check_command` rejects malformed command facts that do not require state.
+- `validate_state_given` rejects commands that conflict with authoritative state.
+- `compute_state_changed` emits the minimal typed `StateChanged` needed to express the successful decision.
 - `to_replayable_events` preserves event order, causality, document links, and terminal facts.
 - Errors are asserted by business meaning, not by string fragments or technical side effects.
 

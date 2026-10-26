@@ -1,158 +1,38 @@
 ---
 name: rustdoc-use-case
-description: Write Rustdoc for RustLOB `CommandUseCase4` use cases. Use when Codex needs to document command structs, business error enums, changes types, or use case types in files such as `*/use_case/**/*.rs`, add field-level docs, explain `pre_check_command` vs `validate_against_state`, or add minimal doctest examples without turning Rustdoc into the main test harness.
+description: Write Rustdoc for RustLOB `StateMachineV2` and `StateMachineV2Diff` use cases, including commands, errors, state truth, replayable diffs, and boundary behavior.
 ---
 
 # Rustdoc Use Case
 
-## Overview
+Document the public business contract an adapter author needs. Start from:
 
-Use this skill when a RustLOB use case needs caller-facing Rustdoc.
+- `lib/common/entity/src/use_case/state_machine_v2.rs`
+- `lib/common/entity/src/use_case/executor.rs`
+- `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
+- `.agents/skills/shared/changes_pair_first_rule.md`
 
-Target the public surface that a reader or adapter author needs to understand:
-- the command type
-- the business error type
-- the use case type
-- sometimes key public fields
+## Contract Vocabulary
 
-Keep Rustdoc short, business-oriented, and example-driven.
-
-Start from these files:
-- Contract: `lib/common/cmd_handler/src/command_use_case_def2/use_case.rs`
-- Example with Rustdoc: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
-- Shared `Changes` rule: `.agents/skills/shared/changes_pair_first_rule.md`
-
-Read `.agents/skills/shared/changes_pair_first_rule.md` before documenting public `*Changes`.
+- `Command` corresponds to `StateMachineV2::Command` and describes the requested business action.
+- `StateGiven` is authoritative loaded state.
+- `StateChanged` is the after truth returned by `compute_state_changed()`.
+- `StateDiff` is replay/persist before/after truth and implements `ReplayableChanges`.
+- `check_command()` performs command-only validation.
+- `validate_state_given()` performs business validation requiring loaded state.
+- `compute_state_changed_only()` derives after truth after those checks.
+- `to_replayable_events()` projects replayable events from the diff.
 
 ## What To Document
 
-Document these items first:
+- Command: business purpose, identity fields, and non-obvious field semantics.
+- Error: the business rejection represented by each public variant; keep `Display` aligned with `thiserror` messages.
+- State truth: identify authoritative fields. For updates, document `UpdatedEntityPair<T>` as authoritative and derive reply, events, and assertions from it.
+- Use case: state the business change it derives and that it is deterministic for the same command and state.
+- Diff: explain the before/after truth needed for replay or persistence without treating a duplicate `*_after` snapshot as a second truth.
 
-1. `*Cmd`
-- What business action the command represents
-- What the important fields mean
-- Where validation happens:
-  - command-only checks in `pre_check_command()`
-  - state-dependent checks in `validate_against_state()`
+Keep examples small and compilable. Good doctests construct a command, demonstrate an error string, or show `compute_state_changed()` usage. Leave fixture-heavy business flows to unit tests.
 
-2. `*Error`
-- What kind of business rejection this enum models
-- Short per-variant docs for when each error is returned
-- If the error is public, ensure `Display` is useful; default to `thiserror::Error`
+Explicitly state relevant boundaries: the use case does not query a database, persist, replay, publish, call HTTP, or shape transport replies. Those concerns belong to `StateSource`, `StateSink`, adapters, and runtime wiring.
 
-3. `*UseCase`
-- One short paragraph describing what business changes it derives
-- Mention what it does **not** do:
-  - no DB access
-  - no publish/persist
-  - no HTTP reply shaping
-
-4. `*Changes`
-- What business facts this strong typed changes object carries
-- Which fields are authoritative business truth
-- That replayable events come from `ReplayableChanges::to_replayable_events()`
-- For update scenarios, document pair-first fields as the primary business semantics
-- Avoid docs that normalize duplicate pair + `*_after` fields as if both were equal truths
-
-Field docs are useful when a field name is too generic or has business semantics that are not obvious from the type alone.
-
-## Rustdoc Pattern
-
-Use this structure by default:
-
-```rust
-/// One-sentence business purpose.
-///
-/// Optional second paragraph for boundary clarification.
-///
-/// # Examples
-///
-/// ```
-/// // minimal construction or usage example
-/// ```
-pub struct SomeCmd { ... }
-```
-
-For errors:
-
-```rust
-/// Business errors that can reject this use case.
-///
-/// # Examples
-///
-/// ```
-/// assert_eq!(SomeError::Foo.to_string(), "...");
-/// ```
-#[derive(Debug, thiserror::Error)]
-pub enum SomeError {
-    /// Returned when ...
-    #[error("...")]
-    Foo,
-}
-```
-
-For the use case type:
-
-```rust
-/// Use case that validates X and derives strong typed Y changes.
-///
-/// It is deterministic for the same command and loaded state.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SomeUseCase;
-```
-
-## Doctest Rules
-
-Use doctest as a lightweight harness, not the main harness.
-
-Good doctest targets:
-- construct a command
-- show one expected error string
-- show the `compute_changes()` API shape
-
-Do not push complex business flow into doctest when normal `#[test]` is clearer.
-
-Keep doctests:
-- small
-- compileable
-- independent from large fixture setup
-
-Prefer `use example_core_use_case::TypeName;` style imports when the type is re-exported publicly.
-
-## What To Avoid
-
-Avoid these Rustdoc mistakes:
-
-- Explaining framework trivia instead of business meaning
-- Repeating the field name in prose without adding information
-- Copying test-sized setup into doctest
-- Documenting private implementation detail that may churn often
-- Using Rustdoc as a substitute for real unit tests
-- Leaving placeholder comments like `todo rust doc`
-
-## Project Guidance
-
-For RustLOB use cases:
-
-- `CommandUseCase4` is the business boundary
-- `pre_check_command()` is for cheap command-only validation
-- `validate_against_state()` is for loaded-state business checks
-- `compute_changes()` is the business derivation core
-- `ReplayableChanges::to_replayable_events()` is the projection boundary
-
-Reflect that split in the docs when it helps the reader.
-
-If the file already uses `thiserror`, keep error docs aligned with `#[error(...)]` messages.
-
-## Output Checklist
-
-Before finishing:
-
-- `*Cmd` has a top-level Rustdoc block
-- important public fields have concise field docs
-- `*Error` has top-level docs plus per-variant docs where useful
-- `*Changes` has a short business-truth doc block when it is public
-- update-style `*Changes` docs clearly mark which pair field is authoritative
-- `*UseCase` has a short purpose statement
-- doctest examples are minimal and likely to stay stable
-- unit tests remain the main business harness
+Before finishing, verify public commands, important fields, errors, state truth, diffs, and use-case types have concise business-oriented Rustdoc and that unit tests remain the primary business harness.
