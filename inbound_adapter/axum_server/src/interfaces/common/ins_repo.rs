@@ -27,7 +27,7 @@ use spot_behavior::proc::v2::processor::kafka::event_publisher::{EventPublisher,
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
 use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
 use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
-use spot_behavior::proc::v2::trade_cmd_handlers::spot_trade::SpotTradeBehaviorV4Impl;
+use spot_behavior::proc::v2::trade_common_entitys::spot_trade::SpotTradeBehaviorV4Impl;
 
 use crate::interfaces::spot::websocket::md_sse_controller::SpotMarketDataSSEImpl;
 use crate::interfaces::spot::websocket::ud_sse_controller::SpotUserDataSSEImpl;

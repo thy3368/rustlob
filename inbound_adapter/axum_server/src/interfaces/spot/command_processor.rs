@@ -17,7 +17,7 @@ use spot_behavior::proc::behavior::v2::spot_user_data_sse_behavior::{
 use spot_behavior::proc::v2::spot_market_data::SpotMarketDataImpl;
 use spot_behavior::proc::v2::spot_user_data::SpotUserDataImpl;
 use spot_behavior::proc::v2::spot_user_data_key::SpotUserDataListenKeyImpl;
-use spot_behavior::proc::v2::trade_cmd_handlers::spot_trade::SpotTradeBehaviorV4Impl;
+use spot_behavior::proc::v2::trade_common_entitys::spot_trade::SpotTradeBehaviorV4Impl;
 
 use crate::interfaces::common::http_handler_util::handle_generic;
 use crate::interfaces::common::ins_repo;
