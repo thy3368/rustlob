@@ -4,7 +4,6 @@ cargo-features = ["profile-rustflags"]
 members = [
     # lib/common
     "lib/common/base_types",
-    "lib/common/cmd_handler",
     "lib/common/db_repo",
     "lib/common/diff",
     "lib/common/entity",
@@ -16,9 +15,6 @@ members = [
     "lib/common/lob_repo",
     "lib/common/lob_repo_v2",
     # lib/core
-    "lib/core/exchange/prep",
-    "lib/core/l1",
-    "lib/core/l1_adapter",
     # lib/example
     "lib/example/entity",
     "lib/example/use_case",
@@ -47,7 +43,6 @@ members = [
 default-members = [
     # lib/common
     "lib/common/base_types",
-    "lib/common/cmd_handler",
     "lib/common/db_repo",
     "lib/common/diff",
     "lib/common/entity",
@@ -59,9 +54,6 @@ default-members = [
     "lib/common/lob_repo",
     "lib/common/lob_repo_v2",
     # lib/core
-    "lib/core/exchange/prep",
-    "lib/core/l1",
-    "lib/core/l1_adapter",
     # lib/example
     "lib/example/entity",
     "lib/example/use_case",

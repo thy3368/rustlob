@@ -15,7 +15,7 @@ RustLOB 是一个用 Rust 编写的交易系统与 Clean Architecture 实践仓�
 RustLOB 当前优先用于：
 
 - 用实体表达订单、账户、余额、冻结、成交和资金变更等领域规则；
-- 用 CommandUseCase4 组织现货、资金、衍生品和风险相关业务动作；
+- 用 StateMachineV2 组织现货、资金、衍生品和风险相关业务动作；
 - 用执行器和 outbound port 连接状态加载、事件持久化、回放、发布和 broker；
 - 用 HTTP、CLI、事件、定时任务和 DEX/交易入口验证不同接入方式；
 - 通过测试、BDD 场景和 [`lib/example/gate.md`](lib/example/gate.md) 持续校验核心行为。
@@ -29,7 +29,7 @@ RustLOB 当前优先用于：
 ### Core
 
 - [`lib/example/entity/`](lib/example/entity/)：订单、账户、余额、冻结/预约、成交、市场规则，以及实体自身的业务行为和不变量。
-- [`lib/example/use_case/`](lib/example/use_case/)：现货下单、撮合、撤单、改单、资金充提报价，以及永续合约资金、风险和清算相关 CommandUseCase4 用例。
+- [`lib/example/use_case/`](lib/example/use_case/)：现货下单、撮合、撤单、改单、资金充提报价，以及永续合约资金、风险和清算相关 StateMachineV2 用例。
 
 用例的基本形状是：
 
@@ -170,7 +170,7 @@ rustlob/
 ├── lib/
 │   ├── example/                 # 当前主要核心业务实现
 │   │   ├── entity/              # 领域实体与规则
-│   │   ├── use_case/            # CommandUseCase4 业务用例
+│   │   ├── use_case/            # StateMachineV2 业务用例
 │   │   ├── use_case_executor/   # 用例执行编排
 │   │   ├── inbound_adapter/     # HTTP、CLI 和 API 描述入口
 │   │   ├── outbound_adapter/    # 状态、事件、broker、MySQL 等 outbound

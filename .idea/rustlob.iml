@@ -108,7 +108,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/common/bdd/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/bdd/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/bdd_core/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/common/cmd_handler/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/common_entity/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/derivatives/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/derivatives/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/operating/cex/exchange/derivatives/tests" isTestSource="true" />
@@ -138,7 +138,7 @@
       <sourceFolder url="file://$MODULE_DIR$/operating/l2_prod2/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/l1_e2e/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/l1/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/common/cmd_handler/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/common_entity/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/inbound_adapter_support/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/inbound_adapter_support_macros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/l1/benches" isTestSource="true" />
