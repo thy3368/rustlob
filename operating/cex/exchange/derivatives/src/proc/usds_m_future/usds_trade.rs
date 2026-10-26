@@ -1,6 +1,6 @@
 use base_types::Timestamp;
 use base_types::cqrs::cqrs_types::{CmdResp, ResMetadata};
-use cmd_handler::CmdHandlerForUpdate3;
+use common_entity::CmdHandlerForUpdate3;
 use db_repo::adapter::v2::memdb_repo::MemdbRepo;
 use db_repo::core::event_publish::{EventPublisher2, PublishError};
 use serde::Serialize;

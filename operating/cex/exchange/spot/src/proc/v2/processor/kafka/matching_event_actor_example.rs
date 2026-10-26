@@ -8,7 +8,7 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::v2::processor::kafka::base::KafkaProcessorConfig;
 use crate::proc::v2::processor::kafka::matching_event_actor::KafkaMatchingEventActor;
-use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
+use crate::proc::v2::trade_common_entitys::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
 pub fn start_matching_event_actor_in_thread<
     R: CmdRepo2 + Clone + 'static,

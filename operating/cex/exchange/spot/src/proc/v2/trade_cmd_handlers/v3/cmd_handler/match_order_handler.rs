@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use base_types::Quantity;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
-use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, ReplayableEventSet};
+use common_entity::{CmdHandlerForUpdate3, CmdHandlerInternal, ReplayableEventSet};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::Entity;

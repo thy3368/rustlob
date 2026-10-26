@@ -6,7 +6,7 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
 use crate::proc::v2::processor::nats::nats_event_actor::{NatsEventActor, NatsProcessorConfig};
-use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
+use crate::proc::v2::trade_common_entitys::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
 pub type NatsMatchingEventActor<R, P, L> =
     NatsEventActor<DomainEvent<SpotOrder>, NewOrderPlaceEventHandler<R, P, L>>;

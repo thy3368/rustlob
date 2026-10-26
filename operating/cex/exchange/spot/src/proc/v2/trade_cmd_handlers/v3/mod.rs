@@ -1,4 +1,4 @@
-pub mod cmd_handler;
+pub mod common_entity;
 
 pub mod event_handler;
 

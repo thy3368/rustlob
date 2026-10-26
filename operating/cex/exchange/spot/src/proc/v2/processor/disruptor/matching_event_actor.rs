@@ -6,7 +6,7 @@ use diff::diff_types::DomainEvent;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::v2::processor::disruptor::inproc_event_actor::InprocEventActor;
-use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
+use crate::proc::v2::trade_common_entitys::v3::event_handler::new_order_place_event_handler::NewOrderPlaceEventHandler;
 
 pub type DisruptorMatchingEventActor<R, P, L> =
     InprocEventActor<DomainEvent<SpotOrder>, NewOrderPlaceEventHandler<R, P, L>>;

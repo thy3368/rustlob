@@ -5,7 +5,7 @@ use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
 
 use crate::proc::v2::processor::disruptor::inproc_event_actor::InprocEventActor;
-use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
+use crate::proc::v2::trade_common_entitys::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
 
 pub type DisruptorSettlementEventActor<R, P> =
     InprocEventActor<DomainEvent<SpotTrade>, NewTradeEventHandler<R, P>>;

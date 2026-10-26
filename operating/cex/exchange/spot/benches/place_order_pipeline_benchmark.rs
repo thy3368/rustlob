@@ -17,11 +17,11 @@ use lob_repo::adapter::embedded_lob_repo::EmbeddedLobRepo;
 use lob_repo::adapter::local_lob_impl::LocalLob;
 use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 use spot_behavior::proc::behavior::v2::spot_trade_behavior::NewOrderCmd;
-use spot_behavior::proc::v2::trade_cmd_handlers::v3::cmd_handler::match_order_handler::MatchOrderCmdHandler;
-use spot_behavior::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockEventPublisher;
-use spot_behavior::proc::v2::trade_cmd_handlers::v3::cmd_handler::place_order_handler::PlaceOrderCmdHandler;
-use spot_behavior::proc::v2::trade_cmd_handlers::v3::cmd_handler::sett_order_handler::SettOrderCmdHandler;
-use spot_behavior::proc::v2::trade_cmd_handlers::v3::pipe_line::place_order_pipeline_handler::PlaceOrderPipelineHandler;
+use spot_behavior::proc::v2::trade_common_entitys::v3::common_entity::match_order_handler::MatchOrderCmdHandler;
+use spot_behavior::proc::v2::trade_common_entitys::v3::common_entity::mock_repo::MockEventPublisher;
+use spot_behavior::proc::v2::trade_common_entitys::v3::common_entity::place_order_handler::PlaceOrderCmdHandler;
+use spot_behavior::proc::v2::trade_common_entitys::v3::common_entity::sett_order_handler::SettOrderCmdHandler;
+use spot_behavior::proc::v2::trade_common_entitys::v3::pipe_line::place_order_pipeline_handler::PlaceOrderPipelineHandler;
 
 /// 统计: branch miss rate; cache miss rate
 fn create_test_cmd_with_quantity(client_order_id: &str, quantity: f64) -> NewOrderCmd {

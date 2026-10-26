@@ -1,5 +1,5 @@
 use base_types::exchange::spot::spot_types::{OrderStatus, SpotOrder};
-use cmd_handler::handler_query::QueryHandler;
+use common_entity::handler_query::QueryHandler;
 use db_repo::core::db_repo2::QueryRepo2;
 
 use crate::proc::behavior::v2::spot_trade_api_error::{ApiError, SpotErrorAny, TraderError};

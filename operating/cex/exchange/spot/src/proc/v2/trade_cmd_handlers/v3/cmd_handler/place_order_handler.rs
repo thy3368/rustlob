@@ -1,7 +1,7 @@
 use base_types::Quantity;
 use base_types::base_types::TraderId;
 use base_types::exchange::spot::spot_types::{SpotOrder, TimeInForce};
-use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal, ReplayableEventSet};
+use common_entity::{CmdHandlerForUpdate3, CmdHandlerInternal, ReplayableEventSet};
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::{DomainEvent, track_create};
@@ -153,7 +153,7 @@ mod tests {
     use db_repo::core::db_repo2::QueryRepo2;
 
     use super::*;
-    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockEventPublisher;
+    use crate::proc::v2::trade_common_entitys::v3::common_entity::mock_repo::MockEventPublisher;
 
     #[test]
     fn test_apply_command_and_collect_changes_builds_order_event() {

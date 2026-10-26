@@ -12,7 +12,7 @@ pub use cmd::modify_order_handler::ModifyOrderCmdHandler;
 pub use cmd::new_order_handler::NewOrderCmdHandler;
 pub use cmd::new_order_test_handler::NewOrderTestCmdHandler;
 pub use cmd::place_multiple_orders_handler::PlaceMultipleOrdersCmdHandler;
-use cmd_handler::ReplayableEventSet;
+use common_entity::ReplayableEventSet;
 
 pub mod cmd;
 pub mod query;

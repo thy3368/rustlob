@@ -13,7 +13,7 @@ use crate::proc::behavior::v2::spot_trade_error::{CommonError, SpotApiErrorAny};
 use crate::proc::v2::processor::kafka::base::{
     KafkaConsumerConfig, KafkaProcessorConfig, create_kafka_consumer,
 };
-use crate::proc::v2::trade_cmd_handlers::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
+use crate::proc::v2::trade_common_entitys::v3::event_handler::new_trade_event_handler::NewTradeEventHandler;
 
 pub struct KafkaSettlementEventActor<R: CmdRepo2 + Clone, P: EventPublisher2 + Clone> {
     consumer: StreamConsumer,

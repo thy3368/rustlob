@@ -1,4 +1,4 @@
-use cmd_handler::{CmdHandlerForUpdate3, CmdHandlerInternal};
+use common_entity::{CmdHandlerForUpdate3, CmdHandlerInternal};
 use db_repo::{CmdRepo2, EventPublisher2};
 
 use crate::proc::usds_m_future::behavior::trade_behavior::{NewOrderCmd, UsdsMFutureTradeCmdError};

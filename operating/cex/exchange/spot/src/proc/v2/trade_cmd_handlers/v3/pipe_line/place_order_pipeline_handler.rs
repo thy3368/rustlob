@@ -1,6 +1,6 @@
 use base_types::account::balance::Balance as AccountBalance;
 use base_types::exchange::spot::spot_types::{SpotOrder, SpotTrade};
-use cmd_handler::CmdHandlerForUpdate3;
+use common_entity::CmdHandlerForUpdate3;
 use db_repo::core::db_repo2::CmdRepo2;
 use db_repo::core::event_publish::EventPublisher2;
 use diff::diff_types::DomainEvent;
@@ -8,11 +8,11 @@ use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
 use crate::proc::behavior::v2::spot_trade_behavior::NewOrderCmd;
 use crate::proc::behavior::v2::spot_trade_error::SpotApiErrorAny;
-use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::match_order_handler::{
+use crate::proc::v2::trade_common_entitys::v3::common_entity::match_order_handler::{
     MatchCmd, MatchOrderCmdHandler,
 };
-use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::place_order_handler::PlaceOrderCmdHandler;
-use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::sett_order_handler::{
+use crate::proc::v2::trade_common_entitys::v3::common_entity::place_order_handler::PlaceOrderCmdHandler;
+use crate::proc::v2::trade_common_entitys::v3::common_entity::sett_order_handler::{
     SettOrderCmdHandler, SettlementCmd,
 };
 
@@ -98,7 +98,7 @@ mod tests {
     use lob_repo::core::symbol_lob_repo::MultiSymbolLobRepo;
 
     use super::*;
-    use crate::proc::v2::trade_cmd_handlers::v3::cmd_handler::mock_repo::MockEventPublisher;
+    use crate::proc::v2::trade_common_entitys::v3::common_entity::mock_repo::MockEventPublisher;
 
     fn create_test_cmd_with_quantity(client_order_id: &str, quantity: f64) -> NewOrderCmd {
         NewOrderCmd::new(

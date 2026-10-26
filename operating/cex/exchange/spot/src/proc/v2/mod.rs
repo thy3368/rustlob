@@ -9,7 +9,7 @@ pub mod id_repo;
 
 pub mod test;
 
-pub mod trade_cmd_handlers;
+pub mod trade_common_entitys;
 
 pub mod order_conversion;
 

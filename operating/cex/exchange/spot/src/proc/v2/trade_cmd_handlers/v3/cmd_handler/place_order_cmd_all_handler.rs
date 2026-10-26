@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn test_place_order_cmd_handler() {
+    fn test_place_order_common_entity() {
         let cmd = NewOrderCmd::new(
             CMetadata::default(),
             TradingPair::BtcUsdt,
