@@ -34,7 +34,7 @@ user-invocable: true
 - 用四色建模梳理角色、时标对象、描述、实体
 - 用 BPM / XPDL 组织流程域、活动、参与者与流转关系
 - 先做建模和设计，不进入实现细节
-- 为后续 `CommandUseCase2` 风格实现准备清晰边界
+- 为后续 `StateMachineV2` 风格实现准备清晰边界
 
 ## Deliverables
 
@@ -205,4 +205,4 @@ user-invocable: true
 - `../use-case/references/bpm/bdd_case.yaml`
 - `../use-case/references/bpm/xpdl-five-level-clean-architecture-mapping.md`
 - `../../.agents/skills/write-use-case/SKILL.md`
-- `../../lib/common/cmd_handler/src/use_case_def2.rs`
+- `../../lib/common/common_entity/src/use_case_def2.rs`
