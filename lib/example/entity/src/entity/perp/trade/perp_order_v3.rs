@@ -1,4 +1,4 @@
-use crate::spot::common_order::CommonOrder;
+use crate::entity::common::common_order::CommonOrder;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpOrderV3 {

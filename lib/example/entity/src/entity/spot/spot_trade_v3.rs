@@ -1,6 +1,6 @@
-use crate::spot::common_trade::TradeBase;
+use crate::entity::common::common_trade::TradeBase;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpotTradeV2 {
+pub struct SpotTradeV3 {
     pub comon_trade: TradeBase,
 }

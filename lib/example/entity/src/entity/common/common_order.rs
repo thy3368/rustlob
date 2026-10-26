@@ -1,9 +1,12 @@
+use base_types::UserId;
 use serde::{Deserialize, Serialize};
 
 use crate::{OrderGroupRelation, OrderSide, OrderTif, OrderType, SpotOrderStatus};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommonOrder {
+    pub owner: UserId,
+
     /// Hyperliquid 原生现货订单 `oid`。
     ///
     /// 字段名保留 `order_id` 以兼容本仓库内实体接口语义，但业务含义等同
@@ -18,9 +21,9 @@ pub struct CommonOrder {
     pub side: OrderSide,
     /// Hyperliquid `p` 字段；market 意图同样保存其激进限价。
     pub limit_px: u64,
-    /// 以 base asset 计价的下单数量。
+    /// 以 base asset 计价的可撮合数量。
     pub size: u64,
-    /// 已成交数量。
+    /// 下单数量。
     pub orig_size: u64,
 
     /// 统一的 Hyperliquid 订单类型事实。

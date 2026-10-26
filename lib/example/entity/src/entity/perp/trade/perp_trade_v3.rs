@@ -1,6 +1,6 @@
 use rust_decimal::Decimal;
 
-use crate::spot::common_trade::TradeBase;
+use crate::entity::common::common_trade::TradeBase;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PerpTradeKind {

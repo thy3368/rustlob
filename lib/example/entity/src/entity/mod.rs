@@ -4,6 +4,8 @@ mod reservation;
 
 pub mod transfer;
 
+pub mod common;
+
 pub mod hyperliquid_account;
 pub use market_data::{
     KlineAggregationError, KlineCandle, KlineInterval, KlineUpdate, SpotKlineAggregator,
@@ -60,7 +62,7 @@ pub use reservation::{
     ReservationKind, ReservationMarketKind, ReservationStatus,
 };
 use spot as spot_entity;
-pub use spot::common_trade::TradeBase;
+pub use common::common_trade::TradeBase;
 pub use spot::spot_kline::SpotKline;
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
