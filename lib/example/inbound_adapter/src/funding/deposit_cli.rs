@@ -1,12 +1,11 @@
 use common_entity::{
-    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
-    EntityReplayableEvent, UseCaseReplyMapper,
+    EntityReplayableEvent, ExecutionError, LogEntrySequencer, StateSink, StateSource,
 };
-use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteState};
+use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteUseCase};
 use serde::Serialize;
 
 use crate::common::{
-    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, execute_deposit_quote_with_mapper,
+    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, InboundReplyMapper, execute_deposit_quote_with_mapper,
     find_string_field, find_u64_field,
 };
 
@@ -64,14 +63,14 @@ impl ExampleBusinessErrorMapping for DepositQuoteError {
 }
 
 impl DepositQuoteCliCommand {
-    fn into_envelope(self) -> CommandEnvelope<DepositQuoteCmd> {
-        CommandEnvelope {
-            meta: CommandMeta {
-                trace_id: Some("cli-deposit-quote".to_string()),
-                command_id: Some(format!("cli:deposit:{}:{}", self.trader_id, self.amount)),
-            },
-            command: DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
-        }
+    fn into_log_entry(self) -> common_entity::LogEntry<DepositQuoteCmd> {
+        LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
+        )
     }
 }
 
@@ -112,7 +111,7 @@ pub struct DepositQuoteCliResponse {
 #[derive(Debug, Clone, Copy, Default)]
 struct DepositQuoteCliReplyMapper;
 
-impl UseCaseReplyMapper for DepositQuoteCliReplyMapper {
+impl InboundReplyMapper for DepositQuoteCliReplyMapper {
     type Reply = DepositQuoteCliResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
@@ -133,16 +132,22 @@ impl UseCaseReplyMapper for DepositQuoteCliReplyMapper {
 pub fn run_deposit_quote_cli<OB>(
     command: DepositQuoteCliCommand,
     outbound: &OB,
-) -> Result<DepositQuoteCliResponse, CommandUseCaseExecutionError<DepositQuoteError, OB::Error>>
+) -> Result<
+    DepositQuoteCliResponse,
+    ExecutionError<
+        DepositQuoteError,
+        <OB as StateSource<DepositQuoteUseCase>>::Error,
+    >,
+>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<Command = DepositQuoteCmd, State = DepositQuoteState>,
-    OB::Error: 'static,
+        + StateSource<DepositQuoteUseCase>
+        + StateSink<DepositQuoteUseCase, Error = <OB as StateSource<DepositQuoteUseCase>>::Error>,
 {
     execute_deposit_quote_with_mapper(
-        command.into_envelope(),
+        command.into_log_entry(),
         outbound,
         &DepositQuoteCliReplyMapper,
     )

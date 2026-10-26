@@ -1,9 +1,9 @@
 use actix_web::{HttpResponse, ResponseError};
 use axum::response::{IntoResponse, Response};
 use common_entity::{
-    CommandEnvelope, CommandUseCaseExecutionError, CommandUseCaseExecutor4, CommandUseCaseOutbound,
-    CommandUseCaseOutboundPhase, EntityError, EntityReplayableEvent, ExecutionError,
-    StateMachineV2, UseCaseReplyMapper,
+    EntityError, EntityReplayableEvent,
+    ExecutionError, LogEntry, StateMachineExecutor, StateMachineV2Diff, StateSink, StateSource,
+    
 };
 use example_core_use_case::{
     DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, WithdrawQuoteCmd,
@@ -15,6 +15,8 @@ pub use inbound_adapter_support::{
     outbound_phase_code,
 };
 
+pub(crate) trait InboundReplyMapper { type Reply; fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply; }
+
 pub trait ExampleBusinessErrorMapping: std::error::Error {
     fn inbound_error_code(&self) -> &'static str;
 
@@ -25,7 +27,7 @@ pub trait ExampleBusinessErrorMapping: std::error::Error {
 pub struct HttpInboundError(inbound_adapter_support::HttpInboundError);
 
 impl HttpInboundError {
-    pub fn from_execution_error<BE, OE>(error: CommandUseCaseExecutionError<BE, OE>) -> Self
+    pub fn from_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
     where
         BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
         OE: std::error::Error + Send + Sync + 'static,
@@ -49,12 +51,12 @@ impl HttpInboundError {
     }
 }
 
-impl<BE, OE> From<CommandUseCaseExecutionError<BE, OE>> for HttpInboundError
+impl<BE, OE> From<ExecutionError<BE, OE>> for HttpInboundError
 where
     BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
     OE: std::error::Error + Send + Sync + 'static,
 {
-    fn from(error: CommandUseCaseExecutionError<BE, OE>) -> Self {
+    fn from(error: ExecutionError<BE, OE>) -> Self {
         Self::from_execution_error(error)
     }
 }
@@ -98,7 +100,7 @@ impl CliInboundError {
         Self(inbound_adapter_support::CliInboundError::from_parse_error(error))
     }
 
-    pub fn from_execution_error<BE, OE>(error: CommandUseCaseExecutionError<BE, OE>) -> Self
+    pub fn from_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
     where
         BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
         OE: std::error::Error + Send + Sync + 'static,
@@ -129,31 +131,13 @@ impl CliInboundError {
     }
 }
 
-fn mi_error_to_command_error<BE, OE>(
-    error: ExecutionError<BE, OE>,
-) -> CommandUseCaseExecutionError<BE, OE>
+fn mi_error_to_command_error<BE, OE>(error: ExecutionError<BE, OE>) -> ExecutionError<BE, OE>
 where
     BE: std::error::Error + 'static,
     OE: std::error::Error + 'static,
 {
     match error {
-        ExecutionError::Business(error) => CommandUseCaseExecutionError::Business(error),
-        ExecutionError::ProjectEvents(error) => CommandUseCaseExecutionError::event_project(error),
-        ExecutionError::LoadState(error) => {
-            CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::LoadState, error)
-        }
-        ExecutionError::Persist(error) => {
-            CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Persist, error)
-        }
-        ExecutionError::Replay(error) => {
-            CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Replay, error)
-        }
-        ExecutionError::Publish(error) => {
-            CommandUseCaseExecutionError::outbound(CommandUseCaseOutboundPhase::Publish, error)
-        }
-        ExecutionError::DuplicateEventKey { .. } => CommandUseCaseExecutionError::event_project(
-            EntityError::Custom("duplicate replay event key".to_owned()),
-        ),
+        error => error,
     }
 }
 
@@ -169,53 +153,69 @@ impl std::error::Error for CliInboundError {
     }
 }
 
-pub(crate) fn execute_with_mapper<U, OB, M>(
+pub(crate) fn execute_with_mapper<U, OB, E, M>(
     use_case: &U,
-    envelope: CommandEnvelope<U::Command>,
+    command: LogEntry<U::Command>,
     outbound: &OB,
     mapper: &M,
-) -> Result<M::Reply, CommandUseCaseExecutionError<U::Error, OB::Error>>
+) -> Result<M::Reply, ExecutionError<U::Error, E>>
 where
-    U: StateMachineV2,
-    OB: ?Sized + Send + Sync + CommandUseCaseOutbound<Command = U::Command, State = U::GivenState>,
-    M: UseCaseReplyMapper,
-    OB::Error: 'static,
+    U: StateMachineV2Diff,
+    OB: ?Sized + Send + Sync + StateSource<U, Error = E> + StateSink<U, Error = E>,
+    E: std::error::Error + 'static,
+    M: InboundReplyMapper,
 {
-    let executor = CommandUseCaseExecutor4;
-    let result = executor.execute(use_case, envelope, outbound, &())?;
+    let executor = StateMachineExecutor;
+    let result = executor
+        .execute(use_case, &command, outbound, outbound)
+        .map_err(mi_error_to_command_error)?;
     Ok(mapper.map(result.events))
 }
 
 pub(crate) fn execute_deposit_quote_with_mapper<OB, M>(
-    envelope: CommandEnvelope<DepositQuoteCmd>,
+    command: LogEntry<DepositQuoteCmd>,
     outbound: &OB,
     mapper: &M,
-) -> Result<M::Reply, CommandUseCaseExecutionError<DepositQuoteError, OB::Error>>
+) -> Result<
+    M::Reply,
+    ExecutionError<
+        DepositQuoteError,
+        <OB as StateSource<DepositQuoteUseCase>>::Error,
+    >,
+>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<Command = DepositQuoteCmd, State = DepositQuoteState>,
-    M: UseCaseReplyMapper,
-    OB::Error: 'static,
+        + StateSource<DepositQuoteUseCase>
+        + StateSink<DepositQuoteUseCase, Error = <OB as StateSource<DepositQuoteUseCase>>::Error>,
+    M: InboundReplyMapper,
+    <OB as StateSource<DepositQuoteUseCase>>::Error: 'static,
 {
-    execute_with_mapper(&DepositQuoteUseCase, envelope, outbound, mapper)
+    execute_with_mapper(&DepositQuoteUseCase, command, outbound, mapper)
 }
 
 pub(crate) fn execute_withdraw_quote_with_mapper<OB, M>(
-    envelope: CommandEnvelope<WithdrawQuoteCmd>,
+    command: LogEntry<WithdrawQuoteCmd>,
     outbound: &OB,
     mapper: &M,
-) -> Result<M::Reply, CommandUseCaseExecutionError<WithdrawQuoteError, OB::Error>>
+) -> Result<
+    M::Reply,
+    ExecutionError<
+        WithdrawQuoteError,
+        <OB as StateSource<WithdrawQuoteUseCase>>::Error,
+    >,
+>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<Command = WithdrawQuoteCmd, State = WithdrawQuoteState>,
-    M: UseCaseReplyMapper,
-    OB::Error: 'static,
+        + StateSource<WithdrawQuoteUseCase>
+        + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
+    M: InboundReplyMapper,
+    <OB as StateSource<WithdrawQuoteUseCase>>::Error: 'static,
 {
-    execute_with_mapper(&WithdrawQuoteUseCase, envelope, outbound, mapper)
+    execute_with_mapper(&WithdrawQuoteUseCase, command, outbound, mapper)
 }
 
 pub(crate) fn find_string_field(
@@ -264,13 +264,11 @@ pub(crate) fn find_last_u64_field(
 pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
-    use common_entity::{
-        CommandUseCaseOutbound, EntityReplayableEvent, LogEntry, StateSink, StateSource,
-    };
+    use common_entity::{EntityReplayableEvent, LogEntry, StateSink, StateSource};
     use example_core_use_case::{
-        Balance, DepositQuoteCmd, DepositQuoteState, PlaceMatchSpotOrderV2State,
-        PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, WithdrawQuoteCmd,
-        WithdrawQuoteState,
+        Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
+        PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
+        WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteUseCase,
     };
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(crate) enum TestOutboundError {
@@ -396,12 +394,13 @@ pub(crate) mod tests {
         }
     }
 
-    impl CommandUseCaseOutbound for DepositQuoteTestOutbound {
-        type Command = DepositQuoteCmd;
-        type State = DepositQuoteState;
+    impl StateSource<DepositQuoteUseCase> for DepositQuoteTestOutbound {
         type Error = TestOutboundError;
 
-        fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
+        fn load_given_state(
+            &self,
+            _cmd: &LogEntry<DepositQuoteCmd>,
+        ) -> Result<DepositQuoteState, Self::Error> {
             Ok(DepositQuoteState {
                 quote_balance: Balance::new(
                     "trader-1".to_string(),
@@ -412,6 +411,10 @@ pub(crate) mod tests {
                 ),
             })
         }
+    }
+
+    impl StateSink<DepositQuoteUseCase> for DepositQuoteTestOutbound {
+        type Error = TestOutboundError;
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.state.persist(events)
@@ -426,12 +429,13 @@ pub(crate) mod tests {
         }
     }
 
-    impl CommandUseCaseOutbound for WithdrawQuoteTestOutbound {
-        type Command = WithdrawQuoteCmd;
-        type State = WithdrawQuoteState;
+    impl StateSource<WithdrawQuoteUseCase> for WithdrawQuoteTestOutbound {
         type Error = TestOutboundError;
 
-        fn load_state(&self, _cmd: &Self::Command) -> Result<Self::State, Self::Error> {
+        fn load_given_state(
+            &self,
+            _cmd: &LogEntry<WithdrawQuoteCmd>,
+        ) -> Result<WithdrawQuoteState, Self::Error> {
             Ok(WithdrawQuoteState {
                 quote_balance: Balance::new(
                     "trader-1".to_string(),
@@ -442,6 +446,10 @@ pub(crate) mod tests {
                 ),
             })
         }
+    }
+
+    impl StateSink<WithdrawQuoteUseCase> for WithdrawQuoteTestOutbound {
+        type Error = TestOutboundError;
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.state.persist(events)

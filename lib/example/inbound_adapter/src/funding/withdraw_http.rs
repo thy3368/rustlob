@@ -5,23 +5,19 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use common_entity::{
-    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
-    EntityReplayableEvent, UseCaseReplyMapper,
+    EntityReplayableEvent, ExecutionError, LogEntry, LogEntrySequencer, StateSink, StateSource,
 };
-use example_core_use_case::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState};
+use example_core_use_case::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteUseCase};
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
-    HttpInboundError, execute_withdraw_quote_with_mapper, find_string_field, find_u64_field,
+    HttpInboundError, InboundReplyMapper, execute_withdraw_quote_with_mapper, find_string_field, find_u64_field,
 };
 
 pub trait WithdrawQuoteOutboundAccess {
     type OutboundError: std::error::Error + Send + Sync + 'static;
-    type Outbound: CommandUseCaseOutbound<
-            Command = WithdrawQuoteCmd,
-            State = WithdrawQuoteState,
-            Error = Self::OutboundError,
-        >;
+    type Outbound: StateSource<WithdrawQuoteUseCase, Error = Self::OutboundError>
+        + StateSink<WithdrawQuoteUseCase, Error = Self::OutboundError>;
 
     fn withdraw_quote_outbound(&self) -> &Self::Outbound;
 }
@@ -35,11 +31,14 @@ pub struct WithdrawQuoteHttpRequest {
 }
 
 impl WithdrawQuoteHttpRequest {
-    fn into_envelope(self) -> CommandEnvelope<WithdrawQuoteCmd> {
-        CommandEnvelope {
-            meta: CommandMeta { trace_id: self.trace_id, command_id: self.command_id },
-            command: WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
-        }
+    fn into_log_entry(self) -> LogEntry<WithdrawQuoteCmd> {
+        LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
+        )
     }
 }
 
@@ -54,7 +53,7 @@ pub struct WithdrawQuoteHttpResponse {
 #[derive(Debug, Clone, Copy, Default)]
 struct WithdrawQuoteHttpReplyMapper;
 
-impl UseCaseReplyMapper for WithdrawQuoteHttpReplyMapper {
+impl InboundReplyMapper for WithdrawQuoteHttpReplyMapper {
     type Reply = WithdrawQuoteHttpResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
@@ -71,16 +70,22 @@ impl UseCaseReplyMapper for WithdrawQuoteHttpReplyMapper {
 pub fn handle_withdraw_quote_http<OB>(
     request: WithdrawQuoteHttpRequest,
     outbound: &OB,
-) -> Result<WithdrawQuoteHttpResponse, CommandUseCaseExecutionError<WithdrawQuoteError, OB::Error>>
+) -> Result<
+    WithdrawQuoteHttpResponse,
+    ExecutionError<
+        WithdrawQuoteError,
+        <OB as StateSource<WithdrawQuoteUseCase>>::Error,
+    >,
+>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<Command = WithdrawQuoteCmd, State = WithdrawQuoteState>,
-    OB::Error: 'static,
+        + StateSource<WithdrawQuoteUseCase>
+        + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
 {
     execute_withdraw_quote_with_mapper(
-        request.into_envelope(),
+        request.into_log_entry(),
         outbound,
         &WithdrawQuoteHttpReplyMapper,
     )

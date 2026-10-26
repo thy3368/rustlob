@@ -5,23 +5,19 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use common_entity::{
-    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
-    EntityReplayableEvent, UseCaseReplyMapper,
+    EntityReplayableEvent, ExecutionError, LogEntry, LogEntrySequencer, StateSink, StateSource,
 };
-use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteState};
+use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteUseCase};
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
-    HttpInboundError, execute_deposit_quote_with_mapper, find_string_field, find_u64_field,
+    HttpInboundError, InboundReplyMapper, execute_deposit_quote_with_mapper, find_string_field, find_u64_field,
 };
 
 pub trait DepositQuoteOutboundAccess {
     type OutboundError: std::error::Error + Send + Sync + 'static;
-    type Outbound: CommandUseCaseOutbound<
-            Command = DepositQuoteCmd,
-            State = DepositQuoteState,
-            Error = Self::OutboundError,
-        >;
+    type Outbound: StateSource<DepositQuoteUseCase, Error = Self::OutboundError>
+        + StateSink<DepositQuoteUseCase, Error = Self::OutboundError>;
 
     fn deposit_quote_outbound(&self) -> &Self::Outbound;
 }
@@ -35,11 +31,14 @@ pub struct DepositQuoteHttpRequest {
 }
 
 impl DepositQuoteHttpRequest {
-    fn into_envelope(self) -> CommandEnvelope<DepositQuoteCmd> {
-        CommandEnvelope {
-            meta: CommandMeta { trace_id: self.trace_id, command_id: self.command_id },
-            command: DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
-        }
+    fn into_log_entry(self) -> LogEntry<DepositQuoteCmd> {
+        LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
+        )
     }
 }
 
@@ -54,7 +53,7 @@ pub struct DepositQuoteHttpResponse {
 #[derive(Debug, Clone, Copy, Default)]
 struct DepositQuoteHttpReplyMapper;
 
-impl UseCaseReplyMapper for DepositQuoteHttpReplyMapper {
+impl InboundReplyMapper for DepositQuoteHttpReplyMapper {
     type Reply = DepositQuoteHttpResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
@@ -71,16 +70,22 @@ impl UseCaseReplyMapper for DepositQuoteHttpReplyMapper {
 pub fn handle_deposit_quote_http<OB>(
     request: DepositQuoteHttpRequest,
     outbound: &OB,
-) -> Result<DepositQuoteHttpResponse, CommandUseCaseExecutionError<DepositQuoteError, OB::Error>>
+) -> Result<
+    DepositQuoteHttpResponse,
+    ExecutionError<
+        DepositQuoteError,
+        <OB as StateSource<DepositQuoteUseCase>>::Error,
+    >,
+>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<Command = DepositQuoteCmd, State = DepositQuoteState>,
-    OB::Error: 'static,
+        + StateSource<DepositQuoteUseCase>
+        + StateSink<DepositQuoteUseCase, Error = <OB as StateSource<DepositQuoteUseCase>>::Error>,
 {
     execute_deposit_quote_with_mapper(
-        request.into_envelope(),
+        request.into_log_entry(),
         outbound,
         &DepositQuoteHttpReplyMapper,
     )

@@ -1,12 +1,11 @@
 use common_entity::{
-    CommandEnvelope, CommandMeta, CommandUseCaseExecutionError, CommandUseCaseOutbound,
-    EntityReplayableEvent, UseCaseReplyMapper,
+    EntityReplayableEvent, ExecutionError, LogEntrySequencer, StateSink, StateSource,
 };
-use example_core_use_case::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteState};
+use example_core_use_case::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteUseCase};
 use serde::Serialize;
 
 use crate::common::{
-    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, execute_withdraw_quote_with_mapper,
+    ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, InboundReplyMapper, execute_withdraw_quote_with_mapper,
     find_string_field, find_u64_field,
 };
 
@@ -65,14 +64,14 @@ impl ExampleBusinessErrorMapping for WithdrawQuoteError {
 }
 
 impl WithdrawQuoteCliCommand {
-    fn into_envelope(self) -> CommandEnvelope<WithdrawQuoteCmd> {
-        CommandEnvelope {
-            meta: CommandMeta {
-                trace_id: Some("cli-withdraw-quote".to_string()),
-                command_id: Some(format!("cli:{}:withdraw:{}", self.trader_id, self.amount)),
-            },
-            command: WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
-        }
+    fn into_log_entry(self) -> common_entity::LogEntry<WithdrawQuoteCmd> {
+        LogEntrySequencer::from_metadata(
+            1,
+            1,
+            1,
+            1,
+            WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
+        )
     }
 }
 
@@ -113,7 +112,7 @@ pub struct WithdrawQuoteCliResponse {
 #[derive(Debug, Clone, Copy, Default)]
 struct WithdrawQuoteCliReplyMapper;
 
-impl UseCaseReplyMapper for WithdrawQuoteCliReplyMapper {
+impl InboundReplyMapper for WithdrawQuoteCliReplyMapper {
     type Reply = WithdrawQuoteCliResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
@@ -134,16 +133,22 @@ impl UseCaseReplyMapper for WithdrawQuoteCliReplyMapper {
 pub fn run_withdraw_quote_cli<OB>(
     command: WithdrawQuoteCliCommand,
     outbound: &OB,
-) -> Result<WithdrawQuoteCliResponse, CommandUseCaseExecutionError<WithdrawQuoteError, OB::Error>>
+) -> Result<
+    WithdrawQuoteCliResponse,
+    ExecutionError<
+        WithdrawQuoteError,
+        <OB as StateSource<WithdrawQuoteUseCase>>::Error,
+    >,
+>
 where
     OB: ?Sized
         + Send
         + Sync
-        + CommandUseCaseOutbound<Command = WithdrawQuoteCmd, State = WithdrawQuoteState>,
-    OB::Error: 'static,
+        + StateSource<WithdrawQuoteUseCase>
+        + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
 {
     execute_withdraw_quote_with_mapper(
-        command.into_envelope(),
+        command.into_log_entry(),
         outbound,
         &WithdrawQuoteCliReplyMapper,
     )

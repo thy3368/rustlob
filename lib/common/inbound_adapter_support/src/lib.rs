@@ -4,7 +4,7 @@ use actix_web::{HttpResponse, ResponseError};
 use anyhow::Error as AnyError;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use common_entity::{CommandUseCaseExecutionError, CommandUseCaseOutboundPhase};
+use common_entity::ExecutionError;
 pub use descriptor::{
     CliApiDescriptor, CliArgDescriptor, CliErrorCodeDescriptor, HttpApiDescriptor,
     HttpErrorCodeDescriptor, InboundApiDescriptor, build_api_manifest, build_cli_schema,
@@ -49,7 +49,7 @@ impl HttpInboundError {
     }
 
     pub fn from_execution_error_with<BE, OE, F>(
-        error: CommandUseCaseExecutionError<BE, OE>,
+        error: ExecutionError<BE, OE>,
         map_business: F,
     ) -> Self
     where
@@ -58,23 +58,23 @@ impl HttpInboundError {
         F: FnOnce(&BE) -> (u16, &'static str),
     {
         match error {
-            CommandUseCaseExecutionError::Business(error) => {
+            ExecutionError::Business(error) => {
                 let (status_code, code) = map_business(&error);
                 Self::new(status_code, code, error.to_string())
             }
-            CommandUseCaseExecutionError::EventProject(error) => Self {
+            ExecutionError::ProjectEvents(error) => Self {
                 status_code: 500,
                 code: "event_project_failed",
                 message: error.to_string(),
                 source: Some(AnyError::new(error)),
             },
-            CommandUseCaseExecutionError::Outbound { phase, source } => {
-                let code = outbound_phase_code(phase);
+            phase => {
+                let code = match phase { ExecutionError::LoadState(_) => "outbound_load_state_failed", ExecutionError::Persist(_) => "outbound_persist_failed", ExecutionError::Replay(_) => "outbound_replay_failed", ExecutionError::Publish(_) => "outbound_publish_failed", _ => "event_project_failed" };
                 Self {
                     status_code: 500,
                     code,
-                    message: source.to_string(),
-                    source: Some(AnyError::new(source)),
+                    message: format!("{phase:?}"),
+                    source: None,
                 }
             }
         }
@@ -160,7 +160,7 @@ impl CliInboundError {
     }
 
     pub fn from_execution_error_with<BE, OE, F>(
-        error: CommandUseCaseExecutionError<BE, OE>,
+        error: ExecutionError<BE, OE>,
         map_business_code: F,
     ) -> Self
     where
@@ -169,26 +169,26 @@ impl CliInboundError {
         F: FnOnce(&BE) -> &'static str,
     {
         match error {
-            CommandUseCaseExecutionError::Business(error) => Self {
+            ExecutionError::Business(error) => Self {
                 category: CliInboundErrorCategory::Business,
                 code: map_business_code(&error),
                 message: error.to_string(),
                 exit_code: 3,
                 source: Some(AnyError::new(error)),
             },
-            CommandUseCaseExecutionError::EventProject(error) => Self {
+            ExecutionError::ProjectEvents(error) => Self {
                 category: CliInboundErrorCategory::Runtime,
                 code: "event_project_failed",
                 message: error.to_string(),
                 exit_code: 1,
                 source: Some(AnyError::new(error)),
             },
-            CommandUseCaseExecutionError::Outbound { phase, source } => Self {
+            phase => Self {
                 category: CliInboundErrorCategory::Outbound,
-                code: outbound_phase_code(phase),
-                message: source.to_string(),
+                code: match phase { ExecutionError::LoadState(_) => "outbound_load_state_failed", ExecutionError::Persist(_) => "outbound_persist_failed", ExecutionError::Replay(_) => "outbound_replay_failed", ExecutionError::Publish(_) => "outbound_publish_failed", _ => "event_project_failed" },
+                message: format!("{phase:?}"),
                 exit_code: 4,
-                source: Some(AnyError::new(source)),
+                source: None,
             },
         }
     }
