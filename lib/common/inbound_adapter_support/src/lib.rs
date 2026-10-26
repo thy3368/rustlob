@@ -4,7 +4,7 @@ use actix_web::{HttpResponse, ResponseError};
 use anyhow::Error as AnyError;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use cmd_handler::command_use_case_def2::{
+use entity::{
     CommandUseCaseExecutionError, CommandUseCaseOutboundPhase,
 };
 pub use descriptor::{
@@ -236,7 +236,7 @@ pub fn outbound_phase_code(phase: CommandUseCaseOutboundPhase) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use cmd_handler::command_use_case_def2::{
+    use entity::{
         CommandUseCaseExecutionError, CommandUseCaseOutboundPhase, EventProjectError,
     };
 

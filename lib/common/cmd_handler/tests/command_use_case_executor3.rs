@@ -1,7 +1,7 @@
 use std::fmt;
 
 use cmd_handler::HandlerLatencyMetrics;
-use cmd_handler::command_use_case_def2::{
+use entity::{
     CommandEnvelope, CommandMeta, CommandUseCase3, CommandUseCaseExecutionError,
     CommandUseCaseExecutor3, CommandUseCaseOutbound, CommandUseCaseOutboundPhase,
     ObserveHandlerLatency, UseCaseOutput, UseCaseReplyMapper3,
