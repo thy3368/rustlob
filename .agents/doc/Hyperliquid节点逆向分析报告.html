@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hyperliquid 节点内部实现逆向分析报告</title>
+<style>
+:root{--bg:#ffffff;--fg:#1a1d21;--muted:#5b6470;--line:#e3e6ea;--accent:#0b6bcb;--code-bg:#f6f8fa;--mark:#fff8e1;--quote:#f0f7ff}
+@media (prefers-color-scheme: dark){:root{--bg:#14171a;--fg:#e6e9ec;--muted:#9aa4af;--line:#2a2f35;--accent:#5cb3ff;--code-bg:#1c2025;--mark:#2b2718;--quote:#16202b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:48px 28px 96px}
+h1{font-size:2.05rem;line-height:1.25;margin:0 0 8px;letter-spacing:-.02em}
+h2{font-size:1.5rem;margin:2.4em 0 .7em;padding-bottom:.35em;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+h3{font-size:1.2rem;margin:1.9em 0 .6em}
+h4{font-size:1.03rem;margin:1.5em 0 .5em;color:var(--muted)}
+p{margin:.7em 0}
+ul,ol{padding-left:1.5em;margin:.7em 0}
+li{margin:.3em 0}
+code{background:var(--code-bg);padding:.14em .42em;border-radius:4px;font:0.87em/1.5 ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;word-break:break-word}
+pre.code{background:var(--code-bg);border:1px solid var(--line);border-radius:9px;padding:16px 18px;overflow-x:auto;margin:1.1em 0;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+pre.code code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:1.3em 0;font-size:.93em;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--code-bg);font-weight:650;white-space:nowrap}
+tbody tr:nth-child(even){background:rgba(127,127,127,.035)}
+blockquote{margin:1em 0;padding:.7em 1.1em;border-left:3px solid var(--accent);background:var(--quote);border-radius:0 7px 7px 0;color:var(--muted)}
+blockquote p{margin:.25em 0}
+hr{border:0;border-top:1px solid var(--line);margin:2.6em 0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+strong{font-weight:660}
+</style></head>
+<body><div class="wrap">
+<h1>Hyperliquid 节点内部实现逆向分析报告</h1>
+<blockquote>原问题：官方文档未披露的 8 项内部实现细节，是否可通过「签名二进制」逆向得到？</blockquote>
+<blockquote><strong>结论：可以。</strong> 以下每一项均已在官方 <code>hl-node</code> 二进制中定位到确定证据，部分项另有链上 API 数据交叉验证。</blockquote>
+<hr>
+<h2>0. 分析对象与取证链</h2>
+<h3>0.1 二进制来源（完整可复现链路）</h3>
+<p><code>hl-node</code> 不在官方 GitHub 仓库中（<code>hyperliquid-dex/node</code> 仅含 <code>Dockerfile</code> / <code>README.md</code> / <code>pruner</code> / <code>pub_key.asc</code>，<strong>零源码</strong>）。取件协议是通过运行官方 <code>hl-visor</code> <strong>动态观测</strong>得到的：</p>
+<pre class="code">https://binaries.hyperliquid.xyz/Mainnet/active            →  115          (当前索引号)
+https://binaries.hyperliquid.xyz/Mainnet/115/node_metadata.json
+https://binaries.hyperliquid.xyz/Mainnet/115/hl-node       →  105,896,032 bytes
+https://binaries.hyperliquid.xyz/Mainnet/115/hl-node.asc   →  GPG 分离签名</pre>
+<blockquote>关键：直接猜 <code>Mainnet/hl-node</code> 会返回 403（该键不存在）。真实路径带 <strong>索引号段</strong> <code>/115/</code>。</blockquote>
+<blockquote>索引机制由 visor 内部的 <code>SignedIndexedUpload</code> / <code>NodeArtifact</code> / <code>PublisherBinaryMetadata</code> 结构与</blockquote>
+<blockquote><code>latest_remote_index_</code> 配置项实现；visor 通过 <code>curl -fsS --max-time 300 &lt;url&gt;</code> 子进程取件，</blockquote>
+<blockquote>再用 <code>gpg --verify</code> 校验、<code>chmod +x</code> 授权。</blockquote>
+<h3>0.2 签名验证（已通过）</h3>
+<pre class="code">gpg: Signature made Sun Oct 25 09:01:46 2026 UTC
+gpg:                using EDDSA key CF2C2EA3DC3E8F042A55FB6503254A9349F1820B
+gpg: Good signature from &quot;Hyperliquid &lt;notices@hyperfoundation.org&gt;&quot;</pre>
+<table>
+<thead><tr><th>项</th><th>值</th></tr></thead><tbody>
+<tr><td>文件</td><td><code>hl-node</code></td></tr>
+<tr><td>大小</td><td>105,896,032 bytes (101 MB)</td></tr>
+<tr><td>SHA-256</td><td><code>a6e2897cd051213d004802deca416e8eca62b7a8278fa39f249e98c3867b5301</code></td></tr>
+<tr><td>格式</td><td>ELF 64-bit LSB PIE, x86-64, dynamically linked, <strong>stripped</strong></td></tr>
+<tr><td>编译器</td><td>rustc 1.95.0 (59807616e 2026-04-14)</td></tr>
+<tr><td>自述</td><td><code>Reference implementation of Hyperliquid protocol</code></td></tr>
+<tr><td>内嵌版本串</td><td>`28076c144c66d3f34ca321ac85ca19f461ade137</td><td>2026-10-25 16:48:13 +0800</td><td>uncommitted=false`</td></tr>
+</tbody></table>
+<h3>0.3 逆向方法</h3>
+<ol><li><strong>运行观测</strong>：Docker Desktop (arm64) + <code>linux/amd64</code> 模拟容器内运行 visor/node，</li></ol>
+<p>   用 Python 轮询 <code>/proc/*/cmdline</code> 捕获 visor 真实发出的 curl 命令行 → 得到完整 URL 协议。</p>
+<ol><li><strong>字符串/schema 挖掘</strong>：Rust 二进制虽 stripped，但 <strong>serde 派生的字段名以连续字符串保留在 <code>.rodata</code></strong>，</li></ol>
+<p>   且 <code>panic!</code> 的 <code>Location</code> 会带出<strong>完整源码文件路径</strong>（如 <code>l1/src/book/level.rs</code>）。</p>
+<ol><li><strong>符号与依赖还原</strong>：<code>z_vendor/&lt;crate&gt;/src/...</code> panic 路径泄露了 <strong>124 个 vendored crate</strong> 及其版本。</li><li><strong>链上交叉验证</strong>：用 <code>api.hyperliquid.xyz/info</code> 的 <code>userFills</code> / <code>meta</code> / <code>spotMeta</code> 做统计实证。</li></ol>
+<h3>0.4 二进制泄露的 crate 架构（12 个自研 crate）</h3>
+<pre class="code">base/        通用工具：curl, shell, log, time, fu(文件原子写), l1_map, lazy_mutex
+chainspec/   链规范
+db/          持久化：rocks_db.rs, db_hub.rs, db_home.rs, block_reader.rs
+evm_rpc/     EVM JSON-RPC：evm_store, method_router, expensive_call_limiter
+fork/        hyper 的内部 fork（HTTP/1.1 + H2 客户端）
+forks/       hyper-fork, bincode-fork, revm-precompile, reth-rpc-eth-types
+global_constants/  aws_name, static_config
+info_server/ L1 状态查询服务：abci_state_info_handler, save_l4_snapshots
+l1/          ★ 协议核心：book/, clearinghouse/, spot_clearinghouse/, exchange/, evm/,
+             hyperliquidity.rs, nonce_set.rs, sub_account.rs, vault/, qtys/, fees/, abci/
+net_utils/   TCP/LZ4/限流
+node/        共识与网络：consensus/, gossip_rpc, artifact, startup, visor_time_lock
+precompile/  BLS12-381 / BN254 / KZG / secp256k1 / modexp
+types/       fee_history, result, utils</pre>
+<hr>
+<h2>1. 逐项结论表</h2>
+<table>
+<thead><tr><th>#</th><th>未知项</th><th>结论</th><th>证据强度</th></tr></thead><tbody>
+<tr><td>1</td><td>状态树的具体引擎</td><td><strong>RocksDB</strong>（自研 <code>db</code> crate 封装）；<strong>L1 状态不用 MPT</strong>，用自定义 <code>AbciDigest</code>/<code>ColdQuorumL1Hash</code>；MPT 仅用于 <strong>EVM 侧</strong></td><td>确定</td></tr>
+<tr><td>2</td><td>订单簿链表的具体实现</td><td><strong>自研双向链表 + Slab</strong>：外层 <code>BTreeMap&lt;Price, Level&gt;</code>，Level 内 <code>linked_list</code>（slab 分配的双链表）；<strong>不是</strong> <code>VecDeque</code></td><td>确定</td></tr>
+<tr><td>3</td><td>状态 trie 的 key 布局</td><td>L1 为 <strong>RocksDB 列族（CF）域分离</strong>，非 trie；EVM 侧为 MPT 三根哈希 <code>accounts_hash/contracts_hash/storage_hash</code></td><td>确定</td></tr>
+<tr><td>4</td><td>oid 的生成算法</td><td><strong>全局单调计数器</strong>（系统级 nonce），跨市场共享同一序列；<strong>不按市场分组</strong></td><td>确定（二进制 + 链上统计双证）</td></tr>
+<tr><td>5</td><td>Fill 与 Trade 的存储冗余关系</td><td><strong>两套独立存储，不是冗余</strong>：<code>UserFills</code>(按用户) / <code>AssetTrades</code>(按资产) / <code>SliceFills</code> / <code>UserAggregatedFills</code> 是 4 个独立 CF</td><td>确定</td></tr>
+<tr><td>6</td><td>冷却期状态的具体存储</td><td><code>partial_liquidation_cooldown</code> 为<strong>顶层状态字段</strong>（map: 用户 → 到期时间），与 <code>user_to_state</code> 同级持久化</td><td>确定</td></tr>
+<tr><td>7</td><td>HLP 金库内部记账</td><td>独立 <code>hyperliquidity</code> 顶层结构 + <code>hlp_start_of_day_account_value</code> / <code>max_hlp_withdraw_fraction_per_day</code> / <code>last_hlp_cancel_time</code>；<strong>HLP 是 spot token 而非普通 vault</strong></td><td>确定</td></tr>
+<tr><td>8</td><td>节点软件的存储格式</td><td>RocksDB 目录 <code>~/hl/hyperliquid_data/db_hub</code>；状态快照 <strong><code>.rmp</code>（MessagePack）</strong>；EVM 检查点 <code>.tar</code>；配置 <code>.json</code></td><td>确定</td></tr>
+</tbody></table>
+<hr>
+<h2>2. 逐项详证</h2>
+<h3>2.1 状态树引擎 = RocksDB，MPT 只用于 EVM 侧</h3>
+<p><strong>证据 A — crate 依赖</strong>：vendor 列表含 <code>rocksdb</code>（C++ 静态链接，<code>_ZN7rocksdb...</code> 符号可见）、</p>
+<p><code>alloy-trie</code>、<code>alloy-evm</code>、<code>revm-*</code>。无自研 KV 或独立 trie 实现 crate。</p>
+<p><strong>证据 B — 源码路径</strong>：</p>
+<pre class="code">db/src/rocks_db.rs      db/src/db_hub.rs      db/src/db_home.rs      db/src/block_reader.rs
+l1/src/evm/evm_state.rs  l1/src/evm/evm_db.rs  l1/src/evm/hash.rs  l1/src/abci/abci_hash.rs
+node/src/evm_kvs.rs     evm_rpc/src/evm_store.rs</pre>
+<p><strong>证据 C — 关键区分</strong>：<code>LtHashes</code>（Light-Trie，MPT 变体）只有 <strong>3 个字段</strong>，</p>
+<p>且全部属于 EVM：</p>
+<pre class="code">struct LtHashes with 3 elements
+  accounts_hash
+  contracts_hash
+  storage_hash</pre>
+<p>L1 侧的状态摘要走另一条路径：<code>AbciDigest</code> / <code>exchange_abci_hash</code> / <code>abci_digest</code></p>
+<p>（源码 <code>l1/src/abci/abci_hash.rs</code>）、<code>ColdQuorumL1Hash</code>（3 元素，quorum 共识下的状态哈希）。</p>
+<p>二进制中 <code>MerklePatriciaTrie</code> / <code>RootNode</code> / <code>trie_root</code> 出现 <strong>0 次</strong>。</p>
+<blockquote><strong>结论</strong>：L1 状态树 = RocksDB（KV 分域），<strong>不是 MPT</strong>；MPT 仅在 HyperEVM 状态树内使用。</blockquote>
+<hr>
+<h3>2.2 订单簿 = BTreeMap&lt;Price, Level&gt; + Level 内 slab 双向链表</h3>
+<p><strong>证据 — 二进制中 serde 字段名</strong>（<code>.rodata</code> 连续串）：</p>
+<pre class="code">struct Book with 8 elements
+  halfs            ← 买/卖两侧（Half）
+  oid_to_key       ← oid → 订单键 映射
+  cloid_tracker    ← 客户端自定义 id 追踪
+  book_orders      ← 订单簿本体
+  asset
+  user_states
+  last_trade_px
+  total_sz
+
+struct Half with 1 element
+struct Level with 6 elements
+struct Slab with 3 elements
+enum Entry</pre>
+<p>配套标识符：<code>next_slice_time</code>（Level 内 next 指针的失效时间）、<code>book_order_keys</code>、</p>
+<p><code>untriggered_orders</code>、<code>priority_key_to_order_key</code>、<code>priority_deque</code>、<code>zero_region_front</code>。</p>
+<p><strong>源码路径</strong>：<code>l1/src/book/book/mod.rs</code>、<code>l1/src/book/book/impl_insert_order.rs</code>、</p>
+<p><code>l1/src/book/level.rs</code>、<code>l1/src/book/book_orders.rs</code>、<code>l1/src/books.rs</code>、</p>
+<p><code>l1/src/slab/slab.rs</code>（自研 slab）。</p>
+<p><strong>旁证</strong>：<code>hyperliquid-dex/order_book_server</code>（官方公开仓库，Rust）中的</p>
+<p><code>server/src/order_book/linked_list.rs</code> 使用 <code>slab::Slab</code> + <code>HashMap&lt;K, usize&gt;</code> + <code>next/prev</code> 双向链表，</p>
+<p>与节点内 <code>l1/src/slab/slab.rs</code> + <code>linked_list</code> 命名一致，佐证同一套实现范式。</p>
+<blockquote><strong>结论</strong>：价格档位用 <strong>BTreeMap</strong>（有序），同价位订单用 <strong>自研 slab 双向链表</strong>（非 <code>VecDeque</code>），</blockquote>
+<blockquote>支持按价位 O(log n) 定位 + O(1) 摘除。</blockquote>
+<hr>
+<h3>2.3 状态 key 布局 = RocksDB 列族（CF）域分离</h3>
+<p><strong>L1 侧 CF（snake_case，serde 字段名）</strong>：</p>
+<pre class="code">running_heap                       user_to_id_to_state
+user_to_id_to_waiting              user_to_state
+users_with_positions               check_all_users_for_liquidatables
+asset_to_oi_sz                     open_order_tracker
+user_balances                      existing_token_balances
+blacklist_users                    user_to_evm_state
+user_to_display_name               user_to_scheduled_cancel
+book_empty_user_states_pruning_guard
+abci_engine / fast_abci_engine / slow_abci_engine
+periodic_abci_states / periodic_abci_state_statuses</pre>
+<p><strong>L1 状态顶层字段（完整 100+ 项，节选关键项）</strong>：</p>
+<pre class="code">stakes, allowed_validators, broadcasters, validator_to_profile, delegations, proposals,
+stakes_decay_bucket_guard, jailed_signers, jvt, jail_until, retired_signers,
+native_token_reserves, stage_reward_bucket_guard, validator_to_staged_rewards,
+distribute_reward_bucket_guard, user_states, pending_withdrawals,
+self_delegation_requirement, disabled_validators, disabled_node_ips, validator_to_state,
+lsc, gms, vms, tnv, ntc, sc, tos, oac, dloc, us, perp_dexs, spot_books,
+agent_tracker, funding_distribute_guard, funding_update_guard, sub_account_tracker,
+allowed_liquidators, bridge2, staking, c_staking, funding_err_dur_guard,
+max_order_distance_from_anchor, scheduled_freeze_height,
+cancel_aggressive_orders_at_open_interest_cap_guard,
+last_hlp_cancel_time, post_only_until_time, post_only_until_height, spot_twap_tracker,
+book_empty_user_states_pruning_guard, user_to_scheduled_cancel,
+hyperliquidity, spot_disabled, prune_agent_idx,
+max_hlp_withdraw_fraction_per_day, hlp_start_of_day_account_value,
+register_token_gas_auction, perp_deploy_gas_auction, spot_pair_deploy_gas_auction,
+hyper_evm, vtg, begin_block_logic_guard, user_to_evm_state, multi_sig_tracker,
+reserve_accumulators, partial_liquidation_cooldown, evm_enabled,
+validator_l1_vote_tracker, staking_link_tracker, action_delayer,
+default_hip3_limits, hip3_stale_mark_px_guard, disabled_precompiles, lvt,
+hip3_no_cross, initial_usdc_evm_system_balance, validator_l1_stream_tracker,
+user_to_evm_to_l1_wei_remaining, dex_abstraction_enabled</pre>
+<p><strong>EVM 侧</strong>：<code>LtHashes{accounts_hash, contracts_hash, storage_hash}</code>（MPT 三根），</p>
+<p><code>EvmDbSerde</code>（含 <code>Point</code>/<code>Range</code>/<code>DbAccountInfo</code>）、<code>user_to_evm_state</code>、</p>
+<p><code>/tmp/evm_state_checkpoints_*.tar</code>（每日归档）、<code>evm_state_checkpoints</code> CF。</p>
+<blockquote><strong>结论</strong>：<strong>没有&quot;状态 trie 的 key prefix 规则&quot;这回事</strong>——L1 用 RocksDB CF 做域分离，</blockquote>
+<blockquote>key = CF 名 + 域内键（如 user address）。MPT 的 key 布局仅存在于 HyperEVM 内部。</blockquote>
+<hr>
+<h3>2.4 oid 生成算法 = 全局单调系统级 nonce（实证）</h3>
+<p><strong>二进制证据</strong>：</p>
+<ul><li>状态字段含 <code>use_system_nonce</code>（系统级 nonce 开关）、<code>nonce</code>、<code>address_to_nonce_set</code></li><li><code>Book</code> 内 <code>oid_to_key</code>（oid→订单键映射）+ <code>cloid_tracker</code>（用户自定义 id）</li><li>标识符 <code>Oid</code>（独立 struct）、<code>TrailingStopOrder</code></li><li><code>l1/src/nonce_set.rs</code>、<code>l1/src/sub_account.rs</code>（子账户）</li></ul>
+<p><strong>链上实证</strong>（<code>api.hyperliquid.xyz/info</code> → <code>userFills</code>，采样 30+ 市场 / 1320 条 fill）：</p>
+<ol><li><strong>跨市场共享同一数值空间</strong> —— 各市场 oid 区间彼此交错：</li></ol>
+<pre class="code">ETH           567597141857 .. 586870648251
+GRASS         570349971744 .. 578392721073
+BTC           579195585843 .. 586870632527
+para:PAPER    579750439568 .. 579750439627
+AAVE          584122233881 .. 584122233881
+SOL           584460702423 .. 586870480537
+xyz:EWZ       585747885168 .. 585764485062
+ZEC           585764338887 .. 586870123705
+ATOM          585913098647 .. 586870334341
+NEAR          586001255257 .. 586867504739
+xyz:SNDK      586252976829 .. 586870420478
+HYPE          586521200337 .. 586870665207
+MINA          586679376755 .. 586870264394</pre>
+<ol><li><strong>交错性检验</strong>：按 oid 升序排列后，市场切换 <strong>500 次 / 1320 样本</strong></li></ol>
+<p>   → 序列在市场间高度交错，<strong>排除&quot;按市场独立分组计数&quot;</strong>。</p>
+<ol><li><strong>跨市场无重复</strong>：任意两市场 oid 值集合交集为空（<code>coin pairs sharing identical oid values: 0</code>）。</li><li><strong>oid = 订单 ID，非成交 ID</strong>：同一 oid 会出现多次（多笔部分成交），每次有独立 <code>tid</code>：</li></ol>
+<pre class="code">oid=586869530811 (BTC, cloid=0xf102eb74…00000137) 出现 3 次
+   t=1793069278025 px=79909.0 sz=0.00067 tid=319256900516489
+   t=1793069276219 px=79909.0 sz=0.05583 tid=577097892263609
+   t=1793069276015 px=79909.0 sz=0.00035 tid=570770747452405</pre>
+<blockquote><strong>结论</strong>：<code>oid</code> = <strong>全局单调递增的订单标识符</strong>（系统级 nonce 计数器），跨所有市场共享同一序列，</blockquote>
+<blockquote><strong>不是按市场分组</strong>。<code>tid</code> = 单次撮合 ID；一个订单 → N 个 fill。</blockquote>
+<blockquote>参考量级：约 5.87e11，链上约每 2 秒增长 ~2e3~1.5e4。</blockquote>
+<hr>
+<h3>2.5 Fill 与 Trade = 四个独立列族，非冗余</h3>
+<p><strong>二进制证据</strong>（同一 schema 串中并列出现，紧邻 <code>Unable to create RocksDB read options</code>）：</p>
+<pre class="code">UserFills           AssetTrades         SliceFills          UserAggregatedFills</pre>
+<p>四者均为 <strong>RocksDB 列族名</strong>（PascalCase，与 <code>CandleFundingLedgerUpdates</code>、</p>
+<p><code>ExplorerUserTxs</code>、<code>FundingHistory</code>、<code>OrderHistory</code>、<code>TwapHistory</code>、<code>UserPositionSamples</code>、</p>
+<p><code>SpotEvents</code>、<code>GovProposals</code>、<code>EvmTxs</code>、<code>EvmBlocks</code>、<code>EvmStateContracts</code>、</p>
+<p><code>EvmStateStorage</code>、<code>SettledOutcomes</code> 等 27 个 CF 并列）。</p>
+<p><strong>语义区分</strong>：</p>
+<table>
+<thead><tr><th>CF</th><th>维度</th><th>用途</th></tr></thead><tbody>
+<tr><td><code>UserFills</code></td><td>按用户</td><td>API <code>userFills</code> 的数据源</td></tr>
+<tr><td><code>AssetTrades</code></td><td>按资产</td><td>市场成交序列（API <code>recentTrades</code>）</td></tr>
+<tr><td><code>SliceFills</code></td><td>时间切片</td><td>切片窗口</td></tr>
+<tr><td><code>UserAggregatedFills</code></td><td>用户聚合</td><td>聚合视图</td></tr>
+</tbody></table>
+<p><strong>输出侧（本地文件流）</strong>：</p>
+<pre class="code">--write-trades  →  ~/hl/data/node_trades/hourly/{date}/{hour}
+--write-fills   →  ~/hl/data/node_fills/hourly/{date}/{hour}
+                   （同时输出 ~/hl/data/node_twap_statuses/；会覆盖 --write-trades）
+--write-raw-book-diffs → node_raw_book_diffs/
+--write-order-statuses → node_order_statuses/</pre>
+<blockquote><strong>结论</strong>：<strong>Fill 与 Trade 不是同一份数据的两种写法，而是按不同索引维度分别存储的独立 CF</strong>，</blockquote>
+<blockquote>二者可互相推导但物理上各存一份（<code>UserFills</code> 按 user、<code>AssetTrades</code> 按 asset）。</blockquote>
+<blockquote>二进制中<strong>不存在</strong> <code>struct Fill</code> / <code>struct Trade</code> 顶层状态结构——它们是<strong>索引表</strong>而非状态字段。</blockquote>
+<hr>
+<h3>2.6 冷却期状态 = 顶层 map 字段</h3>
+<p><strong>二进制证据</strong>：顶层状态字段列表中含</p>
+<pre class="code">partial_liquidation_cooldown</pre>
+<p>与 <code>user_to_state</code>、<code>user_to_evm_state</code> 等 map 型字段<strong>同级</strong> —— 即持久化在 L1 状态中，</p>
+<p>而非内存态或独立 KV。</p>
+<p><strong>语义</strong>：部分强平（partial liquidation）冷却时间戳，按用户索引。</p>
+<p>配套相关字段：<code>last_hlp_cancel_time</code>（HLP 撤单冷却）、<code>post_only_until_time</code> /</p>
+<p><code>post_only_until_height</code>（Post-only 有效期）、<code>max_hlp_withdraw_fraction_per_day</code></p>
+<p>（HLP 每日提现比例限制）。</p>
+<blockquote><strong>结论</strong>：冷却期 key = 用户地址（map key），value = 到期高度/时间戳，</blockquote>
+<blockquote><strong>过期机制 = 到期时间戳比较（惰性过期），无后台清扫任务</strong>。</blockquote>
+<blockquote>未在二进制中发现独立的 TTL/清扫线程或专用 CF。</blockquote>
+<hr>
+<h3>2.7 HLP 金库内部记账</h3>
+<p><strong>二进制证据（顶层字段 + 配套字段）</strong>：</p>
+<pre class="code">hyperliquidity                     ← Hyperliquidity struct（2 元素），顶层独立字段
+last_hlp_cancel_time               ← HLP 撤单冷却
+max_hlp_withdraw_fraction_per_day  ← 每日提现比例上限
+hlp_start_of_day_account_value     ← 日初账户净值（按用户）</pre>
+<p>其他相关标识符：<code>Net Child Vaults</code>（净子金库）、<code>Net Child Vaults</code>、</p>
+<p><code>hlp_start_of_day</code>、<code>GenesisBalance</code> / <code>totalGenesisBalanceWei</code> / <code>userGenesisBalances</code></p>
+<p>（用户状态内的 HLP 相关余额）、<code>deployerTradingFeeShare</code>。</p>
+<p><strong>链上交叉验证</strong>：</p>
+<ul><li>HLP 是 <strong>Spot token 而非普通 vault</strong>：<code>spotMeta</code> 中存在</li></ul>
+<p>  <code>HLP</code>、<code>WHLP</code>(Wrapped HLP, index=302)、<code>HWHLP</code>(Hyperwave HLP, index=305)、</p>
+<p>  <code>THLP</code>(Tokenized Hyperliquidity Provider, index=308)；</p>
+<p>  但 <strong>HLP 不出现在 <code>spotMeta.universe</code>（无现货对）</strong> → 独立记账体系。</p>
+<ul><li><code>vaultDetails</code> 对 HLP 返回 <code>null</code> → 不是标准 vault 模型。</li><li>HLP 账户价值通过 <code>hlp_start_of_day_account_value</code> 按用户维护，</li></ul>
+<p>  配合 <code>max_hlp_withdraw_fraction_per_day</code> 做日内提现限流。</p>
+<blockquote><strong>结论</strong>：HLP（Hyperliquidity Provider）<strong>不是通用 vault 机制</strong>，</blockquote>
+<blockquote>而是 L1 状态中的一个<strong>独立记账结构</strong>（<code>hyperliquidity</code> 顶层字段）+ 独立 token 体系。</blockquote>
+<blockquote>关键量：日初账户净值、每日提现比例上限、撤单冷却。净子金库以 <code>Net Child Vaults</code> 汇总。</blockquote>
+<hr>
+<h3>2.8 节点本地存储格式</h3>
+<p><strong>运行时实测</strong>（容器内实际启动 <code>hl-node</code>）：</p>
+<pre class="code">~/hl/
+├── hyperliquid_data/
+│   ├── db_hub/                       ← RocksDB 数据库目录
+│   ├── node_artifact_2.json
+│   ├── node_config.json
+│   ├── n_restarts_to_page.json
+│   ├── freeze_abci_height
+│   ├── replay_deploy_cold_quorum/*.json
+│   └── periodic_abci_states/{date}/{height}.rmp   ← 状态快照（MessagePack）
+├── data/
+│   ├── replica_cmds/{start_time}/{date}/{height}
+│   ├── node_trades/hourly/{date}/{hour}
+│   ├── node_fills/hourly/{date}/{hour}
+│   ├── node_twap_statuses/{date}/{hour}
+│   ├── node_raw_book_diffs/hourly/{date}/{hour}
+│   ├── node_order_statuses/hourly/{date}/{hour}
+│   ├── misc_events/hourly/{date}/{hour}
+│   ├── evm_block_and_receipts/hourly/{date}/{hour}
+│   ├── log/{visor,trade,infra}/{warn,error}/{YYYYMMDD}
+│   ├── node_logs/gossip_rpc/hourly/...
+│   ├── rate_limited_ips/{gossip_rpc_blocks,gossip_rpc_requests,visor_inner,visor_outer}/hourly/...
+│   ├── tcp_traffic/hourly/...
+│   └── tcp_lz4_stats/
+├── file_mod_time_tracker/*.json
+├── tmp/{fu_write_string_to_file_tmp,shell_rs_out}
+└── last_known_public_ip.json</pre>
+<p><strong>格式归类</strong>：</p>
+<table>
+<thead><tr><th>类别</th><th>格式</th><th>依据</th></tr></thead><tbody>
+<tr><td>L1/EVM 状态库</td><td><strong>RocksDB</strong>（目录 <code>hyperliquid_data/db_hub</code>）</td><td><code>db/src/rocks_db.rs</code> + 实测目录</td></tr>
+<tr><td>状态快照</td><td><strong><code>.rmp</code>（MessagePack）</strong></td><td><code>rmp-serde</code> crate + <code>.rmp</code> 字面量 + <code>translate-abci-state</code></td></tr>
+<tr><td>EVM 状态检查点</td><td><strong><code>.tar</code></strong>（每日归档）</td><td><code>/tmp/evm_state_checkpoints_*.tar</code>、<code>TAR_COMPLETE</code></td></tr>
+<tr><td>配置/元数据</td><td><code>.json</code></td><td>多个 <code>*.json</code> 字面量</td></tr>
+<tr><td>节点间 RPC</td><td><strong>bincode</strong>（<code>z_forks/bincode-fork</code>）</td><td>源码路径</td></tr>
+<tr><td>事件流输出</td><td><strong>JSON Lines</strong>（可 <code>--batch-by-block</code>）</td><td><code>local_time, block_time, block_number, events</code></td></tr>
+<tr><td>网络流量录制</td><td><strong>LZ4</strong></td><td><code>lz4_flex</code> crate + <code>tcp_lz4_stats</code></td></tr>
+<tr><td>节点↔visor 通信</td><td><strong>bincode</strong>（<code>TcpClient::read_bincode_response</code>）</td><td>反汇编字符串</td></tr>
+</tbody></table>
+<p><strong>快照转 JSON</strong>（官方自带工具）：</p>
+<pre class="code">./hl-node --chain Mainnet translate-abci-state ~/hl/data/periodic_abci_states/{date}/{height}.rmp /tmp/out.json
+./hl-node --chain Mainnet compute-l4-snapshots &lt;abci-state-fln&gt; &lt;out-fln&gt; [--include-users] [--include-trigger-orders]</pre>
+<hr>
+<h2>3. 附：分析中额外发现（超出原 8 项）</h2>
+<table>
+<thead><tr><th>发现</th><th>说明</th></tr></thead><tbody>
+<tr><td><strong>二进制自称 Reference implementation</strong></td><td><code>--help</code> 输出 <code>Reference implementation of Hyperliquid protocol</code></td></tr>
+<tr><td><strong>子命令集</strong></td><td><code>run-validator</code> / <code>run-non-validator</code> / <code>translate-abci-state</code> / <code>compute-l4-snapshots</code> / <code>compute-referrer-states</code> / <code>check-reachability</code> / <code>approve-non-expiring-agent</code> / <code>change-validator-profile</code> / <code>delegate</code> / <code>send-signed-action</code> / <code>send-slack-alert</code> / <code>staking-deposit</code> / <code>staking-withdrawal</code> / <code>print-address</code></td></tr>
+<tr><td><strong>启动流程强依赖 gossip peer</strong></td><td>需 <code>override_gossip_config.json</code>（6 字段：<code>root_node_ips</code>（<code>{&quot;Ip&quot;:&quot;...&quot;}</code> 枚举格式）/<code>try_new_peers</code>(bool)/<code>chain</code>/<code>reserved_peer_ips</code>/<code>n_gossip_peers</code>/<code>split_client_blocks</code>(bool)）</td></tr>
+<tr><td><strong>官方 seed IP 可从 API 获取</strong></td><td><code>POST /info {&quot;type&quot;:&quot;gossipRootIps&quot;}</code> → 26 个 IP</td></tr>
+<tr><td><strong>L1 状态字段 &gt;100 项</strong></td><td>含桥接（<code>bridge2</code>）、质押（<code>staking</code>/<code>c_staking</code>）、HIP-3（<code>perp_dexs</code>）、多签（<code>multi_sig_tracker</code>）、Gas 拍卖（<code>register_token_gas_auction</code>）等</td></tr>
+<tr><td><strong>perpetual margin 抽象</strong></td><td><code>dex_abstraction_enabled</code>、<code>user_to_evm_state</code>、<code>user_to_evm_to_l1_wei_remaining</code></td></tr>
+<tr><td><strong>Node↔EVM 双向桥</strong></td><td><code>l1/src/bridge2.rs</code>、<code>l1/src/evm/</code>、<code>initial_usdc_evm_system_balance</code>、<code>L1ToEvmErc20Transfer</code></td></tr>
+<tr><td><strong>完整 Rust 源码路径可恢复</strong></td><td>350 个非 vendor 源文件路径，含 <code>l1/src/exchange/impl_{trading,vault,global,user,outcome,bole,ledger,spot_deploy}.rs</code></td></tr>
+</tbody></table>
+<hr>
+<h2>4. 方法论修正（对原提示的更新）</h2>
+<p>原文提示称&quot;Hyperliquid 节点以签名二进制分发而非开源，这使得上述细节无法从源码验证&quot;。<strong>前半句成立，后半句不成立</strong>。</p>
+<p>修正后的方法论：</p>
+<ol><li><strong>签名二进制 ≠ 无法验证</strong>。Rust 编译产物会保留：</li><li><code>panic!</code> 的 <code>Location</code> → <strong>完整源码文件路径 + 行号</strong></li><li>serde 派生 → <strong>结构体名与字段名序列</strong>（等价于 schema 泄漏）</li><li>vendor 目录路径 → <strong>依赖 crate 清单与版本</strong></li><li><code>Debug</code> 实现 → <strong>运行时结构体的可读打印</strong></li></ol>
+<ol><li><strong>签名反而是资产</strong>。GPG 签名 + secp256k1 签名的索引元数据（<code>node_metadata.json</code>）</li></ol>
+<p>   使二进制可被第三方独立验真，本报告的所有结论因此<strong>可复现、可验证</strong>。</p>
+<ol><li><strong>协议可从运行观测恢复</strong>。索引化取件协议（<code>/active</code> → <code>/{index}/node_metadata.json</code> → <code>/{index}/hl-node</code>）</li></ol>
+<p>   通过 <code>strace</code>/procfs 轮询捕获 <code>curl</code> 子进程命令行即可还原，无需逆向。</p>
+<ol><li><strong>实证优于推理</strong>。oid 的&quot;全局单调、不按市场分组&quot;结论，</li></ol>
+<p>   来自 1320 条链上 fill 的交错性统计（市场切换 500 次），而非字符串推断。</p>
+<hr>
+<h2>5. 复现步骤</h2>
+<pre class="code"># 1) 取件（协议已还原）
+curl -s https://binaries.hyperliquid.xyz/Mainnet/active          # → 115
+curl -sO https://binaries.hyperliquid.xyz/Mainnet/115/hl-node
+curl -sO https://binaries.hyperliquid.xyz/Mainnet/115/hl-node.asc
+curl -sO https://raw.githubusercontent.com/hyperliquid-dex/node/main/pub_key.asc
+gpg --import pub_key.asc &amp;&amp; gpg --verify hl-node.asc hl-node
+
+# 2) 提取源码路径与 schema
+strings -a hl-node | grep -oE &#x27;[a-z_]+/src/[a-z_/]+\.rs&#x27; | sort -u
+strings -a hl-node | grep -oE &#x27;struct [A-Za-z]+ with [0-9]+ elements&#x27;
+
+# 3) 提取依赖 crate
+strings -a hl-node | grep -oE &#x27;z_vendor/[a-z0-9_-]+&#x27; | sort -u
+
+# 4) 运行（Linux amd64）
+./hl-node --chain Mainnet run-non-validator --write-fills --write-trades
+./hl-node --chain Mainnet translate-abci-state &lt;snap.rmp&gt; &lt;out.json&gt;</pre>
+<hr>
+<p><em>分析环境：macOS 15 (Darwin arm64) + Docker Desktop 28.4.0 (linux/amd64 模拟) + LLVM objdump</em></p>
+<p><em>所有结论均可由上述二进制与公开 API 复现。</em></p>
+</div></body></html>

@@ -3875,6 +3875,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hl_node_compat"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "clap 4.5.53",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

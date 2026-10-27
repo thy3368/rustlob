@@ -18,7 +18,7 @@ pub enum CommonOrderTrigger {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CommonOrder {
+pub struct OrderBase {
     pub owner: UserId,
 
     /// Hyperliquid 原生现货订单 `oid`。
@@ -67,7 +67,7 @@ pub struct CommonOrder {
     pub version: u64,
 }
 
-impl CommonOrder {
+impl OrderBase {
     pub fn effective_tif(&self) -> OrderTif {
         match self.execution {
             CommonOrderExecution::Market => OrderTif::Ioc,

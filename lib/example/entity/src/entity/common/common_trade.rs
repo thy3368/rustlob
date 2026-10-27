@@ -12,7 +12,7 @@ pub struct TradeBase {
     /// Hyperliquid 现货资产编号。
     pub asset: u32,
     /// 交易对，例如 `BTCUSDT`。
-    pub symbol: String,
+    pub pair: String,
 
     pub taker_user: UserId,
     pub maker_user: UserId,

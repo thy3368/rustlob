@@ -1,6 +1,6 @@
 use base_types::UserId;
 use example_core_entity::entity::common::common_order::{
-    CommonOrder, CommonOrderExecution, CommonOrderTrigger,
+    OrderBase, CommonOrderExecution, CommonOrderTrigger,
 };
 use example_core_entity::{
     OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, SpotOrderStatus,
@@ -14,8 +14,8 @@ fn make_order(
     is_position_tpsl: bool,
     group_relation: OrderGroupRelation,
     limit_px: u64,
-) -> CommonOrder {
-    CommonOrder {
+) -> OrderBase {
+    OrderBase {
         owner: UserId(1),
         order_id: 7,
         asset: 10001,
@@ -195,7 +195,7 @@ fn valid_order_combinations_preserve_execution_and_trigger_facts() {
         assert_eq!(order.is_trigger(), expected_trigger, "{name}");
         assert_eq!(order.trigger_role(), expected_role, "{name}");
         assert!(order.has_consistent_execution_facts(), "{name}");
-        let restored: CommonOrder =
+        let restored: OrderBase =
             serde_json::from_str(&serde_json::to_string(&order).unwrap()).unwrap();
         assert_eq!(restored, order, "{name}");
     }
