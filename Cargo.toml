@@ -35,7 +35,6 @@ members = [
     "operating/cex/push/push",
     # study
     "study/web3",
-    "study/hyperliquid_analyzer",
     "study/hl_node_compat",
     "lib/example/use_case_executor", "lib/example/dex_inbound_adapter",
 ]
@@ -73,7 +72,6 @@ default-members = [
     "operating/cex/push/push",
     # study
     "study/web3",
-    "study/hyperliquid_analyzer",
 ]
 
 resolver = "2"
