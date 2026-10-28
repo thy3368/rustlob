@@ -1,0 +1,28 @@
+services:
+  consensus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CHAIN: ${CHAIN:-Mainnet}
+        HL_VERSION: ${HL_VERSION:-}
+        HL_PUBLIC_KEY_URL: ${HL_PUBLIC_KEY_URL:-https://raw.githubusercontent.com/hyperliquid-dex/node/main/pub_key.asc}
+    image: rustlob/hyperliquid-node:${CHAIN:-mainnet}
+    platform: linux/amd64
+    # hl-visor's signed self-update writes /usr/local/bin/hl-node.asc and
+    # replaces /usr/local/bin/hl-node. Keep the updater's required privilege;
+    # the data and config paths remain bind-mounted and isolated below.
+    user: "0:0"
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      HOME: /home/hyperliquid
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "${INFO_PORT:-3000}:3000/tcp"
+      - "${EVM_RPC_PORT:-3001}:3001/tcp"
+      - "${P2P_PORT_RANGE:-4000-4010}:4000-4010/tcp"
+      - "${P2P_PORT_RANGE:-4000-4010}:4000-4010/udp"
+    volumes:
+      - ./runtime/hl:/home/hyperliquid/hl
+      - ./runtime/config:/home/hyperliquid/config

@@ -1,0 +1,12 @@
+[package]
+name = "hyperliquid_node"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "Deployment package for an official Hyperliquid non-validator node"
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
