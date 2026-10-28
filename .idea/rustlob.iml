@@ -171,9 +171,11 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/example/lob_repo_v2/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/example/use_case_executor/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/example/use_case_executor/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/dpdk_http_frontend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/study/hl_node_compat/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/study/hl_node_domain/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/study/hl_node_domain/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_node/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

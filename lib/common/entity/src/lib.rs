@@ -10,7 +10,6 @@ mod use_case;
 pub use entity_v2::entity::{
     AggregateRole, Entity, EntityLifecycle, EntityMutationModel, EntityUseCaseApiPolicy,
     EntityUseCaseApiSurface, FieldDiff, FinancialClassification, FourColorArchetype,
-    MiCausalRelation, MiCausalSourceMetadata,
 };
 pub use entity_v2::entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayEventFieldParseError,
