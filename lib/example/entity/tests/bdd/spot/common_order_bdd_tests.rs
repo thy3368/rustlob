@@ -1,6 +1,6 @@
 use base_types::UserId;
 use example_core_entity::entity::common::common_order::{
-    OrderBase, CommonOrderExecution, CommonOrderTrigger,
+    CommonOrderExecution, CommonOrderTrigger, OrderBase,
 };
 use example_core_entity::{
     OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, SpotOrderStatus,

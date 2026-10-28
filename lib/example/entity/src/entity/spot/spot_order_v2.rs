@@ -1726,8 +1726,6 @@ impl Entity for SpotOrderV2 {
         FinancialClassification::BusinessVoucher
     }
 
-
-
     fn lsn(&self) -> u64 {
         self.version
     }

@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FieldDiff,
-    FinancialClassification, FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff,
+    FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
@@ -441,24 +441,6 @@ impl Entity for SpotTrade {
         FinancialClassification::BusinessVoucher
     }
 
-    fn mi_causal_sources() -> &'static [MiCausalSourceMetadata]
-    where
-        Self: Sized,
-    {
-        &[
-            MiCausalSourceMetadata {
-                source_fact_type: "spot_order",
-                relation: MiCausalRelation::CausedBy,
-                source_role: "taker_order",
-            },
-            MiCausalSourceMetadata {
-                source_fact_type: "spot_order",
-                relation: MiCausalRelation::DueTo,
-                source_role: "maker_order",
-            },
-        ]
-    }
-
     fn lsn(&self) -> u64 {
         1
     }
@@ -526,30 +508,6 @@ mod tests {
         assert_eq!(trade.fee_role_for_account("buyer"), Some(SpotTradeFeeRole::Taker));
         assert_eq!(trade.fee_role_for_account("seller"), Some(SpotTradeFeeRole::Maker));
         assert_eq!(trade.fee_role_for_account("outsider"), None);
-    }
-
-    #[test]
-    fn spot_trade_declares_mi_causal_source_metadata() {
-        assert_eq!(SpotTrade::four_color_archetype(), FourColorArchetype::MomentInterval);
-        assert_eq!(SpotTrade::mutation_model(), EntityMutationModel::AppendOnlyRecord);
-        assert_eq!(SpotTrade::aggregate_role(), AggregateRole::AggregateRoot);
-        assert_eq!(SpotTrade::financial_classification(), FinancialClassification::BusinessVoucher);
-        assert!(!SpotTrade::is_mi_chain_root());
-        assert_eq!(
-            SpotTrade::mi_causal_sources(),
-            &[
-                MiCausalSourceMetadata {
-                    source_fact_type: "spot_order",
-                    relation: MiCausalRelation::CausedBy,
-                    source_role: "taker_order",
-                },
-                MiCausalSourceMetadata {
-                    source_fact_type: "spot_order",
-                    relation: MiCausalRelation::DueTo,
-                    source_role: "maker_order",
-                },
-            ]
-        );
     }
 
     #[test]

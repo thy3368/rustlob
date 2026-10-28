@@ -35,8 +35,9 @@ members = [
     "operating/cex/push/push",
     # study
     "study/web3",
-    "study/hl_node_compat",
+    "study/hyperliquid_node",
     "lib/example/use_case_executor", "lib/example/dex_inbound_adapter",
+    "app/dpdk_http_frontend",
 ]
 
 # XDP/libbpf 依赖 Linux 内核头与 libelf，macOS 默认构建应跳过该 crate。
