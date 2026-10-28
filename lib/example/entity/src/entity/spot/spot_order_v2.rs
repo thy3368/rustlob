@@ -1726,12 +1726,7 @@ impl Entity for SpotOrderV2 {
         FinancialClassification::BusinessVoucher
     }
 
-    fn is_mi_chain_root() -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
+
 
     fn lsn(&self) -> u64 {
         self.version

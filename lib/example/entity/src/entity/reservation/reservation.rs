@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityError, EntityFieldChange, FieldDiff, FinancialClassification,
-    FourColorArchetype, MiCausalRelation, MiCausalSourceMetadata,
+    AggregateRole, Entity, EntityFieldChange, FieldDiff, FinancialClassification,
+    FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -430,24 +430,6 @@ impl Entity for Reservation {
         Self: Sized,
     {
         FinancialClassification::BusinessVoucher
-    }
-
-    fn is_mi_chain_root() -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
-
-    fn mi_causal_sources() -> &'static [MiCausalSourceMetadata]
-    where
-        Self: Sized,
-    {
-        &[MiCausalSourceMetadata {
-            source_fact_type: "order",
-            relation: MiCausalRelation::CausedBy,
-            source_role: "caused_by_order",
-        }]
     }
 
     fn lsn(&self) -> u64 {

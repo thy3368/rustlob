@@ -153,6 +153,7 @@ impl AggregateRole {
     }
 }
 
+//todo remove
 /// entity 对 use case 暴露 API 面的治理强度。
 ///
 /// 该分类不直接限制 Rust 语法层面的 `pub fn`，而是为 architecture policy 与静态 checker
@@ -175,6 +176,7 @@ impl EntityUseCaseApiSurface {
     }
 }
 
+//todo remove
 /// entity 面向 use case 暴露 API 的治理条款映射。
 ///
 /// 该结构是工程元数据落点；真正的执行仍依赖独立 checker 与 reviewer judgement。
@@ -206,32 +208,6 @@ impl EntityUseCaseApiPolicy {
             require_high_semantic_queries: true,
         }
     }
-}
-
-/// MI 因果链里当前事实与前驱事实之间的业务关系。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MiCausalRelation {
-    /// 当前事实由前驱事实直接触发或形成。
-    CausedBy,
-    /// 当前事实基于某个参与性前驱事实而成立。
-    DueTo,
-    /// 当前事实用于冲正或补偿前驱事实。
-    Compensates,
-    /// 当前事实用于结清前驱事实。
-    Settles,
-}
-
-/// 当前 MI 事实允许引用的前驱事实元数据。
-///
-/// 该结构描述类型级因果来源；具体实例仍由实体字段保存，例如订单 ID 或成交 ID。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct MiCausalSourceMetadata {
-    /// 前驱事实的稳定业务类型名。
-    pub source_fact_type: &'static str,
-    /// 当前事实与该前驱事实之间的因果关系。
-    pub relation: MiCausalRelation,
-    /// 同一前驱类型有多个参与角色时使用的业务角色名。
-    pub source_role: &'static str,
 }
 
 /// 可复用的字段级 diff 契约。
@@ -376,27 +352,6 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
                 EntityUseCaseApiPolicy::minimal_business_api()
             }
         }
-    }
-
-    /// 返回该实体类型是否是一条 MI 因果链的根事实类型。
-    /// 必须：当root=true时，必须补充该因果链根的业务方法 驱动状态演进，链根是因，内链内mi是果。
-    #[inline]
-    fn is_mi_chain_root() -> bool
-    where
-        Self: Sized,
-    {
-        false
-    }
-
-    /// 返回当前 MI 事实允许由哪些前驱 MI 事实导致。
-    ///
-    /// 这里表达类型级规则；具体因果实例仍由业务字段表达。
-    #[inline]
-    fn mi_causal_sources() -> &'static [MiCausalSourceMetadata]
-    where
-        Self: Sized,
-    {
-        &[]
     }
 
     fn lsn(&self) -> u64;
