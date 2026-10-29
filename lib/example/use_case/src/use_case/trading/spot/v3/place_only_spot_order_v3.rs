@@ -398,7 +398,7 @@ mod tests {
         assert_eq!(record.symbol, order(1).symbol);
         assert_eq!(record.limit_px, Decimal::new(10025, 2));
         assert_eq!((record.size, record.orig_size), (Decimal::new(15, 1), Decimal::new(15, 1)));
-        assert_eq!(record.taker_max_fee, Decimal::new(25, 2));
+        assert_eq!(record.buy_quote_fee_reserve_limit, Decimal::new(25, 2));
         assert_eq!(record.tif, OrderTif::Alo);
         assert_eq!(record.status, SpotOrderStatus::Pending);
         assert_eq!(record.group_relation, OrderGroupRelation::Standalone);

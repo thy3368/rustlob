@@ -3038,6 +3038,7 @@ dependencies = [
  "lob_repo_v2",
  "proptest",
  "rust_decimal",
+ "rust_decimal_macros",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3047,6 +3048,7 @@ dependencies = [
 name = "example_core_use_case"
 version = "0.1.0"
 dependencies = [
+ "base_types",
  "entity",
  "example_core_entity",
  "proptest",
@@ -8202,6 +8204,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust_decimal_macros"
+version = "1.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74a5a6f027e892c7a035c6fddb50435a1fbf5a734ffc0c2a9fed4d0221440519"
+dependencies = [
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10194,8 +10206,10 @@ dependencies = [
 name = "use_case_executor"
 version = "0.1.0"
 dependencies = [
+ "base_types",
  "criterion",
  "entity",
+ "example_core_entity",
  "example_core_use_case",
  "example_outbound_adapter",
  "rstest",
