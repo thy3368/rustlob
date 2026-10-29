@@ -34,6 +34,13 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
         _cmd: &Self::Command,
         _given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
+        
+      let amountCoin=  _given_state.order.freeze_requirement();
+
+        _given_state.balance.freeze(amountCoin.unwrap().amount());
+        
+        
+        
         todo!()
     }
 }
