@@ -311,6 +311,5 @@ mod tests {
             HyperliquidPerpFundingSettlement::financial_classification(),
             FinancialClassification::BusinessVoucher
         );
-        assert!(!HyperliquidPerpFundingSettlement::is_mi_chain_root());
     }
 }

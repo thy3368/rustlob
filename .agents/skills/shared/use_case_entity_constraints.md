@@ -71,8 +71,6 @@
 - `aggregate_role() -> AggregateRole`
 - `use_case_api_surface() -> EntityUseCaseApiSurface`
 - `use_case_api_policy() -> EntityUseCaseApiPolicy`
-- `is_mi_chain_root() -> bool`
-- `mi_causal_sources() -> &'static [MiCausalSourceMetadata]`
 
 ### Default Values And Override Semantics
 
@@ -81,8 +79,6 @@
 - `aggregate_role()` 默认是 `AggregateRole::Unclassified`
 - `use_case_api_surface()` 默认是 `EntityUseCaseApiSurface::LegacyUnconstrained`
 - `use_case_api_policy()` 由 `use_case_api_surface()` 映射得出
-- `is_mi_chain_root()` 默认是 `false`
-- `mi_causal_sources()` 默认是 `[]`
 
 `entity.rs` 对 override 语义有直接说明：
 
@@ -96,7 +92,6 @@
 - 若实体只在某个聚合内部存在，应 override 为 `AggregateMember`。
 - `AggregateMember` 只表达聚合内部存在，不应被 `use case` 直接依赖为主业务入口。
 - 聚合成员不应直接访问、装载、调用或导航其它聚合，也不应承载跨聚合协作逻辑。
-- 当 `is_mi_chain_root() == true` 时，trait 注释要求该因果链根补充业务方法来驱动状态演进。
 
 ## Boundary Rules Directly Supported By Facts
 
@@ -106,7 +101,6 @@
 - `AggregateRoot` 表达该实体统一承担本聚合对外业务入口与一致性边界。
 - `AggregateMember` 表达该实体只在聚合内部存在，不是 `use case` 的主业务入口。
 - `AggregateMember` 不应直接承担跨聚合访问或协作。
-- `is_mi_chain_root = true` 的实体，需要承担链根业务方法来驱动链内状态演进。
 - replay helper 的默认运行语义天然更贴近 `VersionedMutable`。
 - `AppendOnlyRecord`、`Snapshot`、`DerivedReadModel` 若要表达不同业务语义，需要显式 override
   `mutation_model()`。
