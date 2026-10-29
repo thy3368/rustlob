@@ -1,6 +1,7 @@
 mod funding;
 mod support;
 
+mod settlement;
 mod trading;
 
 pub use funding::{

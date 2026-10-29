@@ -1,7 +1,25 @@
 use base_types::UserId;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
+use crate::account::symbol::Symbol;
 use crate::{OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus};
+
+/// 从订单 Decimal 金额转换为整数资产最小单位时的错误。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum SpotAmountConversionError {
+    #[error("order and market symbols do not match")]
+    SymbolMismatch,
+    #[error("order amounts must not be negative")]
+    InvalidAmount,
+    #[error("amount cannot be represented exactly at the asset precision")]
+    InexactConversion,
+    #[error("arithmetic overflow while deriving spot freeze requirement")]
+    ArithmeticOverflow,
+    #[error("amount exceeds the u64 range")]
+    AmountOutOfRange,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CommonOrderExecution {
@@ -26,19 +44,17 @@ pub struct OrderBase {
     /// 字段名保留 `order_id` 以兼容本仓库内实体接口语义，但业务含义等同
     /// Hyperliquid numeric spot `oid`。
     pub order_id: u64,
-    /// Hyperliquid 现货资产编号，现货通常为 `10000 + spot index`。
-    pub asset: u32,
+    /// 订单所属交易对；业务身份以该 ID 为准。
+    pub symbol: Symbol,
 
-    /// 交易对展示名，例如 `BTCUSDT`。业务身份以 `asset` 为准。
-    pub pair: String,
     /// 买卖方向。
     pub side: OrderSide,
     /// Hyperliquid `p` 字段；market 意图同样保存其激进限价。
-    pub limit_px: u64,
+    pub limit_px: Decimal,
     /// 以 base asset 计价的可撮合数量。
-    pub size: u64,
+    pub size: Decimal,
     /// 下单数量。
-    pub orig_size: u64,
+    pub orig_size: Decimal,
     /// 订单如何执行。
     pub execution: CommonOrderExecution,
     /// 限价单有效方式；市价单固定按 IOC 执行。
@@ -46,7 +62,7 @@ pub struct OrderBase {
     /// 订单何时触发。
     pub trigger: CommonOrderTrigger,
     /// TP/SL 触发价格；普通订单必须为空。
-    pub trigger_px: Option<u64>,
+    pub trigger_px: Option<Decimal>,
     /// `normalTpsl` 父子关系；历史订单反序列化时默认为独立订单。
     pub group_relation: OrderGroupRelation,
     /// 是否为仓单
@@ -55,8 +71,8 @@ pub struct OrderBase {
     pub reduce_only: bool,
     /// 本地生命周期状态。
     pub status: SpotOrderStatus,
-    /// 冻结费 spot 特有
-    pub taker_max_fee: u64,
+    /// 冻结费 spot 特有，币用
+    pub taker_max_fee: Decimal,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub cloid: Option<String>,
     /// 订单创建时间，单位为 Unix 纳秒。
@@ -88,7 +104,7 @@ impl OrderBase {
         let trigger_is_valid = match self.trigger {
             CommonOrderTrigger::None => self.trigger_px.is_none(),
             CommonOrderTrigger::TakeProfit | CommonOrderTrigger::StopLoss => {
-                self.trigger_px.is_some_and(|px| px > 0)
+                self.trigger_px.is_some_and(|px| px > Decimal::ZERO)
             }
         };
         let group_is_valid = match &self.group_relation {
@@ -104,6 +120,6 @@ impl OrderBase {
         };
         trigger_is_valid
             && group_is_valid
-            && (self.execution != CommonOrderExecution::Market || self.limit_px > 0)
+            && (self.execution != CommonOrderExecution::Market || self.limit_px > Decimal::ZERO)
     }
 }

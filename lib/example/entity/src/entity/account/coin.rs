@@ -1,11 +1,12 @@
 use std::fmt;
 
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 // ============ Currency ============
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Coin {
     BTC,  // 8
     ETH,  // 18

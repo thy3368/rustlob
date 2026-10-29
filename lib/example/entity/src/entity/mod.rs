@@ -25,7 +25,11 @@ pub use account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2 as BalanceLedgerEntry,
     BalanceLedgerV2,
 };
+pub use account::balance_v2::{
+    BalanceV2, BalanceV2Error, BalanceV2Record, BalanceV2Status, Closed, Open,
+};
 pub use account::{AccountStatus, SpotAccount};
+pub use common::common_order::SpotAmountConversionError;
 pub use common::common_trade::TradeBase;
 pub use hyperliquid_account::{
     MarginSummary, PerpAssetRiskRule, PerpClearinghouseState, PerpClearinghouseStateCalcError,
@@ -52,6 +56,7 @@ pub use perp::trade::hyperliquid_perp_order::{
 pub use perp::trade::hyperliquid_perp_trade::{
     HyperliquidPerpTrade, HyperliquidPerpTradePositionSettlement,
 };
+pub use perp::trade::perp_order_v3::PerpOrderV3;
 pub use perp::trade::perp_position::{
     HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPositionError,
     HyperliquidPerpPositionLeverageOutcome, HyperliquidPerpPositionStatus,
@@ -64,6 +69,7 @@ pub use reservation::{
 };
 use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
+pub use spot::spot_order_v3::SpotOrderV3;
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
     OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderStatusReason,

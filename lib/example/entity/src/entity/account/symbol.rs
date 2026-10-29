@@ -10,7 +10,7 @@ pub struct SymbolId(u32);
 
 // ============ Symbol（KISS：只有三个字段） ============
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Symbol {
     pub id: SymbolId,
     /// 真正被买卖的币，也就是订单数量对应的币。
