@@ -1,5 +1,6 @@
 use crate::entity::common::common_order::OrderBase;
 
+/// 永续订单实体，共享订单价格、数量与触发价的语义单位。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpOrderV3 {
     pub comon_order: OrderBase,
