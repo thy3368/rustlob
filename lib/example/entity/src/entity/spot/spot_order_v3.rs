@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
-use common_entity::{EntityError, EntityReplayableEvent, ReplayFieldChange};
+use common_entity::{
+    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, FieldDiff, ReplayFieldChange,
+};
 use rust_decimal::Decimal;
 
 use crate::account::coin::{CoinAmount, CoinAmountError};
@@ -281,6 +283,20 @@ impl SpotOrderV3<Pending> {
 }
 
 impl<S> SpotOrderV3<S> {
+    /// 取消尚未终止的委托，返回取消后的完整订单事实。
+    pub fn cancel(&self, timestamp: u64) -> Result<Self, EntityError> {
+        if !matches!(
+            self.comon_order.status,
+            SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+        ) {
+            return Err(entity_error("order is not cancelable"));
+        }
+
+        let mut order = self.comon_order.clone();
+        transition(&mut order, SpotOrderStatus::Canceled, timestamp)?;
+        Ok(with_stage(order))
+    }
+
     /// 委托的只读事实快照，供查询和持久化投影使用。
     pub fn order_base(&self) -> &OrderBase {
         &self.comon_order
@@ -415,6 +431,77 @@ fn fee_amount(notional: Decimal, fee_bps: u64, scale: u32) -> Result<Decimal, En
 
 fn with_stage<S>(comon_order: OrderBase) -> SpotOrderV3<S> {
     SpotOrderV3 { comon_order, stage: PhantomData }
+}
+
+impl<S> FieldDiff for SpotOrderV3<S> {
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        vec![
+            EntityFieldChange::new("order_id", "", self.comon_order.order_id.to_string()),
+            EntityFieldChange::new("status", "", format!("{:?}", self.comon_order.status)),
+            EntityFieldChange::new("updated_at", "", self.comon_order.updated_at.to_string()),
+            EntityFieldChange::new("version", "", self.comon_order.version.to_string()),
+        ]
+    }
+
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+        let mut changes = Vec::new();
+        if self.comon_order.status != other.comon_order.status {
+            changes.push(EntityFieldChange::new(
+                "status",
+                format!("{:?}", self.comon_order.status),
+                format!("{:?}", other.comon_order.status),
+            ));
+        }
+        if self.comon_order.updated_at != other.comon_order.updated_at {
+            changes.push(EntityFieldChange::new(
+                "updated_at",
+                self.comon_order.updated_at.to_string(),
+                other.comon_order.updated_at.to_string(),
+            ));
+        }
+        if self.comon_order.version != other.comon_order.version {
+            changes.push(EntityFieldChange::new(
+                "version",
+                self.comon_order.version.to_string(),
+                other.comon_order.version.to_string(),
+            ));
+        }
+        changes
+    }
+}
+
+impl<S> Entity for SpotOrderV3<S>
+where
+    S: Clone + std::fmt::Debug + Send + Sync + 'static,
+{
+    fn entity_id(&self) -> u64 {
+        self.comon_order.order_id
+    }
+
+    fn entity_type() -> u8 {
+        16
+    }
+
+    fn is_derived() -> bool {
+        false
+    }
+
+    fn lsn(&self) -> u64 {
+        self.comon_order.version
+    }
+
+    fn replay_field_type(field_name: &str) -> u8 {
+        match field_name {
+            "updated_at" | "version" => 1,
+            _ => 0,
+        }
+    }
+}
+
+impl<S> common_entity::Shard for SpotOrderV3<S> {
+    fn partition(&self) -> u8 {
+        self.comon_order.symbol.base.index() as u8
+    }
 }
 
 fn resting_result(
@@ -677,6 +764,34 @@ mod tests {
             order.freeze_requirement(),
             Ok(CoinAmount::new(Coin::USDT, Decimal::new(775, 2)).unwrap())
         );
+    }
+
+    #[test]
+    fn cancel_advances_open_order_to_canceled() {
+        let original = order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO);
+        let canceled = original.cancel(42).unwrap();
+
+        assert_eq!(canceled.order_base().status, SpotOrderStatus::Canceled);
+        assert_eq!(canceled.order_base().updated_at, 42);
+        assert_eq!(canceled.order_base().version, original.order_base().version + 1);
+    }
+
+    #[test]
+    fn cancel_rejects_terminal_order() {
+        let mut original = order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO);
+        original.comon_order.status = SpotOrderStatus::Filled;
+
+        assert!(original.cancel(42).is_err());
+    }
+
+    #[test]
+    fn cancel_preserves_order_when_version_overflows() {
+        let mut original = order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO);
+        original.comon_order.version = u64::MAX;
+
+        assert!(original.cancel(42).is_err());
+        assert_eq!(original.order_base().status, SpotOrderStatus::Pending);
+        assert_eq!(original.order_base().version, u64::MAX);
     }
 
     #[test]
