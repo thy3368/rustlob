@@ -368,9 +368,10 @@ impl SpotOrderV3<Canceled> {
             || order.orig_size <= Decimal::ZERO
             || order.size > order.orig_size
             || (order.side == OrderSide::Buy && order.limit_px <= Decimal::ZERO)
-            || order.taker_max_fee < Decimal::ZERO
-            || order.fee_consumed < Decimal::ZERO
-            || order.fee_consumed > order.taker_max_fee
+            || (order.side == OrderSide::Buy
+                && (order.taker_max_fee < Decimal::ZERO
+                    || order.fee_consumed < Decimal::ZERO
+                    || order.fee_consumed > order.taker_max_fee))
         {
             return Err(SpotAmountConversionError::InvalidAmount);
         }
@@ -478,12 +479,14 @@ fn apply_fill(
         .ok_or(EntityError::VersionOverflow { version: order.version })?;
     let mut updated = order.clone();
     updated.size = remaining;
-    updated.fee_consumed = updated
-        .fee_consumed
-        .checked_add(fee_consumed)
-        .ok_or_else(|| entity_error("order fee arithmetic overflow"))?;
-    if updated.fee_consumed > updated.taker_max_fee {
-        return Err(entity_error("order fee exceeds reserved maximum"));
+    if updated.side == OrderSide::Buy {
+        updated.fee_consumed = updated
+            .fee_consumed
+            .checked_add(fee_consumed)
+            .ok_or_else(|| entity_error("order fee arithmetic overflow"))?;
+        if updated.fee_consumed > updated.taker_max_fee {
+            return Err(entity_error("order fee exceeds reserved maximum"));
+        }
     }
     updated.status = if remaining == Decimal::ZERO {
         SpotOrderStatus::Filled
