@@ -213,7 +213,7 @@ impl Balance {
         Ok(())
     }
 
-    // todo 增加的能力 冻结 （100）， 解冻支付（20，80）
+    // todo 增加的能力 2个能力  冻结 （100）， 解冻支付（解冻20，支付80）
 }
 
 impl FieldDiff for Balance {
