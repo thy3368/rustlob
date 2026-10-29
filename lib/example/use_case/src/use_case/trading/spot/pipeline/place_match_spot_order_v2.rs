@@ -251,7 +251,7 @@ fn compute_activate_and_match_after_for_created_taker(
     let activation_cmd = ActivateSpotOrderV2Cmd {
         party_id: order_cmd.party_id.clone(),
         asset: order_cmd.asset,
-        order_id: order_cmd.order_id.clone(),
+        order_id: order_cmd.order_id,
     };
     let activation_state = ActivateSpotOrderV2State {
         pending_order: created_taker_order,
@@ -268,7 +268,7 @@ fn compute_activate_and_match_after_for_created_taker(
     let match_cmd = MatchSpotOrderV3Cmd {
         party_id: order_cmd.party_id.clone(),
         asset: order_cmd.asset,
-        order_id: order_cmd.order_id.clone(),
+        order_id: order_cmd.order_id,
     };
     let match_state = MatchSpotOrderV3State {
         taker_order: activation_after.activated_order_after.clone(),
@@ -310,7 +310,7 @@ fn compute_match_changes(
 ) -> Result<MatchSpotOrderV3Changes, PlaceMatchSpotOrderV2Error> {
     let activated_taker_order = activation_after.activated_order_after;
     let match_state = MatchSpotOrderV3State {
-        taker_order: activated_taker_order.clone(),
+        taker_order: activated_taker_order,
         maker_orders: state.maker_orders,
         settlement_balances: activation_after.balances_after,
         base_asset_id: String::new(),

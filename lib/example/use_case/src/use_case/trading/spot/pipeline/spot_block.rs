@@ -803,6 +803,9 @@ fn command_party_id(command: &SpotBlockCommand) -> Option<&str> {
         SpotBlockCommand::Activate(cmd) => Some(cmd.party_id.as_str()),
         SpotBlockCommand::Cancel(cmd) => Some(cmd.party_id.as_str()),
         SpotBlockCommand::Modify(cmd) => Some(cmd.party_id.as_str()),
-        SpotBlockCommand::PlaceMatch(cmd) => cmd.party_id(),
+        SpotBlockCommand::PlaceMatch(cmd) => match cmd {
+            PlaceOnlySpotOrderV2Cmd::Single(order) => Some(order.party_id.as_str()),
+            PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, .. } => Some(parent.party_id.as_str()),
+        },
     }
 }

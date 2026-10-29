@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{Entity, EntityReplayableEvent, UpdatedEntityPair};
-use example_core_entity::common_entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;
 
@@ -14,7 +13,8 @@ use crate::common_entity::{
     Balance, OrderSide, Reservation, ReservationCloseReason, ReservationKind,
     ReservationMarketKind, SettlementTransferVoucher, spot as spot_entity,
 };
-use crate::support::{concat2, concat3, concat4};
+use crate::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
+use crate::support::{concat3, concat4};
 
 pub type SettleMatchedSpotTradesV4Error = MatchSpotOrderV4Error;
 
@@ -506,8 +506,8 @@ fn apply_balance_ledger_entry(
     amount: u64,
     reason: BalanceLedgerReason,
 ) -> Result<BalanceLedgerV2, BalanceLedgerEntryV2Error> {
-    let account_id = balance.account_id.clone();
-    let asset_id = balance.asset_id.clone();
+    let account_id = balance.account_id;
+    let asset_id = balance.asset_id;
     let balance_entity_id = balance.business_entity_id();
     let mut entry = match operation {
         BalanceLedgerOperation::Unfreeze => BalanceLedgerV2::unfreeze(

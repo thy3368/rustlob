@@ -172,16 +172,15 @@ impl StateMachineV2 for PlaceOnlySpotOrderV2UseCase {
                 })
             }
             PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, children } => {
-                let parent_order_id = parent.order_id.clone();
+                let parent_order_id = parent.order_id;
                 let mut created_parent_order = build_order(parent, cmd.lsn(), cmd.logical_ts())?;
                 created_parent_order.group_relation = OrderGroupRelation::NormalTpslParent;
 
                 let mut created_child_orders = Vec::with_capacity(children.len());
                 for child in children {
                     let mut child_order = build_order(child, cmd.lsn(), cmd.logical_ts())?;
-                    child_order.group_relation = OrderGroupRelation::NormalTpslChild {
-                        parent_order_id: parent_order_id.clone(),
-                    };
+                    child_order.group_relation =
+                        OrderGroupRelation::NormalTpslChild { parent_order_id };
                     created_child_orders.push(child_order);
                 }
 

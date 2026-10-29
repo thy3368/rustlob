@@ -422,8 +422,8 @@ fn apply_balance_ledger_entry(
     amount: u64,
     reason: BalanceLedgerReason,
 ) -> Result<BalanceLedgerV2, ModifySpotOrderV2Error> {
-    let account_id = balance.account_id.clone();
-    let asset_id = balance.asset_id.clone();
+    let account_id = balance.account_id;
+    let asset_id = balance.asset_id;
     let balance_entity_id = balance.business_entity_id();
     let mut entry = match operation {
         BalanceLedgerOperation::Freeze => BalanceLedgerV2::freeze(

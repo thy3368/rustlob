@@ -1,6 +1,7 @@
 use common_entity::{LogEntry, ReplayableChanges, StateMachineV2};
 
 use super::*;
+use crate::HyperliquidPerpOrderSide;
 
 fn entry(payload: PlaceHyperliquidPerpOrderCmd) -> LogEntry<PlaceHyperliquidPerpOrderCmd> {
     common_entity::LogEntrySequencer::from_metadata(1, 1_000_000_000, 1, 1, payload)

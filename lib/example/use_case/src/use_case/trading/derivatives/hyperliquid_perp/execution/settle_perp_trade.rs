@@ -166,8 +166,8 @@ impl StateMachineV2 for SettleHyperliquidPerpTradeUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let outcome = derive_settlement_outcome(cmd, &state)?;
-        validate_balances_can_apply(&state, &outcome.balance_deltas)?;
+        let outcome = derive_settlement_outcome(cmd, state)?;
+        validate_balances_can_apply(state, &outcome.balance_deltas)?;
 
         let changed_positions = state
             .positions

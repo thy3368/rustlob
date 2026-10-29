@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, EventProjectError, LogEntry, ReplayableChanges, StateMachineV2,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     UpdatedEntityPair, action_type,
 };
 use example_core_entity::OrderSide;
@@ -183,7 +183,7 @@ pub struct PlaceHyperliquidPerpOrderChanges {
 }
 
 impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         let mut events = Vec::with_capacity(
             self.updated_margin_balances
                 .len()
@@ -368,17 +368,17 @@ impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
 }
 
 fn map_margin_ledger_error(
-    error: crate::common_entity::BalanceLedgerEntryV2Error,
+    error: crate::entity::BalanceLedgerEntryV2Error,
 ) -> PlaceHyperliquidPerpOrderError {
     match error {
-        crate::common_entity::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
+        crate::entity::BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
             PlaceHyperliquidPerpOrderError::InsufficientMarginBalance
         }
-        crate::common_entity::BalanceLedgerEntryV2Error::InvalidAmount
-        | crate::common_entity::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
-        | crate::common_entity::BalanceLedgerEntryV2Error::ArithmeticOverflow
-        | crate::common_entity::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
-        | crate::common_entity::BalanceLedgerEntryV2Error::AlreadyApplied => {
+        crate::entity::BalanceLedgerEntryV2Error::InvalidAmount
+        | crate::entity::BalanceLedgerEntryV2Error::InsufficientFrozenBalance
+        | crate::entity::BalanceLedgerEntryV2Error::ArithmeticOverflow
+        | crate::entity::BalanceLedgerEntryV2Error::BalanceIdentityMismatch
+        | crate::entity::BalanceLedgerEntryV2Error::AlreadyApplied => {
             PlaceHyperliquidPerpOrderError::ArithmeticOverflow
         }
     }

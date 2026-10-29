@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, EventProjectError, LogEntry, ReplayableChanges, StateMachineV2,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     UpdatedEntityPair,
 };
 use thiserror::Error;
@@ -75,7 +75,7 @@ pub struct UpdateHyperliquidPerpLeverageChanges {
 }
 
 impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EventProjectError> {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         let mut events = vec![
             self.changed_leverage_setting
                 .after

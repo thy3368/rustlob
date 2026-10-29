@@ -212,8 +212,8 @@ impl StateMachineV2 for SettleHyperliquidPerpFundingUseCase {
             let mut entry = if delta.available_delta > 0 {
                 BalanceLedgerEntry::credit_available(
                     entry_id,
-                    balance.account_id.clone(),
-                    balance.asset_id.clone(),
+                    balance.account_id,
+                    balance.asset_id,
                     balance.business_entity_id(),
                     amount,
                     reason,
@@ -221,8 +221,8 @@ impl StateMachineV2 for SettleHyperliquidPerpFundingUseCase {
             } else {
                 BalanceLedgerEntry::debit_available(
                     entry_id,
-                    balance.account_id.clone(),
-                    balance.asset_id.clone(),
+                    balance.account_id,
+                    balance.asset_id,
                     balance.business_entity_id(),
                     amount,
                     reason,
