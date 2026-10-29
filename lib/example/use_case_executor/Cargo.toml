@@ -13,7 +13,6 @@ thiserror = "2"
 serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
-base_types = { path = "../../common/base_types" }
 example_core_entity = { path = "../entity" }
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }
 rstest = "0.23"

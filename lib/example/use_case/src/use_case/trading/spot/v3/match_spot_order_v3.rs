@@ -136,8 +136,8 @@ impl StateMachineV2 for MatchSpotOrderV3UseCase {
 
 #[cfg(test)]
 mod tests {
-    use base_types::UserId;
     use common_entity::{LogEntry, LogEntrySequencer, StateMachineV2};
+    use example_core_entity::UserId;
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};

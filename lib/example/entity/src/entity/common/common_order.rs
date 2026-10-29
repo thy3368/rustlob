@@ -1,9 +1,9 @@
-use base_types::UserId;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::account::symbol::Symbol;
+use crate::entity::common::UserId;
 use crate::{OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus};
 
 /// 从订单 Decimal 金额转换为整数资产最小单位时的错误。

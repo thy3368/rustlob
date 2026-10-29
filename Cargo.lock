@@ -3033,7 +3033,6 @@ dependencies = [
 name = "example_core_entity"
 version = "0.1.0"
 dependencies = [
- "base_types",
  "entity",
  "lob_repo_v2",
  "proptest",
@@ -10206,7 +10205,6 @@ dependencies = [
 name = "use_case_executor"
 version = "0.1.0"
 dependencies = [
- "base_types",
  "criterion",
  "entity",
  "example_core_entity",

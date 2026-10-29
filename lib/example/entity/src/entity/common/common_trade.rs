@@ -1,9 +1,9 @@
-use base_types::UserId;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::OrderSide;
 use crate::account::symbol::Symbol;
+use crate::entity::common::UserId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TradeBase {

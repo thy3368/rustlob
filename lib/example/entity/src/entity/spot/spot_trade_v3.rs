@@ -81,13 +81,13 @@ impl SpotTradeV3 {
 
 #[cfg(test)]
 mod tests {
-    use base_types::UserId;
     use rust_decimal::Decimal;
 
     use super::{SpotTradeSettlementError, SpotTradeV3};
     use crate::OrderSide;
     use crate::account::coin::Coin;
     use crate::account::symbol::Symbol;
+    use crate::entity::common::UserId;
     use crate::entity::common::common_trade::TradeBase;
 
     fn trade(taker_side: OrderSide, taker_fee: i64, maker_fee: i64) -> SpotTradeV3 {

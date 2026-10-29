@@ -1,6 +1,6 @@
-use base_types::{AssetId, UserId};
-
+use crate::account::symbol::Symbol;
 use super::funding_payment_factory::Size;
+use crate::entity::common::{AssetId, UserId};
 use crate::entity::hyperliquid_account::usdc::Usdc;
 
 /// 用户级资金费结算事件（L0 fact）
@@ -13,7 +13,7 @@ pub struct FundingPayment {
     pub hash: TxHash, // 链上 tx hash
 
     // —— delta 主体 ——
-    pub coin: AssetId,      // 结算品种
+    pub coin: Symbol,      // 结算品种
     pub funding_rate: Rate, // 本次采用费率（小时）
     pub szi: Size,          // 结算时带符号仓位（正多负空）
     pub usdc: Usdc,         // 正负：正=收钱，负=付钱（已结算到余额）

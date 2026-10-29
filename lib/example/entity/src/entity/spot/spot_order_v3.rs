@@ -673,12 +673,12 @@ fn resting_result(
 
 #[cfg(test)]
 mod tests {
-    use base_types::UserId;
     use rust_decimal::Decimal;
 
     use super::{MatchResult, MatchSpotOrderV3Input, SpotOrderV3, SpotOrderV3Any};
     use crate::account::coin::{Coin, CoinAmount};
     use crate::account::symbol::Symbol;
+    use crate::entity::common::UserId;
     use crate::entity::common::common_order::{
         CommonOrderExecution, CommonOrderTrigger, OrderBase, SpotAmountConversionError,
     };

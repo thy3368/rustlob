@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use base_types::UserId;
 use common_entity::{
     EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     StateMachineV2Diff,
@@ -8,7 +7,9 @@ use common_entity::{
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
 use example_core_entity::spot::spot_order_v3::Pending;
-use example_core_entity::{OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV3};
+use example_core_entity::{
+    OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV3, UserId,
+};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

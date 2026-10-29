@@ -1,9 +1,9 @@
-use base_types::UserId;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::entity::common::UserId;
 use crate::perp::fund::funding_payment::FundingPayment;
 use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 
