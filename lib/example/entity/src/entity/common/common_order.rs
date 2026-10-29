@@ -17,6 +17,8 @@ pub enum SpotAmountConversionError {
     InexactConversion,
     #[error("arithmetic overflow while deriving spot freeze requirement")]
     ArithmeticOverflow,
+    #[error("order must be canceled before deriving cancel release requirement")]
+    OrderNotCanceled,
     #[error("amount exceeds the u64 range")]
     AmountOutOfRange,
 }
@@ -73,6 +75,9 @@ pub struct OrderBase {
     pub status: SpotOrderStatus,
     /// 冻结费 spot 特有，币用
     pub taker_max_fee: Decimal,
+    /// 已从该订单冻结的手续费预留中实际消耗的 quote 手续费。
+    #[serde(default)]
+    pub fee_consumed: Decimal,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub cloid: Option<String>,
     /// 订单创建时间，单位为 Unix 纳秒。

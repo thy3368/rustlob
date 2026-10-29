@@ -182,6 +182,7 @@ mod tests {
             reduce_only: false,
             status,
             taker_max_fee: Decimal::ZERO,
+            fee_consumed: Decimal::ZERO,
             cloid: None,
             created_at: 1,
             updated_at: 1,

@@ -305,6 +305,7 @@ fn build_order(
         reduce_only: order.reduce_only,
         status: SpotOrderStatus::Pending,
         taker_max_fee: order.taker_max_fee,
+        fee_consumed: Decimal::ZERO,
         cloid: order.cloid.clone(),
         created_at,
         updated_at: created_at,

@@ -130,8 +130,11 @@ impl<S> SpotOrderV3<S> {
                 .trade_id_start
                 .checked_add(trade_offset)
                 .ok_or_else(|| entity_error("trade id overflow"))?;
-            let next_taker = apply_fill(&taker, size, input.timestamp)?;
-            let next_maker = apply_fill(&maker.comon_order, size, input.timestamp)?;
+            let taker_fee = fee_amount(notional, input.taker_fee_bps, taker.symbol.quote.scale())?;
+            let maker_fee =
+                fee_amount(notional, input.maker_fee_bps, maker.comon_order.symbol.quote.scale())?;
+            let next_taker = apply_fill(&taker, size, taker_fee, input.timestamp)?;
+            let next_maker = apply_fill(&maker.comon_order, size, maker_fee, input.timestamp)?;
 
             trades.push(SpotTradeV3 {
                 comon_trade: TradeBase {
@@ -144,16 +147,8 @@ impl<S> SpotOrderV3<S> {
                     taker_side: taker.side,
                     price,
                     size,
-                    taker_fee: fee_amount(
-                        notional,
-                        input.taker_fee_bps,
-                        taker.symbol.quote.scale(),
-                    )?,
-                    maker_fee: fee_amount(
-                        notional,
-                        input.maker_fee_bps,
-                        maker.comon_order.symbol.quote.scale(),
-                    )?,
+                    taker_fee,
+                    maker_fee,
                     created_at: input.timestamp,
                     updated_at: input.timestamp,
                     version: 0,
@@ -302,6 +297,42 @@ impl<S> SpotOrderV3<S> {
         &self.comon_order
     }
 
+    /// 返回撤单后仍可释放的单币种冻结金额，不修改余额。
+    ///
+    /// 该方法只接受已取消订单。买单释放剩余 quote 名义额和未消耗的手续费预留，
+    /// 卖单释放剩余 base 数量。
+    pub fn cancel_release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
+        let order = &self.comon_order;
+        if order.status != SpotOrderStatus::Canceled {
+            return Err(SpotAmountConversionError::OrderNotCanceled);
+        }
+        if order.size < Decimal::ZERO
+            || order.orig_size <= Decimal::ZERO
+            || order.size > order.orig_size
+            || (order.side == OrderSide::Buy && order.limit_px <= Decimal::ZERO)
+            || order.taker_max_fee < Decimal::ZERO
+            || order.fee_consumed < Decimal::ZERO
+            || order.fee_consumed > order.taker_max_fee
+        {
+            return Err(SpotAmountConversionError::InvalidAmount);
+        }
+
+        let amount = match order.side {
+            OrderSide::Buy => order
+                .limit_px
+                .checked_mul(order.size)
+                .and_then(|notional| notional.checked_add(order.taker_max_fee))
+                .and_then(|amount| amount.checked_sub(order.fee_consumed))
+                .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
+            OrderSide::Sell => order.size,
+        };
+        let currency = match order.side {
+            OrderSide::Buy => order.symbol.quote,
+            OrderSide::Sell => order.symbol.base,
+        };
+        CoinAmount::new(currency, amount).map_err(map_coin_amount_error)
+    }
+
     /// 返回订单需要预冻结的单币种金额，不修改订单状态。
     ///
     /// 买单冻结 quote 币的原始数量限价金额及最大 taker 手续费；卖单冻结
@@ -385,7 +416,12 @@ fn crosses(taker: &OrderBase, maker: &OrderBase) -> bool {
     }
 }
 
-fn apply_fill(order: &OrderBase, size: Decimal, timestamp: u64) -> Result<OrderBase, EntityError> {
+fn apply_fill(
+    order: &OrderBase,
+    size: Decimal,
+    fee_consumed: Decimal,
+    timestamp: u64,
+) -> Result<OrderBase, EntityError> {
     let remaining = order
         .size
         .checked_sub(size)
@@ -397,6 +433,13 @@ fn apply_fill(order: &OrderBase, size: Decimal, timestamp: u64) -> Result<OrderB
         .ok_or(EntityError::VersionOverflow { version: order.version })?;
     let mut updated = order.clone();
     updated.size = remaining;
+    updated.fee_consumed = updated
+        .fee_consumed
+        .checked_add(fee_consumed)
+        .ok_or_else(|| entity_error("order fee arithmetic overflow"))?;
+    if updated.fee_consumed > updated.taker_max_fee {
+        return Err(entity_error("order fee exceeds reserved maximum"));
+    }
     updated.status = if remaining == Decimal::ZERO {
         SpotOrderStatus::Filled
     } else {
@@ -439,6 +482,7 @@ impl<S> FieldDiff for SpotOrderV3<S> {
             EntityFieldChange::new("order_id", "", self.comon_order.order_id.to_string()),
             EntityFieldChange::new("status", "", format!("{:?}", self.comon_order.status)),
             EntityFieldChange::new("updated_at", "", self.comon_order.updated_at.to_string()),
+            EntityFieldChange::new("fee_consumed", "", self.comon_order.fee_consumed.to_string()),
             EntityFieldChange::new("version", "", self.comon_order.version.to_string()),
         ]
     }
@@ -457,6 +501,13 @@ impl<S> FieldDiff for SpotOrderV3<S> {
                 "updated_at",
                 self.comon_order.updated_at.to_string(),
                 other.comon_order.updated_at.to_string(),
+            ));
+        }
+        if self.comon_order.fee_consumed != other.comon_order.fee_consumed {
+            changes.push(EntityFieldChange::new(
+                "fee_consumed",
+                self.comon_order.fee_consumed.to_string(),
+                other.comon_order.fee_consumed.to_string(),
             ));
         }
         if self.comon_order.version != other.comon_order.version {
@@ -492,7 +543,7 @@ where
 
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "updated_at" | "version" => 1,
+            "updated_at" | "fee_consumed" | "version" => 1,
             _ => 0,
         }
     }
@@ -554,6 +605,7 @@ mod tests {
             reduce_only: false,
             status: SpotOrderStatus::Open,
             taker_max_fee: fee,
+            fee_consumed: Decimal::ZERO,
             cloid: None,
             created_at: 0,
             updated_at: 0,
@@ -570,6 +622,7 @@ mod tests {
     ) -> SpotOrderV3 {
         let mut order = order(side, limit_px, size, Decimal::ZERO);
         order.comon_order.order_id = id;
+        order.comon_order.taker_max_fee = Decimal::new(100, 0);
         order.comon_order.size = size;
         order.comon_order.tif = tif;
         order.comon_order.status = SpotOrderStatus::Open;
@@ -618,6 +671,8 @@ mod tests {
         assert_eq!(created_trades[0].comon_trade.size, Decimal::new(2, 0));
         assert_eq!(created_trades[0].comon_trade.taker_fee, Decimal::new(396, 2));
         assert_eq!(created_trades[0].comon_trade.maker_fee, Decimal::new(198, 2));
+        assert_eq!(filled_taker_order_after.order_base().fee_consumed, Decimal::new(396, 2));
+        assert_eq!(maker_orders_after[0].order_base().fee_consumed, Decimal::new(198, 2));
     }
 
     #[test]
@@ -792,6 +847,48 @@ mod tests {
         assert!(original.cancel(42).is_err());
         assert_eq!(original.order_base().status, SpotOrderStatus::Pending);
         assert_eq!(original.order_base().version, u64::MAX);
+    }
+
+    #[test]
+    fn canceled_buy_releases_remaining_notional_and_unconsumed_fee() {
+        let mut order =
+            order(OrderSide::Buy, Decimal::new(100, 0), Decimal::new(2, 0), Decimal::new(50, 1));
+        order.comon_order.size = Decimal::ONE;
+        order.comon_order.fee_consumed = Decimal::new(2, 1);
+        order.comon_order.status = SpotOrderStatus::Canceled;
+
+        assert_eq!(
+            order.cancel_release_requirement(),
+            Ok(CoinAmount::new(Coin::USDT, Decimal::new(103, 0)).unwrap())
+        );
+    }
+
+    #[test]
+    fn canceled_sell_releases_remaining_base_size() {
+        let mut order = order(OrderSide::Sell, Decimal::ONE, Decimal::new(3, 0), Decimal::ZERO);
+        order.comon_order.size = Decimal::new(125, 2);
+        order.comon_order.status = SpotOrderStatus::Canceled;
+
+        assert_eq!(
+            order.cancel_release_requirement(),
+            Ok(CoinAmount::new(Coin::BTC, Decimal::new(125, 2)).unwrap())
+        );
+    }
+
+    #[test]
+    fn cancel_release_requires_canceled_order_and_valid_fee_consumption() {
+        let mut order = order(OrderSide::Buy, Decimal::ONE, Decimal::ONE, Decimal::ONE);
+        assert_eq!(
+            order.cancel_release_requirement(),
+            Err(SpotAmountConversionError::OrderNotCanceled)
+        );
+
+        order.comon_order.status = SpotOrderStatus::Canceled;
+        order.comon_order.fee_consumed = Decimal::new(11, 1);
+        assert_eq!(
+            order.cancel_release_requirement(),
+            Err(SpotAmountConversionError::InvalidAmount)
+        );
     }
 
     #[test]
