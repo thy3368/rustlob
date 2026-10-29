@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::hyperliquid_account::usdc::Usdc;
 
-struct Leverage {
+pub(crate) struct Leverage {
     pub(crate) leverage_type: MarginMode, // "cross" | "isolated"
     value: u8,
     raw_usd: Option<Decimal>, // isolated 才有

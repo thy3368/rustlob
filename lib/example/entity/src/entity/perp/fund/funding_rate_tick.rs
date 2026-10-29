@@ -1,3 +1,7 @@
+use base_types::AssetId;
+
+use super::funding_payment::Rate;
+
 /// 市场级资金费率观测（fact，不可篡改）
 /// 对应 fundingHistory 返回的一行
 #[derive(Clone, Debug)]

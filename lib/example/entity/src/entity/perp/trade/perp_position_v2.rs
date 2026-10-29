@@ -370,7 +370,7 @@ fn validate_margin(
         MarginModeV2::Cross if isolated.is_some() => {
             Err(PerpPositionV2Error::InvalidMarginConfiguration)
         }
-        MarginModeV2::Isolated if isolated.map_or(true, |v| v < Decimal::ZERO) => {
+        MarginModeV2::Isolated if isolated.is_none_or(|v| v < Decimal::ZERO) => {
             Err(PerpPositionV2Error::InvalidMarginConfiguration)
         }
         _ => Ok(()),

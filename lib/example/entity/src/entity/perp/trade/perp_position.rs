@@ -156,22 +156,24 @@ impl PerpPosition {
     }
 
     pub fn position_value(&self, mark_price: u64) -> i64 {
-        self.signed_size * mark_price
+        self.signed_size.saturating_mul(mark_price.min(i64::MAX as u64) as i64)
     }
 
     /// 初始保证金 下单时有用
     pub fn im(&self) -> i64 {
-        self.signed_size * self.entry_px
+        self.signed_size.saturating_mul(self.entry_px.min(i64::MAX as u64) as i64)
     }
 
     /// 现值
     pub fn notional(&self, mark_price: u64) -> i64 {
-        self.signed_size.abs() * mark_price
+        self.signed_size.abs().saturating_mul(mark_price.min(i64::MAX as u64) as i64)
     }
 
     /// 浮盈
     pub fn unrealized_pnl(&self, mark_price: u64) -> i64 {
-        self.signed_size.abs() * (mark_price - self.entry_px)
+        let mark_price = mark_price.min(i64::MAX as u64) as i64;
+        let entry_price = self.entry_px.min(i64::MAX as u64) as i64;
+        self.signed_size.abs().saturating_mul(mark_price.saturating_sub(entry_price))
     }
 
     /// 返回尚未创建的空仓位槽位。

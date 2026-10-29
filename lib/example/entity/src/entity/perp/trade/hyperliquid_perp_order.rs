@@ -795,7 +795,7 @@ impl LobOrder for HyperliquidPerpOrder {
         todo!()
     }
 
-    fn is_buy_side(side: Self::Side) -> bool {
+    fn is_buy_side(_side: Self::Side) -> bool {
         todo!()
     }
 
@@ -823,11 +823,11 @@ impl LobOrder for HyperliquidPerpOrder {
         todo!()
     }
 
-    fn from_replay_event(event: &EntityReplayableEvent, id: u64) -> Result<Self, LobError> {
+    fn from_replay_event(_event: &EntityReplayableEvent, _id: u64) -> Result<Self, LobError> {
         todo!()
     }
 
-    fn apply_replay_event(self, event: &EntityReplayableEvent) -> Result<Self, LobError> {
+    fn apply_replay_event(self, _event: &EntityReplayableEvent) -> Result<Self, LobError> {
         todo!()
     }
 }

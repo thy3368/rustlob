@@ -129,7 +129,7 @@ fn weighted_median(
         }
     }
     // Sort by price, then return the first value whose cumulative weight reaches half.
-    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    sorted.sort_by_key(|a| a.0);
     let total = sorted.iter().try_fold(Decimal::ZERO, |s, (_, w)| add(s, *w))?;
     let half = div(total, Decimal::from(2u32))?;
     let mut cumulative = Decimal::ZERO;
