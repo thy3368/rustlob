@@ -2775,6 +2775,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 
 [[package]]
+name = "dpdk_http_frontend"
+version = "0.1.0"
+
+[[package]]
 name = "dtoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3865,20 +3869,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hl_node_compat"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "clap 4.5.53",
- "hex",
- "rmp-serde",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4129,6 +4119,10 @@ dependencies = [
  "tracing",
  "windows-registry",
 ]
+
+[[package]]
+name = "hyperliquid_node"
+version = "0.1.0"
 
 [[package]]
 name = "iana-time-zone"
