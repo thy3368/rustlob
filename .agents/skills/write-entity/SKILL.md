@@ -1,6 +1,6 @@
 ---
 name: write-entity
-description: Write RustLOB core entities for command-style use cases. Use when creating or refactoring structs in core/src/entity, moving reusable entity rules out of use cases or adapters, implementing entity constructors and entity methods, adding Rustdoc, or writing focused entity unit tests. Uses SpotOrderV2 as the reference pattern.
+description: Write RustLOB core entities for command-style use cases. Use when creating or refactoring structs in core/src/entity, moving reusable entity rules out of use cases or adapters, implementing entity constructors and entity methods, adding Rustdoc, or writing focused entity unit tests. Uses BalanceV2 as the reference pattern.
 ---
 
 # Write Entity
@@ -9,17 +9,14 @@ description: Write RustLOB core entities for command-style use cases. Use when c
 
 Use this skill to create or refactor RustLOB `core/src/entity` types so they carry reusable
 business meaning instead of being passive data bags. The reference pattern is
-`lib/example/entity/src/entity/spot/spot_order_v2.rs`: an entity with high-semantic business entry
-points and private/internal derivation details.
-
-`SpotOrderV2` is the current reference for entity API shape. Older `SpotOrder` code may be useful
-as legacy contrast, but it is not the standard for new entity design.
+`lib/example/entity/src/entity/account/balance_v2.rs`: `BalanceV2Record` is the stable persistence
+and replay record, while `BalanceV2<Open/Closed>` uses typestate to constrain lifecycle operations.
 
 Before changing an entity, read these shared constraints:
 
 - `.agents/skills/shared/entity_four_color_classification.md`
 - `.agents/skills/shared/use_case_entity_constraints.md` as the canonical reference for `use case` /
-  `entity` boundary facts, `aggregate role`, `MI chain root`, and `replay/version` semantics
+  `entity` boundary facts, aggregate role, and replay/version semantics
 - `.agents/skills/shared/entity_method_constraints.md` for entity method classification, admission
   rules, Rustdoc tagging, focused tests, and use case / adapter cleanup guidance
 
@@ -44,52 +41,66 @@ modeling, Rustdoc, entity methods, and small inline unit tests.
 6. Add only reusable methods that at least two workflows may naturally need, or that make one
    workflow's business rule explicit.
 7. Keep validation ownership clear: use cases reject commands/state; entities expose facts,
-   invariant checks, and legal lifecycle progression.
-8. Add Rustdoc for the struct, fields or exposed facts, constructor, and entity methods.
-9. Add focused inline `#[cfg(test)]` unit tests for the entity methods. If the entity needs
-   business-state enumeration with `proptest`, switch to `proptest-entity`.
-10. Replace duplicate manual construction or calculation in adapters/use cases with entity methods
-   when it does not couple core to adapter details.
-11. Run targeted formatting and tests for the touched package.
+   invariant checks, and legal lifecycle progression. Follow the BalanceV2 boundary: the record
+   carries stable persistence/replay facts, while typestate carries lifecycle-operation constraints.
+8. For stateful entities, document the lifecycle states, legal transitions, and the boundary between
+   entity state and persistence records. Validate all inputs and derive every new value with checked
+   arithmetic before committing state or version changes; failures leave state unchanged.
+9. Add Rustdoc for the struct, fields or exposed facts, constructor, and entity methods.
+10. Add focused inline `#[cfg(test)]` unit tests for the entity methods. If the entity needs
+    business-state enumeration with `proptest`, switch to `proptest-entity`.
+11. Replace duplicate manual construction or calculation in adapters/use cases with entity methods
+    when it does not couple core to adapter details.
+12. Run targeted formatting and tests for the touched package.
 
 ## Entity Shape
 
-Prefer this shape:
+Prefer a stable record plus a domain entity wrapper when persistence and lifecycle need different
+responsibilities:
 
 ```rust
-/// Business meaning of this stored entity.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EntityName {
-    /// Field-level business meaning.
-    field: Type,
-    legs: Vec<EntityLeg>,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BalanceV2Record {
+    // stable identity, amounts, version/LSN, and serde-compatible lifecycle status
 }
 
-impl EntityName {
-    /// Builds the entity from already validated facts or replayed history.
-    pub(crate) fn new(...) -> Self {
-        Self { ... }
-    }
-
-    /// Business query or calculation.
-    pub fn business_method(&self) -> ... {
-        ...
-    }
-
-    /// Exposes only the fact that outside workflows actually depend on.
-    pub fn field(&self) -> &Type {
-        &self.field
-    }
-
-    /// Returns only the business-relevant subset instead of the raw collection.
-    pub fn principal_legs(&self) -> impl Iterator<Item = &EntityLeg> {
-        self.legs.iter().filter(|leg| leg.is_principal())
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BalanceV2<S = Open> {
+    record: BalanceV2Record,
+    stage: PhantomData<S>,
 }
 ```
 
+Keep the serialized shape flat. If a lifecycle status is added to an existing record, use serde
+compatibility defaults where appropriate (for example, an omitted status decodes as `open`). When
+decoding into a typestate wrapper, verify that the persisted status agrees with the target stage.
+
+For lifecycle operations such as `freeze`, `unfreeze_and_pay`, and `close`:
+
+- validate amounts and available/frozen balances before mutation;
+- derive all new balances and the incremented version with checked arithmetic first;
+- commit state and version only after every derivation succeeds;
+- preserve state on errors; and
+- when consuming an open entity, make a failed `close` return the unchanged open entity together
+  with the error.
+
 Use `Option` for arithmetic that can overflow, e.g. `checked_mul`, `checked_add`, `checked_sub`.
-Do not use `unwrap()` or `expect()` in production entity code.
+Do not use `unwrap()` or `expect()` in production entity code; existing test conventions may use
+those helpers in tests.
+
+Expose high-level business facts, lifecycle transitions, and requirement/summary objects. Keep
+intermediate derivations private to the entity module.
+
+For replay and persistence metadata, keep the responsibilities distinct:
+
+- `FieldDiff` describes created/changed persisted fields;
+- entity identity identifies the stable business entity;
+- `partition` selects the persistence/sharding partition;
+- LSN/version orders entity revisions; and
+- `replay_field_type` declares the field value representation used during replay.
+
+The record should implement the applicable `Entity`, `Shard`, and `FieldDiff` contracts without
+turning version into an ordinary field diff when the event protocol represents it as LSN.
 
 ## Document Chain Factories
 
@@ -108,53 +119,36 @@ run downstream document behavior such as `apply_to(balance)`.
 Downstream document invariants and behavior remain owned by the downstream entity. Cross-aggregate
 state changes and persistence/publication sequencing remain use case orchestration.
 
-## SpotOrderV2 Pattern
+## Four-Color and Boundary Rules
 
-For an order-like entity, use `SpotOrderV2` as the current real pattern:
+Classify the entity using the four-color model before implementation. Preserve the distinction
+between entity facts and use-case orchestration: an entity owns identity, invariants, derived facts,
+and legal state transitions; a use case owns command admission, cross-aggregate sequencing,
+persistence, and publication. Keep adapter concerns outside the entity.
 
-```rust
-impl SpotOrderV2 {
-    pub fn new(...) -> Self { ... }
+Prefer constructors with the narrowest visibility that fits the architecture (`pub(crate)` when
+callers are inside the crate; public only when the boundary requires it). Do not weaken semantics
+with placeholder types or empty branches.
 
-    pub fn belongs_to_account(&self, account_id: &str) -> bool { ... }
-    pub fn trades_asset(&self, asset: u32) -> bool { ... }
-    pub fn trades_symbol(&self, symbol: &str) -> bool { ... }
-    pub fn has_consistent_execution_state(&self) -> bool { ... }
-    pub fn has_consistent_reserved_quote(&self) -> bool { ... }
-    pub fn has_consistent_reserved_base(&self) -> bool { ... }
+The reusable document chain `SpotTrade -> SettlementTransferVoucher -> BalanceLedgerEntryV2`
+remains a required reference where relevant, even though order matching is no longer the reference
+entity pattern.
 
-    pub fn hold_requirement(&self) -> Option<SpotOrderHoldRequirement> { ... }
-    pub fn cancel_release_requirements(...) -> SpotOrderReleaseRequirements { ... }
-    pub fn terminal_release_requirements(...) -> SpotOrderReleaseRequirements { ... }
-    pub fn fee_consume_requirement_for_trade(...) -> Result<SpotOrderFeeConsumeRequirement, ...> { ... }
+## Verification Guidance
 
-    pub(crate) fn fill(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> { ... }
-    pub(crate) fn finish_after_match(&mut self, added_fill_qty: u64) -> Result<(), SpotOrderV2MatchError> { ... }
-    pub(crate) fn cancel_by_user(&mut self) -> Result<(), SpotOrderV2MatchError> { ... }
-    pub(crate) fn reject_as_bad_alo(&mut self) -> Result<(), SpotOrderV2MatchError> { ... }
-    pub(crate) fn reject_as_no_liquidity(&mut self) -> Result<(), SpotOrderV2MatchError> { ... }
+Tests for a BalanceV2-style entity should cover, as applicable:
 
-    fn remaining_qty(&self) -> Option<u64> { ... }
-    fn limit_price(&self) -> Option<u64> { ... }
-    fn crosses_order(&self, maker: &Self) -> Result<bool, SpotOrderV2MatchError> { ... }
-    fn should_enter_matching(&self, best_maker: Option<&Self>) -> Result<bool, SpotOrderV2MatchError> { ... }
-    fn matched_status_for(&self, next_filled_qty: u64) -> SpotOrderStatus { ... }
-}
-```
+- construction facts and lifecycle status;
+- successful lifecycle transitions;
+- invalid amounts and insufficient balances;
+- Decimal and version overflow;
+- close preconditions and boundary behavior;
+- flat serialization compatibility, including old records defaulting to open;
+- typestate/status mismatch on decode; and
+- stable diff/replay metadata, entity identity, partition, and LSN behavior.
 
-Expose high-level business facts, lifecycle transitions, and requirement/summary objects. Keep
-intermediate derivations inside the entity module, including remaining quantity, limit price,
-crossing checks, maker price selection, trade quantity, and matched-status calculation.
-
-Use case code may call `SpotOrderV2` to ask for a business decision or apply a lifecycle action,
-then coordinate other aggregates such as balances, reservations, fees, trades, and outbound events.
-It should not reconstruct `qty - filled_qty`, `qty * price`, crossing semantics, or release reason
-selection from public fields.
-
-## Validation
-
-Run targeted commands rather than full workspace commands when the workspace is dirty or has known
-unrelated failures:
+Rustdoc should explain commands, errors, state truth, replayable diffs, and boundary behavior when
+those concepts apply. Validate with focused tests and formatting, for example:
 
 ```bash
 rustfmt path/to/entity.rs path/to/changed_adapter.rs
