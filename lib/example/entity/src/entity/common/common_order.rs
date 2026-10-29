@@ -74,10 +74,9 @@ pub struct OrderBase {
     /// 本地生命周期状态。
     pub status: SpotOrderStatus,
     /// 买单冻结的 quote 手续费预留上限；卖单不使用。
-    pub taker_max_fee: Decimal,
+    pub buy_quote_fee_reserve_limit: Decimal,
     /// 买单已消耗的 quote 手续费预留；卖单手续费仅记录在成交事实中。
-    #[serde(default)]
-    pub fee_consumed: Decimal,
+    pub buy_quote_fee_reserve_consumed: Decimal,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub cloid: Option<String>,
     /// 订单创建时间，单位为 Unix 纳秒。
