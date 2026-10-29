@@ -69,7 +69,7 @@ pub use reservation::{
 };
 use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
-pub use spot::spot_order_v3::SpotOrderV3;
+pub use spot::spot_order_v3::{SpotOrderStage, SpotOrderV3, SpotOrderV3Any};
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
     OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderStatusReason,

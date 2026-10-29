@@ -2,7 +2,7 @@ use common_entity::{
     EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     StateMachineV2Diff, UpdatedEntityPair,
 };
-use example_core_entity::{SpotOrderStatus, SpotOrderV3};
+use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -13,17 +13,17 @@ pub struct CancelSpotOrderV3Cmd {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3State {
-    pub order: SpotOrderV3,
+    pub order: SpotOrderV3Any,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3AfterChanges {
-    pub canceled_order: SpotOrderV3,
+    pub canceled_order: SpotOrderV3Any,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3Changes {
-    pub updated_order: UpdatedEntityPair<SpotOrderV3>,
+    pub updated_order: UpdatedEntityPair<SpotOrderV3Any>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -68,8 +68,10 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
             return Err(CancelSpotOrderV3Error::CloidMismatch);
         }
         if !matches!(
-            given_state.order.order_base().status,
-            SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+            given_state.order,
+            SpotOrderV3Any::Pending(_)
+                | SpotOrderV3Any::Open(_)
+                | SpotOrderV3Any::PartiallyFilled(_)
         ) {
             return Err(CancelSpotOrderV3Error::OrderNotCancelable);
         }
@@ -81,9 +83,19 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        Ok(CancelSpotOrderV3AfterChanges {
-            canceled_order: given_state.order.cancel(cmd.logical_ts())?,
-        })
+        let canceled_order = match &given_state.order {
+            SpotOrderV3Any::Pending(order) => {
+                SpotOrderV3Any::Canceled(order.cancel(cmd.logical_ts())?)
+            }
+            SpotOrderV3Any::Open(order) => {
+                SpotOrderV3Any::Canceled(order.cancel(cmd.logical_ts())?)
+            }
+            SpotOrderV3Any::PartiallyFilled(order) => {
+                SpotOrderV3Any::Canceled(order.cancel(cmd.logical_ts())?)
+            }
+            _ => return Err(CancelSpotOrderV3Error::OrderNotCancelable),
+        };
+        Ok(CancelSpotOrderV3AfterChanges { canceled_order })
     }
 }
 

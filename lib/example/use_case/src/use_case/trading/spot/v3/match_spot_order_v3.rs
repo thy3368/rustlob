@@ -2,7 +2,9 @@ use std::collections::HashSet;
 
 use common_entity::{EntityError, LogEntry, StateMachineV2};
 use example_core_entity::SpotOrderV3;
-use example_core_entity::spot::spot_order_v3::{MatchResult, MatchSpotOrderV3Input};
+use example_core_entity::spot::spot_order_v3::{
+    MatchResult, MatchSpotOrderV3Input, Pending, SpotOrderV3Any,
+};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -34,8 +36,8 @@ pub enum MatchSpotOrderV3Error {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchSpotOrderV3State {
-    pub taker_order: SpotOrderV3,
-    pub maker_orders: Vec<SpotOrderV3>,
+    pub taker_order: SpotOrderV3<Pending>,
+    pub maker_orders: Vec<SpotOrderV3Any>,
     pub trade_id_start: u64,
     pub maker_fee_bps: u64,
     pub taker_fee_bps: u64,
@@ -73,12 +75,7 @@ impl StateMachineV2 for MatchSpotOrderV3UseCase {
             || (taker.status == example_core_entity::SpotOrderStatus::PartiallyFilled
                 && taker.size >= taker.orig_size)
             || !taker.has_consistent_execution_facts()
-            || !matches!(
-                taker.status,
-                example_core_entity::SpotOrderStatus::Pending
-                    | example_core_entity::SpotOrderStatus::Open
-                    | example_core_entity::SpotOrderStatus::PartiallyFilled
-            )
+            || taker.status != example_core_entity::SpotOrderStatus::Pending
         {
             return Err(MatchSpotOrderV3Error::TakerOrderNotMatchable);
         }
@@ -141,19 +138,22 @@ impl StateMachineV2 for MatchSpotOrderV3UseCase {
 mod tests {
     use base_types::UserId;
     use common_entity::{LogEntry, LogEntrySequencer, StateMachineV2};
-    use example_core_entity::SpotOrderV3;
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
     use example_core_entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
     use example_core_entity::spot::spot_order_v2::OrderGroupRelation;
-    use example_core_entity::spot::spot_order_v3::MatchResult;
+    use example_core_entity::spot::spot_order_v3::{MatchResult, SpotOrderV3Any};
     use rust_decimal::Decimal;
 
     use super::{MatchSpotOrderV3Cmd, MatchSpotOrderV3State, MatchSpotOrderV3UseCase};
 
-    fn order(id: u64, side: OrderSide, px: i64, size: i64) -> SpotOrderV3 {
+    fn order(id: u64, side: OrderSide, px: i64, size: i64) -> SpotOrderV3Any {
         order_with(id, side, px, size, size, OrderTif::Gtc, SpotOrderStatus::Open)
+    }
+
+    fn pending_order(id: u64, side: OrderSide, px: i64, size: i64) -> SpotOrderV3Any {
+        order_with(id, side, px, size, size, OrderTif::Gtc, SpotOrderStatus::Pending)
     }
 
     fn order_with(
@@ -164,8 +164,8 @@ mod tests {
         orig_size: i64,
         tif: OrderTif,
         status: SpotOrderStatus,
-    ) -> SpotOrderV3 {
-        SpotOrderV3::from_record(OrderBase {
+    ) -> SpotOrderV3Any {
+        SpotOrderV3Any::from_record(OrderBase {
             owner: UserId(id),
             order_id: id,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
@@ -188,15 +188,19 @@ mod tests {
             updated_at: 1,
             version: 0,
         })
+        .unwrap()
     }
 
     fn entry(order_id: u64, logical_ts: u64) -> LogEntry<MatchSpotOrderV3Cmd> {
         LogEntrySequencer::from_metadata(1, logical_ts, 1, 1, MatchSpotOrderV3Cmd { order_id })
     }
 
-    fn state(taker: SpotOrderV3, makers: Vec<SpotOrderV3>) -> MatchSpotOrderV3State {
+    fn state(taker: SpotOrderV3Any, makers: Vec<SpotOrderV3Any>) -> MatchSpotOrderV3State {
+        let SpotOrderV3Any::Pending(taker_order) = taker else {
+            panic!("test taker must be pending");
+        };
         MatchSpotOrderV3State {
-            taker_order: taker,
+            taker_order,
             maker_orders: makers,
             trade_id_start: 100,
             maker_fee_bps: 0,
@@ -206,7 +210,7 @@ mod tests {
 
     #[test]
     fn matches_multiple_makers_in_input_order_with_stable_trade_ids() {
-        let taker = order(1, OrderSide::Buy, 100, 3);
+        let taker = pending_order(1, OrderSide::Buy, 100, 3);
         let first = order(2, OrderSide::Sell, 99, 1);
         let second = order(3, OrderSide::Sell, 100, 2);
         let mut given_state = state(taker, vec![first, second]);
@@ -229,9 +233,7 @@ mod tests {
 
     #[test]
     fn preserves_resting_result_without_liquidity() {
-        let result = MatchSpotOrderV3UseCase
-            .compute_state_changed(&entry(1, 77), &state(order(1, OrderSide::Buy, 100, 1), vec![]))
-            .unwrap();
+        let result = MatchSpotOrderV3UseCase.unwrap();
         assert!(matches!(result, MatchResult::Resting { .. }));
     }
 
@@ -240,7 +242,10 @@ mod tests {
         let result = MatchSpotOrderV3UseCase
             .compute_state_changed(
                 &entry(1, 77),
-                &state(order(1, OrderSide::Buy, 100, 3), vec![order(2, OrderSide::Sell, 99, 1)]),
+                &state(
+                    pending_order(1, OrderSide::Buy, 100, 3),
+                    vec![order(2, OrderSide::Sell, 99, 1)],
+                ),
             )
             .unwrap();
         let MatchResult::PartiallyFilled { taker_order_after, created_trades, .. } = result else {
@@ -252,7 +257,7 @@ mod tests {
 
     #[test]
     fn returns_ioc_cancellation_after_partial_fill() {
-        let taker = order_with(1, OrderSide::Buy, 100, 3, 3, OrderTif::Ioc, SpotOrderStatus::Open);
+        let taker = pending_order(1, OrderSide::Buy, 100, 3);
         let result = MatchSpotOrderV3UseCase
             .compute_state_changed(
                 &entry(1, 77),
@@ -268,7 +273,8 @@ mod tests {
 
     #[test]
     fn rejects_alo_order_that_would_cross() {
-        let taker = order_with(1, OrderSide::Buy, 100, 1, 1, OrderTif::Alo, SpotOrderStatus::Open);
+        let taker =
+            order_with(1, OrderSide::Buy, 100, 1, 1, OrderTif::Alo, SpotOrderStatus::Pending);
         let result = MatchSpotOrderV3UseCase
             .compute_state_changed(
                 &entry(1, 77),
@@ -285,7 +291,10 @@ mod tests {
         assert!(matches!(
             use_case.validate_state_given(
                 &entry(1, 77),
-                &state(order(1, OrderSide::Buy, 100, 2), vec![duplicate.clone(), duplicate]),
+                &state(
+                    pending_order(1, OrderSide::Buy, 100, 2),
+                    vec![duplicate.clone(), duplicate]
+                ),
             ),
             Err(super::MatchSpotOrderV3Error::DuplicateMakerOrderId)
         ));
@@ -301,7 +310,7 @@ mod tests {
         assert!(matches!(
             use_case.validate_state_given(
                 &entry(9, 1),
-                &state(order(1, OrderSide::Buy, 100, 1), vec![])
+                &state(pending_order(1, OrderSide::Buy, 100, 1), vec![])
             ),
             Err(super::MatchSpotOrderV3Error::TakerOrderIdMismatch)
         ));
@@ -309,7 +318,8 @@ mod tests {
 
     #[test]
     fn does_not_mutate_given_state_and_is_deterministic() {
-        let state = state(order(1, OrderSide::Buy, 100, 1), vec![order(2, OrderSide::Sell, 99, 1)]);
+        let state =
+            state(pending_order(1, OrderSide::Buy, 100, 1), vec![order(2, OrderSide::Sell, 99, 1)]);
         let command = entry(1, 77);
         let first = MatchSpotOrderV3UseCase.compute_state_changed(&command, &state).unwrap();
         let second = MatchSpotOrderV3UseCase.compute_state_changed(&command, &state).unwrap();

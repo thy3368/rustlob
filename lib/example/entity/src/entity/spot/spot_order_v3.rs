@@ -14,24 +14,60 @@ use crate::entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderS
 use crate::entity::spot::spot_order_v2::OrderGroupRelation;
 use crate::spot::spot_trade_v3::SpotTradeV3;
 
+/// 订单生命周期的 typestate 标记。
+pub trait SpotOrderStage:
+    Clone + Copy + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static
+{
+    const STATUS: SpotOrderStatus;
+}
+
 /// 已受理，等待进入执行流程。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pending;
+impl SpotOrderStage for Pending {
+    const STATUS: SpotOrderStatus = SpotOrderStatus::Pending;
+}
 /// 已进入执行流程。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Open;
+impl SpotOrderStage for Open {
+    const STATUS: SpotOrderStatus = SpotOrderStatus::Open;
+}
 /// 部分成交。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PartiallyFilled;
+impl SpotOrderStage for PartiallyFilled {
+    const STATUS: SpotOrderStatus = SpotOrderStatus::PartiallyFilled;
+}
 /// 完全成交。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Filled;
+impl SpotOrderStage for Filled {
+    const STATUS: SpotOrderStatus = SpotOrderStatus::Filled;
+}
 /// 已撤销。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Canceled;
+impl SpotOrderStage for Canceled {
+    const STATUS: SpotOrderStatus = SpotOrderStatus::Canceled;
+}
 /// 已拒绝。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rejected;
+impl SpotOrderStage for Rejected {
+    const STATUS: SpotOrderStatus = SpotOrderStatus::Rejected;
+}
+
+/// 从持久化记录动态分派出的订单状态。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotOrderV3Any {
+    Pending(SpotOrderV3<Pending>),
+    Open(SpotOrderV3<Open>),
+    PartiallyFilled(SpotOrderV3<PartiallyFilled>),
+    Filled(SpotOrderV3<Filled>),
+    Canceled(SpotOrderV3<Canceled>),
+    Rejected(SpotOrderV3<Rejected>),
+}
 
 /// 撮合批次的时间、费用和稳定成交编号输入。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,26 +86,23 @@ pub struct MatchSpotOrderV3Input {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchResult {
     /// 没有成交，订单继续留在订单簿；本次没有其它业务副作用。
-    Resting {
-        //状态可能是多种
-        taker_order_after: SpotOrderV3<Open>,
-    },
+    Resting { taker_order_after: SpotOrderV3<Open> },
     /// 发生成交但仍有剩余数量，订单继续可撮合。
     PartiallyFilled {
         taker_order_after: SpotOrderV3<PartiallyFilled>,
-        maker_orders_after: Vec<SpotOrderV3>,
+        maker_orders_after: Vec<SpotOrderV3Any>,
         created_trades: Vec<SpotTradeV3>,
     },
     /// 成交数量达到订单总数量，订单终止为 Filled。
     Filled {
         filled_taker_order_after: SpotOrderV3<Filled>,
-        maker_orders_after: Vec<SpotOrderV3>,
+        maker_orders_after: Vec<SpotOrderV3Any>,
         created_trades: Vec<SpotTradeV3>,
     },
     /// IOC 部分成交后，剩余数量被取消并释放冻结。
     CanceledAfterPartialFill {
         canceled_taker_order_after: SpotOrderV3<Canceled>,
-        maker_orders_after: Vec<SpotOrderV3>,
+        maker_orders_after: Vec<SpotOrderV3Any>,
         created_trades: Vec<SpotTradeV3>,
     },
     /// ALO crossing maker 或 IOC 无流动性导致拒单。
@@ -81,18 +114,18 @@ pub enum MatchResult {
 /// `OrderBase` 保存稳定事实；新创建入口返回 Pending，加载入口保留记录中的生命周期状态。
 /// 撮合行为负责验证事实并返回相应状态的 after truth。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpotOrderV3<S = Pending> {
+pub struct SpotOrderV3<S> {
     comon_order: OrderBase,
     stage: PhantomData<S>,
 }
 
-impl<S> SpotOrderV3<S> {
-    /// 依 maker 顺序撮合，并返回更新后的订单和成交事实。
+impl SpotOrderV3<Pending> {
+    /// 依 maker 顺序撮合 Pending taker，并返回更新后的订单和成交事实。
     ///
     /// 成交费按 quote 币精度向上取整。订单仅在全部检查成功后作为结果返回。
     pub fn match_with_input(
         &self,
-        makers: Vec<SpotOrderV3>,
+        makers: Vec<SpotOrderV3Any>,
         input: MatchSpotOrderV3Input,
     ) -> Result<MatchResult, EntityError> {
         let mut taker = self.comon_order.clone();
@@ -102,11 +135,11 @@ impl<S> SpotOrderV3<S> {
 
         if tif == OrderTif::Alo {
             if let Some(maker) = makers.first() {
-                validate_pair(&taker, &maker.comon_order)?;
-                if crosses(&taker, &maker.comon_order) {
+                validate_pair(&taker, maker.order_base())?;
+                if crosses(&taker, maker.order_base()) {
                     transition(&mut taker, SpotOrderStatus::Rejected, input.timestamp)?;
                     return Ok(MatchResult::Rejected {
-                        rejected_taker_order_after: with_stage(taker),
+                        rejected_taker_order_after: with_stage(taker)?,
                     });
                 }
             }
@@ -115,13 +148,14 @@ impl<S> SpotOrderV3<S> {
 
         let mut trades = Vec::new();
         for maker in &mut makers {
-            validate_pair(&taker, &maker.comon_order)?;
-            if !crosses(&taker, &maker.comon_order) {
+            validate_pair(&taker, maker.order_base())?;
+            if !crosses(&taker, maker.order_base()) {
                 break;
             }
 
-            let size = taker.size.min(maker.comon_order.size);
-            let price = maker.comon_order.limit_px;
+            let maker_base = maker.order_base();
+            let size = taker.size.min(maker_base.size);
+            let price = maker_base.limit_px;
             let notional =
                 price.checked_mul(size).ok_or_else(|| entity_error("trade notional overflow"))?;
             let trade_offset =
@@ -132,18 +166,18 @@ impl<S> SpotOrderV3<S> {
                 .ok_or_else(|| entity_error("trade id overflow"))?;
             let taker_fee = fee_amount(notional, input.taker_fee_bps, taker.symbol.quote.scale())?;
             let maker_fee =
-                fee_amount(notional, input.maker_fee_bps, maker.comon_order.symbol.quote.scale())?;
+                fee_amount(notional, input.maker_fee_bps, maker.order_base().symbol.quote.scale())?;
             let next_taker = apply_fill(&taker, size, taker_fee, input.timestamp)?;
-            let next_maker = apply_fill(&maker.comon_order, size, maker_fee, input.timestamp)?;
+            let next_maker = apply_fill(maker.order_base(), size, maker_fee, input.timestamp)?;
 
             trades.push(SpotTradeV3 {
                 comon_trade: TradeBase {
                     trade_id,
                     symbol: taker.symbol.clone(),
                     taker_user: taker.owner,
-                    maker_user: maker.comon_order.owner,
+                    maker_user: maker.order_base().owner,
                     taker_order_id: taker.order_id,
-                    maker_order_id: maker.comon_order.order_id,
+                    maker_order_id: maker.order_base().order_id,
                     taker_side: taker.side,
                     price,
                     size,
@@ -155,41 +189,17 @@ impl<S> SpotOrderV3<S> {
                 },
             });
             taker = next_taker;
-            maker.comon_order = next_maker;
+            *maker = SpotOrderV3Any::from_record(next_maker)?;
             if taker.size == Decimal::ZERO {
                 break;
             }
         }
 
-        match (taker.size == Decimal::ZERO, tif, trades.is_empty()) {
-            (true, _, _) => Ok(MatchResult::Filled {
-                filled_taker_order_after: with_stage(taker),
-                maker_orders_after: makers,
-                created_trades: trades,
-            }),
-            (false, OrderTif::Ioc, true) => {
-                transition(&mut taker, SpotOrderStatus::Rejected, input.timestamp)?;
-                Ok(MatchResult::Rejected { rejected_taker_order_after: with_stage(taker) })
-            }
-            (false, OrderTif::Ioc, false) => {
-                transition(&mut taker, SpotOrderStatus::Canceled, input.timestamp)?;
-                Ok(MatchResult::CanceledAfterPartialFill {
-                    canceled_taker_order_after: with_stage(taker),
-                    maker_orders_after: makers,
-                    created_trades: trades,
-                })
-            }
-            (false, _, true) => resting_result(taker, makers, input.timestamp),
-            (false, _, false) => Ok(MatchResult::PartiallyFilled {
-                taker_order_after: with_stage(taker),
-                maker_orders_after: makers,
-                created_trades: trades,
-            }),
-        }
+        finalize_match(taker, makers, trades, tif, input.timestamp)
     }
 
-    /// 兼容原有调用；需要费用和批次时间时使用 [`Self::match_with_input`]。
-    pub fn matchOrder(&self, makers: Vec<SpotOrderV3>) -> Result<MatchResult, EntityError> {
+    /// 以零费率执行兼容撮合；正式调用应提供批次费率和时间。
+    pub fn match_order(&self, makers: Vec<SpotOrderV3Any>) -> Result<MatchResult, EntityError> {
         self.match_with_input(
             makers,
             MatchSpotOrderV3Input {
@@ -247,14 +257,6 @@ impl SpotOrderV3<Pending> {
         Self { comon_order: order, stage: PhantomData }
     }
 
-    /// 仅装配已加载或已回放的订单事实，保留其生命周期状态和订单组关系。
-    ///
-    /// 调用方须保证输入事实已通过 admission 和回放校验；本方法不推进生命周期，
-    /// 也不执行撮合或其它跨聚合操作。
-    pub fn from_record(order: OrderBase) -> Self {
-        Self { comon_order: order, stage: PhantomData }
-    }
-
     /// 仅装配已校验的 normalTpsl 父子委托，保持子单顺序。
     ///
     /// 调用方须先校验子单非空及父子业务约束。本方法不重复 admission 校验；
@@ -277,60 +279,45 @@ impl SpotOrderV3<Pending> {
     }
 }
 
-impl<S> SpotOrderV3<S> {
-    /// 取消尚未终止的委托，返回取消后的完整订单事实。
-    pub fn cancel(&self, timestamp: u64) -> Result<Self, EntityError> {
-        if !matches!(
-            self.comon_order.status,
-            SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-        ) {
-            return Err(entity_error("order is not cancelable"));
-        }
+impl SpotOrderV3Any {
+    /// 按记录状态校验并分派为对应的静态生命周期类型。
+    pub fn from_record(order: OrderBase) -> Result<Self, EntityError> {
+        Ok(match order.status {
+            SpotOrderStatus::Pending => Self::Pending(SpotOrderV3::try_from_record(order)?),
+            SpotOrderStatus::Open => Self::Open(SpotOrderV3::try_from_record(order)?),
+            SpotOrderStatus::PartiallyFilled => {
+                Self::PartiallyFilled(SpotOrderV3::try_from_record(order)?)
+            }
+            SpotOrderStatus::Filled => Self::Filled(SpotOrderV3::try_from_record(order)?),
+            SpotOrderStatus::Canceled => Self::Canceled(SpotOrderV3::try_from_record(order)?),
+            SpotOrderStatus::Rejected => Self::Rejected(SpotOrderV3::try_from_record(order)?),
+        })
+    }
 
-        let mut order = self.comon_order.clone();
-        transition(&mut order, SpotOrderStatus::Canceled, timestamp)?;
-        Ok(with_stage(order))
+    pub fn order_base(&self) -> &OrderBase {
+        match self {
+            Self::Pending(order) => order.order_base(),
+            Self::Open(order) => order.order_base(),
+            Self::PartiallyFilled(order) => order.order_base(),
+            Self::Filled(order) => order.order_base(),
+            Self::Canceled(order) => order.order_base(),
+            Self::Rejected(order) => order.order_base(),
+        }
+    }
+}
+
+impl<S: SpotOrderStage> SpotOrderV3<S> {
+    /// 仅装配状态与 typestate 一致的持久化订单记录。
+    pub fn try_from_record(order: OrderBase) -> Result<Self, EntityError> {
+        if order.status != S::STATUS {
+            return Err(entity_error("order status does not match typestate"));
+        }
+        Ok(Self { comon_order: order, stage: PhantomData })
     }
 
     /// 委托的只读事实快照，供查询和持久化投影使用。
     pub fn order_base(&self) -> &OrderBase {
         &self.comon_order
-    }
-
-    /// 返回撤单后仍可释放的单币种冻结金额，不修改余额。
-    ///
-    /// 该方法只接受已取消订单。买单释放剩余 quote 名义额和未消耗的手续费预留，
-    /// 卖单释放剩余 base 数量。
-    pub fn cancel_release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
-        let order = &self.comon_order;
-        if order.status != SpotOrderStatus::Canceled {
-            return Err(SpotAmountConversionError::OrderNotCanceled);
-        }
-        if order.size < Decimal::ZERO
-            || order.orig_size <= Decimal::ZERO
-            || order.size > order.orig_size
-            || (order.side == OrderSide::Buy && order.limit_px <= Decimal::ZERO)
-            || order.taker_max_fee < Decimal::ZERO
-            || order.fee_consumed < Decimal::ZERO
-            || order.fee_consumed > order.taker_max_fee
-        {
-            return Err(SpotAmountConversionError::InvalidAmount);
-        }
-
-        let amount = match order.side {
-            OrderSide::Buy => order
-                .limit_px
-                .checked_mul(order.size)
-                .and_then(|notional| notional.checked_add(order.taker_max_fee))
-                .and_then(|amount| amount.checked_sub(order.fee_consumed))
-                .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
-            OrderSide::Sell => order.size,
-        };
-        let currency = match order.side {
-            OrderSide::Buy => order.symbol.quote,
-            OrderSide::Sell => order.symbol.base,
-        };
-        CoinAmount::new(currency, amount).map_err(map_coin_amount_error)
     }
 
     /// 返回订单需要预冻结的单币种金额，不修改订单状态。
@@ -366,6 +353,64 @@ impl<S> SpotOrderV3<S> {
             }
         }
     }
+}
+
+impl SpotOrderV3<Canceled> {
+    /// 取消尚未终止的 Pending 订单，返回 Canceled after truth。
+    pub fn cancel_pending(&self, timestamp: u64) -> Result<Self, EntityError> {
+        cancel_order(&self.comon_order, timestamp)
+    }
+
+    /// 返回撤单后仍可释放的单币种冻结金额，不修改余额。
+    pub fn cancel_release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
+        let order = &self.comon_order;
+        if order.size < Decimal::ZERO
+            || order.orig_size <= Decimal::ZERO
+            || order.size > order.orig_size
+            || (order.side == OrderSide::Buy && order.limit_px <= Decimal::ZERO)
+            || order.taker_max_fee < Decimal::ZERO
+            || order.fee_consumed < Decimal::ZERO
+            || order.fee_consumed > order.taker_max_fee
+        {
+            return Err(SpotAmountConversionError::InvalidAmount);
+        }
+        let amount = match order.side {
+            OrderSide::Buy => order
+                .limit_px
+                .checked_mul(order.size)
+                .and_then(|value| value.checked_add(order.taker_max_fee))
+                .and_then(|value| value.checked_sub(order.fee_consumed))
+                .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
+            OrderSide::Sell => order.size,
+        };
+        let currency =
+            if order.side == OrderSide::Buy { order.symbol.quote } else { order.symbol.base };
+        CoinAmount::new(currency, amount).map_err(map_coin_amount_error)
+    }
+}
+
+impl SpotOrderV3<Open> {
+    pub fn cancel(&self, timestamp: u64) -> Result<SpotOrderV3<Canceled>, EntityError> {
+        cancel_order(&self.comon_order, timestamp)
+    }
+}
+
+impl SpotOrderV3<PartiallyFilled> {
+    pub fn cancel(&self, timestamp: u64) -> Result<SpotOrderV3<Canceled>, EntityError> {
+        cancel_order(&self.comon_order, timestamp)
+    }
+}
+
+impl SpotOrderV3<Pending> {
+    pub fn cancel(&self, timestamp: u64) -> Result<SpotOrderV3<Canceled>, EntityError> {
+        cancel_order(&self.comon_order, timestamp)
+    }
+}
+
+fn cancel_order(order: &OrderBase, timestamp: u64) -> Result<SpotOrderV3<Canceled>, EntityError> {
+    let mut order = order.clone();
+    transition(&mut order, SpotOrderStatus::Canceled, timestamp)?;
+    with_stage(order)
 }
 
 fn map_coin_amount_error(_: CoinAmountError) -> SpotAmountConversionError {
@@ -472,8 +517,11 @@ fn fee_amount(notional: Decimal, fee_bps: u64, scale: u32) -> Result<Decimal, En
     Ok(fee.round_dp_with_strategy(scale, rust_decimal::RoundingStrategy::ToPositiveInfinity))
 }
 
-fn with_stage<S>(comon_order: OrderBase) -> SpotOrderV3<S> {
-    SpotOrderV3 { comon_order, stage: PhantomData }
+fn with_stage<S: SpotOrderStage>(comon_order: OrderBase) -> Result<SpotOrderV3<S>, EntityError> {
+    if comon_order.status != S::STATUS {
+        return Err(entity_error("order status does not match typestate"));
+    }
+    Ok(SpotOrderV3 { comon_order, stage: PhantomData })
 }
 
 impl<S> FieldDiff for SpotOrderV3<S> {
@@ -555,14 +603,55 @@ impl<S> common_entity::Shard for SpotOrderV3<S> {
     }
 }
 
+fn finalize_match(
+    mut taker: OrderBase,
+    makers: Vec<SpotOrderV3Any>,
+    trades: Vec<SpotTradeV3>,
+    tif: OrderTif,
+    timestamp: u64,
+) -> Result<MatchResult, EntityError> {
+    if taker.size == Decimal::ZERO {
+        return Ok(MatchResult::Filled {
+            filled_taker_order_after: with_stage(taker)?,
+            maker_orders_after: makers,
+            created_trades: trades,
+        });
+    }
+
+    if trades.is_empty() {
+        return match tif {
+            OrderTif::Ioc => {
+                transition(&mut taker, SpotOrderStatus::Rejected, timestamp)?;
+                Ok(MatchResult::Rejected { rejected_taker_order_after: with_stage(taker)? })
+            }
+            _ => resting_result(taker, makers, timestamp),
+        };
+    }
+
+    if tif == OrderTif::Ioc {
+        transition(&mut taker, SpotOrderStatus::Canceled, timestamp)?;
+        return Ok(MatchResult::CanceledAfterPartialFill {
+            canceled_taker_order_after: with_stage(taker)?,
+            maker_orders_after: makers,
+            created_trades: trades,
+        });
+    }
+
+    Ok(MatchResult::PartiallyFilled {
+        taker_order_after: with_stage(taker)?,
+        maker_orders_after: makers,
+        created_trades: trades,
+    })
+}
+
 fn resting_result(
     mut taker: OrderBase,
-    makers: Vec<SpotOrderV3>,
+    makers: Vec<SpotOrderV3Any>,
     timestamp: u64,
 ) -> Result<MatchResult, EntityError> {
     if taker.status == SpotOrderStatus::PartiallyFilled {
         return Ok(MatchResult::PartiallyFilled {
-            taker_order_after: with_stage(taker),
+            taker_order_after: with_stage(taker)?,
             maker_orders_after: makers,
             created_trades: Vec::new(),
         });
@@ -570,7 +659,7 @@ fn resting_result(
     if taker.status == SpotOrderStatus::Pending {
         transition(&mut taker, SpotOrderStatus::Open, timestamp)?;
     }
-    Ok(MatchResult::Resting { taker_order_after: with_stage(taker) })
+    Ok(MatchResult::Resting { taker_order_after: with_stage(taker)? })
 }
 
 #[cfg(test)]
@@ -578,7 +667,7 @@ mod tests {
     use base_types::UserId;
     use rust_decimal::Decimal;
 
-    use super::{MatchResult, MatchSpotOrderV3Input, SpotOrderV3};
+    use super::{MatchResult, MatchSpotOrderV3Input, SpotOrderV3, SpotOrderV3Any};
     use crate::account::coin::{Coin, CoinAmount};
     use crate::account::symbol::Symbol;
     use crate::entity::common::common_order::{
@@ -587,7 +676,12 @@ mod tests {
     use crate::entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
     use crate::entity::spot::spot_order_v2::OrderGroupRelation;
 
-    fn order(side: OrderSide, limit_px: Decimal, orig_size: Decimal, fee: Decimal) -> SpotOrderV3 {
+    fn order(
+        side: OrderSide,
+        limit_px: Decimal,
+        orig_size: Decimal,
+        fee: Decimal,
+    ) -> SpotOrderV3<super::Pending> {
         SpotOrderV3::single(OrderBase {
             owner: UserId(1),
             order_id: 1,
@@ -603,7 +697,7 @@ mod tests {
             group_relation: OrderGroupRelation::Standalone,
             is_position_tpsl: false,
             reduce_only: false,
-            status: SpotOrderStatus::Open,
+            status: SpotOrderStatus::Pending,
             taker_max_fee: fee,
             fee_consumed: Decimal::ZERO,
             cloid: None,
@@ -619,14 +713,22 @@ mod tests {
         limit_px: Decimal,
         size: Decimal,
         tif: OrderTif,
-    ) -> SpotOrderV3 {
+    ) -> SpotOrderV3<super::Pending> {
         let mut order = order(side, limit_px, size, Decimal::ZERO);
         order.comon_order.order_id = id;
         order.comon_order.taker_max_fee = Decimal::new(100, 0);
         order.comon_order.size = size;
         order.comon_order.tif = tif;
-        order.comon_order.status = SpotOrderStatus::Open;
         order
+    }
+
+    fn as_any<S: super::SpotOrderStage>(
+        order: &SpotOrderV3<S>,
+        status: SpotOrderStatus,
+    ) -> SpotOrderV3Any {
+        let mut record = order.order_base().clone();
+        record.status = status;
+        SpotOrderV3Any::from_record(record).unwrap()
     }
 
     fn match_input() -> MatchSpotOrderV3Input {
@@ -654,6 +756,10 @@ mod tests {
             Decimal::new(3, 0),
             OrderTif::Gtc,
         );
+        let maker_record = maker.order_base().clone();
+        let mut maker_record = maker_record;
+        maker_record.status = SpotOrderStatus::Open;
+        let maker = SpotOrderV3Any::from_record(maker_record).unwrap();
 
         let result = taker.match_with_input(vec![maker], match_input()).unwrap();
         let MatchResult::Filled { filled_taker_order_after, maker_orders_after, created_trades } =
@@ -692,7 +798,9 @@ mod tests {
             OrderTif::Gtc,
         );
 
-        let result = taker.match_with_input(vec![maker], match_input()).unwrap();
+        let result = taker
+            .match_with_input(vec![as_any(&maker, SpotOrderStatus::Open)], match_input())
+            .unwrap();
         let MatchResult::CanceledAfterPartialFill {
             canceled_taker_order_after,
             created_trades,
@@ -725,7 +833,12 @@ mod tests {
             OrderTif::Gtc,
         );
 
-        let result = taker.match_with_input(vec![first, second], match_input()).unwrap();
+        let result = taker
+            .match_with_input(
+                vec![as_any(&first, SpotOrderStatus::Open), as_any(&second, SpotOrderStatus::Open)],
+                match_input(),
+            )
+            .unwrap();
         let MatchResult::Filled { created_trades, .. } = result else {
             panic!("expected filled result");
         };
@@ -754,11 +867,22 @@ mod tests {
             active_order(1, OrderSide::Buy, Decimal::new(100, 0), Decimal::ONE, OrderTif::Alo);
         let maker =
             active_order(2, OrderSide::Sell, Decimal::new(99, 0), Decimal::ONE, OrderTif::Gtc);
-        let result = taker.match_with_input(vec![maker], match_input()).unwrap();
+        let result = taker
+            .match_with_input(vec![as_any(&maker, SpotOrderStatus::Open)], match_input())
+            .unwrap();
         let MatchResult::Rejected { rejected_taker_order_after } = result else {
             panic!("expected rejection");
         };
         assert_eq!(rejected_taker_order_after.order_base().status, SpotOrderStatus::Rejected);
+    }
+
+    #[test]
+    fn record_loading_dispatches_state_and_rejects_typestate_mismatch() {
+        let mut record =
+            order(OrderSide::Buy, Decimal::ONE, Decimal::ONE, Decimal::ZERO).order_base().clone();
+        record.status = SpotOrderStatus::Open;
+        assert!(SpotOrderV3::<super::Pending>::try_from_record(record.clone()).is_err());
+        assert!(matches!(SpotOrderV3Any::from_record(record), Ok(SpotOrderV3Any::Open(_))));
     }
 
     #[test]
@@ -770,7 +894,7 @@ mod tests {
         original.created_at = 123;
         original.updated_at = 456;
         original.version = 7;
-        let loaded: SpotOrderV3<super::Pending> = SpotOrderV3::from_record(original.clone());
+        let loaded = SpotOrderV3Any::from_record(original.clone()).unwrap();
         assert_eq!(loaded.order_base(), &original);
 
         let single: SpotOrderV3<super::Pending> = SpotOrderV3::single(original.clone());
@@ -799,7 +923,7 @@ mod tests {
 
     #[test]
     fn lifecycle_types_share_read_only_queries() {
-        fn query<S>(order: &SpotOrderV3<S>) {
+        fn query<S: super::SpotOrderStage>(order: &SpotOrderV3<S>) {
             let _ = order.freeze_requirement();
         }
         let _ = query::<super::Pending>;
@@ -823,7 +947,11 @@ mod tests {
 
     #[test]
     fn cancel_advances_open_order_to_canceled() {
-        let original = order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO);
+        let original = as_any(
+            &order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO),
+            SpotOrderStatus::Open,
+        );
+        let SpotOrderV3Any::Open(original) = original else { unreachable!() };
         let canceled = original.cancel(42).unwrap();
 
         assert_eq!(canceled.order_base().status, SpotOrderStatus::Canceled);
@@ -833,29 +961,40 @@ mod tests {
 
     #[test]
     fn cancel_rejects_terminal_order() {
-        let mut original = order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO);
-        original.comon_order.status = SpotOrderStatus::Filled;
-
-        assert!(original.cancel(42).is_err());
+        let mut record =
+            order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO).order_base().clone();
+        record.status = SpotOrderStatus::Filled;
+        let filled = SpotOrderV3Any::from_record(record).unwrap();
+        assert!(matches!(filled, SpotOrderV3Any::Filled(_)));
     }
 
     #[test]
     fn cancel_preserves_order_when_version_overflows() {
-        let mut original = order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO);
-        original.comon_order.version = u64::MAX;
+        let mut record =
+            order(OrderSide::Sell, Decimal::ONE, Decimal::ONE, Decimal::ZERO).order_base().clone();
+        record.status = SpotOrderStatus::Open;
+        record.version = u64::MAX;
+        let SpotOrderV3Any::Open(original) = SpotOrderV3Any::from_record(record).unwrap() else {
+            unreachable!()
+        };
 
         assert!(original.cancel(42).is_err());
-        assert_eq!(original.order_base().status, SpotOrderStatus::Pending);
+        assert_eq!(original.order_base().status, SpotOrderStatus::Open);
         assert_eq!(original.order_base().version, u64::MAX);
     }
 
     #[test]
     fn canceled_buy_releases_remaining_notional_and_unconsumed_fee() {
-        let mut order =
-            order(OrderSide::Buy, Decimal::new(100, 0), Decimal::new(2, 0), Decimal::new(50, 1));
-        order.comon_order.size = Decimal::ONE;
-        order.comon_order.fee_consumed = Decimal::new(2, 1);
-        order.comon_order.status = SpotOrderStatus::Canceled;
+        let mut record =
+            order(OrderSide::Buy, Decimal::new(100, 0), Decimal::new(2, 0), Decimal::new(50, 1))
+                .order_base()
+                .clone();
+        record.size = Decimal::ONE;
+        record.fee_consumed = Decimal::new(2, 1);
+        record.status = SpotOrderStatus::Canceled;
+        let SpotOrderV3Any::Canceled(order) = SpotOrderV3Any::from_record(record).unwrap() else {
+            unreachable!()
+        };
 
         assert_eq!(
             order.cancel_release_requirement(),
@@ -865,9 +1004,14 @@ mod tests {
 
     #[test]
     fn canceled_sell_releases_remaining_base_size() {
-        let mut order = order(OrderSide::Sell, Decimal::ONE, Decimal::new(3, 0), Decimal::ZERO);
-        order.comon_order.size = Decimal::new(125, 2);
-        order.comon_order.status = SpotOrderStatus::Canceled;
+        let mut record = order(OrderSide::Sell, Decimal::ONE, Decimal::new(3, 0), Decimal::ZERO)
+            .order_base()
+            .clone();
+        record.size = Decimal::new(125, 2);
+        record.status = SpotOrderStatus::Canceled;
+        let SpotOrderV3Any::Canceled(order) = SpotOrderV3Any::from_record(record).unwrap() else {
+            unreachable!()
+        };
 
         assert_eq!(
             order.cancel_release_requirement(),
@@ -876,15 +1020,14 @@ mod tests {
     }
 
     #[test]
-    fn cancel_release_requires_canceled_order_and_valid_fee_consumption() {
-        let mut order = order(OrderSide::Buy, Decimal::ONE, Decimal::ONE, Decimal::ONE);
-        assert_eq!(
-            order.cancel_release_requirement(),
-            Err(SpotAmountConversionError::OrderNotCanceled)
-        );
-
-        order.comon_order.status = SpotOrderStatus::Canceled;
-        order.comon_order.fee_consumed = Decimal::new(11, 1);
+    fn cancel_release_rejects_fee_consumption_above_reservation() {
+        let mut record =
+            order(OrderSide::Buy, Decimal::ONE, Decimal::ONE, Decimal::ONE).order_base().clone();
+        record.status = SpotOrderStatus::Canceled;
+        record.fee_consumed = Decimal::new(11, 1);
+        let SpotOrderV3Any::Canceled(order) = SpotOrderV3Any::from_record(record).unwrap() else {
+            unreachable!()
+        };
         assert_eq!(
             order.cancel_release_requirement(),
             Err(SpotAmountConversionError::InvalidAmount)

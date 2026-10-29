@@ -1,6 +1,6 @@
 use common_entity::{LogEntry, StateMachineV2};
 use example_core_entity::spot::spot_order_primitives::SpotOrderStatus;
-use example_core_entity::spot::spot_order_v3::SpotOrderV3;
+use example_core_entity::spot::spot_order_v3::{SpotOrderV3, SpotOrderV3Any};
 use example_core_entity::{BalanceV2, BalanceV2Error, Open, SpotAmountConversionError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -12,7 +12,7 @@ pub struct FreezeSpotOrderV2Cmd {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FreezeSpotOrderV2State {
-    pub order: SpotOrderV3,
+    pub order: SpotOrderV3Any,
     pub balance: BalanceV2<Open>,
 }
 
@@ -64,13 +64,16 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
         if cmd.order_id != order.order_id {
             return Err(FreezeSpotOrderV2Error::OrderIdMismatch);
         }
-        if order.status != SpotOrderStatus::Pending {
+        if !matches!(given_state.order, SpotOrderV3Any::Pending(_)) {
             return Err(FreezeSpotOrderV2Error::OrderNotPending);
         }
         if given_state.balance.party_id() != order.owner.0 {
             return Err(FreezeSpotOrderV2Error::PartyMismatch);
         }
-        let requirement = given_state.order.freeze_requirement()?;
+        let SpotOrderV3Any::Pending(pending_order) = &given_state.order else {
+            return Err(FreezeSpotOrderV2Error::OrderNotPending);
+        };
+        let requirement = pending_order.freeze_requirement()?;
         if given_state.balance.asset_id() != u64::from(requirement.currency().index()) {
             return Err(FreezeSpotOrderV2Error::AssetMismatch);
         }
@@ -82,7 +85,10 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
         _cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let requirement = given_state.order.freeze_requirement()?;
+        let SpotOrderV3Any::Pending(pending_order) = &given_state.order else {
+            return Err(FreezeSpotOrderV2Error::OrderNotPending);
+        };
+        let requirement = pending_order.freeze_requirement()?;
         let mut balance_after = given_state.balance.clone();
         balance_after.freeze(requirement.amount())?;
         Ok(FreezeSpotOrderV2AfterChanges { balance_after })
