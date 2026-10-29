@@ -4,7 +4,7 @@ use rust_decimal::Decimal;
 use crate::entity::hyperliquid_account::usdc::Usdc;
 use crate::entity::perp::fund::funding_payment::{FundingPayment, Rate};
 use crate::entity::perp::fund::price::Price;
-use crate::entity::perp::trade::perp_position_v2::PerpPositionV2;
+use crate::entity::perp::trade::perp_position_v2::PerpPositionV3;
 
 pub type Size = Decimal;
 pub type TxHash = [u8; 32];
@@ -16,7 +16,7 @@ pub fn settle_hour(
     oracle: Price,
     batch_hash: TxHash,
     seq_start: u64,
-    positions: &[(UserId, PerpPositionV2)],
+    positions: &[(UserId, PerpPositionV3)],
 ) -> Vec<FundingPayment> {
     let mut next_seq = seq_start;
     positions

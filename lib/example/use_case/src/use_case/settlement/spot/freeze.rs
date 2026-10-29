@@ -31,8 +31,8 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
 
     fn compute_state_changed_only(
         &self,
-        cmd: &Self::Command,
-        given_state: &Self::StateGiven,
+        _cmd: &Self::Command,
+        _given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         todo!()
     }

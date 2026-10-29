@@ -9,8 +9,9 @@ pub mod pending_trigger_spot_order_source;
 
 pub mod pipeline;
 
+pub mod v3;
+
 pub mod generate_spot_klines_from_historical_trades;
-pub mod place_only_spot_order_v3;
 
 pub use activate_spot_order_v2::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,

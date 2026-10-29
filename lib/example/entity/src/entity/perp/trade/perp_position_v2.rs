@@ -51,7 +51,7 @@ pub enum PerpPositionV2Error {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PerpPositionV2 {
+pub struct PerpPositionV3 {
     /// 仓位的唯一标识。
     position_id: u64,
     /// 持有该仓位的账户标识。
@@ -85,7 +85,7 @@ pub struct PerpPositionV2 {
     version: u64,
 }
 
-impl PerpPositionV2 {
+impl PerpPositionV3 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         position_key: u64,
@@ -377,7 +377,7 @@ fn validate_margin(
     }
 }
 
-impl PerpPositionV2 {
+impl PerpPositionV3 {
     pub fn apply_trade2(&mut self, trade: &PerpTradeV3) -> Result<Decimal, PerpPositionV2Error> {
         if trade.kind == PerpTradeKind::InsuranceFundTransfer {
             return Err(PerpPositionV2Error::InvalidState);

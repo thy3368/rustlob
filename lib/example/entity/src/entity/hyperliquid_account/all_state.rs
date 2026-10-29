@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
-use crate::perp::trade::perp_position_v2::PerpPositionV2;
+use crate::perp::trade::perp_position_v2::PerpPositionV3;
 use crate::{Balance, HyperliquidPerpOrder, SpotAccount, SpotOrderV2};
 
 /// 三户模型
@@ -58,5 +58,5 @@ pub struct FundingWallet {
 pub struct PerpWallet {
     ///其实他只需要usdc的balance就行了，他的语义和上面的语义不一样，只有USDC
     pub cross: Balance, // 全仓余额（通常只有 USDC）
-    pub isolated: BTreeMap<u64, PerpPositionV2>, // USDC
+    pub isolated: BTreeMap<u64, PerpPositionV3>, // USDC
 }
