@@ -76,8 +76,8 @@ pub enum MatchResult {
 
 /// 现货委托这一 Moment-Interval 业务事实及其生命周期类型。
 ///
-/// `OrderBase` 保存稳定事实；私有包装保证工厂产物的类型与 Pending 状态一致。
-/// 本模块暂只提供 Pending 创建入口，不提供状态转换或历史状态恢复入口。
+/// `OrderBase` 保存稳定事实；新创建入口返回 Pending，加载入口保留记录中的生命周期状态。
+/// 撮合行为负责验证事实并返回相应状态的 after truth。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotOrderV3<S = Pending> {
     comon_order: OrderBase,
@@ -247,6 +247,14 @@ impl SpotOrderV3<Pending> {
     pub fn single(mut order: OrderBase) -> Self {
         order.status = SpotOrderStatus::Pending;
         order.group_relation = OrderGroupRelation::Standalone;
+        Self { comon_order: order, stage: PhantomData }
+    }
+
+    /// 仅装配已加载或已回放的订单事实，保留其生命周期状态和订单组关系。
+    ///
+    /// 调用方须保证输入事实已通过 admission 和回放校验；本方法不推进生命周期，
+    /// 也不执行撮合或其它跨聚合操作。
+    pub fn from_record(order: OrderBase) -> Self {
         Self { comon_order: order, stage: PhantomData }
     }
 
@@ -620,6 +628,9 @@ mod tests {
         original.created_at = 123;
         original.updated_at = 456;
         original.version = 7;
+        let loaded: SpotOrderV3<super::Pending> = SpotOrderV3::from_record(original.clone());
+        assert_eq!(loaded.order_base(), &original);
+
         let single: SpotOrderV3<super::Pending> = SpotOrderV3::single(original.clone());
         let mut expected = original.clone();
         expected.status = SpotOrderStatus::Pending;
