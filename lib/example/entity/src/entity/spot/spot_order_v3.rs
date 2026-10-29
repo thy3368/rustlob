@@ -327,7 +327,7 @@ impl<S: SpotOrderStage> SpotOrderV3<S> {
     pub fn freeze_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
         let order = &self.comon_order;
         let orig_size = order.orig_size;
-        let fee = order.taker_max_fee;
+        let fee = order.buy_quote_fee_reserve_limit;
 
         if orig_size <= Decimal::ZERO || fee < Decimal::ZERO {
             return Err(SpotAmountConversionError::InvalidAmount);
@@ -369,9 +369,9 @@ impl SpotOrderV3<Canceled> {
             || order.size > order.orig_size
             || (order.side == OrderSide::Buy && order.limit_px <= Decimal::ZERO)
             || (order.side == OrderSide::Buy
-                && (order.taker_max_fee < Decimal::ZERO
-                    || order.fee_consumed < Decimal::ZERO
-                    || order.fee_consumed > order.taker_max_fee))
+                && (order.buy_quote_fee_reserve_limit < Decimal::ZERO
+                    || order.buy_quote_fee_reserve_consumed < Decimal::ZERO
+                    || order.buy_quote_fee_reserve_consumed > order.buy_quote_fee_reserve_limit))
         {
             return Err(SpotAmountConversionError::InvalidAmount);
         }
@@ -379,8 +379,8 @@ impl SpotOrderV3<Canceled> {
             OrderSide::Buy => order
                 .limit_px
                 .checked_mul(order.size)
-                .and_then(|value| value.checked_add(order.taker_max_fee))
-                .and_then(|value| value.checked_sub(order.fee_consumed))
+                .and_then(|value| value.checked_add(order.buy_quote_fee_reserve_limit))
+                .and_then(|value| value.checked_sub(order.buy_quote_fee_reserve_consumed))
                 .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
             OrderSide::Sell => order.size,
         };
@@ -480,11 +480,11 @@ fn apply_fill(
     let mut updated = order.clone();
     updated.size = remaining;
     if updated.side == OrderSide::Buy {
-        updated.fee_consumed = updated
-            .fee_consumed
+        updated.buy_quote_fee_reserve_consumed = updated
+            .buy_quote_fee_reserve_consumed
             .checked_add(fee_consumed)
             .ok_or_else(|| entity_error("order fee arithmetic overflow"))?;
-        if updated.fee_consumed > updated.taker_max_fee {
+        if updated.buy_quote_fee_reserve_consumed > updated.buy_quote_fee_reserve_limit {
             return Err(entity_error("order fee exceeds reserved maximum"));
         }
     }
@@ -533,7 +533,11 @@ impl<S> FieldDiff for SpotOrderV3<S> {
             EntityFieldChange::new("order_id", "", self.comon_order.order_id.to_string()),
             EntityFieldChange::new("status", "", format!("{:?}", self.comon_order.status)),
             EntityFieldChange::new("updated_at", "", self.comon_order.updated_at.to_string()),
-            EntityFieldChange::new("fee_consumed", "", self.comon_order.fee_consumed.to_string()),
+            EntityFieldChange::new(
+                "fee_consumed",
+                "",
+                self.comon_order.buy_quote_fee_reserve_consumed.to_string(),
+            ),
             EntityFieldChange::new("version", "", self.comon_order.version.to_string()),
         ]
     }
@@ -554,11 +558,13 @@ impl<S> FieldDiff for SpotOrderV3<S> {
                 other.comon_order.updated_at.to_string(),
             ));
         }
-        if self.comon_order.fee_consumed != other.comon_order.fee_consumed {
+        if self.comon_order.buy_quote_fee_reserve_consumed
+            != other.comon_order.buy_quote_fee_reserve_consumed
+        {
             changes.push(EntityFieldChange::new(
                 "fee_consumed",
-                self.comon_order.fee_consumed.to_string(),
-                other.comon_order.fee_consumed.to_string(),
+                self.comon_order.buy_quote_fee_reserve_consumed.to_string(),
+                other.comon_order.buy_quote_fee_reserve_consumed.to_string(),
             ));
         }
         if self.comon_order.version != other.comon_order.version {
@@ -701,8 +707,8 @@ mod tests {
             is_position_tpsl: false,
             reduce_only: false,
             status: SpotOrderStatus::Pending,
-            taker_max_fee: fee,
-            fee_consumed: Decimal::ZERO,
+            buy_quote_fee_reserve_limit: fee,
+            buy_quote_fee_reserve_consumed: Decimal::ZERO,
             cloid: None,
             created_at: 0,
             updated_at: 0,
@@ -719,7 +725,7 @@ mod tests {
     ) -> SpotOrderV3<super::Pending> {
         let mut order = order(side, limit_px, size, Decimal::ZERO);
         order.comon_order.order_id = id;
-        order.comon_order.taker_max_fee = Decimal::new(100, 0);
+        order.comon_order.buy_quote_fee_reserve_limit = Decimal::new(100, 0);
         order.comon_order.size = size;
         order.comon_order.tif = tif;
         order
@@ -780,8 +786,14 @@ mod tests {
         assert_eq!(created_trades[0].comon_trade.size, Decimal::new(2, 0));
         assert_eq!(created_trades[0].comon_trade.taker_fee, Decimal::new(396, 2));
         assert_eq!(created_trades[0].comon_trade.maker_fee, Decimal::new(198, 2));
-        assert_eq!(filled_taker_order_after.order_base().fee_consumed, Decimal::new(396, 2));
-        assert_eq!(maker_orders_after[0].order_base().fee_consumed, Decimal::new(198, 2));
+        assert_eq!(
+            filled_taker_order_after.order_base().buy_quote_fee_reserve_consumed,
+            Decimal::new(396, 2)
+        );
+        assert_eq!(
+            maker_orders_after[0].order_base().buy_quote_fee_reserve_consumed,
+            Decimal::new(198, 2)
+        );
     }
 
     #[test]
@@ -855,7 +867,7 @@ mod tests {
     fn match_order_uses_zero_fee_defaults() {
         let mut taker =
             active_order(1, OrderSide::Buy, Decimal::new(100, 0), Decimal::ONE, OrderTif::Gtc);
-        taker.comon_order.taker_max_fee = Decimal::ZERO;
+        taker.comon_order.buy_quote_fee_reserve_limit = Decimal::ZERO;
         let maker =
             active_order(2, OrderSide::Sell, Decimal::new(99, 0), Decimal::ONE, OrderTif::Gtc);
         let maker = as_any(&maker, SpotOrderStatus::Open);
@@ -1011,7 +1023,7 @@ mod tests {
                 .order_base()
                 .clone();
         record.size = Decimal::ONE;
-        record.fee_consumed = Decimal::new(2, 1);
+        record.buy_quote_fee_reserve_consumed = Decimal::new(2, 1);
         record.status = SpotOrderStatus::Canceled;
         let SpotOrderV3Any::Canceled(order) = SpotOrderV3Any::from_record(record).unwrap() else {
             unreachable!()
@@ -1045,7 +1057,7 @@ mod tests {
         let mut record =
             order(OrderSide::Buy, Decimal::ONE, Decimal::ONE, Decimal::ONE).order_base().clone();
         record.status = SpotOrderStatus::Canceled;
-        record.fee_consumed = Decimal::new(11, 1);
+        record.buy_quote_fee_reserve_consumed = Decimal::new(11, 1);
         let SpotOrderV3Any::Canceled(order) = SpotOrderV3Any::from_record(record).unwrap() else {
             unreachable!()
         };
