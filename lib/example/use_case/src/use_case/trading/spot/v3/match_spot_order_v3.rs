@@ -1,6 +1,6 @@
 use common_entity::{LogEntry, StateMachineV2};
-use example_core_entity::spot::spot_order_v3::MatchResult;
 use example_core_entity::SpotOrderV3;
+use example_core_entity::spot::spot_order_v3::MatchResult;
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;

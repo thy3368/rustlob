@@ -74,9 +74,6 @@ pub enum MatchResult {
     Rejected { rejected_taker_order_after: SpotOrderV3<Rejected> },
 }
 
-
-
-
 /// 现货委托这一 Moment-Interval 业务事实及其生命周期类型。
 ///
 /// `OrderBase` 保存稳定事实；私有包装保证工厂产物的类型与 Pending 状态一致。
@@ -87,140 +84,114 @@ pub struct SpotOrderV3<S = Pending> {
     stage: PhantomData<S>,
 }
 
-impl<S = Pending> SpotOrderV3<S> {
-    /// 按 maker 优先级撮合 taker，并派生成交事实和订单 after-state。
+impl<S> SpotOrderV3<S> {
+    /// 依 maker 顺序撮合，并返回更新后的订单和成交事实。
     ///
-    /// 本方法不修改输入实体。成交手续费按 quote 币精度向上取整；成交编号从
-    /// `input.trade_id_start` 起逐笔递增。任何校验或 checked arithmetic 失败都会
-    /// 返回错误，不会向调用方暴露部分撮合结果。
+    /// 成交费按 quote 币精度向上取整。订单仅在全部检查成功后作为结果返回。
     pub fn match_with_input(
         &self,
         makers: Vec<SpotOrderV3>,
         input: MatchSpotOrderV3Input,
     ) -> Result<MatchResult, EntityError> {
-        validate_taker(&self.comon_order)?;
-
-        let mut taker_after = self.comon_order.clone();
-        let tif = taker_after.effective_tif();
-        let mut makers_after = makers;
+        let mut taker = self.comon_order.clone();
+        validate_order(&taker)?;
+        let mut makers = makers;
+        let tif = taker.effective_tif();
 
         if tif == OrderTif::Alo {
-            let crosses_best = if let Some(maker) = makers_after.first() {
-                validate_maker(&taker_after, &maker.comon_order)?;
-                crosses(&taker_after, &maker.comon_order)
-            } else {
-                false
-            };
-            if crosses_best {
-                transition_status(&mut taker_after, SpotOrderStatus::Rejected, input.timestamp)?;
-                return Ok(MatchResult::Rejected {
-                    rejected_taker_order_after: with_stage(taker_after),
-                });
-            }
-            rest_or_preserve_partial(taker_after, makers_after, Vec::new(), input.timestamp)
-        } else {
-            let mut trades = Vec::new();
-            let mut next_trade_id = input.trade_id_start;
-
-            for maker in &mut makers_after {
-                validate_maker(&taker_after, &maker.comon_order)?;
-                if !crosses(&taker_after, &maker.comon_order) {
-                    break;
-                }
-
-                let taker_remaining = remaining(&taker_after)?;
-                let maker_remaining = remaining(&maker.comon_order)?;
-                let trade_size = taker_remaining.min(maker_remaining);
-                if trade_size <= Decimal::ZERO {
-                    return Err(entity_error("matched order has no remaining quantity"));
-                }
-                let price = maker.comon_order.limit_px;
-                let notional = price
-                    .checked_mul(trade_size)
-                    .ok_or_else(|| entity_error("trade notional overflow"))?;
-                let taker_fee = fee_amount(
-                    notional,
-                    input.taker_fee_bps,
-                    taker_after.symbol.quote.scale(),
-                )?;
-                let maker_fee = fee_amount(
-                    notional,
-                    input.maker_fee_bps,
-                    maker.comon_order.symbol.quote.scale(),
-                )?;
-                let next_taker = filled_order_after(&taker_after, trade_size, input.timestamp)?;
-                let next_maker =
-                    filled_order_after(&maker.comon_order, trade_size, input.timestamp)?;
-                let next_trade_id = next_trade_id;
-                let next_trade_id_after = next_trade_id
-                    .checked_add(1)
-                    .ok_or_else(|| entity_error("trade id overflow"))?;
-
-                trades.push(SpotTradeV3 {
-                    comon_trade: TradeBase {
-                        trade_id: next_trade_id,
-                        symbol: taker_after.symbol.clone(),
-                        taker_user: taker_after.owner,
-                        maker_user: maker.comon_order.owner,
-                        taker_order_id: taker_after.order_id,
-                        maker_order_id: maker.comon_order.order_id,
-                        taker_side: taker_after.side,
-                        price,
-                        size: trade_size,
-                        taker_fee,
-                        maker_fee,
-                        created_at: input.timestamp,
-                        updated_at: input.timestamp,
-                        version: 0,
-                    },
-                });
-                taker_after = next_taker;
-                maker.comon_order = next_maker;
-                next_trade_id = next_trade_id_after;
-
-                if remaining(&taker_after)? == Decimal::ZERO {
-                    break;
-                }
-            }
-
-            if remaining(&taker_after)? == Decimal::ZERO {
-                return Ok(MatchResult::Filled {
-                    filled_taker_order_after: with_stage(taker_after),
-                    maker_orders_after: makers_after,
-                    created_trades: trades,
-                });
-            }
-
-            if tif == OrderTif::Ioc {
-                if trades.is_empty() {
-                    transition_status(&mut taker_after, SpotOrderStatus::Rejected, input.timestamp)?;
+            if let Some(maker) = makers.first() {
+                validate_pair(&taker, &maker.comon_order)?;
+                if crosses(&taker, &maker.comon_order) {
+                    transition(&mut taker, SpotOrderStatus::Rejected, input.timestamp)?;
                     return Ok(MatchResult::Rejected {
-                        rejected_taker_order_after: with_stage(taker_after),
+                        rejected_taker_order_after: with_stage(taker),
                     });
                 }
-                transition_status(&mut taker_after, SpotOrderStatus::Canceled, input.timestamp)?;
-                return Ok(MatchResult::CanceledAfterPartialFill {
-                    canceled_taker_order_after: with_stage(taker_after),
-                    maker_orders_after: makers_after,
-                    created_trades: trades,
-                });
+            }
+            return resting_result(taker, makers, input.timestamp);
+        }
+
+        let mut trades = Vec::new();
+        for maker in &mut makers {
+            validate_pair(&taker, &maker.comon_order)?;
+            if !crosses(&taker, &maker.comon_order) {
+                break;
             }
 
-            if trades.is_empty() {
-                rest_or_preserve_partial(taker_after, makers_after, trades, input.timestamp)
-            } else {
-                Ok(MatchResult::PartiallyFilled {
-                    taker_order_after: with_stage(taker_after),
-                    maker_orders_after: makers_after,
+            let size = taker.size.min(maker.comon_order.size);
+            let price = maker.comon_order.limit_px;
+            let notional =
+                price.checked_mul(size).ok_or_else(|| entity_error("trade notional overflow"))?;
+            let trade_offset =
+                u64::try_from(trades.len()).map_err(|_| entity_error("trade id overflow"))?;
+            let trade_id = input
+                .trade_id_start
+                .checked_add(trade_offset)
+                .ok_or_else(|| entity_error("trade id overflow"))?;
+            let next_taker = apply_fill(&taker, size, input.timestamp)?;
+            let next_maker = apply_fill(&maker.comon_order, size, input.timestamp)?;
+
+            trades.push(SpotTradeV3 {
+                comon_trade: TradeBase {
+                    trade_id,
+                    symbol: taker.symbol.clone(),
+                    taker_user: taker.owner,
+                    maker_user: maker.comon_order.owner,
+                    taker_order_id: taker.order_id,
+                    maker_order_id: maker.comon_order.order_id,
+                    taker_side: taker.side,
+                    price,
+                    size,
+                    taker_fee: fee_amount(
+                        notional,
+                        input.taker_fee_bps,
+                        taker.symbol.quote.scale(),
+                    )?,
+                    maker_fee: fee_amount(
+                        notional,
+                        input.maker_fee_bps,
+                        maker.comon_order.symbol.quote.scale(),
+                    )?,
+                    created_at: input.timestamp,
+                    updated_at: input.timestamp,
+                    version: 0,
+                },
+            });
+            taker = next_taker;
+            maker.comon_order = next_maker;
+            if taker.size == Decimal::ZERO {
+                break;
+            }
+        }
+
+        match (taker.size == Decimal::ZERO, tif, trades.is_empty()) {
+            (true, _, _) => Ok(MatchResult::Filled {
+                filled_taker_order_after: with_stage(taker),
+                maker_orders_after: makers,
+                created_trades: trades,
+            }),
+            (false, OrderTif::Ioc, true) => {
+                transition(&mut taker, SpotOrderStatus::Rejected, input.timestamp)?;
+                Ok(MatchResult::Rejected { rejected_taker_order_after: with_stage(taker) })
+            }
+            (false, OrderTif::Ioc, false) => {
+                transition(&mut taker, SpotOrderStatus::Canceled, input.timestamp)?;
+                Ok(MatchResult::CanceledAfterPartialFill {
+                    canceled_taker_order_after: with_stage(taker),
+                    maker_orders_after: makers,
                     created_trades: trades,
                 })
             }
+            (false, _, true) => resting_result(taker, makers, input.timestamp),
+            (false, _, false) => Ok(MatchResult::PartiallyFilled {
+                taker_order_after: with_stage(taker),
+                maker_orders_after: makers,
+                created_trades: trades,
+            }),
         }
     }
 
-    /// 兼容不带撮合上下文的调用方；新调用应使用 [`Self::match_with_input`]。
-    ///
-    /// 兼容路径采用零费率、订单更新时间和 taker 订单 ID 作为成交 ID 起点。
+    /// 兼容原有调用；需要费用和批次时间时使用 [`Self::match_with_input`]。
     pub fn matchOrder(&self, makers: Vec<SpotOrderV3>) -> Result<MatchResult, EntityError> {
         self.match_with_input(
             makers,
@@ -346,12 +317,122 @@ fn map_coin_amount_error(_: CoinAmountError) -> SpotAmountConversionError {
     SpotAmountConversionError::InexactConversion
 }
 
+fn entity_error(message: &str) -> EntityError {
+    EntityError::Custom(message.to_owned())
+}
+
+fn validate_order(order: &OrderBase) -> Result<(), EntityError> {
+    if !order.has_consistent_execution_facts()
+        || order.orig_size <= Decimal::ZERO
+        || order.size <= Decimal::ZERO
+        || order.size > order.orig_size
+        || order.limit_px <= Decimal::ZERO
+    {
+        return Err(entity_error("order has invalid execution facts"));
+    }
+    if !matches!(
+        order.status,
+        SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+    ) {
+        return Err(entity_error("order is not matchable"));
+    }
+    if order.status == SpotOrderStatus::PartiallyFilled && order.size >= order.orig_size {
+        return Err(entity_error("partially filled order has inconsistent size"));
+    }
+    Ok(())
+}
+
+fn validate_pair(taker: &OrderBase, maker: &OrderBase) -> Result<(), EntityError> {
+    validate_order(maker)?;
+    if maker.order_id == taker.order_id || maker.side == taker.side || maker.symbol != taker.symbol
+    {
+        return Err(entity_error("maker is not compatible with taker"));
+    }
+    if maker.status == SpotOrderStatus::Pending || maker.execution != CommonOrderExecution::Limit {
+        return Err(entity_error("maker must be an open limit order"));
+    }
+    Ok(())
+}
+
+fn crosses(taker: &OrderBase, maker: &OrderBase) -> bool {
+    match taker.side {
+        OrderSide::Buy => taker.limit_px >= maker.limit_px,
+        OrderSide::Sell => taker.limit_px <= maker.limit_px,
+    }
+}
+
+fn apply_fill(order: &OrderBase, size: Decimal, timestamp: u64) -> Result<OrderBase, EntityError> {
+    let remaining = order
+        .size
+        .checked_sub(size)
+        .filter(|remaining| *remaining >= Decimal::ZERO)
+        .ok_or_else(|| entity_error("trade exceeds order remaining size"))?;
+    let version = order
+        .version
+        .checked_add(1)
+        .ok_or(EntityError::VersionOverflow { version: order.version })?;
+    let mut updated = order.clone();
+    updated.size = remaining;
+    updated.status = if remaining == Decimal::ZERO {
+        SpotOrderStatus::Filled
+    } else {
+        SpotOrderStatus::PartiallyFilled
+    };
+    updated.updated_at = timestamp;
+    updated.version = version;
+    Ok(updated)
+}
+
+fn transition(
+    order: &mut OrderBase,
+    status: SpotOrderStatus,
+    timestamp: u64,
+) -> Result<(), EntityError> {
+    order.version = order
+        .version
+        .checked_add(1)
+        .ok_or(EntityError::VersionOverflow { version: order.version })?;
+    order.status = status;
+    order.updated_at = timestamp;
+    Ok(())
+}
+
+fn fee_amount(notional: Decimal, fee_bps: u64, scale: u32) -> Result<Decimal, EntityError> {
+    let fee = notional
+        .checked_mul(Decimal::from(fee_bps))
+        .and_then(|amount| amount.checked_div(Decimal::from(10_000u64)))
+        .ok_or_else(|| entity_error("trade fee arithmetic overflow"))?;
+    Ok(fee.round_dp_with_strategy(scale, rust_decimal::RoundingStrategy::ToPositiveInfinity))
+}
+
+fn with_stage<S>(comon_order: OrderBase) -> SpotOrderV3<S> {
+    SpotOrderV3 { comon_order, stage: PhantomData }
+}
+
+fn resting_result(
+    mut taker: OrderBase,
+    makers: Vec<SpotOrderV3>,
+    timestamp: u64,
+) -> Result<MatchResult, EntityError> {
+    if taker.status == SpotOrderStatus::PartiallyFilled {
+        return Ok(MatchResult::PartiallyFilled {
+            taker_order_after: with_stage(taker),
+            maker_orders_after: makers,
+            created_trades: Vec::new(),
+        });
+    }
+    if taker.status == SpotOrderStatus::Pending {
+        transition(&mut taker, SpotOrderStatus::Open, timestamp)?;
+    }
+    Ok(MatchResult::Resting { taker_order_after: with_stage(taker) })
+}
+
 #[cfg(test)]
 mod tests {
     use base_types::UserId;
     use rust_decimal::Decimal;
 
-    use super::SpotOrderV3;
+    use super::{MatchResult, MatchSpotOrderV3Input, SpotOrderV3};
     use crate::account::coin::{Coin, CoinAmount};
     use crate::account::symbol::Symbol;
     use crate::entity::common::common_order::{
@@ -383,6 +464,151 @@ mod tests {
             updated_at: 0,
             version: 0,
         })
+    }
+
+    fn active_order(
+        id: u64,
+        side: OrderSide,
+        limit_px: Decimal,
+        size: Decimal,
+        tif: OrderTif,
+    ) -> SpotOrderV3 {
+        let mut order = order(side, limit_px, size, Decimal::ZERO);
+        order.comon_order.order_id = id;
+        order.comon_order.size = size;
+        order.comon_order.tif = tif;
+        order.comon_order.status = SpotOrderStatus::Open;
+        order
+    }
+
+    fn match_input() -> MatchSpotOrderV3Input {
+        MatchSpotOrderV3Input {
+            trade_id_start: 500,
+            maker_fee_bps: 100,
+            taker_fee_bps: 200,
+            timestamp: 123,
+        }
+    }
+
+    #[test]
+    fn matches_at_maker_price_and_updates_both_orders() {
+        let taker = active_order(
+            1,
+            OrderSide::Buy,
+            Decimal::new(100, 0),
+            Decimal::new(2, 0),
+            OrderTif::Gtc,
+        );
+        let maker = active_order(
+            2,
+            OrderSide::Sell,
+            Decimal::new(99, 0),
+            Decimal::new(3, 0),
+            OrderTif::Gtc,
+        );
+
+        let result = taker.match_with_input(vec![maker], match_input()).unwrap();
+        let MatchResult::Filled { filled_taker_order_after, maker_orders_after, created_trades } =
+            result
+        else {
+            panic!("expected filled result");
+        };
+
+        assert_eq!(filled_taker_order_after.order_base().status, SpotOrderStatus::Filled);
+        assert_eq!(filled_taker_order_after.order_base().size, Decimal::ZERO);
+        assert_eq!(maker_orders_after[0].order_base().status, SpotOrderStatus::PartiallyFilled);
+        assert_eq!(maker_orders_after[0].order_base().size, Decimal::ONE);
+        assert_eq!(created_trades[0].comon_trade.trade_id, 500);
+        assert_eq!(created_trades[0].comon_trade.price, Decimal::new(99, 0));
+        assert_eq!(created_trades[0].comon_trade.size, Decimal::new(2, 0));
+        assert_eq!(created_trades[0].comon_trade.taker_fee, Decimal::new(396, 2));
+        assert_eq!(created_trades[0].comon_trade.maker_fee, Decimal::new(198, 2));
+    }
+
+    #[test]
+    fn cancels_ioc_remainder_after_partial_fill() {
+        let taker = active_order(
+            1,
+            OrderSide::Buy,
+            Decimal::new(100, 0),
+            Decimal::new(3, 0),
+            OrderTif::Ioc,
+        );
+        let maker = active_order(
+            2,
+            OrderSide::Sell,
+            Decimal::new(99, 0),
+            Decimal::new(2, 0),
+            OrderTif::Gtc,
+        );
+
+        let result = taker.match_with_input(vec![maker], match_input()).unwrap();
+        let MatchResult::CanceledAfterPartialFill {
+            canceled_taker_order_after,
+            created_trades,
+            ..
+        } = result
+        else {
+            panic!("expected canceled partial fill");
+        };
+        assert_eq!(canceled_taker_order_after.order_base().status, SpotOrderStatus::Canceled);
+        assert_eq!(canceled_taker_order_after.order_base().size, Decimal::ONE);
+        assert_eq!(created_trades.len(), 1);
+    }
+
+    #[test]
+    fn fills_multiple_makers_in_input_order() {
+        let taker = active_order(
+            1,
+            OrderSide::Buy,
+            Decimal::new(100, 0),
+            Decimal::new(3, 0),
+            OrderTif::Gtc,
+        );
+        let first =
+            active_order(2, OrderSide::Sell, Decimal::new(99, 0), Decimal::ONE, OrderTif::Gtc);
+        let second = active_order(
+            3,
+            OrderSide::Sell,
+            Decimal::new(100, 0),
+            Decimal::new(2, 0),
+            OrderTif::Gtc,
+        );
+
+        let result = taker.match_with_input(vec![first, second], match_input()).unwrap();
+        let MatchResult::Filled { created_trades, .. } = result else {
+            panic!("expected filled result");
+        };
+        assert_eq!(created_trades.len(), 2);
+        assert_eq!(created_trades[0].comon_trade.maker_order_id, 2);
+        assert_eq!(created_trades[1].comon_trade.maker_order_id, 3);
+        assert_eq!(created_trades[1].comon_trade.trade_id, 501);
+    }
+
+    #[test]
+    fn pending_gtc_without_makers_becomes_open() {
+        let mut taker = order(OrderSide::Buy, Decimal::ONE, Decimal::ONE, Decimal::ZERO);
+        taker.comon_order.size = Decimal::ONE;
+        let result = taker.match_with_input(vec![], match_input()).unwrap();
+        let MatchResult::Resting { taker_order_after } = result else {
+            panic!("expected resting result");
+        };
+        assert_eq!(taker_order_after.order_base().status, SpotOrderStatus::Open);
+        assert_eq!(taker_order_after.order_base().version, 1);
+        assert_eq!(taker_order_after.order_base().updated_at, 123);
+    }
+
+    #[test]
+    fn rejects_alo_that_crosses_the_best_maker() {
+        let taker =
+            active_order(1, OrderSide::Buy, Decimal::new(100, 0), Decimal::ONE, OrderTif::Alo);
+        let maker =
+            active_order(2, OrderSide::Sell, Decimal::new(99, 0), Decimal::ONE, OrderTif::Gtc);
+        let result = taker.match_with_input(vec![maker], match_input()).unwrap();
+        let MatchResult::Rejected { rejected_taker_order_after } = result else {
+            panic!("expected rejection");
+        };
+        assert_eq!(rejected_taker_order_after.order_base().status, SpotOrderStatus::Rejected);
     }
 
     #[test]
