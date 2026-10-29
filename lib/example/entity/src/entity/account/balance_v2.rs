@@ -21,6 +21,9 @@ pub enum BalanceV2Error {
     /// 冻结余额不足。
     #[error("frozen balance is insufficient")]
     InsufficientFrozenBalance,
+    /// 余额属于已关闭的账户资产。
+    #[error("balance is closed")]
+    BalanceClosed,
     /// 余额或版本计算发生溢出。
     #[error("arithmetic overflow while deriving balance transition")]
     ArithmeticOverflow,
@@ -197,6 +200,9 @@ impl BalanceV2<Open> {
     ///
     /// 将指定金额从可用余额转入冻结余额；校验失败时余额和版本保持不变。
     pub fn freeze(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
+        if self.record.status != BalanceV2Status::Open {
+            return Err(BalanceV2Error::BalanceClosed);
+        }
         if amount <= Decimal::ZERO {
             return Err(BalanceV2Error::InvalidAmount);
         }
@@ -226,6 +232,9 @@ impl BalanceV2<Open> {
         unfreeze_amount: Decimal,
         payment_amount: Decimal,
     ) -> Result<(), BalanceV2Error> {
+        if self.record.status != BalanceV2Status::Open {
+            return Err(BalanceV2Error::BalanceClosed);
+        }
         if unfreeze_amount <= Decimal::ZERO || payment_amount <= Decimal::ZERO {
             return Err(BalanceV2Error::InvalidAmount);
         }
@@ -251,6 +260,45 @@ impl BalanceV2<Open> {
 
         self.record.available = available;
         self.record.frozen = frozen;
+        self.record.version = version;
+        Ok(())
+    }
+
+    /// 将成交消耗额从冻结余额中扣除，不释放订单的剩余冻结额。
+    pub fn debit_frozen(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
+        if self.record.status != BalanceV2Status::Open {
+            return Err(BalanceV2Error::BalanceClosed);
+        }
+        if amount <= Decimal::ZERO {
+            return Err(BalanceV2Error::InvalidAmount);
+        }
+        if self.record.frozen < amount {
+            return Err(BalanceV2Error::InsufficientFrozenBalance);
+        }
+
+        let frozen =
+            self.record.frozen.checked_sub(amount).ok_or(BalanceV2Error::ArithmeticOverflow)?;
+        let version =
+            self.record.version.checked_add(1).ok_or(BalanceV2Error::ArithmeticOverflow)?;
+        self.record.frozen = frozen;
+        self.record.version = version;
+        Ok(())
+    }
+
+    /// 将成交所得加入可用余额。
+    pub fn credit_available(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
+        if self.record.status != BalanceV2Status::Open {
+            return Err(BalanceV2Error::BalanceClosed);
+        }
+        if amount <= Decimal::ZERO {
+            return Err(BalanceV2Error::InvalidAmount);
+        }
+
+        let available =
+            self.record.available.checked_add(amount).ok_or(BalanceV2Error::ArithmeticOverflow)?;
+        let version =
+            self.record.version.checked_add(1).ok_or(BalanceV2Error::ArithmeticOverflow)?;
+        self.record.available = available;
         self.record.version = version;
         Ok(())
     }
@@ -529,6 +577,37 @@ mod tests {
             balance.unfreeze_and_pay(amount(1), amount(1)),
             Err(BalanceV2Error::ArithmeticOverflow)
         );
+        assert_eq!(balance, before);
+    }
+
+    #[test]
+    fn debit_frozen_and_credit_available_apply_checked_transitions() {
+        let mut balance = BalanceV2::new(1, 2, 3, amount(10), amount(50), 4);
+        balance.debit_frozen(amount(20)).unwrap();
+        assert_eq!(
+            (balance.available(), balance.frozen(), balance.version()),
+            (amount(10), amount(30), 5)
+        );
+        balance.credit_available(amount(7)).unwrap();
+        assert_eq!(
+            (balance.available(), balance.frozen(), balance.version()),
+            (amount(17), amount(30), 6)
+        );
+    }
+
+    #[test]
+    fn debit_and_credit_failures_leave_balance_unchanged() {
+        let mut balance = BalanceV2::new(1, 2, 3, Decimal::MAX, amount(5), 4);
+        let before = balance.clone();
+        assert_eq!(balance.debit_frozen(Decimal::ZERO), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(balance.debit_frozen(amount(6)), Err(BalanceV2Error::InsufficientFrozenBalance));
+        assert_eq!(balance.credit_available(amount(1)), Err(BalanceV2Error::ArithmeticOverflow));
+        assert_eq!(balance.credit_available(amount(-1)), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(balance, before);
+
+        let mut balance = BalanceV2::new(1, 2, 3, Decimal::ZERO, amount(5), u64::MAX);
+        let before = balance.clone();
+        assert_eq!(balance.debit_frozen(amount(1)), Err(BalanceV2Error::ArithmeticOverflow));
         assert_eq!(balance, before);
     }
 
