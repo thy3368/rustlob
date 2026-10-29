@@ -849,6 +849,24 @@ mod tests {
     }
 
     #[test]
+    fn match_order_uses_zero_fee_defaults() {
+        let mut taker =
+            active_order(1, OrderSide::Buy, Decimal::new(100, 0), Decimal::ONE, OrderTif::Gtc);
+        taker.comon_order.taker_max_fee = Decimal::ZERO;
+        let maker =
+            active_order(2, OrderSide::Sell, Decimal::new(99, 0), Decimal::ONE, OrderTif::Gtc);
+        let maker = as_any(&maker, SpotOrderStatus::Open);
+
+        let MatchResult::Filled { created_trades, .. } = taker.match_order(vec![maker]).unwrap()
+        else {
+            panic!("expected filled result");
+        };
+        assert_eq!(created_trades.len(), 1);
+        assert_eq!(created_trades[0].comon_trade.taker_fee, Decimal::ZERO);
+        assert_eq!(created_trades[0].comon_trade.maker_fee, Decimal::ZERO);
+    }
+
+    #[test]
     fn pending_gtc_without_makers_becomes_open() {
         let mut taker = order(OrderSide::Buy, Decimal::ONE, Decimal::ONE, Decimal::ZERO);
         taker.comon_order.size = Decimal::ONE;
