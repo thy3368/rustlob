@@ -2,6 +2,7 @@ use base_types::UserId;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use crate::account::symbol::Symbol;
 use crate::OrderSide;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -9,10 +10,8 @@ pub struct TradeBase {
     /// 本系统稳定成交 ID。
     pub trade_id: u64,
 
-    /// Hyperliquid 现货资产编号。
-    pub asset: u32,
     /// 交易对，例如 `BTCUSDT`。
-    pub pair: String,
+    pub symbol: Symbol,
 
     pub taker_user: UserId,
     pub maker_user: UserId,
