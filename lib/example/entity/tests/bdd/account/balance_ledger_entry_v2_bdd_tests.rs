@@ -10,7 +10,7 @@ fn order_reason() -> BalanceLedgerReason {
 }
 
 fn balance() -> Balance {
-    Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 100, 3)
+    Balance::new(1, 1, 2, 1_000, 100, 3)
 }
 
 fn balance_identity(balance: &Balance) -> (String, String, String) {
@@ -83,8 +83,8 @@ fn freeze_constructs_identity_operation_amount_then_applies_to_balance() {
         BalanceLedgerEntryV2::financial_classification(),
         FinancialClassification::LedgerEntry
     );
-    assert_eq!(entry.account_id, "trader-1");
-    assert_eq!(entry.asset_id, "USDT");
+    assert_eq!(entry.account_id, 1);
+    assert_eq!(entry.asset_id, 2);
     assert_eq!(entry.operation, BalanceLedgerOperation::Freeze);
     assert_eq!(entry.amount, 200);
     assert_eq!(entry.reason.order_id(), Some("1".to_string()));
@@ -117,28 +117,28 @@ fn all_operations_apply_and_project_expected_snapshots() {
     let cases = [
         (
             BalanceLedgerOperation::Unfreeze,
-            Balance::new("trader-1".to_string(), "USDT".to_string(), 500, 400, 7),
+            Balance::new(1, 1, 2, 500, 400, 7),
             150,
             650,
             250,
         ),
         (
             BalanceLedgerOperation::CreditAvailable,
-            Balance::new("trader-1".to_string(), "USDT".to_string(), 10, 2, 1),
+            Balance::new(1, 1, 2, 10, 2, 1),
             5,
             15,
             2,
         ),
         (
             BalanceLedgerOperation::DebitAvailable,
-            Balance::new("trader-1".to_string(), "USDT".to_string(), 900, 20, 11),
+            Balance::new(1, 1, 2, 900, 20, 11),
             300,
             600,
             20,
         ),
         (
             BalanceLedgerOperation::DebitFrozen,
-            Balance::new("trader-1".to_string(), "USDT".to_string(), 5, 7, 4),
+            Balance::new(1, 1, 2, 5, 7, 4),
             3,
             5,
             4,
@@ -274,7 +274,7 @@ fn large_amount_is_accepted_and_projected_at_construction() {
 
 #[test]
 fn apply_failure_keeps_balance_and_entry_unapplied() {
-    let mut balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 100, 0, 1);
+    let mut balance = Balance::new(1, 1, 2, 100, 0, 1);
     let (account_id, asset_id, balance_entity_id) = balance_identity(&balance);
     let mut entry = BalanceLedgerEntryV2::freeze(
         "ledger-7".to_string(),
@@ -310,7 +310,7 @@ fn apply_rejects_identity_mismatch_without_mutating_balance() {
         order_reason(),
     )
     .unwrap();
-    let mut other = Balance::new("other".to_string(), "USDT".to_string(), 1_000, 100, 3);
+    let mut other = Balance::new(9, 9, 2, 1_000, 100, 3);
 
     let result = entry.apply_to(&mut other);
 
@@ -346,7 +346,7 @@ fn duplicate_apply_is_rejected_without_second_mutation() {
 
 #[test]
 fn version_overflow_apply_failure_keeps_entry_unapplied() {
-    let mut balance = Balance::new("trader-1".to_string(), "USDT".to_string(), 100, 50, u64::MAX);
+    let mut balance = Balance::new(1, 1, 2, 100, 50, u64::MAX);
     let (account_id, asset_id, balance_entity_id) = balance_identity(&balance);
     let mut entry = BalanceLedgerEntryV2::debit_available(
         "ledger-9".to_string(),
@@ -400,7 +400,7 @@ fn pending_create_event_projects_operation_amount_and_compatibility_fields() {
 
 #[test]
 fn applied_create_event_projects_snapshots_and_spot_settlement_purpose() {
-    let mut balance = Balance::new("buyer".to_string(), "USDT".to_string(), 0, 200, 2);
+    let mut balance = Balance::new(2, 2, 2, 0, 200, 2);
     let (account_id, asset_id, balance_entity_id) = balance_identity(&balance);
     let mut entry = BalanceLedgerEntryV2::debit_frozen(
         "ledger-11".to_string(),

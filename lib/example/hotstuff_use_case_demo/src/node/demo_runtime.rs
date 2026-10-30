@@ -293,11 +293,11 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
         Ok(SpotBlockState {
             orders: vec![demo_sell_order(2, "seller", 100, 1)?, cancel_order],
             balances: vec![
-                Balance::new("buyer".to_string(), "USDT".to_string(), 100_000, buyer_frozen, 1),
-                Balance::new("buyer".to_string(), "BTC".to_string(), 0, 0, 1),
-                Balance::new("seller".to_string(), "BTC".to_string(), 0, 1, 1),
-                Balance::new("seller".to_string(), "USDT".to_string(), 0, 1, 1),
-                Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+                Balance::new(1, 1, 2, 100_000, buyer_frozen, 1),
+                Balance::new(1, 1, 1, 0, 0, 1),
+                Balance::new(2, 2, 1, 0, 1, 1),
+                Balance::new(2, 2, 2, 0, 1, 1),
+                Balance::new(3, 3, 2, 0, 0, 1),
             ],
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
