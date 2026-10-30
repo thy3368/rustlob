@@ -42,5 +42,10 @@ cargo metadata --no-deps --format-version 1
 - `cargo crap` 执行失败时停止后续代码改动并报告首个根因；crate 编译失败但静态分析成功时，同时报告编译失败和静态 CRAP 结果。
 - 所有 crate 修改完成后，再运行 `cargo crap --workspace --summary` 作为整体汇总；仅修改文档、配置或 workspace 根文件时，只需运行
   workspace 汇总。
+- Agent 每次完成一个 crate 的代码改动后，还必须运行 `cargo dupes stats --path <crate-directory> --exclude-tests` 和 `cargo mutants --package <package> --timeout 60`。
+- `cargo dupes` 用 crate 目录定位，`cargo mutants` 用 Cargo package 名定位；多个 crate 改动时三项检查都必须逐 crate 执行。
+- 如果只检查指定 Rust 文件，使用 `cargo mutants --package <package> --file '<relative-file>' --cargo-test-arg '<test-filter>' --timeout 60`；`--file` 只限制生成 mutant 的文件，`--cargo-test-arg` 才限制运行的测试。路径包含 `/` 时按 workspace 根目录传入完整相对路径。
+- 例如只检查 `lib/example/entity/src/entity/spot/spot_order_v3.rs`：`cargo mutants --package example_core_entity --file 'lib/example/entity/src/entity/spot/spot_order_v3.rs' --cargo-test-arg 'spot_order_v3::tests' --timeout 60`。
+- `cargo mutants` 未安装、基线测试失败、执行超时或工具失败时，必须报告失败原因，不得把未运行当作通过；全部改动完成后再运行对应的 workspace 汇总检查。
 
 
