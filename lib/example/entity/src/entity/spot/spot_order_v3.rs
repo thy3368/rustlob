@@ -128,73 +128,16 @@ impl SpotOrderV3<Pending> {
         makers: Vec<SpotOrderV3Any>,
         input: MatchSpotOrderV3Input,
     ) -> Result<MatchResult, EntityError> {
-        let mut taker = self.comon_order.clone();
+        let taker = self.comon_order.clone();
         validate_order(&taker)?;
-        let mut makers = makers;
+        let makers = makers;
         let tif = taker.effective_tif();
 
         if tif == OrderTif::Alo {
-            if let Some(maker) = makers.first() {
-                validate_pair(&taker, maker.order_base())?;
-                if crosses(&taker, maker.order_base()) {
-                    transition(&mut taker, SpotOrderStatus::Rejected, input.timestamp)?;
-                    return Ok(MatchResult::Rejected {
-                        rejected_taker_order_after: with_stage(taker)?,
-                    });
-                }
-            }
-            return resting_result(taker, makers, input.timestamp);
+            return match_alo_order(taker, makers, input.timestamp);
         }
 
-        let mut trades = Vec::new();
-        for maker in &mut makers {
-            validate_pair(&taker, maker.order_base())?;
-            if !crosses(&taker, maker.order_base()) {
-                break;
-            }
-
-            let maker_base = maker.order_base();
-            let size = taker.size.min(maker_base.size);
-            let price = maker_base.limit_px;
-            let notional =
-                price.checked_mul(size).ok_or_else(|| entity_error("trade notional overflow"))?;
-            let trade_offset =
-                u64::try_from(trades.len()).map_err(|_| entity_error("trade id overflow"))?;
-            let trade_id = input
-                .trade_id_start
-                .checked_add(trade_offset)
-                .ok_or_else(|| entity_error("trade id overflow"))?;
-            let taker_fee = fee_amount(notional, input.taker_fee_bps, taker.symbol.quote.scale())?;
-            let maker_fee =
-                fee_amount(notional, input.maker_fee_bps, maker.order_base().symbol.quote.scale())?;
-            let next_taker = apply_fill(&taker, size, taker_fee, input.timestamp)?;
-            let next_maker = apply_fill(maker.order_base(), size, maker_fee, input.timestamp)?;
-
-            trades.push(SpotTradeV3 {
-                comon_trade: TradeBase {
-                    trade_id,
-                    symbol: taker.symbol,
-                    taker_user: taker.owner,
-                    maker_user: maker.order_base().owner,
-                    taker_order_id: taker.order_id,
-                    maker_order_id: maker.order_base().order_id,
-                    taker_side: taker.side,
-                    price,
-                    size,
-                    taker_fee,
-                    maker_fee,
-                    created_at: input.timestamp,
-                    updated_at: input.timestamp,
-                    version: 0,
-                },
-            });
-            taker = next_taker;
-            *maker = SpotOrderV3Any::from_record(next_maker)?;
-            if taker.size == Decimal::ZERO {
-                break;
-            }
-        }
-
+        let (taker, makers, trades) = match_with_makers(taker, makers, input)?;
         finalize_match(taker, makers, trades, tif, input.timestamp)
     }
 
@@ -731,6 +674,86 @@ impl<S> common_entity::Shard for SpotOrderV3<S> {
     fn partition(&self) -> u8 {
         self.comon_order.symbol.base.index() as u8
     }
+}
+
+fn match_alo_order(
+    mut taker: OrderBase,
+    makers: Vec<SpotOrderV3Any>,
+    timestamp: u64,
+) -> Result<MatchResult, EntityError> {
+    if let Some(maker) = makers.first() {
+        validate_pair(&taker, maker.order_base())?;
+        if crosses(&taker, maker.order_base()) {
+            transition(&mut taker, SpotOrderStatus::Rejected, timestamp)?;
+            return Ok(MatchResult::Rejected { rejected_taker_order_after: with_stage(taker)? });
+        }
+    }
+    resting_result(taker, makers, timestamp)
+}
+
+fn match_with_makers(
+    mut taker: OrderBase,
+    mut makers: Vec<SpotOrderV3Any>,
+    input: MatchSpotOrderV3Input,
+) -> Result<(OrderBase, Vec<SpotOrderV3Any>, Vec<SpotTradeV3>), EntityError> {
+    let mut trades = Vec::new();
+    for maker in &mut makers {
+        validate_pair(&taker, maker.order_base())?;
+        if !crosses(&taker, maker.order_base()) {
+            break;
+        }
+
+        let (next_taker, next_maker, trade) =
+            execute_match(&taker, maker.order_base(), trades.len(), input)?;
+        taker = next_taker;
+        *maker = SpotOrderV3Any::from_record(next_maker)?;
+        trades.push(trade);
+        if taker.size == Decimal::ZERO {
+            break;
+        }
+    }
+    Ok((taker, makers, trades))
+}
+
+fn execute_match(
+    taker: &OrderBase,
+    maker: &OrderBase,
+    trade_offset: usize,
+    input: MatchSpotOrderV3Input,
+) -> Result<(OrderBase, OrderBase, SpotTradeV3), EntityError> {
+    let size = taker.size.min(maker.size);
+    let price = maker.limit_px;
+    let notional =
+        price.checked_mul(size).ok_or_else(|| entity_error("trade notional overflow"))?;
+    let trade_offset =
+        u64::try_from(trade_offset).map_err(|_| entity_error("trade id overflow"))?;
+    let trade_id = input
+        .trade_id_start
+        .checked_add(trade_offset)
+        .ok_or_else(|| entity_error("trade id overflow"))?;
+    let taker_fee = fee_amount(notional, input.taker_fee_bps, taker.symbol.quote.scale())?;
+    let maker_fee = fee_amount(notional, input.maker_fee_bps, maker.symbol.quote.scale())?;
+    let next_taker = apply_fill(taker, size, taker_fee, input.timestamp)?;
+    let next_maker = apply_fill(maker, size, maker_fee, input.timestamp)?;
+    let trade = SpotTradeV3 {
+        comon_trade: TradeBase {
+            trade_id,
+            symbol: taker.symbol,
+            taker_user: taker.owner,
+            maker_user: maker.owner,
+            taker_order_id: taker.order_id,
+            maker_order_id: maker.order_id,
+            taker_side: taker.side,
+            price,
+            size,
+            taker_fee,
+            maker_fee,
+            created_at: input.timestamp,
+            updated_at: input.timestamp,
+            version: 0,
+        },
+    };
+    Ok((next_taker, next_maker, trade))
 }
 
 fn finalize_match(
