@@ -137,11 +137,11 @@ pub fn run_deposit_quote_cli<OB>(
     ExecutionError<DepositQuoteError, <OB as StateSource<DepositQuoteUseCase>>::Error>,
 >
 where
-    OB: ?Sized
-        + Send
+    OB: Send
         + Sync
         + StateSource<DepositQuoteUseCase>
         + StateSink<DepositQuoteUseCase, Error = <OB as StateSource<DepositQuoteUseCase>>::Error>,
+    <OB as StateSource<DepositQuoteUseCase>>::Error: 'static,
 {
     execute_deposit_quote_with_mapper(
         command.into_log_entry(),

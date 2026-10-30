@@ -6,7 +6,6 @@ use axum::routing::post;
 use axum::{Json, Router};
 use common_entity::{
     EntityReplayableEvent, ExecutionError, LogEntry, StateMachineExecutor, StateSink, StateSource,
-    UseCaseReplyMapper,
 };
 use example_core_use_case::{
     PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
@@ -14,7 +13,7 @@ use example_core_use_case::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::common::{HttpInboundError, find_last_u64_field, find_u64_field};
+use crate::common::{HttpInboundError, InboundReplyMapper, find_last_u64_field, find_u64_field};
 
 pub trait PlaceOrderOutboundAccess {
     type OutboundError: std::error::Error + Send + Sync + 'static;
@@ -88,7 +87,7 @@ pub struct PlaceOrderHttpResponse {
 #[derive(Debug, Clone, Copy, Default)]
 struct PlaceOrderHttpReplyMapper;
 
-impl UseCaseReplyMapper for PlaceOrderHttpReplyMapper {
+impl crate::common::InboundReplyMapper for PlaceOrderHttpReplyMapper {
     type Reply = PlaceOrderHttpResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
@@ -150,26 +149,6 @@ where
     web::scope("").route("/orders", web::post().to(create_order_actix::<S>))
 }
 
-#[inbound_adapter_support::collect_http_endpoint(
-    name = "place_order_http",
-    method = "POST",
-    path = "/orders",
-    summary = "Submit a spot order request.",
-    error_response_schema = "ExampleHttpErrorResponse",
-    error_codes = [
-        (400, "invalid_qty"),
-        (400, "invalid_price"),
-        (400, "qty_below_min"),
-        (400, "trading_disabled"),
-        (400, "symbol_not_tradable"),
-        (400, "insufficient_quote_balance"),
-        (500, "arithmetic_overflow"),
-        (500, "outbound_load_state_failed"),
-        (500, "outbound_persist_failed"),
-        (500, "outbound_replay_failed"),
-        (500, "outbound_publish_failed")
-    ]
-)]
 async fn create_order<S>(
     State(state): State<Arc<S>>,
     Json(payload): Json<PlaceOrderHttpRequest>,
@@ -217,40 +196,10 @@ mod tests {
     use std::sync::Arc;
 
     use actix_web::{App, test as actix_test};
-    use inbound_adapter_support::{HttpApiDescriptor, http_error};
     use serde_json::{Value, json};
 
     use super::*;
     use crate::common::tests::PlaceOrderTestOutbound;
-
-    #[test]
-    fn collected_http_endpoint_descriptor_matches_macro_and_signature() {
-        assert_eq!(
-            create_order_http_api_descriptor(),
-            HttpApiDescriptor {
-                name: "place_order_http",
-                method: "POST",
-                path: "/orders",
-                summary: "Submit a spot order request.",
-                request_schema_name: stringify!(PlaceOrderHttpRequest),
-                success_response_schema_name: stringify!(PlaceOrderHttpResponse),
-                error_response_schema_name: "ExampleHttpErrorResponse",
-                error_codes: vec![
-                    http_error(400, "invalid_qty"),
-                    http_error(400, "invalid_price"),
-                    http_error(400, "qty_below_min"),
-                    http_error(400, "trading_disabled"),
-                    http_error(400, "symbol_not_tradable"),
-                    http_error(400, "insufficient_quote_balance"),
-                    http_error(500, "arithmetic_overflow"),
-                    http_error(500, "outbound_load_state_failed"),
-                    http_error(500, "outbound_persist_failed"),
-                    http_error(500, "outbound_replay_failed"),
-                    http_error(500, "outbound_publish_failed"),
-                ],
-            }
-        );
-    }
 
     #[actix_web::test]
     async fn http_adapter_translates_request_and_maps_response()

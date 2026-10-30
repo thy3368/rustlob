@@ -1,5 +1,4 @@
 mod common;
-mod descriptor;
 mod funding;
 mod trading;
 
@@ -8,13 +7,6 @@ pub mod event_source;
 pub use common::{
     CliInboundError, CliInboundErrorCategory, ExampleBusinessErrorMapping,
     ExampleCliParseErrorMapping, ExampleHttpErrorBody, ExampleHttpErrorResponse, HttpInboundError,
-    outbound_phase_code,
-};
-pub use descriptor::{
-    API_MANIFEST_REL_PATH, CLI_SCHEMA_REL_PATH, CliApiDescriptor, CliArgDescriptor,
-    CliErrorCodeDescriptor, HttpApiDescriptor, HttpErrorCodeDescriptor, InboundApiDescriptor,
-    OPENAPI_REL_PATH, example_api_manifest, example_cli_schema, example_http_openapi,
-    example_inbound_descriptors, write_generated_api_docs,
 };
 pub use funding::{
     DEPOSIT_QUOTE_CLI_BIN, DEPOSIT_QUOTE_CLI_DEFAULT_AMOUNT, DEPOSIT_QUOTE_CLI_DEFAULT_TRADER_ID,

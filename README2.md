@@ -124,14 +124,10 @@ cargo run -p example_inbound_adapter --example cli_withdraw_demo -- trader-1 200
 `example_inbound_adapter` 还提供 API 描述生成示例：
 
 ```bash
-cargo run -p example_inbound_adapter --example generate_api_docs
 ```
 
 生成或维护的描述文件位于：
 
-- [`lib/example/api-manifest.json`](lib/example/api-manifest.json)
-- [`lib/example/cli-schema.json`](lib/example/cli-schema.json)
-- [`lib/example/openapi.json`](lib/example/openapi.json)
 
 ## 测试与质量门禁
 

@@ -139,8 +139,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/core/l1_e2e/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/l1/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/common_entity/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/common/inbound_adapter_support/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/common/inbound_adapter_support_macros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/core/l1/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/example/app/composition_root/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/example/core/src" isTestSource="false" />

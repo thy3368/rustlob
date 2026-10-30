@@ -3063,11 +3063,11 @@ name = "example_inbound_adapter"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "anyhow",
  "axum 0.7.9",
  "entity",
  "example_core_use_case",
  "example_outbound_adapter",
- "inbound_adapter_support",
  "serde",
  "serde_json",
  "tokio",
@@ -4342,28 +4342,6 @@ name = "impl-trait-for-tuples"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0eb5a3343abf848c0984fe4604b2b105da9539376e24fc0a3b0007411ae4fd9"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.114",
-]
-
-[[package]]
-name = "inbound_adapter_support"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "anyhow",
- "axum 0.7.9",
- "entity",
- "inbound_adapter_support_macros",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "inbound_adapter_support_macros"
-version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",

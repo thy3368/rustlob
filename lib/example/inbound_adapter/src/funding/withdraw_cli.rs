@@ -138,11 +138,11 @@ pub fn run_withdraw_quote_cli<OB>(
     ExecutionError<WithdrawQuoteError, <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
 >
 where
-    OB: ?Sized
-        + Send
+    OB: Send
         + Sync
         + StateSource<WithdrawQuoteUseCase>
         + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
+    <OB as StateSource<WithdrawQuoteUseCase>>::Error: 'static,
 {
     execute_withdraw_quote_with_mapper(
         command.into_log_entry(),

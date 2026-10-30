@@ -1,18 +1,37 @@
 use actix_web::{HttpResponse, ResponseError};
+use anyhow::Error as AnyError;
+use axum::Json;
 use axum::response::{IntoResponse, Response};
 use common_entity::{
-    EntityError, EntityReplayableEvent, ExecutionError, LogEntry, StateMachineExecutor,
-    StateMachineV2Diff, StateSink, StateSource,
+    EntityReplayableEvent, ExecutionError, LogEntry, StateMachineExecutor, StateMachineV2Diff,
+    StateSink, StateSource,
 };
 use example_core_use_case::{
-    DepositQuoteCmd, DepositQuoteError, DepositQuoteState, DepositQuoteUseCase, WithdrawQuoteCmd,
-    WithdrawQuoteError, WithdrawQuoteState, WithdrawQuoteUseCase,
+    DepositQuoteCmd, DepositQuoteError, DepositQuoteUseCase, WithdrawQuoteCmd, WithdrawQuoteError,
+    WithdrawQuoteUseCase,
 };
-pub use inbound_adapter_support::{
-    ApiErrorBody as ExampleHttpErrorBody, ApiErrorResponse as ExampleHttpErrorResponse,
-    CliInboundErrorCategory, CliParseErrorMapping as ExampleCliParseErrorMapping,
-    outbound_phase_code,
-};
+use serde::Serialize;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExampleHttpErrorBody {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExampleHttpErrorResponse {
+    pub error: ExampleHttpErrorBody,
+}
+
+impl ExampleHttpErrorResponse {
+    fn new(code: &'static str, message: impl Into<String>) -> Self {
+        Self { error: ExampleHttpErrorBody { code: code.to_string(), message: message.into() } }
+    }
+}
+
+pub trait ExampleCliParseErrorMapping: std::error::Error {
+    fn cli_error_code(&self) -> &'static str;
+}
 
 pub(crate) trait InboundReplyMapper {
     type Reply;
@@ -26,7 +45,12 @@ pub trait ExampleBusinessErrorMapping: std::error::Error {
 }
 
 #[derive(Debug)]
-pub struct HttpInboundError(inbound_adapter_support::HttpInboundError);
+pub struct HttpInboundError {
+    status_code: u16,
+    code: &'static str,
+    message: String,
+    source: Option<AnyError>,
+}
 
 impl HttpInboundError {
     pub fn from_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
@@ -34,14 +58,30 @@ impl HttpInboundError {
         BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
         OE: std::error::Error + Send + Sync + 'static,
     {
-        Self(inbound_adapter_support::HttpInboundError::from_execution_error_with(
-            error,
-            |business| (business.http_status_code(), business.inbound_error_code()),
-        ))
+        match error {
+            ExecutionError::Business(error) => Self {
+                status_code: error.http_status_code(),
+                code: error.inbound_error_code(),
+                message: error.to_string(),
+                source: None,
+            },
+            ExecutionError::ProjectEvents(error) => Self {
+                status_code: 500,
+                code: "event_project_failed",
+                message: error.to_string(),
+                source: Some(AnyError::new(error)),
+            },
+            phase => Self {
+                status_code: 500,
+                code: outbound_phase_code(&phase),
+                message: format!("{phase:?}"),
+                source: None,
+            },
+        }
     }
 
     pub fn status_code(&self) -> u16 {
-        self.0.status_code()
+        self.status_code
     }
 
     pub fn from_mi_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
@@ -65,41 +105,76 @@ where
 
 impl std::fmt::Display for HttpInboundError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{}: {}", self.code, self.message)
     }
 }
 
 impl std::error::Error for HttpInboundError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.0.source()
+        self.source.as_ref().map(|error| error.as_ref() as _)
     }
 }
 
 impl IntoResponse for HttpInboundError {
     fn into_response(self) -> Response {
-        self.0.into_response()
+        let status = axum::http::StatusCode::from_u16(self.status_code)
+            .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        (status, Json(ExampleHttpErrorResponse::new(self.code, self.message))).into_response()
     }
 }
 
 impl ResponseError for HttpInboundError {
     fn status_code(&self) -> actix_web::http::StatusCode {
-        ResponseError::status_code(&self.0)
+        actix_web::http::StatusCode::from_u16(self.status_code)
+            .unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR)
     }
 
     fn error_response(&self) -> HttpResponse {
-        self.0.error_response()
+        HttpResponse::build(ResponseError::status_code(self))
+            .json(ExampleHttpErrorResponse::new(self.code, self.message.clone()))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CliInboundErrorCategory {
+    Parse,
+    Business,
+    Outbound,
+    Runtime,
+}
+
+impl std::fmt::Display for CliInboundErrorCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Parse => "parse",
+            Self::Business => "business",
+            Self::Outbound => "outbound",
+            Self::Runtime => "runtime",
+        })
     }
 }
 
 #[derive(Debug)]
-pub struct CliInboundError(inbound_adapter_support::CliInboundError);
+pub struct CliInboundError {
+    category: CliInboundErrorCategory,
+    code: &'static str,
+    message: String,
+    exit_code: i32,
+    source: Option<AnyError>,
+}
 
 impl CliInboundError {
     pub fn from_parse_error<E>(error: E) -> Self
     where
         E: ExampleCliParseErrorMapping + Send + Sync + 'static,
     {
-        Self(inbound_adapter_support::CliInboundError::from_parse_error(error))
+        Self {
+            category: CliInboundErrorCategory::Parse,
+            code: error.cli_error_code(),
+            message: error.to_string(),
+            exit_code: 2,
+            source: Some(AnyError::new(error)),
+        }
     }
 
     pub fn from_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
@@ -107,10 +182,29 @@ impl CliInboundError {
         BE: ExampleBusinessErrorMapping + Send + Sync + 'static,
         OE: std::error::Error + Send + Sync + 'static,
     {
-        Self(inbound_adapter_support::CliInboundError::from_execution_error_with(
-            error,
-            ExampleBusinessErrorMapping::inbound_error_code,
-        ))
+        match error {
+            ExecutionError::Business(error) => Self {
+                category: CliInboundErrorCategory::Business,
+                code: error.inbound_error_code(),
+                message: error.to_string(),
+                exit_code: 3,
+                source: Some(AnyError::new(error)),
+            },
+            ExecutionError::ProjectEvents(error) => Self {
+                category: CliInboundErrorCategory::Runtime,
+                code: "event_project_failed",
+                message: error.to_string(),
+                exit_code: 1,
+                source: Some(AnyError::new(error)),
+            },
+            phase => Self {
+                category: CliInboundErrorCategory::Outbound,
+                code: outbound_phase_code(&phase),
+                message: format!("{phase:?}"),
+                exit_code: 4,
+                source: None,
+            },
+        }
     }
 
     pub fn from_mi_execution_error<BE, OE>(error: ExecutionError<BE, OE>) -> Self
@@ -125,11 +219,17 @@ impl CliInboundError {
     where
         E: std::error::Error + Send + Sync + 'static,
     {
-        Self(inbound_adapter_support::CliInboundError::runtime(code, error))
+        Self {
+            category: CliInboundErrorCategory::Runtime,
+            code,
+            message: error.to_string(),
+            exit_code: 1,
+            source: Some(AnyError::new(error)),
+        }
     }
 
     pub fn exit_code(&self) -> i32 {
-        self.0.exit_code()
+        self.exit_code
     }
 }
 
@@ -138,39 +238,45 @@ where
     BE: std::error::Error + 'static,
     OE: std::error::Error + 'static,
 {
-    match error {
-        error => error,
-    }
+    error
 }
 
 impl std::fmt::Display for CliInboundError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{} {}: {}", self.category, self.code, self.message)
     }
 }
 
 impl std::error::Error for CliInboundError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.0.source()
+        self.source.as_ref().map(|error| error.as_ref() as _)
+    }
+}
+
+fn outbound_phase_code<BE, OE>(error: &ExecutionError<BE, OE>) -> &'static str {
+    match error {
+        ExecutionError::LoadState(_) => "outbound_load_state_failed",
+        ExecutionError::Persist(_) => "outbound_persist_failed",
+        ExecutionError::Replay(_) => "outbound_replay_failed",
+        ExecutionError::Publish(_) => "outbound_publish_failed",
+        _ => "event_project_failed",
     }
 }
 
 pub(crate) fn execute_with_mapper<U, OB, E, M>(
     use_case: &U,
-    command: LogEntry<U::Command>,
+    command: U::Command,
     outbound: &OB,
     mapper: &M,
 ) -> Result<M::Reply, ExecutionError<U::Error, E>>
 where
     U: StateMachineV2Diff,
-    OB: ?Sized + Send + Sync + StateSource<U, Error = E> + StateSink<U, Error = E>,
+    OB: Send + Sync + StateSource<U, Error = E> + StateSink<U, Error = E>,
     E: std::error::Error + 'static,
     M: InboundReplyMapper,
 {
     let executor = StateMachineExecutor;
-    let result = executor
-        .execute(use_case, &command, outbound, outbound)
-        .map_err(mi_error_to_command_error)?;
+    let result = executor.execute(use_case, &command, outbound, outbound)?;
     Ok(mapper.map(result.events))
 }
 
@@ -183,8 +289,7 @@ pub(crate) fn execute_deposit_quote_with_mapper<OB, M>(
     ExecutionError<DepositQuoteError, <OB as StateSource<DepositQuoteUseCase>>::Error>,
 >
 where
-    OB: ?Sized
-        + Send
+    OB: Send
         + Sync
         + StateSource<DepositQuoteUseCase>
         + StateSink<DepositQuoteUseCase, Error = <OB as StateSource<DepositQuoteUseCase>>::Error>,
@@ -203,8 +308,7 @@ pub(crate) fn execute_withdraw_quote_with_mapper<OB, M>(
     ExecutionError<WithdrawQuoteError, <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
 >
 where
-    OB: ?Sized
-        + Send
+    OB: Send
         + Sync
         + StateSource<WithdrawQuoteUseCase>
         + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,

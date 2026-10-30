@@ -10,8 +10,6 @@ members = [
     "lib/common/entity_derive",
     "lib/common/hotstuff_rs",
     "lib/common/id_generator",
-    "lib/common/inbound_adapter_support",
-    "lib/common/inbound_adapter_support_macros",
     "lib/common/lob_repo",
     "lib/common/lob_repo_v2",
     # lib/core
@@ -50,8 +48,6 @@ default-members = [
     "lib/common/entity_derive",
     "lib/common/hotstuff_rs",
     "lib/common/id_generator",
-    "lib/common/inbound_adapter_support",
-    "lib/common/inbound_adapter_support_macros",
     "lib/common/lob_repo",
     "lib/common/lob_repo_v2",
     # lib/core

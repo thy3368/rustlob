@@ -76,11 +76,11 @@ pub fn handle_withdraw_quote_http<OB>(
     ExecutionError<WithdrawQuoteError, <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
 >
 where
-    OB: ?Sized
-        + Send
+    OB: Send
         + Sync
         + StateSource<WithdrawQuoteUseCase>
         + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
+    <OB as StateSource<WithdrawQuoteUseCase>>::Error: 'static,
 {
     execute_withdraw_quote_with_mapper(
         request.into_log_entry(),
@@ -103,22 +103,6 @@ where
     web::scope("").route("/withdrawals/quote", web::post().to(create_withdraw_actix::<S>))
 }
 
-#[inbound_adapter_support::collect_http_endpoint(
-    name = "withdraw_quote_http",
-    method = "POST",
-    path = "/withdrawals/quote",
-    summary = "Quote a withdrawal against the trading account.",
-    error_response_schema = "ExampleHttpErrorResponse",
-    error_codes = [
-        (400, "invalid_amount"),
-        (400, "insufficient_quote_balance"),
-        (500, "arithmetic_overflow"),
-        (500, "outbound_load_state_failed"),
-        (500, "outbound_persist_failed"),
-        (500, "outbound_replay_failed"),
-        (500, "outbound_publish_failed")
-    ]
-)]
 async fn create_withdraw<S>(
     State(state): State<Arc<S>>,
     Json(payload): Json<WithdrawQuoteHttpRequest>,

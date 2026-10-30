@@ -1,6 +1,5 @@
 use common_entity::{
     EntityReplayableEvent, ExecutionError, LogEntry, StateMachineExecutor, StateSink, StateSource,
-    UseCaseReplyMapper,
 };
 use example_core_use_case::{
     PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
@@ -8,7 +7,9 @@ use example_core_use_case::{
 };
 use serde::Serialize;
 
-use crate::common::{ExampleCliParseErrorMapping, find_last_u64_field, find_u64_field};
+use crate::common::{
+    ExampleCliParseErrorMapping, InboundReplyMapper, find_last_u64_field, find_u64_field,
+};
 
 pub const PLACE_ORDER_CLI_BIN: &str = "cli_demo";
 pub const PLACE_ORDER_CLI_DEFAULT_TRADER_ID: &str = "trader-1";
@@ -137,7 +138,7 @@ pub struct PlaceOrderCliResponse {
 #[derive(Debug, Clone, Copy, Default)]
 struct PlaceOrderCliReplyMapper;
 
-impl UseCaseReplyMapper for PlaceOrderCliReplyMapper {
+impl crate::common::InboundReplyMapper for PlaceOrderCliReplyMapper {
     type Reply = PlaceOrderCliResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {

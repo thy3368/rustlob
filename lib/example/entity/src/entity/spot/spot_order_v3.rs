@@ -361,33 +361,71 @@ impl SpotOrderV3<Canceled> {
         cancel_order(&self.comon_order, timestamp)
     }
 
-    /// 返回撤单后仍可释放的单币种冻结金额，不修改余额。
-    pub fn cancel_release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
-        let order = &self.comon_order;
-        if order.size < Decimal::ZERO
-            || order.orig_size <= Decimal::ZERO
-            || order.size > order.orig_size
-            || (order.side == OrderSide::Buy && order.limit_px <= Decimal::ZERO)
-            || (order.side == OrderSide::Buy
-                && (order.buy_quote_fee_reserve_limit < Decimal::ZERO
-                    || order.buy_quote_fee_reserve_consumed < Decimal::ZERO
-                    || order.buy_quote_fee_reserve_consumed > order.buy_quote_fee_reserve_limit))
-        {
-            return Err(SpotAmountConversionError::InvalidAmount);
-        }
-        let amount = match order.side {
-            OrderSide::Buy => order
-                .limit_px
-                .checked_mul(order.size)
-                .and_then(|value| value.checked_add(order.buy_quote_fee_reserve_limit))
-                .and_then(|value| value.checked_sub(order.buy_quote_fee_reserve_consumed))
-                .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
-            OrderSide::Sell => order.size,
-        };
-        let currency =
-            if order.side == OrderSide::Buy { order.symbol.quote } else { order.symbol.base };
-        CoinAmount::new(currency, amount).map_err(map_coin_amount_error)
+    /// 返回终态订单仍可释放的单币种冻结金额，不修改余额。
+    pub fn release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
+        release_requirement(&self.comon_order, ReleaseAmount::Remaining)
     }
+}
+
+impl SpotOrderV3<Filled> {
+    /// 返回完全成交后仍未消耗的单币种冻结金额，不修改余额。
+    pub fn release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
+        release_requirement(&self.comon_order, ReleaseAmount::Remaining)
+    }
+}
+
+impl SpotOrderV3<Rejected> {
+    /// 返回拒单前整笔订单应释放的单币种冻结金额，不修改余额。
+    pub fn release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
+        release_requirement(&self.comon_order, ReleaseAmount::Original)
+    }
+}
+
+enum ReleaseAmount {
+    Remaining,
+    Original,
+}
+
+fn release_requirement(
+    order: &OrderBase,
+    release_amount: ReleaseAmount,
+) -> Result<CoinAmount, SpotAmountConversionError> {
+    let size = match release_amount {
+        ReleaseAmount::Remaining => order.size,
+        ReleaseAmount::Original => {
+            if order.size != order.orig_size
+                || order.buy_quote_fee_reserve_consumed != Decimal::ZERO
+            {
+                return Err(SpotAmountConversionError::InvalidAmount);
+            }
+            order.orig_size
+        }
+    };
+
+    if size < Decimal::ZERO
+        || order.orig_size <= Decimal::ZERO
+        || size > order.orig_size
+        || (order.side == OrderSide::Buy && order.limit_px <= Decimal::ZERO)
+        || (order.side == OrderSide::Buy
+            && (order.buy_quote_fee_reserve_limit < Decimal::ZERO
+                || order.buy_quote_fee_reserve_consumed < Decimal::ZERO
+                || order.buy_quote_fee_reserve_consumed > order.buy_quote_fee_reserve_limit))
+    {
+        return Err(SpotAmountConversionError::InvalidAmount);
+    }
+
+    let amount = match order.side {
+        OrderSide::Buy => order
+            .limit_px
+            .checked_mul(size)
+            .and_then(|value| value.checked_add(order.buy_quote_fee_reserve_limit))
+            .and_then(|value| value.checked_sub(order.buy_quote_fee_reserve_consumed))
+            .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
+        OrderSide::Sell => size,
+    };
+    let currency =
+        if order.side == OrderSide::Buy { order.symbol.quote } else { order.symbol.base };
+    CoinAmount::new(currency, amount).map_err(map_coin_amount_error)
 }
 
 impl SpotOrderV3<Open> {
@@ -1051,6 +1089,88 @@ mod tests {
     }
 
     #[test]
+    fn terminal_release_requirement_covers_filled_canceled_and_rejected_orders() {
+        let mut filled_record =
+            order(OrderSide::Buy, Decimal::new(100, 0), Decimal::new(2, 0), Decimal::new(5, 0))
+                .order_base()
+                .clone();
+        filled_record.size = Decimal::ZERO;
+        filled_record.buy_quote_fee_reserve_consumed = Decimal::new(2, 0);
+        filled_record.status = SpotOrderStatus::Filled;
+        let SpotOrderV3Any::Filled(filled) = SpotOrderV3Any::from_record(filled_record).unwrap()
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            filled.release_requirement(),
+            Ok(CoinAmount::new(Coin::USDT, Decimal::new(3, 0)).unwrap())
+        );
+
+        let mut canceled_record =
+            order(OrderSide::Sell, Decimal::ONE, Decimal::new(3, 0), Decimal::ZERO)
+                .order_base()
+                .clone();
+        canceled_record.size = Decimal::new(125, 2);
+        canceled_record.status = SpotOrderStatus::Canceled;
+        let SpotOrderV3Any::Canceled(canceled) =
+            SpotOrderV3Any::from_record(canceled_record).unwrap()
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            canceled.release_requirement(),
+            Ok(CoinAmount::new(Coin::BTC, Decimal::new(125, 2)).unwrap())
+        );
+
+        let mut rejected_buy_record =
+            order(OrderSide::Buy, Decimal::new(100, 0), Decimal::new(2, 0), Decimal::new(5, 0))
+                .order_base()
+                .clone();
+        rejected_buy_record.size = rejected_buy_record.orig_size;
+        rejected_buy_record.status = SpotOrderStatus::Rejected;
+        let SpotOrderV3Any::Rejected(rejected_buy) =
+            SpotOrderV3Any::from_record(rejected_buy_record).unwrap()
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            rejected_buy.release_requirement(),
+            Ok(CoinAmount::new(Coin::USDT, Decimal::new(205, 0)).unwrap())
+        );
+
+        let mut rejected_sell_record =
+            order(OrderSide::Sell, Decimal::ONE, Decimal::new(3, 0), Decimal::ZERO)
+                .order_base()
+                .clone();
+        rejected_sell_record.size = rejected_sell_record.orig_size;
+        rejected_sell_record.status = SpotOrderStatus::Rejected;
+        let SpotOrderV3Any::Rejected(rejected_sell) =
+            SpotOrderV3Any::from_record(rejected_sell_record).unwrap()
+        else {
+            unreachable!()
+        };
+        assert_eq!(
+            rejected_sell.release_requirement(),
+            Ok(CoinAmount::new(Coin::BTC, Decimal::new(3, 0)).unwrap())
+        );
+    }
+
+    #[test]
+    fn rejected_release_rejects_partially_consumed_facts() {
+        let mut record = order(OrderSide::Buy, Decimal::ONE, Decimal::new(2, 0), Decimal::ONE)
+            .order_base()
+            .clone();
+        record.size = Decimal::ONE;
+        record.status = SpotOrderStatus::Rejected;
+        let SpotOrderV3Any::Rejected(rejected) = SpotOrderV3Any::from_record(record).unwrap()
+        else {
+            unreachable!()
+        };
+
+        assert_eq!(rejected.release_requirement(), Err(SpotAmountConversionError::InvalidAmount));
+    }
+
+    #[test]
     fn buy_freezes_original_quote_notional_plus_fee() {
         let order =
             order(OrderSide::Buy, Decimal::new(250, 2), Decimal::new(3, 0), Decimal::new(25, 2));
@@ -1113,7 +1233,7 @@ mod tests {
         };
 
         assert_eq!(
-            order.cancel_release_requirement(),
+            order.release_requirement(),
             Ok(CoinAmount::new(Coin::USDT, Decimal::new(103, 0)).unwrap())
         );
     }
@@ -1130,7 +1250,7 @@ mod tests {
         };
 
         assert_eq!(
-            order.cancel_release_requirement(),
+            order.release_requirement(),
             Ok(CoinAmount::new(Coin::BTC, Decimal::new(125, 2)).unwrap())
         );
     }
@@ -1144,10 +1264,7 @@ mod tests {
         let SpotOrderV3Any::Canceled(order) = SpotOrderV3Any::from_record(record).unwrap() else {
             unreachable!()
         };
-        assert_eq!(
-            order.cancel_release_requirement(),
-            Err(SpotAmountConversionError::InvalidAmount)
-        );
+        assert_eq!(order.release_requirement(), Err(SpotAmountConversionError::InvalidAmount));
     }
 
     #[test]
