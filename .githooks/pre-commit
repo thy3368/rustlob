@@ -6,8 +6,8 @@ cd "$repo_root"
 
 echo "Running pre-commit quality gates..."
 cargo fmt --all -- --check
-cargo check
-cargo test
+cargo check --workspace
+cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo deny check advisories licenses sources bans --exclude-dev
 cargo audit
