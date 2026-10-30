@@ -155,6 +155,59 @@ pub enum MatchSpotOrderV3Error {
     BalanceLedger(#[from] BalanceLedgerEntryV2Error),
 }
 
+impl MatchSpotOrderV3Changes {
+    pub(crate) fn to_replayable_events_without_taker_order(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        match self {
+            Self::Resting => Ok(Vec::new()),
+            Self::PartiallyFilled {
+                updated_taker_order,
+                updated_maker_orders,
+                updated_balances,
+                created_trades,
+                created_vouchers,
+                created_balance_ledger_entries,
+            }
+            | Self::Filled {
+                filled_taker_order: updated_taker_order,
+                updated_maker_orders,
+                updated_balances,
+                created_trades,
+                created_vouchers,
+                created_balance_ledger_entries,
+            }
+            | Self::CanceledAfterPartialFill {
+                canceled_taker_order: updated_taker_order,
+                updated_maker_orders,
+                updated_balances,
+                created_trades,
+                created_vouchers,
+                created_balance_ledger_entries,
+            } => replay_events_without_taker_order(
+                updated_taker_order,
+                updated_maker_orders,
+                updated_balances,
+                created_trades,
+                created_vouchers,
+                created_balance_ledger_entries,
+            ),
+            Self::Rejected {
+                rejected_taker_order: updated_taker_order,
+                updated_balances,
+                created_balance_ledger_entries,
+            } => replay_events_without_taker_order(
+                updated_taker_order,
+                &[],
+                updated_balances,
+                &[],
+                &[],
+                created_balance_ledger_entries,
+            ),
+        }
+    }
+}
+
 impl ReplayableChanges for MatchSpotOrderV3Changes {
     fn to_replayable_events(
         &self,
@@ -185,7 +238,7 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
                 created_vouchers,
                 created_balance_ledger_entries,
             } => replay_events(
-                updated_taker_order,
+                Some(updated_taker_order),
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
@@ -197,7 +250,7 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
                 updated_balances,
                 created_balance_ledger_entries,
             } => replay_events(
-                updated_taker_order,
+                Some(updated_taker_order),
                 &[],
                 updated_balances,
                 &[],
@@ -208,8 +261,27 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
     }
 }
 
+fn replay_events_without_taker_order(
+    _updated_taker_order: &UpdatedEntityPair<SpotOrderV2>,
+    updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
+    updated_balances: &[UpdatedEntityPair<Balance>],
+    created_trades: &[SpotTrade],
+    created_vouchers: &[SettlementTransferVoucher],
+    created_balance_ledger_entries: &[BalanceLedgerV2],
+) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+    let events = replay_events(
+        None,
+        updated_maker_orders,
+        updated_balances,
+        created_trades,
+        created_vouchers,
+        created_balance_ledger_entries,
+    )?;
+    Ok(events)
+}
+
 fn replay_events(
-    updated_taker_order: &UpdatedEntityPair<SpotOrderV2>,
+    updated_taker_order: Option<&UpdatedEntityPair<SpotOrderV2>>,
     updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
     updated_balances: &[UpdatedEntityPair<Balance>],
     created_trades: &[SpotTrade],
@@ -222,7 +294,10 @@ fn replay_events(
         .saturating_add(created_vouchers.len())
         .saturating_add(created_balance_ledger_entries.len().saturating_mul(2));
     let mut events = Vec::with_capacity(event_capacity);
-    events.push(updated_taker_order.after.track_update_event_from(&updated_taker_order.before)?);
+    if let Some(updated_taker_order) = updated_taker_order {
+        events
+            .push(updated_taker_order.after.track_update_event_from(&updated_taker_order.before)?);
+    }
     for trade in created_trades {
         events.push(trade.track_create_event()?);
     }

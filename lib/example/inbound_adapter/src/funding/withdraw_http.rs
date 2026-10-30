@@ -11,8 +11,7 @@ use example_core_use_case::{WithdrawQuoteCmd, WithdrawQuoteError, WithdrawQuoteU
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
-    HttpInboundError, InboundReplyMapper, execute_withdraw_quote_with_mapper, find_string_field,
-    find_u64_field,
+    HttpInboundError, InboundReplyMapper, execute_withdraw_quote_with_mapper, find_u64_field,
 };
 
 pub trait WithdrawQuoteOutboundAccess {
@@ -51,16 +50,17 @@ pub struct WithdrawQuoteHttpResponse {
     pub domain_event_count: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-struct WithdrawQuoteHttpReplyMapper;
+#[derive(Debug, Clone)]
+struct WithdrawQuoteHttpReplyMapper {
+    account_id: String,
+}
 
 impl InboundReplyMapper for WithdrawQuoteHttpReplyMapper {
     type Reply = WithdrawQuoteHttpResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
         WithdrawQuoteHttpResponse {
-            account_id: find_string_field(&events, "account_id")
-                .unwrap_or_else(|| "missing-account-id".to_string()),
+            account_id: self.account_id.clone(),
             available_quote: find_u64_field(&events, "available").unwrap_or(0),
             frozen_quote: find_u64_field(&events, "frozen").unwrap_or(0),
             domain_event_count: events.len(),
@@ -82,11 +82,8 @@ where
         + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
     <OB as StateSource<WithdrawQuoteUseCase>>::Error: 'static,
 {
-    execute_withdraw_quote_with_mapper(
-        request.into_log_entry(),
-        outbound,
-        &WithdrawQuoteHttpReplyMapper,
-    )
+    let mapper = WithdrawQuoteHttpReplyMapper { account_id: request.trader_id.clone() };
+    execute_withdraw_quote_with_mapper(request.into_log_entry(), outbound, &mapper)
 }
 
 pub fn build_withdraw_http_router<S>() -> Router<Arc<S>>
@@ -138,7 +135,8 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::common::{HttpInboundError, tests::WithdrawQuoteTestOutbound};
+    use crate::common::HttpInboundError;
+    use crate::common::tests::WithdrawQuoteTestOutbound;
 
     #[actix_web::test]
     async fn http_adapter_translates_withdraw_request_and_maps_response()

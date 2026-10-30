@@ -1,5 +1,4 @@
-use common_entity::UpdatedEntityPair;
-use common_entity::{AggregateRole, Entity, FinancialClassification};
+use common_entity::{AggregateRole, Entity, FinancialClassification, UpdatedEntityPair};
 use example_core_entity::{
     Balance, BalanceLedgerEntryV2, BalanceLedgerEntryV2Error, BalanceLedgerOperation,
     BalanceLedgerReason, SettlementTransferPurpose,
@@ -115,34 +114,10 @@ fn freeze_constructs_identity_operation_amount_then_applies_to_balance() {
 #[test]
 fn all_operations_apply_and_project_expected_snapshots() {
     let cases = [
-        (
-            BalanceLedgerOperation::Unfreeze,
-            Balance::new(1, 1, 2, 500, 400, 7),
-            150,
-            650,
-            250,
-        ),
-        (
-            BalanceLedgerOperation::CreditAvailable,
-            Balance::new(1, 1, 2, 10, 2, 1),
-            5,
-            15,
-            2,
-        ),
-        (
-            BalanceLedgerOperation::DebitAvailable,
-            Balance::new(1, 1, 2, 900, 20, 11),
-            300,
-            600,
-            20,
-        ),
-        (
-            BalanceLedgerOperation::DebitFrozen,
-            Balance::new(1, 1, 2, 5, 7, 4),
-            3,
-            5,
-            4,
-        ),
+        (BalanceLedgerOperation::Unfreeze, Balance::new(1, 1, 2, 500, 400, 7), 150, 650, 250),
+        (BalanceLedgerOperation::CreditAvailable, Balance::new(1, 1, 2, 10, 2, 1), 5, 15, 2),
+        (BalanceLedgerOperation::DebitAvailable, Balance::new(1, 1, 2, 900, 20, 11), 300, 600, 20),
+        (BalanceLedgerOperation::DebitFrozen, Balance::new(1, 1, 2, 5, 7, 4), 3, 5, 4),
     ];
 
     for (operation, before, amount, after_available, after_frozen) in cases {

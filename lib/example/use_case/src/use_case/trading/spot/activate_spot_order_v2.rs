@@ -94,22 +94,28 @@ impl From<BalanceLedgerEntryV2Error> for ActivateSpotOrderV2Error {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ActivateSpotOrderV2UseCase;
 
+impl ActivateSpotOrderV2Changes {
+    pub(crate) fn to_replayable_balance_events(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        let mut events = balance_replay_events_from_ledger_entries(
+            &self.updated_balances,
+            &self.created_balance_ledger_entries,
+        )?;
+        for entry in &self.created_balance_ledger_entries {
+            events.push(entry.track_create_event()?);
+        }
+        Ok(events)
+    }
+}
+
 impl ReplayableChanges for ActivateSpotOrderV2Changes {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-        let event_capacity = 1usize
-            .saturating_add(self.created_balance_ledger_entries.len())
-            .saturating_add(self.created_balance_ledger_entries.len());
-        let mut events = Vec::with_capacity(event_capacity);
-        events.push(self.updated_order.after.track_update_event_from(&self.updated_order.before)?);
-        events.extend(balance_replay_events_from_ledger_entries(
-            &self.updated_balances,
-            &self.created_balance_ledger_entries,
-        )?);
-        for entry in &self.created_balance_ledger_entries {
-            events.push(entry.track_create_event()?);
-        }
+        let mut events =
+            vec![self.updated_order.after.track_update_event_from(&self.updated_order.before)?];
+        events.extend(self.to_replayable_balance_events()?);
         Ok(events)
     }
 }
@@ -339,7 +345,7 @@ fn apply_freeze_for_reservation(
         entry_id,
         order.account_id().to_string(),
         reservation.asset_id.clone(),
-        balance_book.entity_id_for_account_asset(order.account_id(), &reservation.asset_id)?,
+        common_entity::stable_string_entity_id(order.account_id()),
         reservation.original_amount,
         BalanceLedgerReason::FreezeForOrder { order_id: order.order_id() },
     )

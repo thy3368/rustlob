@@ -281,7 +281,7 @@ impl FieldDiff for Balance {
 
 impl common_entity::Shard for Balance {
     fn partition(&self) -> u8 {
-        todo!()
+        (self.account_id % 256) as u8
     }
 }
 

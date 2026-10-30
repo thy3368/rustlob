@@ -82,28 +82,30 @@ impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
             Self::SinglePlacedOnly { created_order } => {
                 Ok(vec![created_order.track_create_event()?])
             }
-            Self::SinglePlacedAndMatched {
-                created_taker_order,
-                activation_changes,
-                match_changes,
-            } => {
-                let mut events = vec![created_taker_order.track_create_event()?];
-                events.extend(activation_changes.to_replayable_events()?);
-                events.extend(match_changes.to_replayable_events()?);
+            Self::SinglePlacedAndMatched { activation_changes, match_changes, .. } => {
+                let final_taker_order = match_changes
+                    .taker_order_after()
+                    .unwrap_or(&activation_changes.updated_order.after);
+                let mut events = vec![final_taker_order.track_create_event()?];
+                events.extend(activation_changes.to_replayable_balance_events()?);
+                events.extend(match_changes.to_replayable_events_without_taker_order()?);
                 Ok(events)
             }
             Self::NormalTpslPlacedAndMatched {
-                created_parent_order,
                 created_child_orders,
                 activation_changes,
                 match_changes,
+                ..
             } => {
-                let mut events = vec![created_parent_order.track_create_event()?];
+                let final_parent_order = match_changes
+                    .taker_order_after()
+                    .unwrap_or(&activation_changes.updated_order.after);
+                let mut events = vec![final_parent_order.track_create_event()?];
                 for child in created_child_orders {
                     events.push(child.track_create_event()?);
                 }
-                events.extend(activation_changes.to_replayable_events()?);
-                events.extend(match_changes.to_replayable_events()?);
+                events.extend(activation_changes.to_replayable_balance_events()?);
+                events.extend(match_changes.to_replayable_events_without_taker_order()?);
                 Ok(events)
             }
         }

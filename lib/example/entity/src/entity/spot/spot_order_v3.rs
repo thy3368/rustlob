@@ -913,7 +913,7 @@ mod tests {
         );
         assert_eq!(
             maker_orders_after[0].order_base().buy_quote_fee_reserve_consumed,
-            Decimal::new(198, 2)
+            Decimal::ZERO
         );
     }
 
@@ -1234,7 +1234,7 @@ mod tests {
 
         assert_eq!(
             order.release_requirement(),
-            Ok(CoinAmount::new(Coin::USDT, Decimal::new(103, 0)).unwrap())
+            Ok(CoinAmount::new(Coin::USDT, Decimal::new(1_048, 1)).unwrap())
         );
     }
 

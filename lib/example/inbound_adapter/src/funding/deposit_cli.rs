@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::common::{
     ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, InboundReplyMapper,
-    execute_deposit_quote_with_mapper, find_string_field, find_u64_field,
+    execute_deposit_quote_with_mapper, find_u64_field,
 };
 
 pub const DEPOSIT_QUOTE_CLI_BIN: &str = "cli_deposit_demo";
@@ -108,15 +108,16 @@ pub struct DepositQuoteCliResponse {
     pub account_id: String,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-struct DepositQuoteCliReplyMapper;
+#[derive(Debug, Clone)]
+struct DepositQuoteCliReplyMapper {
+    account_id: String,
+}
 
 impl InboundReplyMapper for DepositQuoteCliReplyMapper {
     type Reply = DepositQuoteCliResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
-        let account_id = find_string_field(&events, "account_id")
-            .unwrap_or_else(|| "missing-account-id".to_string());
+        let account_id = self.account_id.clone();
         let available_quote = find_u64_field(&events, "available").unwrap_or(0);
         let frozen_quote = find_u64_field(&events, "frozen").unwrap_or(0);
 
@@ -143,17 +144,15 @@ where
         + StateSink<DepositQuoteUseCase, Error = <OB as StateSource<DepositQuoteUseCase>>::Error>,
     <OB as StateSource<DepositQuoteUseCase>>::Error: 'static,
 {
-    execute_deposit_quote_with_mapper(
-        command.into_log_entry(),
-        outbound,
-        &DepositQuoteCliReplyMapper,
-    )
+    let mapper = DepositQuoteCliReplyMapper { account_id: command.trader_id.clone() };
+    execute_deposit_quote_with_mapper(command.into_log_entry(), outbound, &mapper)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::{CliInboundError, tests::DepositQuoteTestOutbound};
+    use crate::common::CliInboundError;
+    use crate::common::tests::DepositQuoteTestOutbound;
 
     #[test]
     fn cli_adapter_translates_deposit_command_and_maps_text_response()

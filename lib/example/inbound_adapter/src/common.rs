@@ -318,21 +318,6 @@ where
     execute_with_mapper(&WithdrawQuoteUseCase, command, outbound, mapper)
 }
 
-pub(crate) fn find_string_field(
-    events: &[EntityReplayableEvent],
-    field_name: &str,
-) -> Option<String> {
-    events.iter().find_map(|event| {
-        event.field_changes.iter().find_map(|change| {
-            if change.field_name_as_str().ok() != Some(field_name) {
-                return None;
-            }
-
-            Some(String::from_utf8_lossy(change.new_value_bytes()).to_string())
-        })
-    })
-}
-
 pub(crate) fn find_u64_field(events: &[EntityReplayableEvent], field_name: &str) -> Option<u64> {
     events.iter().find_map(|event| {
         event.field_changes.iter().find_map(|change| {

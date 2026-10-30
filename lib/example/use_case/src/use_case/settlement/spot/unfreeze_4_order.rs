@@ -47,14 +47,14 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
     type Error = FreezeSpotOrderV2Error;
     type StateChanged = UnFreezeSpotOrderV2AfterChanges;
 
-    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+    fn check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn validate_state_given(
         &self,
-        cmd: &Self::Command,
-        given_state: &Self::StateGiven,
+        _cmd: &Self::Command,
+        _given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

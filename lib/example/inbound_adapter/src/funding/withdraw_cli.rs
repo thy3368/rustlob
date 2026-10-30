@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::common::{
     ExampleBusinessErrorMapping, ExampleCliParseErrorMapping, InboundReplyMapper,
-    execute_withdraw_quote_with_mapper, find_string_field, find_u64_field,
+    execute_withdraw_quote_with_mapper, find_u64_field,
 };
 
 pub const WITHDRAW_QUOTE_CLI_BIN: &str = "cli_withdraw_demo";
@@ -109,15 +109,16 @@ pub struct WithdrawQuoteCliResponse {
     pub account_id: String,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-struct WithdrawQuoteCliReplyMapper;
+#[derive(Debug, Clone)]
+struct WithdrawQuoteCliReplyMapper {
+    account_id: String,
+}
 
 impl InboundReplyMapper for WithdrawQuoteCliReplyMapper {
     type Reply = WithdrawQuoteCliResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
-        let account_id = find_string_field(&events, "account_id")
-            .unwrap_or_else(|| "missing-account-id".to_string());
+        let account_id = self.account_id.clone();
         let available_quote = find_u64_field(&events, "available").unwrap_or(0);
         let frozen_quote = find_u64_field(&events, "frozen").unwrap_or(0);
 
@@ -144,17 +145,15 @@ where
         + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
     <OB as StateSource<WithdrawQuoteUseCase>>::Error: 'static,
 {
-    execute_withdraw_quote_with_mapper(
-        command.into_log_entry(),
-        outbound,
-        &WithdrawQuoteCliReplyMapper,
-    )
+    let mapper = WithdrawQuoteCliReplyMapper { account_id: command.trader_id.clone() };
+    execute_withdraw_quote_with_mapper(command.into_log_entry(), outbound, &mapper)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::{CliInboundError, tests::WithdrawQuoteTestOutbound};
+    use crate::common::CliInboundError;
+    use crate::common::tests::WithdrawQuoteTestOutbound;
 
     #[test]
     fn cli_adapter_translates_withdraw_command_and_maps_text_response()

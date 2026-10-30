@@ -14,8 +14,22 @@ fn main() {
 
 fn run() -> Result<(), example_inbound_adapter::CliInboundError> {
     let store = InMemoryStore::seed_balances(
-        example_core_use_case::Balance::new(1, 1, 1, 0, 0, 2),
-        example_core_use_case::Balance::new(1, 1, 2, 1_000, 0, 2),
+        example_core_use_case::Balance::new(
+            common_entity::stable_string_entity_id("trader-1"),
+            common_entity::stable_string_entity_id("trader-1"),
+            common_entity::stable_string_entity_id("BTC"),
+            0,
+            0,
+            2,
+        ),
+        example_core_use_case::Balance::new(
+            common_entity::stable_string_entity_id("trader-1"),
+            common_entity::stable_string_entity_id("trader-1"),
+            common_entity::stable_string_entity_id("USDT"),
+            1_000,
+            0,
+            2,
+        ),
         example_core_use_case::MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
     )
     .map_err(|error| example_inbound_adapter::CliInboundError::runtime("app_init_failed", error))?;

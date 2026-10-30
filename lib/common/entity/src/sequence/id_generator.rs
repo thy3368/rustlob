@@ -1,4 +1,4 @@
-use super::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
+use super::single_thread_sequencer::SequenceExhausted;
 
 /// 运行时生成实体 ID 的独立能力。
 ///

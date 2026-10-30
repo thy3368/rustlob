@@ -428,7 +428,7 @@ impl FieldDiff for BalanceLedgerV2 {
 
 impl common_entity::Shard for BalanceLedgerV2 {
     fn partition(&self) -> u8 {
-        todo!()
+        (self.account_id % 256) as u8
     }
 }
 

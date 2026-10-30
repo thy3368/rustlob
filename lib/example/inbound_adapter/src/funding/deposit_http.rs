@@ -11,8 +11,7 @@ use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteUseC
 use serde::{Deserialize, Serialize};
 
 use crate::common::{
-    HttpInboundError, InboundReplyMapper, execute_deposit_quote_with_mapper, find_string_field,
-    find_u64_field,
+    HttpInboundError, InboundReplyMapper, execute_deposit_quote_with_mapper, find_u64_field,
 };
 
 pub trait DepositQuoteOutboundAccess {
@@ -51,16 +50,17 @@ pub struct DepositQuoteHttpResponse {
     pub domain_event_count: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-struct DepositQuoteHttpReplyMapper;
+#[derive(Debug, Clone)]
+struct DepositQuoteHttpReplyMapper {
+    account_id: String,
+}
 
 impl InboundReplyMapper for DepositQuoteHttpReplyMapper {
     type Reply = DepositQuoteHttpResponse;
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
         DepositQuoteHttpResponse {
-            account_id: find_string_field(&events, "account_id")
-                .unwrap_or_else(|| "missing-account-id".to_string()),
+            account_id: self.account_id.clone(),
             available_quote: find_u64_field(&events, "available").unwrap_or(0),
             frozen_quote: find_u64_field(&events, "frozen").unwrap_or(0),
             domain_event_count: events.len(),
@@ -82,11 +82,8 @@ where
         + StateSink<DepositQuoteUseCase, Error = <OB as StateSource<DepositQuoteUseCase>>::Error>,
     <OB as StateSource<DepositQuoteUseCase>>::Error: 'static,
 {
-    execute_deposit_quote_with_mapper(
-        request.into_log_entry(),
-        outbound,
-        &DepositQuoteHttpReplyMapper,
-    )
+    let mapper = DepositQuoteHttpReplyMapper { account_id: request.trader_id.clone() };
+    execute_deposit_quote_with_mapper(request.into_log_entry(), outbound, &mapper)
 }
 
 pub fn build_deposit_http_router<S>() -> Router<Arc<S>>
@@ -136,7 +133,8 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::common::{HttpInboundError, tests::DepositQuoteTestOutbound};
+    use crate::common::HttpInboundError;
+    use crate::common::tests::DepositQuoteTestOutbound;
 
     #[actix_web::test]
     async fn http_adapter_translates_deposit_request_and_maps_response()
