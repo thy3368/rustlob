@@ -1,0 +1,44 @@
+name: Quality Gates
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  hard-gates:
+    name: Hard gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Install cargo-deny and cargo-audit
+        run: cargo install cargo-deny cargo-audit --locked
+      - run: cargo fmt --all -- --check
+      - run: cargo check --workspace
+      - run: cargo test --workspace
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo deny check advisories licenses sources bans --exclude-dev
+      - run: cargo audit
+
+  merge-gates:
+    name: Merge gates
+    if: github.event_name == 'pull_request' || github.ref_protected == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install merge-gate tools
+        run: cargo install cargo-crap cargo-dupes cargo-mutants --locked
+      - run: cargo crap --workspace --summary
+      - run: cargo dupes stats --path . --exclude-tests --exclude target --exclude .git
+      - run: cargo mutants --workspace --timeout 60
