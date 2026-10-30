@@ -12,59 +12,29 @@ members = [
     "lib/common/id_generator",
     "lib/common/lob_repo",
     "lib/common/lob_repo_v2",
-    # lib/core
     # lib/example
+    "lib/example/dex_inbound_adapter",
     "lib/example/entity",
-    "lib/example/use_case",
     "lib/example/inbound_adapter",
     "lib/example/outbound_adapter",
     "lib/example/veldra_inbound_adapter",
     "lib/example/hotstuff_use_case_demo",
-    # app
+    "lib/example/use_case",
+    "lib/example/use_case_executor",
+    # inbound_adapter
     "inbound_adapter/axum_server",
-    "app/client",
-    "app/pingora_gateway",
     "inbound_adapter/websocket_sockudo",
-    # proc
+    # app
+    "app/client",
+    "app/dpdk_http_frontend",
+    "app/pingora_gateway",
+    # operating
     "operating/cex/exchange/wallet",
     "operating/cex/exchange/spot_market_data",
     "operating/cex/push/push",
     # study
     "study/web3",
     "study/hyperliquid_node",
-    "lib/example/use_case_executor", "lib/example/dex_inbound_adapter",
-    "app/dpdk_http_frontend",
-]
-
-# XDP/libbpf 依赖 Linux 内核头与 libelf，macOS 默认构建应跳过该 crate。
-default-members = [
-    # lib/common
-    "lib/common/base_types",
-    "lib/common/db_repo",
-    "lib/common/diff",
-    "lib/common/entity",
-    "lib/common/entity_derive",
-    "lib/common/hotstuff_rs",
-    "lib/common/id_generator",
-    "lib/common/lob_repo",
-    "lib/common/lob_repo_v2",
-    # lib/core
-    # lib/example
-    "lib/example/entity",
-    "lib/example/use_case",
-    "lib/example/inbound_adapter",
-    "lib/example/outbound_adapter",
-    # app
-    "inbound_adapter/axum_server",
-    "app/client",
-    "app/pingora_gateway",
-    "inbound_adapter/websocket_sockudo",
-    # proc
-    "operating/cex/exchange/wallet",
-    "operating/cex/exchange/spot_market_data",
-    "operating/cex/push/push",
-    # study
-    "study/web3",
 ]
 
 resolver = "2"
