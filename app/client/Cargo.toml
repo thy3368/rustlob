@@ -2,6 +2,7 @@
 name = "client"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 
 [[bin]]
 name = "client"
@@ -52,8 +53,6 @@ crossbeam = "0.8"
 metrics = "0.24.3"
 metrics-exporter-prometheus = "0.13"
 
-# Spot 处理依赖
-spot_behavior = { path = "../../operating/cex/exchange/spot", features = ["serde"] }
 base_types = { path = "../../lib/common/base_types" }
 futures = "0.3.31"
 

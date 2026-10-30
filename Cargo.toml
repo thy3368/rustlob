@@ -26,8 +26,6 @@ members = [
     "app/pingora_gateway",
     "inbound_adapter/websocket_sockudo",
     # proc
-    "operating/cex/exchange/spot",
-    "operating/cex/exchange/derivatives",
     "operating/cex/exchange/wallet",
     "operating/cex/exchange/spot_market_data",
     "operating/cex/push/push",
@@ -62,8 +60,6 @@ default-members = [
     "app/pingora_gateway",
     "inbound_adapter/websocket_sockudo",
     # proc
-    "operating/cex/exchange/spot",
-    "operating/cex/exchange/derivatives",
     "operating/cex/exchange/wallet",
     "operating/cex/exchange/spot_market_data",
     "operating/cex/push/push",
