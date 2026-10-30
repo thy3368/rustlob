@@ -138,7 +138,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::common::tests::WithdrawQuoteTestOutbound;
+    use crate::common::{HttpInboundError, tests::WithdrawQuoteTestOutbound};
 
     #[actix_web::test]
     async fn http_adapter_translates_withdraw_request_and_maps_response()
@@ -151,7 +151,8 @@ mod tests {
             amount: 250,
         };
 
-        let response = handle_withdraw_quote_http(request, &outbound)?;
+        let response = handle_withdraw_quote_http(request, &outbound)
+            .map_err(HttpInboundError::from_execution_error)?;
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.account_id, "trader-1");

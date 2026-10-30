@@ -153,7 +153,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::tests::DepositQuoteTestOutbound;
+    use crate::common::{CliInboundError, tests::DepositQuoteTestOutbound};
 
     #[test]
     fn cli_adapter_translates_deposit_command_and_maps_text_response()
@@ -161,7 +161,8 @@ mod tests {
         let outbound = DepositQuoteTestOutbound::default();
         let command = DepositQuoteCliCommand { trader_id: "trader-1".to_string(), amount: 200 };
 
-        let response = run_deposit_quote_cli(command, &outbound)?;
+        let response = run_deposit_quote_cli(command, &outbound)
+            .map_err(CliInboundError::from_execution_error)?;
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.account_id, "trader-1");

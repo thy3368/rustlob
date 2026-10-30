@@ -154,7 +154,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::tests::WithdrawQuoteTestOutbound;
+    use crate::common::{CliInboundError, tests::WithdrawQuoteTestOutbound};
 
     #[test]
     fn cli_adapter_translates_withdraw_command_and_maps_text_response()
@@ -162,7 +162,8 @@ mod tests {
         let outbound = WithdrawQuoteTestOutbound::default();
         let command = WithdrawQuoteCliCommand { trader_id: "trader-1".to_string(), amount: 250 };
 
-        let response = run_withdraw_quote_cli(command, &outbound)?;
+        let response = run_withdraw_quote_cli(command, &outbound)
+            .map_err(CliInboundError::from_execution_error)?;
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.account_id, "trader-1");

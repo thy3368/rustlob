@@ -1,4 +1,4 @@
-use common_entity::{EntityReplayableEvent, EventProjectError, ReplayableChanges, StateMachineV2};
+use common_entity::{EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineV2};
 use example_core_use_case::common_entity::{
     HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode,
 };
@@ -37,7 +37,7 @@ where
     #[error("{0}")]
     Business(UpdateHyperliquidPerpLeverageError),
     #[error("project replayable events failed: {0}")]
-    ProjectEvents(EventProjectError),
+    ProjectEvents(EntityError),
     #[error("load_state failed: {0}")]
     LoadState(OE),
     #[error("persist failed: {0}")]

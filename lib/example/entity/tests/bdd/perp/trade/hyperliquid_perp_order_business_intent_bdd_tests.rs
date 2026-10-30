@@ -157,7 +157,7 @@ fn place_derives_freeze_ledger_from_reservation() {
 #[test]
 fn given_unmatched_perp_order_when_margin_is_reserved_then_clearinghouse_withdrawable_decreases() {
     let clearinghouse_before = clearinghouse_state_from_facts(1_000, vec![]);
-    let mut balance = Balance::new("trader-1".to_string(), "USDC".to_string(), 1_000, 200, 1);
+    let mut balance = Balance::new(1, 1, 3, 1_000, 200, 1);
     let total_before = balance.total();
 
     let mut input = place_input();

@@ -2,8 +2,9 @@ use example_core_entity::{Balance, BalanceError};
 
 fn balance() -> Balance {
     Balance::new_with_snapshot_facts(
-        "trader-1".to_string(),
-        "USDT".to_string(),
+        1,
+        1,
+        2,
         1_000,
         200,
         Some(12_345),
@@ -18,8 +19,9 @@ fn assert_business_facts_preserved(before: &Balance, after: &Balance) {
     assert_eq!(after.entry_notional(), before.entry_notional());
     assert_eq!(after.identifier(), before.identifier());
     assert!(after.matches_business_snapshot(&Balance::new_with_snapshot_facts(
-        before.account_id.clone(),
-        before.asset_id.clone(),
+        before.party_id,
+        before.account_id,
+        before.asset_id,
         after.available,
         after.frozen,
         before.entry_notional(),
@@ -55,7 +57,7 @@ fn reserve_rejects_invalid_or_impossible_amounts() {
     assert_eq!(balance.frozen, 200);
     assert_eq!(balance.version, 3);
 
-    let before = Balance::new("trader-1".to_string(), "USDT".to_string(), 1, u64::MAX, 3);
+    let before = Balance::new(1, 1, 2, 1, u64::MAX, 3);
     let mut before = before;
     assert_eq!(before.reserve(1), Err(BalanceError::ArithmeticOverflow));
     assert_eq!(before.available, 1);
@@ -90,7 +92,7 @@ fn release_rejects_invalid_or_impossible_amounts() {
     assert_eq!(balance.frozen, 200);
     assert_eq!(balance.version, 3);
 
-    let before = Balance::new("trader-1".to_string(), "USDT".to_string(), u64::MAX, 1, 3);
+    let before = Balance::new(1, 1, 2, u64::MAX, 1, 3);
     let mut before = before;
     assert_eq!(before.release(1), Err(BalanceError::ArithmeticOverflow));
     assert_eq!(before.available, u64::MAX);
@@ -119,7 +121,7 @@ fn credit_available_rejects_zero_and_overflow() {
     assert_eq!(balance.frozen, 200);
     assert_eq!(balance.version, 3);
 
-    let before = Balance::new("trader-1".to_string(), "USDT".to_string(), u64::MAX, 0, 3);
+    let before = Balance::new(1, 1, 2, u64::MAX, 0, 3);
     let mut before = before;
     assert_eq!(before.credit_available(1), Err(BalanceError::ArithmeticOverflow));
     assert_eq!(before.available, u64::MAX);
@@ -183,7 +185,7 @@ fn debit_frozen_rejects_zero_and_insufficient_frozen_balance() {
 
 #[test]
 fn behavior_methods_reject_version_overflow() {
-    let before = Balance::new("trader-1".to_string(), "USDT".to_string(), 10, 10, u64::MAX);
+    let before = Balance::new(1, 1, 2, 10, 10, u64::MAX);
     let mut before = before;
 
     assert_eq!(before.reserve(1), Err(BalanceError::ArithmeticOverflow));

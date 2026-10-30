@@ -136,7 +136,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::common::tests::DepositQuoteTestOutbound;
+    use crate::common::{HttpInboundError, tests::DepositQuoteTestOutbound};
 
     #[actix_web::test]
     async fn http_adapter_translates_deposit_request_and_maps_response()
@@ -149,7 +149,8 @@ mod tests {
             amount: 250,
         };
 
-        let response = handle_deposit_quote_http(request, &outbound)?;
+        let response = handle_deposit_quote_http(request, &outbound)
+            .map_err(HttpInboundError::from_execution_error)?;
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.account_id, "trader-1");

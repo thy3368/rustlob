@@ -466,9 +466,30 @@ pub(crate) mod tests {
             _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
         ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
             let settlement_balances = vec![
-                Balance::new("trader-1".to_string(), "BTC".to_string(), 0, 0, 5),
-                Balance::new("trader-1".to_string(), "USDT".to_string(), 1_000, 0, 5),
-                Balance::new("fee".to_string(), "USDT".to_string(), 0, 0, 1),
+                Balance::new(
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("BTC"),
+                    0,
+                    0,
+                    5,
+                ),
+                Balance::new(
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("USDT"),
+                    1_000,
+                    0,
+                    5,
+                ),
+                Balance::new(
+                    common_entity::stable_string_entity_id("fee"),
+                    common_entity::stable_string_entity_id("fee"),
+                    common_entity::stable_string_entity_id("USDT"),
+                    0,
+                    0,
+                    1,
+                ),
             ];
             Ok(PlaceMatchSpotOrderV2State {
                 maker_orders: Vec::new(),
@@ -503,8 +524,9 @@ pub(crate) mod tests {
         ) -> Result<DepositQuoteState, Self::Error> {
             Ok(DepositQuoteState {
                 quote_balance: Balance::new(
-                    "trader-1".to_string(),
-                    "USDT".to_string(),
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("USDT"),
                     1_000,
                     0,
                     5,
@@ -538,8 +560,9 @@ pub(crate) mod tests {
         ) -> Result<WithdrawQuoteState, Self::Error> {
             Ok(WithdrawQuoteState {
                 quote_balance: Balance::new(
-                    "trader-1".to_string(),
-                    "USDT".to_string(),
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("trader-1"),
+                    common_entity::stable_string_entity_id("USDT"),
                     1_000,
                     0,
                     5,
