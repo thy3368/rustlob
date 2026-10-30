@@ -17,6 +17,7 @@ example_core_entity = { path = "../entity" }
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }
 rstest = "0.23"
 criterion = { version = "0.5", features = ["html_reports"] }
+rust_decimal = "1"
 
 [[bench]]
 name = "place_only_spot_order_v2"

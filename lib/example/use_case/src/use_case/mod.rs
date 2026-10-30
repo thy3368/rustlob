@@ -16,6 +16,10 @@ pub use settlement::spot::{
     UnFreezeSpotOrderV2State,
 };
 pub use support::{ACCOUNT_ENTITY_TYPE, ORDER_ENTITY_TYPE};
+pub use trading::spot::{
+    CancelSpotOrderV3AfterChanges, CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd,
+    CancelSpotOrderV3Error, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
+};
 pub use trading::{
     ActivateMatchSpotOrderV2AfterChanges, ActivateMatchSpotOrderV2Changes,
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error, ActivateMatchSpotOrderV2State,

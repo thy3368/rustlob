@@ -173,7 +173,7 @@ impl SpotOrderV3<Pending> {
             trades.push(SpotTradeV3 {
                 comon_trade: TradeBase {
                     trade_id,
-                    symbol: taker.symbol.clone(),
+                    symbol: taker.symbol,
                     taker_user: taker.owner,
                     maker_user: maker.order_base().owner,
                     taker_order_id: taker.order_id,
@@ -280,7 +280,7 @@ impl SpotOrderV3<Pending> {
 }
 
 impl SpotOrderV3Any {
-    /// 按记录状态校验并分派为对应的静态生命周期类型。
+    /// 按记录状态校验并分派为对应的静态生命周期类型.
     pub fn from_record(order: OrderBase) -> Result<Self, EntityError> {
         Ok(match order.status {
             SpotOrderStatus::Pending => Self::Pending(SpotOrderV3::try_from_record(order)?),
@@ -575,6 +575,89 @@ impl<S> FieldDiff for SpotOrderV3<S> {
             ));
         }
         changes
+    }
+}
+
+impl FieldDiff for SpotOrderV3Any {
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        let order = self.order_base();
+        vec![
+            EntityFieldChange::new("order_id", "", order.order_id.to_string()),
+            EntityFieldChange::new("status", "", format!("{:?}", order.status)),
+            EntityFieldChange::new("updated_at", "", order.updated_at.to_string()),
+            EntityFieldChange::new(
+                "fee_consumed",
+                "",
+                order.buy_quote_fee_reserve_consumed.to_string(),
+            ),
+            EntityFieldChange::new("version", "", order.version.to_string()),
+        ]
+    }
+
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+        let before = self.order_base();
+        let after = other.order_base();
+        let mut changes = Vec::new();
+        if before.status != after.status {
+            changes.push(EntityFieldChange::new(
+                "status",
+                format!("{:?}", before.status),
+                format!("{:?}", after.status),
+            ));
+        }
+        if before.updated_at != after.updated_at {
+            changes.push(EntityFieldChange::new(
+                "updated_at",
+                before.updated_at.to_string(),
+                after.updated_at.to_string(),
+            ));
+        }
+        if before.buy_quote_fee_reserve_consumed != after.buy_quote_fee_reserve_consumed {
+            changes.push(EntityFieldChange::new(
+                "fee_consumed",
+                before.buy_quote_fee_reserve_consumed.to_string(),
+                after.buy_quote_fee_reserve_consumed.to_string(),
+            ));
+        }
+        if before.version != after.version {
+            changes.push(EntityFieldChange::new(
+                "version",
+                before.version.to_string(),
+                after.version.to_string(),
+            ));
+        }
+        changes
+    }
+}
+
+impl Entity for SpotOrderV3Any {
+    fn entity_id(&self) -> u64 {
+        self.order_base().order_id
+    }
+
+    fn is_derived() -> bool {
+        false
+    }
+
+    fn entity_type() -> u8 {
+        16
+    }
+
+    fn lsn(&self) -> u64 {
+        self.order_base().version
+    }
+
+    fn replay_field_type(field_name: &str) -> u8 {
+        match field_name {
+            "updated_at" | "fee_consumed" | "version" => 1,
+            _ => 0,
+        }
+    }
+}
+
+impl common_entity::Shard for SpotOrderV3Any {
+    fn partition(&self) -> u8 {
+        self.order_base().symbol.base.index() as u8
     }
 }
 

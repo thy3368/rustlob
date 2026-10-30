@@ -1,6 +1,7 @@
 use rust_decimal::Decimal;
-use crate::account::symbol::Symbol;
-use crate::entity::common::{AssetId, UserId};
+
+use crate::account::coin::Coin;
+use crate::entity::common::UserId;
 use crate::entity::hyperliquid_account::usdc::Usdc;
 use crate::entity::perp::fund::funding_payment::{FundingPayment, Rate};
 use crate::entity::perp::fund::price::Price;
@@ -10,7 +11,7 @@ pub type Size = Decimal;
 pub type TxHash = [u8; 32];
 
 pub fn settle_hour(
-    coin: Symbol,
+    coin: Coin,
     time_ms: u64,
     rate: Rate,
     oracle: Price,
@@ -37,7 +38,7 @@ pub fn settle_hour(
 
 fn make_funding_payment(
     user: UserId,
-    coin: Symbol,
+    coin: Coin,
     time_ms: u64,
     seq: u64,
     hash: TxHash,

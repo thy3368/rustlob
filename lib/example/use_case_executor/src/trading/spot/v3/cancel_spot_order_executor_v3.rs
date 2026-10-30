@@ -98,7 +98,7 @@ mod tests {
 
     fn order(status: SpotOrderStatus) -> OrderBase {
         OrderBase {
-            owner: base_types::UserId(7),
+            owner: 7.into(),
             order_id: 11,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
             side: OrderSide::Buy,

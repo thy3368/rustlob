@@ -62,3 +62,7 @@ pub use place_only_spot_order_v2::{
     PlaceOnlySpotOrderV2Error, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
     PlaceOnlySpotOrderV2State, PlaceOnlySpotOrderV2UseCase,
 };
+pub use v3::{
+    CancelSpotOrderV3AfterChanges, CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd,
+    CancelSpotOrderV3Error, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
+};

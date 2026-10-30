@@ -1,6 +1,5 @@
 use common_entity::{LogEntry, StateMachineV2};
-use example_core_entity::spot::spot_order_primitives::SpotOrderStatus;
-use example_core_entity::spot::spot_order_v3::{SpotOrderV3, SpotOrderV3Any};
+use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
 use example_core_entity::{BalanceV2, BalanceV2Error, Open, SpotAmountConversionError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

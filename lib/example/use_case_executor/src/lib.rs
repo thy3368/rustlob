@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod trading;
 
 pub fn add(left: u64, right: u64) -> u64 {

@@ -10211,6 +10211,7 @@ dependencies = [
  "example_core_use_case",
  "example_outbound_adapter",
  "rstest",
+ "rust_decimal",
  "serde",
  "thiserror 2.0.18",
 ]

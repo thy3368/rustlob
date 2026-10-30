@@ -3,6 +3,7 @@ use rust_decimal::prelude::Signed;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::account::coin::Coin;
 use crate::entity::common::UserId;
 use crate::perp::fund::funding_payment::FundingPayment;
 use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
@@ -56,10 +57,10 @@ pub struct PerpPositionV3 {
     position_id: u64,
     /// 持有该仓位的账户标识。
     user_id: UserId,
-    /// 仓位对应的资产编号。
-    asset: u32,
+    // /// 仓位对应的资产编号。
+    // asset: u32,
     /// 仓位对应的币种或合约名称。
-    coin: String,
+    coin: Coin,
     /// 带方向的仓位数量；正数表示多仓，负数表示空仓，零表示无仓位。
     szi: Decimal,
     /// 当前仓位的开仓均价；平仓后为空仓时为零。
@@ -90,8 +91,7 @@ impl PerpPositionV3 {
     pub fn new(
         position_key: u64,
         user_id: UserId,
-        asset_id: u32,
-        coin: String,
+        coin: Coin,
         signed_size: Decimal,
         entry_price: Decimal,
         leverage: Decimal,
@@ -112,7 +112,6 @@ impl PerpPositionV3 {
         Ok(Self {
             position_id: position_key,
             user_id,
-            asset: asset_id,
             coin,
             szi: signed_size,
             entry_px: entry_price,
@@ -127,11 +126,10 @@ impl PerpPositionV3 {
             version,
         })
     }
-    pub fn empty_slot(position_id: u64, user_id: UserId, asset_id: u32, coin: String) -> Self {
+    pub fn empty_slot(position_id: u64, user_id: UserId, coin: Coin) -> Self {
         Self {
             position_id,
             user_id,
-            asset: asset_id,
             coin,
             szi: Decimal::ZERO,
             entry_px: Decimal::ZERO,
@@ -152,11 +150,8 @@ impl PerpPositionV3 {
     pub fn user_id(&self) -> UserId {
         self.user_id
     }
-    pub fn asset_id(&self) -> u32 {
-        self.asset
-    }
-    pub fn coin(&self) -> &str {
-        &self.coin
+    pub fn coin(&self) -> Coin {
+        self.coin
     }
     pub fn signed_size(&self) -> Decimal {
         self.szi
@@ -382,7 +377,7 @@ impl PerpPositionV3 {
         if trade.kind == PerpTradeKind::InsuranceFundTransfer {
             return Err(PerpPositionV2Error::InvalidState);
         }
-        if self.asset_id() != trade.trade_base.asset {
+        if self.coin != trade.trade_base.symbol.base {
             return Err(PerpPositionV2Error::InvalidState);
         }
         let (signed_quantity, closed_pnl, fee) = if self.user_id == trade.trade_base.taker_user {
@@ -419,7 +414,7 @@ impl PerpPositionV3 {
         &mut self,
         trade: &FundingPayment,
     ) -> Result<Decimal, PerpPositionV2Error> {
-        if self.user_id != trade.user || self.asset_id() != trade.coin.as_u32() {
+        if self.user_id != trade.user || self.coin != trade.coin {
             return Err(PerpPositionV2Error::InvalidState);
         }
         let signed = Decimal::from_i128_with_scale(trade.usdc.raw(), 6);
