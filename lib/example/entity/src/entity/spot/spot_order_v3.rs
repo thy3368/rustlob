@@ -372,21 +372,68 @@ fn release_requirement(
 }
 
 impl SpotOrderV3<Open> {
+    /// 可 BDD 规格化的聚合根行为：修改 Open 现货订单。
+    pub fn modify(
+        &self,
+        price: Decimal,
+        size: Decimal,
+        timestamp: u64,
+    ) -> Result<Self, EntityError> {
+        modify_order(&self.comon_order, price, size, timestamp)
+    }
+
     pub fn cancel(&self, timestamp: u64) -> Result<SpotOrderV3<Canceled>, EntityError> {
         cancel_order(&self.comon_order, timestamp)
     }
 }
 
 impl SpotOrderV3<PartiallyFilled> {
+    /// 可 BDD 规格化的聚合根行为：修改部分成交现货订单。
+    pub fn modify(
+        &self,
+        price: Decimal,
+        size: Decimal,
+        timestamp: u64,
+    ) -> Result<Self, EntityError> {
+        modify_order(&self.comon_order, price, size, timestamp)
+    }
+
     pub fn cancel(&self, timestamp: u64) -> Result<SpotOrderV3<Canceled>, EntityError> {
         cancel_order(&self.comon_order, timestamp)
     }
 }
 
 impl SpotOrderV3<Pending> {
+    /// 可 BDD 规格化的聚合根行为：修改 Pending 现货订单。
+    pub fn modify(
+        &self,
+        price: Decimal,
+        size: Decimal,
+        timestamp: u64,
+    ) -> Result<Self, EntityError> {
+        modify_order(&self.comon_order, price, size, timestamp)
+    }
+
     pub fn cancel(&self, timestamp: u64) -> Result<SpotOrderV3<Canceled>, EntityError> {
         cancel_order(&self.comon_order, timestamp)
     }
+}
+
+fn modify_order<S: SpotOrderStage>(
+    order: &OrderBase,
+    price: Decimal,
+    size: Decimal,
+    timestamp: u64,
+) -> Result<SpotOrderV3<S>, EntityError> {
+    if price <= Decimal::ZERO || size <= Decimal::ZERO {
+        return Err(entity_error("order price and size must be positive"));
+    }
+    let mut updated = order.clone();
+    updated.limit_px = price;
+    updated.size = size;
+    updated.orig_size = size;
+    updated.updated_at = timestamp;
+    with_stage(updated)
 }
 
 fn cancel_order(order: &OrderBase, timestamp: u64) -> Result<SpotOrderV3<Canceled>, EntityError> {
@@ -579,6 +626,22 @@ impl FieldDiff for SpotOrderV3Any {
         let before = self.order_base();
         let after = other.order_base();
         let mut changes = Vec::new();
+        for (name, before_value, after_value) in [
+            ("limit_px", before.limit_px.to_string(), after.limit_px.to_string()),
+            ("size", before.size.to_string(), after.size.to_string()),
+            ("orig_size", before.orig_size.to_string(), after.orig_size.to_string()),
+        ] {
+            if before_value != after_value {
+                changes.push(EntityFieldChange::new(name, before_value, after_value));
+            }
+        }
+        if before.cloid != after.cloid {
+            changes.push(EntityFieldChange::new(
+                "cloid",
+                before.cloid.clone().unwrap_or_default(),
+                after.cloid.clone().unwrap_or_default(),
+            ));
+        }
         if before.status != after.status {
             changes.push(EntityFieldChange::new(
                 "status",
@@ -822,10 +885,10 @@ mod tests {
     use super::{MatchResult, MatchSpotOrderV3Input, SpotOrderV3, SpotOrderV3Any};
     use crate::account::coin::{Coin, CoinAmount};
     use crate::account::symbol::Symbol;
-    use crate::entity::common::UserId;
     use crate::entity::common::common_order::{
         CommonOrderExecution, CommonOrderTrigger, OrderBase, SpotAmountConversionError,
     };
+    use crate::entity::common::UserId;
     use crate::entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
     use crate::entity::spot::spot_order_v2::OrderGroupRelation;
 
