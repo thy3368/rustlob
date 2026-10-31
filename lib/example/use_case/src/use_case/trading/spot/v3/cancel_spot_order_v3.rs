@@ -3,6 +3,8 @@ use common_entity::{
     StateMachineV2Diff, UpdatedEntityPair,
 };
 use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
+use example_core_entity::{BalanceV2, BalanceV2Error, Open, SpotAmountConversionError};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -14,16 +16,19 @@ pub struct CancelSpotOrderV3Cmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3State {
     pub order: SpotOrderV3Any,
+    pub balance: BalanceV2<Open>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3AfterChanges {
     pub canceled_order: SpotOrderV3Any,
+    pub balance: BalanceV2<Open>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV3Any>,
+    pub updated_balance: UpdatedEntityPair<example_core_entity::BalanceV2Record>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -36,6 +41,14 @@ pub enum CancelSpotOrderV3Error {
     MissingCloid,
     #[error("order is not cancelable")]
     OrderNotCancelable,
+    #[error("balance party does not match order owner")]
+    PartyMismatch,
+    #[error("balance asset does not match the order release asset")]
+    AssetMismatch,
+    #[error(transparent)]
+    ReleaseRequirement(#[from] SpotAmountConversionError),
+    #[error(transparent)]
+    Balance(#[from] BalanceV2Error),
     #[error(transparent)]
     Entity(#[from] EntityError),
 }
@@ -75,6 +88,22 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
         ) {
             return Err(CancelSpotOrderV3Error::OrderNotCancelable);
         }
+        if given_state.balance.party_id() != given_state.order.order_base().owner.0 {
+            return Err(CancelSpotOrderV3Error::PartyMismatch);
+        }
+        let requirement = match &given_state.order {
+            SpotOrderV3Any::Pending(order) => {
+                order.cancel(cmd.logical_ts())?.release_requirement()?
+            }
+            SpotOrderV3Any::Open(order) => order.cancel(cmd.logical_ts())?.release_requirement()?,
+            SpotOrderV3Any::PartiallyFilled(order) => {
+                order.cancel(cmd.logical_ts())?.release_requirement()?
+            }
+            _ => return Err(CancelSpotOrderV3Error::OrderNotCancelable),
+        };
+        if given_state.balance.coin_idx() != u64::from(requirement.currency().index()) {
+            return Err(CancelSpotOrderV3Error::AssetMismatch);
+        }
         Ok(())
     }
 
@@ -84,18 +113,21 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let canceled_order = match &given_state.order {
-            SpotOrderV3Any::Pending(order) => {
-                SpotOrderV3Any::Canceled(order.cancel(cmd.logical_ts())?)
-            }
-            SpotOrderV3Any::Open(order) => {
-                SpotOrderV3Any::Canceled(order.cancel(cmd.logical_ts())?)
-            }
-            SpotOrderV3Any::PartiallyFilled(order) => {
-                SpotOrderV3Any::Canceled(order.cancel(cmd.logical_ts())?)
-            }
+            SpotOrderV3Any::Pending(order) => order.cancel(cmd.logical_ts())?,
+            SpotOrderV3Any::Open(order) => order.cancel(cmd.logical_ts())?,
+            SpotOrderV3Any::PartiallyFilled(order) => order.cancel(cmd.logical_ts())?,
             _ => return Err(CancelSpotOrderV3Error::OrderNotCancelable),
         };
-        Ok(CancelSpotOrderV3AfterChanges { canceled_order })
+        let requirement = canceled_order.release_requirement()?;
+        if given_state.balance.coin_idx() != u64::from(requirement.currency().index()) {
+            return Err(CancelSpotOrderV3Error::AssetMismatch);
+        }
+        let mut balance = given_state.balance.clone();
+        balance.unfreeze_and_pay(requirement.amount(), Decimal::ZERO)?;
+        Ok(CancelSpotOrderV3AfterChanges {
+            canceled_order: SpotOrderV3Any::Canceled(canceled_order),
+            balance,
+        })
     }
 }
 
@@ -108,12 +140,19 @@ impl StateMachineV2Diff for CancelSpotOrderV3UseCase {
     ) -> Result<Self::StateDiff, Self::Error> {
         Ok(CancelSpotOrderV3Changes {
             updated_order: UpdatedEntityPair::new(given_state.order, after.canceled_order),
+            updated_balance: UpdatedEntityPair::new(
+                given_state.balance.into_record(),
+                after.balance.into_record(),
+            ),
         })
     }
 }
 
 impl ReplayableChanges for CancelSpotOrderV3Changes {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
-        Ok(vec![self.updated_order.to_replayable_event()?])
+        Ok(vec![
+            self.updated_order.to_replayable_event()?,
+            self.updated_balance.to_replayable_event()?,
+        ])
     }
 }

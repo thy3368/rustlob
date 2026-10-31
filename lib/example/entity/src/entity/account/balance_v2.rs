@@ -69,7 +69,8 @@ pub struct Closed;
 pub struct BalanceV2Record {
     party_id: u64,
     account_id: u64,
-    asset_id: u64,
+    /// 可能是coin
+    coin_idx: u64,
 
     available: Decimal,
     frozen: Decimal,
@@ -90,8 +91,8 @@ impl BalanceV2Record {
     }
 
     /// 返回余额对应的资产 ID。
-    pub fn asset_id(&self) -> u64 {
-        self.asset_id
+    pub fn coin_idx(&self) -> u64 {
+        self.coin_idx
     }
 
     /// 返回可用余额。
@@ -147,8 +148,8 @@ impl<S> BalanceV2<S> {
     }
 
     /// 返回余额对应的资产 ID。
-    pub fn asset_id(&self) -> u64 {
-        self.record.asset_id()
+    pub fn coin_idx(&self) -> u64 {
+        self.record.coin_idx()
     }
 
     /// 返回可用余额。
@@ -186,7 +187,7 @@ impl BalanceV2<Open> {
             record: BalanceV2Record {
                 party_id,
                 account_id,
-                asset_id,
+                coin_idx: asset_id,
                 available,
                 frozen,
                 version,
@@ -235,7 +236,7 @@ impl BalanceV2<Open> {
         if self.record.status != BalanceV2Status::Open {
             return Err(BalanceV2Error::BalanceClosed);
         }
-        if unfreeze_amount <= Decimal::ZERO || payment_amount <= Decimal::ZERO {
+        if unfreeze_amount <= Decimal::ZERO || payment_amount < Decimal::ZERO {
             return Err(BalanceV2Error::InvalidAmount);
         }
 
@@ -264,7 +265,7 @@ impl BalanceV2<Open> {
         Ok(())
     }
 
-    /// 将成交消耗额从冻结余额中扣除，不释放订单的剩余冻结额。
+    /// 将成交消耗额从冻结余额中扣除，不释放订单的剩余冻结额。//todo 可用 unfreeze_and_pay平替
     pub fn debit_frozen(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
         if self.record.status != BalanceV2Status::Open {
             return Err(BalanceV2Error::BalanceClosed);
@@ -369,7 +370,7 @@ impl FieldDiff for BalanceV2Record {
         vec![
             EntityFieldChange::new("party_id", "", self.party_id.to_string()),
             EntityFieldChange::new("account_id", "", self.account_id.to_string()),
-            EntityFieldChange::new("asset_id", "", self.asset_id.to_string()),
+            EntityFieldChange::new("asset_id", "", self.coin_idx.to_string()),
             EntityFieldChange::new("available", "", self.available.to_string()),
             EntityFieldChange::new("frozen", "", self.frozen.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
@@ -392,11 +393,11 @@ impl FieldDiff for BalanceV2Record {
                 other.account_id.to_string(),
             ));
         }
-        if self.asset_id != other.asset_id {
+        if self.coin_idx != other.coin_idx {
             changes.push(EntityFieldChange::new(
                 "asset_id",
-                self.asset_id.to_string(),
-                other.asset_id.to_string(),
+                self.coin_idx.to_string(),
+                other.coin_idx.to_string(),
             ));
         }
         if self.available != other.available {
@@ -432,7 +433,7 @@ impl common_entity::Shard for BalanceV2Record {
 
 impl Entity for BalanceV2Record {
     fn entity_id(&self) -> u64 {
-        let business_id = concat3(&self.account_id.to_string(), ":", &self.asset_id.to_string());
+        let business_id = concat3(&self.account_id.to_string(), ":", &self.coin_idx.to_string());
         common_entity::stable_string_entity_id(&business_id)
     }
 
@@ -483,7 +484,7 @@ mod tests {
             (
                 balance.party_id(),
                 balance.account_id(),
-                balance.asset_id(),
+                balance.coin_idx(),
                 balance.available(),
                 balance.frozen(),
                 balance.version(),
@@ -544,11 +545,11 @@ mod tests {
             balance.unfreeze_and_pay(amount(-1), amount(80)),
             Err(BalanceV2Error::InvalidAmount)
         );
+        balance.unfreeze_and_pay(amount(20), Decimal::ZERO).unwrap();
         assert_eq!(
-            balance.unfreeze_and_pay(amount(20), Decimal::ZERO),
-            Err(BalanceV2Error::InvalidAmount)
+            (balance.available(), balance.frozen(), balance.version()),
+            (amount(920), amount(80), 5)
         );
-        assert_eq!(balance, before);
     }
 
     #[test]

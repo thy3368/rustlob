@@ -32,6 +32,7 @@ mod tests {
     use std::sync::Mutex;
 
     use common_entity::{EntityReplayableEvent, LogEntrySequencer, StateSink, StateSource};
+    use example_core_entity::BalanceV2;
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
@@ -73,6 +74,14 @@ mod tests {
             Ok(CancelSpotOrderV3State {
                 order: SpotOrderV3Any::from_record(order(SpotOrderStatus::Open))
                     .map_err(|_| FakeOutboundError)?,
+                balance: BalanceV2::new(
+                    7,
+                    7,
+                    u64::from(Coin::USDT.index()),
+                    Decimal::ZERO,
+                    Decimal::from(100),
+                    0,
+                ),
             })
         }
     }
@@ -144,10 +153,12 @@ mod tests {
             result.changes.updated_order.after.order_base().status,
             SpotOrderStatus::Canceled
         );
-        assert_eq!(result.events.len(), 1);
-        assert_eq!(outbound.persisted.lock().expect("persist lock").len(), 1);
-        assert_eq!(outbound.replayed.lock().expect("replay lock").len(), 1);
-        assert_eq!(outbound.published.lock().expect("publish lock").len(), 1);
+        assert_eq!(result.changes.updated_balance.after.frozen(), Decimal::ZERO);
+        assert_eq!(result.changes.updated_balance.after.available(), Decimal::from(100));
+        assert_eq!(result.events.len(), 2);
+        assert_eq!(outbound.persisted.lock().expect("persist lock").len(), 2);
+        assert_eq!(outbound.replayed.lock().expect("replay lock").len(), 2);
+        assert_eq!(outbound.published.lock().expect("publish lock").len(), 2);
     }
 
     #[test]

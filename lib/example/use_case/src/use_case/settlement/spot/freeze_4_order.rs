@@ -73,7 +73,7 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
             return Err(FreezeSpotOrderV2Error::OrderNotPending);
         };
         let requirement = pending_order.freeze_requirement()?;
-        if given_state.balance.asset_id() != u64::from(requirement.currency().index()) {
+        if given_state.balance.coin_idx() != u64::from(requirement.currency().index()) {
             return Err(FreezeSpotOrderV2Error::AssetMismatch);
         }
         Ok(())

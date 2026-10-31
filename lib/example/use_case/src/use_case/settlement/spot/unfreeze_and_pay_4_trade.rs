@@ -88,7 +88,7 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
             (&given_state.seller_quote_balance, seller_party, quote_asset),
         ];
         for (balance, party, asset) in balances {
-            if balance.party_id() != party || balance.asset_id() != asset {
+            if balance.party_id() != party || balance.coin_idx() != asset {
                 return Err(UnFreezeSpotOrderV2Error::BalanceIdentityMismatch);
             }
         }
@@ -103,7 +103,7 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
             for right in (left + 1)..balances.len() {
                 let (a, _, _) = balances[left];
                 let (b, _, _) = balances[right];
-                if a.account_id() == b.account_id() && a.asset_id() == b.asset_id() {
+                if a.account_id() == b.account_id() && a.coin_idx() == b.coin_idx() {
                     return Err(UnFreezeSpotOrderV2Error::DuplicateBalance);
                 }
             }
