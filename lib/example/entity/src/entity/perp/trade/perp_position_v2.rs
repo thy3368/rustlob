@@ -8,9 +8,18 @@ use crate::entity::common::UserId;
 use crate::perp::fund::funding_payment::FundingPayment;
 use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 
+/// 仓位使用的保证金方式。
+///
+/// 大白话说，核心区别就是：仓位亏损时从哪里扣钱，以及会不会影响其他仓位。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MarginModeV2 {
+    /// 全仓：所有全仓仓位共用账户的 Cross 保证金池。
+    ///
+    /// 一个全仓仓位发生亏损时，可能会动用共享资金，因此也可能影响同一账户的其他全仓仓位。
     Cross,
+    /// 逐仓：这个仓位只使用单独分配给自己的保证金。
+    ///
+    /// 当仓位亏损到这笔保证金耗尽时，通常不会直接影响其他仓位。
     Isolated,
 }
 
@@ -191,6 +200,28 @@ impl PerpPositionV3 {
     }
     pub fn quantity(&self) -> Decimal {
         self.szi.abs()
+    }
+
+    /// 计算该仓位在指定 oracle 价格和 1e8 刻度资金费率下的 USDC 变动。
+    pub fn funding_usdc_delta(
+        &self,
+        oracle_price: Decimal,
+        funding_rate_e8: Decimal,
+    ) -> Result<Option<Decimal>, PerpPositionV2Error> {
+        if oracle_price <= Decimal::ZERO {
+            return Err(PerpPositionV2Error::InvalidPrice);
+        }
+        if self.is_flat() || funding_rate_e8.is_zero() {
+            return Ok(None);
+        }
+        let amount = self
+            .szi
+            .checked_mul(oracle_price)
+            .and_then(|value| value.checked_mul(funding_rate_e8))
+            .and_then(|value| value.checked_div(Decimal::from(100_000_000u64)))
+            .and_then(|value| Decimal::ZERO.checked_sub(value))
+            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+        if amount.is_zero() { Ok(None) } else { Ok(Some(amount)) }
     }
 
     /// 现值

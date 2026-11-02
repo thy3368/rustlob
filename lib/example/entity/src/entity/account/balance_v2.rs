@@ -304,6 +304,29 @@ impl BalanceV2<Open> {
         Ok(())
     }
 
+    /// 可 BDD 规格化的聚合根行为：从可用余额直接支付。
+    ///
+    /// 金额必须为正且不得超过当前可用余额；校验或计算失败时余额和版本保持不变。
+    pub fn debit_available(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
+        if self.record.status != BalanceV2Status::Open {
+            return Err(BalanceV2Error::BalanceClosed);
+        }
+        if amount <= Decimal::ZERO {
+            return Err(BalanceV2Error::InvalidAmount);
+        }
+        if self.record.available < amount {
+            return Err(BalanceV2Error::InsufficientAvailableBalance);
+        }
+
+        let available =
+            self.record.available.checked_sub(amount).ok_or(BalanceV2Error::ArithmeticOverflow)?;
+        let version =
+            self.record.version.checked_add(1).ok_or(BalanceV2Error::ArithmeticOverflow)?;
+        self.record.available = available;
+        self.record.version = version;
+        Ok(())
+    }
+
     /// 将余额关闭。仅可用余额和冻结余额都为零时成功；失败会返回未改变的开放余额。
     pub fn close(self) -> Result<BalanceV2<Closed>, (Self, BalanceV2Error)> {
         if self.record.available != Decimal::ZERO || self.record.frozen != Decimal::ZERO {
@@ -594,6 +617,31 @@ mod tests {
             (balance.available(), balance.frozen(), balance.version()),
             (amount(17), amount(30), 6)
         );
+    }
+
+    #[test]
+    fn debit_available_updates_amount_and_preserves_state_on_failure() {
+        let mut balance = balance();
+
+        balance.debit_available(amount(250)).unwrap();
+        assert_eq!(
+            (balance.available(), balance.frozen(), balance.version()),
+            (amount(750), Decimal::ZERO, 4)
+        );
+
+        let before = balance.clone();
+        assert_eq!(
+            balance.debit_available(amount(751)),
+            Err(BalanceV2Error::InsufficientAvailableBalance)
+        );
+        assert_eq!(balance.debit_available(Decimal::ZERO), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(balance.debit_available(amount(-1)), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(balance, before);
+
+        let mut overflow = BalanceV2::new(1, 2, 3, amount(1_000), Decimal::ZERO, u64::MAX);
+        let before = overflow.clone();
+        assert_eq!(overflow.debit_available(amount(1)), Err(BalanceV2Error::ArithmeticOverflow));
+        assert_eq!(overflow, before);
     }
 
     #[test]

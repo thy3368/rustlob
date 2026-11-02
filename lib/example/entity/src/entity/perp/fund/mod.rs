@@ -7,3 +7,5 @@ pub mod funding_payment;
 pub mod funding_payment_factory;
 
 pub mod price;
+
+pub mod funding;

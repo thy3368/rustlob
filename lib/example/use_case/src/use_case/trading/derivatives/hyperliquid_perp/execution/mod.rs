@@ -3,6 +3,9 @@ pub mod place_perp_order;
 pub mod settle_perp_trade;
 pub mod update_perp_leverage;
 
+pub mod pipeline;
+
+
 pub use match_perp_order::{
     MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd, MatchHyperliquidPerpOrderError,
     MatchHyperliquidPerpOrderState, MatchHyperliquidPerpOrderUseCase,

@@ -7,3 +7,5 @@ pub use cancel_spot_order_v3::{
     CancelSpotOrderV3AfterChanges, CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd,
     CancelSpotOrderV3Error, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
 };
+
+pub mod pipeline;
