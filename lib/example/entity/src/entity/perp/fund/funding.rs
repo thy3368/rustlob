@@ -12,9 +12,6 @@ const USER_FUNDING_ENTITY_TYPE: u8 = 14;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UserFunding {
-    // /// 固定 "funding"
-    // #[serde(rename = "type")]
-    // pub kind: String,
     /// 本次用户资金费事实的稳定标识。
     funding_id: u64,
 
@@ -29,11 +26,9 @@ pub struct UserFunding {
     szi: Decimal,
 
     /// 本次小时费率（小数，如 0.0000125 = 0.00125%）
-    #[serde(rename = "fundingRate")]
     funding_rate: Decimal,
 
     /// 该周期采样点数（部分 SDK 可能不返回）
-    #[serde(rename = "nSamples")]
     n_samples: Option<u32>,
 
     /// 资金费事实创建时间，单位为 Unix 毫秒。
