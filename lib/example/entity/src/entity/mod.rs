@@ -5,6 +5,7 @@ mod reservation;
 pub mod transfer;
 
 pub mod common;
+pub use common::{DecimalValueError, FundingRate, FundingRate2};
 
 pub mod hyperliquid_account;
 pub use market_data::{

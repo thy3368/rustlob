@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::account::coin::Coin;
-use crate::entity::common::UserId;
+use crate::entity::common::{FundingRate, UserId};
 use crate::perp::fund::funding_payment::FundingPayment;
 use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 
@@ -202,23 +202,22 @@ impl PerpPositionV3 {
         self.szi.abs()
     }
 
-    /// 计算该仓位在指定 oracle 价格和 1e8 刻度资金费率下的 USDC 变动。
+    /// 计算该仓位在指定 oracle 价格和规范化资金费率下的 USDC 变动。
     pub fn funding_usdc_delta(
         &self,
         oracle_price: Decimal,
-        funding_rate_e8: Decimal,
+        funding_rate: FundingRate,
     ) -> Result<Option<Decimal>, PerpPositionV2Error> {
         if oracle_price <= Decimal::ZERO {
             return Err(PerpPositionV2Error::InvalidPrice);
         }
-        if self.is_flat() || funding_rate_e8.is_zero() {
+        if self.is_flat() || funding_rate.value().is_zero() {
             return Ok(None);
         }
         let amount = self
             .szi
             .checked_mul(oracle_price)
-            .and_then(|value| value.checked_mul(funding_rate_e8))
-            .and_then(|value| value.checked_div(Decimal::from(100_000_000u64)))
+            .and_then(|value| value.checked_mul(funding_rate.value()))
             .and_then(|value| Decimal::ZERO.checked_sub(value))
             .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
         if amount.is_zero() { Ok(None) } else { Ok(Some(amount)) }

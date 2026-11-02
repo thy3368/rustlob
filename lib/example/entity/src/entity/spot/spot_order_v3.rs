@@ -885,10 +885,10 @@ mod tests {
     use super::{MatchResult, MatchSpotOrderV3Input, SpotOrderV3, SpotOrderV3Any};
     use crate::account::coin::{Coin, CoinAmount};
     use crate::account::symbol::Symbol;
+    use crate::entity::common::UserId;
     use crate::entity::common::common_order::{
         CommonOrderExecution, CommonOrderTrigger, OrderBase, SpotAmountConversionError,
     };
-    use crate::entity::common::UserId;
     use crate::entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
     use crate::entity::spot::spot_order_v2::OrderGroupRelation;
 

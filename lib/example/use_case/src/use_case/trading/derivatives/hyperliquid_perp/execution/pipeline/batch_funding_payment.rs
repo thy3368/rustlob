@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common_entity::{LogEntry, StateMachineV2};
 use example_core_entity::account::symbol::Symbol;
+use example_core_entity::common::FundingRate;
 use example_core_entity::perp::fund::funding::UserFunding;
 use example_core_entity::perp::trade::perp_position_v2::{MarginModeV2, PerpPositionV3};
 use example_core_entity::{BalanceV2, BalanceV2Error};
@@ -19,15 +20,15 @@ pub struct UserFundingCmd {
     pub symbol: Symbol,
     /// 本次资金费使用的 oracle 价格。
     pub oracle_price: Decimal,
-    /// signed 1e8 刻度资金费率；`0.01% = 10000`。
-    pub funding_rate_e8: Decimal,
+    /// signed scale 10 资金费率原始整数；`0.01% = 1000000`。
+    pub funding_rate: FundingRate,
     /// 本批次要结算的仓位 ID，顺序必须与 state.positions 一致。
     pub position_ids: Vec<u64>,
 }
 
 /// 结算 Hyperliquid perp 资金费所需的已加载业务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PerpFundingState {
+pub struct UserFundingState {
     /// 当前批次涉及的仓位快照。
     pub positions: Vec<PerpPositionV3>,
     /// 当前批次涉及账户的 Cross 保证金币种余额。
@@ -65,22 +66,22 @@ pub enum SettleHyperliquidPerpFundingError {
 
 /// Use case that settles one Hyperliquid perp funding batch into funding facts and balance deltas.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct SettleHyperliquidPerpFundingUseCase;
+pub struct UserFundingUseCase;
 
 /// 结算一批资金费后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SettleHyperliquidPerpFundingChanges {
+pub struct UserFundingChanges {
     /// 本批次新创建的资金费事实。
     pub created_funding_payment: Vec<UserFunding>,
     /// 本批次实际受影响保证金余额的 after 快照，顺序与输入状态稳定对齐。
     pub changed_margin_balances: Vec<BalanceV2>,
 }
 
-impl StateMachineV2 for SettleHyperliquidPerpFundingUseCase {
+impl StateMachineV2 for UserFundingUseCase {
     type Command = LogEntry<UserFundingCmd>;
-    type StateGiven = PerpFundingState;
+    type StateGiven = UserFundingState;
     type Error = SettleHyperliquidPerpFundingError;
-    type StateChanged = SettleHyperliquidPerpFundingChanges;
+    type StateChanged = UserFundingChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         if cmd.funding_batch_id == 0 {
@@ -112,13 +113,13 @@ impl StateMachineV2 for SettleHyperliquidPerpFundingUseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let (created_funding_payment, deltas) = derive_funding_payments(cmd, state)?;
         let changed_margin_balances = derive_changed_balances(cmd, state, &deltas)?;
-        Ok(SettleHyperliquidPerpFundingChanges { created_funding_payment, changed_margin_balances })
+        Ok(UserFundingChanges { created_funding_payment, changed_margin_balances })
     }
 }
 
 fn validate_positions(
     cmd: &LogEntry<UserFundingCmd>,
-    state: &PerpFundingState,
+    state: &UserFundingState,
 ) -> Result<(), SettleHyperliquidPerpFundingError> {
     if cmd.position_ids.len() != state.positions.len() {
         return Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch);
@@ -139,17 +140,13 @@ fn validate_positions(
 
 fn derive_funding_payments(
     cmd: &LogEntry<UserFundingCmd>,
-    state: &PerpFundingState,
+    state: &UserFundingState,
 ) -> Result<(Vec<UserFunding>, BTreeMap<u64, Decimal>), SettleHyperliquidPerpFundingError> {
-    let funding_rate = cmd
-        .funding_rate_e8
-        .checked_div(Decimal::from(100_000_000u64))
-        .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
     let mut payments = Vec::with_capacity(state.positions.len());
     let mut deltas = BTreeMap::<u64, Decimal>::new();
 
     for position in &state.positions {
-        let Some(usdc) = position.funding_usdc_delta(cmd.oracle_price, cmd.funding_rate_e8)
+        let Some(usdc) = position.funding_usdc_delta(cmd.oracle_price, cmd.funding_rate)
             .map_err(|error| match error {
                 example_core_entity::perp::trade::perp_position_v2::PerpPositionV2Error::InvalidPrice => SettleHyperliquidPerpFundingError::InvalidOraclePrice,
                 example_core_entity::perp::trade::perp_position_v2::PerpPositionV2Error::ArithmeticOverflow => SettleHyperliquidPerpFundingError::ArithmeticOverflow,
@@ -162,7 +159,7 @@ fn derive_funding_payments(
             cmd.symbol,
             usdc,
             position.signed_size(),
-            funding_rate,
+            cmd.funding_rate,
             None,
             cmd.funding_time,
             cmd.funding_time,
@@ -177,7 +174,7 @@ fn derive_funding_payments(
 
 fn derive_changed_balances(
     cmd: &LogEntry<UserFundingCmd>,
-    state: &PerpFundingState,
+    state: &UserFundingState,
     deltas: &BTreeMap<u64, Decimal>,
 ) -> Result<Vec<BalanceV2>, SettleHyperliquidPerpFundingError> {
     let quote_coin_idx = u64::from(cmd.symbol.quote.index());
@@ -259,7 +256,7 @@ mod tests {
         .unwrap()
     }
 
-    fn command(rate_e8: i64, position_ids: Vec<u64>) -> LogEntry<UserFundingCmd> {
+    fn command(rate_e10: i64, position_ids: Vec<u64>) -> LogEntry<UserFundingCmd> {
         LogEntrySequencer::from_metadata(
             1,
             1_717_977_600_000,
@@ -270,7 +267,7 @@ mod tests {
                 funding_time: 1_717_977_600_000,
                 symbol: Symbol::new(1, Coin::BTC, Coin::USDC),
                 oracle_price: Decimal::from(50_000),
-                funding_rate_e8: Decimal::from(rate_e8),
+                funding_rate: FundingRate::from_scaled_i128(rate_e10 as i128),
                 position_ids,
             },
         )
@@ -289,7 +286,7 @@ mod tests {
 
     #[test]
     fn creates_long_payment_and_short_receipt_and_updates_balances() {
-        let state = PerpFundingState {
+        let state = UserFundingState {
             positions: vec![
                 position(11, 1, 2, MarginModeV2::Cross),
                 position(12, 2, -2, MarginModeV2::Cross),
@@ -297,8 +294,8 @@ mod tests {
             margin_balances: vec![balance(1, 100), balance(2, 100)],
         };
 
-        let changed = SettleHyperliquidPerpFundingUseCase
-            .compute_state_changed(&command(10_000, vec![11, 12]), &state)
+        let changed = UserFundingUseCase
+            .compute_state_changed(&command(1_000_000, vec![11, 12]), &state)
             .unwrap();
 
         assert_eq!(changed.created_funding_payment.len(), 2);
@@ -313,8 +310,24 @@ mod tests {
     }
 
     #[test]
+    fn preserves_hyperliquid_ten_decimal_funding_rate_precision() {
+        let state = UserFundingState {
+            positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
+            margin_balances: vec![balance(1, 100)],
+        };
+
+        let changed =
+            UserFundingUseCase.compute_state_changed(&command(216_606, vec![11]), &state).unwrap();
+
+        assert_eq!(changed.created_funding_payment.len(), 1);
+        assert_eq!(changed.created_funding_payment[0].usdc(), Decimal::new(-216_606, 5));
+        assert_eq!(changed.created_funding_payment[0].funding_rate(), Decimal::new(216_606, 10));
+        assert_eq!(changed.changed_margin_balances[0].available(), Decimal::new(9_783_394, 5));
+    }
+
+    #[test]
     fn aggregates_multiple_positions_before_updating_one_balance() {
-        let state = PerpFundingState {
+        let state = UserFundingState {
             positions: vec![
                 position(11, 1, 1, MarginModeV2::Cross),
                 position(12, 1, 2, MarginModeV2::Cross),
@@ -322,8 +335,8 @@ mod tests {
             margin_balances: vec![balance(1, 100)],
         };
 
-        let changed = SettleHyperliquidPerpFundingUseCase
-            .compute_state_changed(&command(10_000, vec![11, 12]), &state)
+        let changed = UserFundingUseCase
+            .compute_state_changed(&command(1_000_000, vec![11, 12]), &state)
             .unwrap();
 
         assert_eq!(changed.created_funding_payment.len(), 2);
@@ -334,14 +347,13 @@ mod tests {
 
     #[test]
     fn zero_rate_creates_no_payment_or_balance_change() {
-        let state = PerpFundingState {
+        let state = UserFundingState {
             positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
             margin_balances: vec![balance(1, 100)],
         };
 
-        let changed = SettleHyperliquidPerpFundingUseCase
-            .compute_state_changed(&command(0, vec![11]), &state)
-            .unwrap();
+        let changed =
+            UserFundingUseCase.compute_state_changed(&command(0, vec![11]), &state).unwrap();
 
         assert!(changed.created_funding_payment.is_empty());
         assert!(changed.changed_margin_balances.is_empty());
@@ -349,7 +361,7 @@ mod tests {
 
     #[test]
     fn negative_rate_reverses_long_and_short_directions() {
-        let state = PerpFundingState {
+        let state = UserFundingState {
             positions: vec![
                 position(11, 1, 2, MarginModeV2::Cross),
                 position(12, 2, -2, MarginModeV2::Cross),
@@ -357,8 +369,8 @@ mod tests {
             margin_balances: vec![balance(1, 100), balance(2, 100)],
         };
 
-        let changed = SettleHyperliquidPerpFundingUseCase
-            .compute_state_changed(&command(-10_000, vec![11, 12]), &state)
+        let changed = UserFundingUseCase
+            .compute_state_changed(&command(-1_000_000, vec![11, 12]), &state)
             .unwrap();
 
         assert_eq!(changed.created_funding_payment[0].usdc(), Decimal::from(10));
@@ -369,42 +381,39 @@ mod tests {
 
     #[test]
     fn rejects_mismatched_position_isolated_margin_and_insufficient_balance() {
-        let cross = PerpFundingState {
+        let cross = UserFundingState {
             positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
             margin_balances: vec![balance(1, 5)],
         };
         assert_eq!(
-            SettleHyperliquidPerpFundingUseCase
-                .compute_state_changed(&command(10_000, vec![99]), &cross),
+            UserFundingUseCase.compute_state_changed(&command(1_000_000, vec![99]), &cross),
             Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch)
         );
         assert_eq!(
-            SettleHyperliquidPerpFundingUseCase
-                .compute_state_changed(&command(10_000, vec![11]), &cross),
+            UserFundingUseCase.compute_state_changed(&command(1_000_000, vec![11]), &cross),
             Err(SettleHyperliquidPerpFundingError::InsufficientAvailableMargin)
         );
 
-        let isolated = PerpFundingState {
+        let isolated = UserFundingState {
             positions: vec![position(11, 1, 2, MarginModeV2::Isolated)],
             margin_balances: vec![balance(1, 100)],
         };
         assert_eq!(
-            SettleHyperliquidPerpFundingUseCase
-                .compute_state_changed(&command(10_000, vec![11]), &isolated),
+            UserFundingUseCase.compute_state_changed(&command(1_000_000, vec![11]), &isolated),
             Err(SettleHyperliquidPerpFundingError::UnsupportedMarginMode)
         );
 
-        let missing_balance = PerpFundingState {
+        let missing_balance = UserFundingState {
             positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
             margin_balances: vec![],
         };
         assert_eq!(
-            SettleHyperliquidPerpFundingUseCase
-                .compute_state_changed(&command(10_000, vec![11]), &missing_balance),
+            UserFundingUseCase
+                .compute_state_changed(&command(1_000_000, vec![11]), &missing_balance),
             Err(SettleHyperliquidPerpFundingError::MarginBalanceNotFound)
         );
 
-        let wrong_asset = PerpFundingState {
+        let wrong_asset = UserFundingState {
             positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
             margin_balances: vec![BalanceV2::new(
                 1,
@@ -416,8 +425,7 @@ mod tests {
             )],
         };
         assert_eq!(
-            SettleHyperliquidPerpFundingUseCase
-                .compute_state_changed(&command(10_000, vec![11]), &wrong_asset),
+            UserFundingUseCase.compute_state_changed(&command(1_000_000, vec![11]), &wrong_asset),
             Err(SettleHyperliquidPerpFundingError::InvalidMarginBalance)
         );
     }

@@ -6,6 +6,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::account::symbol::Symbol;
+use crate::entity::common::FundingRate;
 
 /// 资金费结算明细
 const USER_FUNDING_ENTITY_TYPE: u8 = 14;
@@ -45,11 +46,12 @@ impl UserFunding {
         coin: Symbol,
         usdc: Decimal,
         szi: Decimal,
-        funding_rate: Decimal,
+        funding_rate: FundingRate,
         n_samples: Option<u32>,
         created_at: u64,
         updated_at: u64,
     ) -> Self {
+        let funding_rate = funding_rate.value();
         Self { funding_id, coin, usdc, szi, funding_rate, n_samples, created_at, updated_at }
     }
 
@@ -197,7 +199,7 @@ mod tests {
             Symbol::new(1, Coin::BTC, Coin::USDC),
             Decimal::from(-10),
             Decimal::from(2),
-            Decimal::new(1, 4),
+            FundingRate::new(Decimal::new(1, 4)).unwrap(),
             None,
             100,
             100,

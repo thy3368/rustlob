@@ -1,7 +1,9 @@
-use super::funding_payment::Rate;
+use rust_decimal::Decimal;
+
 use super::funding_rate_tick::FundingRateTick;
 use super::price::Price;
 use crate::account::symbol::Symbol;
+use crate::entity::common::FundingRate;
 
 /// 根据一个小时内的 premium 样本构造市场级资金费率观测。
 ///
@@ -9,7 +11,7 @@ use crate::account::symbol::Symbol;
 pub fn make_funding_rate_tick(
     coin: Symbol,
     time_ms: u64,
-    samples: &[Rate],
+    samples: &[FundingRate],
     _oracle_px: Price,
 ) -> Option<FundingRateTick> {
     let sample_count = i128::try_from(samples.len()).ok()?;
@@ -17,20 +19,22 @@ pub fn make_funding_rate_tick(
         return None;
     }
 
-    let sum = samples.iter().try_fold(0_i128, |sum, sample| sum.checked_add(sample.raw()))?;
-    let avg_premium = Rate::new(sum.checked_div(sample_count)?);
-    let fixed_rate = Rate::parse_str("0.0001").ok()?.raw().checked_div(8)?;
-    let correction = (fixed_rate.checked_sub(avg_premium.raw())?)
-        .clamp(Rate::from_bps(-5).raw(), Rate::from_bps(5).raw());
-    let eight_hour_rate = avg_premium.raw().checked_add(correction)?;
-    let hourly_rate = eight_hour_rate
-        .checked_div(8)?
-        .clamp(Rate::from_percent(-4).raw(), Rate::from_percent(4).raw());
+    let sum =
+        samples.iter().try_fold(Decimal::ZERO, |sum, sample| sum.checked_add(sample.value()))?;
+    let avg_premium = sum.checked_div(Decimal::from(sample_count))?;
+    let fixed_rate = Decimal::new(1, 4).checked_div(Decimal::from(8u32))?;
+    let correction =
+        fixed_rate.checked_sub(avg_premium)?.max(Decimal::new(-5, 4)).min(Decimal::new(5, 4));
+    let hourly_rate = avg_premium
+        .checked_add(correction)?
+        .checked_div(Decimal::from(8u32))?
+        .max(Decimal::new(-4, 2))
+        .min(Decimal::new(4, 2));
 
     Some(FundingRateTick {
         coin,
         time_ms,
-        funding_rate: Rate::new(hourly_rate),
-        premium: avg_premium,
+        funding_rate: FundingRate::new(hourly_rate).ok()?,
+        premium: FundingRate::new(avg_premium).ok()?,
     })
 }
