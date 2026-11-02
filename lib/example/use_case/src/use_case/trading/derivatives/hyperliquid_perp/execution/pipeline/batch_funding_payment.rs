@@ -18,7 +18,10 @@ pub struct UserFundingCmd {
     pub funding_time: u64,
     /// 本次结算的合约交易对。
     pub symbol: Symbol,
-    /// 本次资金费使用的 oracle 价格。
+    /// 本次资金费使用的 spot oracle price。
+    /// Hyperliquid `oraclePx` 没有固定小数位，按 API 返回值完整解析为 `Decimal`，
+    /// 不按订单价格 tick 或固定 scale 截断；资金费按
+    /// `position_size * oracle_price * funding_rate` 计算。
     pub oracle_price: Decimal,
     /// signed scale 10 资金费率原始整数；`0.01% = 1000000`。
     pub funding_rate: FundingRate,
