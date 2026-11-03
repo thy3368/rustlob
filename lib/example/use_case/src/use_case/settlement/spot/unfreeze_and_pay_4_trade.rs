@@ -1,9 +1,87 @@
 use common_entity::{LogEntry, StateMachineV2};
 use example_core_entity::spot::spot_order_primitives::OrderSide;
-use example_core_entity::spot::spot_trade_v3::{SpotTradeSettlementError, SpotTradeV3};
+use example_core_entity::spot::spot_trade_v3::{
+    SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3,
+};
 use example_core_entity::{BalanceV2, BalanceV2Error, Open};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+/// 现货成交结算在本次 use case 投影中的状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpotSettlementState {
+    Unsettled,
+    Settled,
+}
+
+/// 结算状态机支持的命令。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpotSettlementCommand {
+    Settle,
+    Inspect,
+}
+
+/// 四个余额变更 effect。金额由 `SpotTradeV3` 派生，中心只负责编排。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpotSettlementEffect {
+    DebitBuyerQuoteFrozen,
+    CreditBuyerBaseAvailable,
+    DebitSellerBaseFrozen,
+    CreditSellerQuoteAvailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum SpotSettlementCenterError {
+    #[error("spot trade settlement was already completed")]
+    DuplicateSettlement,
+}
+
+/// 现货成交结算的 tabular-center 投影。
+///
+/// 表格只决定状态转移和 effect 顺序，不计算金额，也不持有余额。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpotSettlementCenter {
+    state: SpotSettlementState,
+}
+
+impl Default for SpotSettlementCenter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SpotSettlementCenter {
+    pub const fn new() -> Self {
+        Self { state: SpotSettlementState::Unsettled }
+    }
+
+    pub const fn state(self) -> SpotSettlementState {
+        self.state
+    }
+
+    pub fn dispatch(
+        &mut self,
+        command: SpotSettlementCommand,
+    ) -> Result<&'static [SpotSettlementEffect], SpotSettlementCenterError> {
+        const EFFECTS: [SpotSettlementEffect; 4] = [
+            SpotSettlementEffect::DebitBuyerQuoteFrozen,
+            SpotSettlementEffect::CreditBuyerBaseAvailable,
+            SpotSettlementEffect::DebitSellerBaseFrozen,
+            SpotSettlementEffect::CreditSellerQuoteAvailable,
+        ];
+        match (self.state, command) {
+            (SpotSettlementState::Unsettled, SpotSettlementCommand::Settle) => {
+                self.state = SpotSettlementState::Settled;
+                Ok(&EFFECTS)
+            }
+            (SpotSettlementState::Unsettled, SpotSettlementCommand::Inspect)
+            | (SpotSettlementState::Settled, SpotSettlementCommand::Inspect) => Ok(&[]),
+            (SpotSettlementState::Settled, SpotSettlementCommand::Settle) => {
+                Err(SpotSettlementCenterError::DuplicateSettlement)
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct UnFreezeSpotOrderV2Cmd {
@@ -21,6 +99,7 @@ pub struct UnFreezeSpotOrderV2State {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnFreezeSpotOrderV2AfterChanges {
+    pub trade_after: SpotTradeV3,
     pub buyer_base_balance_after: BalanceV2<Open>,
     pub buyer_quote_balance_after: BalanceV2<Open>,
     pub seller_base_balance_after: BalanceV2<Open>,
@@ -41,6 +120,8 @@ pub enum UnFreezeSpotOrderV2Error {
     BalanceIdentityMismatch,
     #[error("settlement balance identities must be distinct")]
     DuplicateBalance,
+    #[error("settlement command was already applied")]
+    DuplicateSettlement,
     #[error(transparent)]
     SettlementAmounts(#[from] SpotTradeSettlementError),
     #[error(transparent)]
@@ -69,6 +150,9 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
         given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         let trade = &given_state.trade.comon_trade;
+        if given_state.trade.settlement_status == SpotTradeSettlementStatus::Settled {
+            return Err(UnFreezeSpotOrderV2Error::DuplicateSettlement);
+        }
         if cmd.trade_id != trade.trade_id {
             return Err(UnFreezeSpotOrderV2Error::TradeIdMismatch);
         }
@@ -114,23 +198,26 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
 
     fn compute_state_changed_only(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let amounts = given_state.trade.settlement_amounts()?;
+        let mut trade_after = given_state.trade.clone();
+        trade_after.mark_settled()?;
         let mut buyer_base_balance_after = given_state.buyer_base_balance.clone();
         let mut buyer_quote_balance_after = given_state.buyer_quote_balance.clone();
         let mut seller_base_balance_after = given_state.seller_base_balance.clone();
         let mut seller_quote_balance_after = given_state.seller_quote_balance.clone();
 
-        buyer_quote_balance_after.debit_frozen(amounts.buyer_quote_payment)?;
-        buyer_base_balance_after.credit_available(amounts.base_amount)?;
-        seller_base_balance_after.debit_frozen(amounts.base_amount)?;
+        buyer_quote_balance_after.debit_frozen(amounts.buyer_quote_payment, cmd.logical_ts())?;
+        buyer_base_balance_after.credit_available(amounts.base_amount, cmd.logical_ts())?;
+        seller_base_balance_after.debit_frozen(amounts.base_amount, cmd.logical_ts())?;
         if amounts.seller_quote_receipt > rust_decimal::Decimal::ZERO {
-            seller_quote_balance_after.credit_available(amounts.seller_quote_receipt)?;
+            seller_quote_balance_after.credit_available(amounts.seller_quote_receipt, cmd.logical_ts())?;
         }
 
         Ok(UnFreezeSpotOrderV2AfterChanges {
+            trade_after,
             buyer_base_balance_after,
             buyer_quote_balance_after,
             seller_base_balance_after,

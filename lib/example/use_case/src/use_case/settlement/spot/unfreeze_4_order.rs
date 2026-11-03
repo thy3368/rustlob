@@ -53,7 +53,7 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
 
     fn validate_state_given(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         _given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -61,7 +61,7 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
 
     fn compute_state_changed_only(
         &self,
-        _cmd: &Self::Command,
+        cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         ///todo 处理 cancel/reject等情况
@@ -70,7 +70,7 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
         };
         let requirement = pending_order.freeze_requirement()?;
         let mut balance_after = given_state.balance.clone();
-        balance_after.freeze(requirement.amount())?;
+        balance_after.freeze(requirement.amount(), cmd.logical_ts())?;
         Ok(UnFreezeSpotOrderV2AfterChanges { balance_after })
     }
 }
