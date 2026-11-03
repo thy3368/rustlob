@@ -516,7 +516,8 @@ mod tests {
             let mut candidate = order(1);
             candidate.taker_max_fee = fee;
             assert_eq!(
-                PlaceOnlySpotOrderV3UseCase.check_command(&log(PlaceOnlySpotOrderV3Cmd::Single(candidate))),
+                PlaceOnlySpotOrderV3UseCase
+                    .check_command(&log(PlaceOnlySpotOrderV3Cmd::Single(candidate))),
                 Ok(())
             );
         }

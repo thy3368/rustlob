@@ -7,10 +7,11 @@ use example_core_entity::{BalanceV2, BalanceV2Error, Open, SpotAmountConversionE
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use example_core_entity::common::identifiers::OrderId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CancelSpotOrderV3Cmd {
-    pub cloid: String,
+    pub order_id: OrderId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,10 +34,14 @@ pub struct CancelSpotOrderV3Changes {
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CancelSpotOrderV3Error {
+    #[error("numeric order id must be greater than zero")]
+    InvalidOid,
     #[error("client order id must not be empty")]
     EmptyCloid,
     #[error("command client order id does not match loaded order")]
     CloidMismatch,
+    #[error("command order id does not match loaded order")]
+    OidMismatch,
     #[error("loaded order has no client order id")]
     MissingCloid,
     #[error("order is not cancelable")]
@@ -63,8 +68,12 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
     type StateChanged = CancelSpotOrderV3AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        if cmd.payload().cloid.trim().is_empty() {
-            return Err(CancelSpotOrderV3Error::EmptyCloid);
+        match &cmd.payload().order_id {
+            OrderId::Oid(oid) if *oid == 0 => return Err(CancelSpotOrderV3Error::InvalidOid),
+            OrderId::Cloid(cloid) if cloid.trim().is_empty() => {
+                return Err(CancelSpotOrderV3Error::EmptyCloid);
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -74,11 +83,20 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        let Some(cloid) = given_state.order.order_base().cloid.as_deref() else {
-            return Err(CancelSpotOrderV3Error::MissingCloid);
-        };
-        if cloid != cmd.payload().cloid {
-            return Err(CancelSpotOrderV3Error::CloidMismatch);
+        match &cmd.payload().order_id {
+            OrderId::Oid(oid) => {
+                if given_state.order.order_base().order_id != *oid {
+                    return Err(CancelSpotOrderV3Error::OidMismatch);
+                }
+            }
+            OrderId::Cloid(expected) => {
+                let Some(cloid) = given_state.order.order_base().cloid.as_deref() else {
+                    return Err(CancelSpotOrderV3Error::MissingCloid);
+                };
+                if cloid != expected {
+                    return Err(CancelSpotOrderV3Error::CloidMismatch);
+                }
+            }
         }
         if !matches!(
             given_state.order,
@@ -123,7 +141,7 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
             return Err(CancelSpotOrderV3Error::AssetMismatch);
         }
         let mut balance = given_state.balance.clone();
-        balance.unfreeze_and_pay(requirement.amount(), Decimal::ZERO)?;
+        balance.unfreeze_and_pay(requirement.amount(), Decimal::ZERO, cmd.logical_ts())?;
         Ok(CancelSpotOrderV3AfterChanges {
             canceled_order: SpotOrderV3Any::Canceled(canceled_order),
             balance,

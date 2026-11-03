@@ -11,7 +11,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModifySpotOrderV3Cmd {
     /// 顶层 `oid`，用于定位原订单。
-    pub order_id: u64,
+    pub oid: u64,
     /// Hyperliquid `order.c`，表示修改后订单的 client order id。
     ///
     /// 为空时由后续业务逻辑保留原订单的 client order id。
@@ -95,7 +95,7 @@ impl StateMachineV2 for ModifySpotOrderV3UseCase {
     type StateChanged = ModifySpotOrderV3AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        if cmd.payload().order_id == 0 || cmd.payload().size <= Decimal::ZERO {
+        if cmd.payload().oid == 0 || cmd.payload().size <= Decimal::ZERO {
             return Err(ModifySpotOrderV2Error::InvalidSize);
         }
         if cmd.payload().price <= Decimal::ZERO {
@@ -109,7 +109,7 @@ impl StateMachineV2 for ModifySpotOrderV3UseCase {
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        if given_state.order.order_base().order_id != cmd.payload().order_id {
+        if given_state.order.order_base().order_id != cmd.payload().oid {
             return Err(ModifySpotOrderV2Error::OrderLookupMismatch);
         }
         if !matches!(
