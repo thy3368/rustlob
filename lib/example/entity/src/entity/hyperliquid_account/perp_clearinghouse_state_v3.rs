@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::perp::trade::perp_position_v2::{MarginModeV2, PerpPositionV3};
+use crate::perp::trade::perp_position_v3::{MarginModeV3, PerpPositionV3};
 
 struct PerpClearinghouseStateV3 {
     margin_summary: MarginSummary,       // 全账户（cross + isolated 合计）
@@ -105,7 +105,7 @@ impl PerpClearinghouseStateV3 {
     fn worst_cross_position(&self, marks: &HashMap<String, Decimal>) -> Option<&PerpPositionV3> {
         self.asset_positions
             .iter()
-            .filter(|ap| ap.position.margin_mode() == MarginModeV2::Cross)
+            .filter(|ap| ap.position.margin_mode() == MarginModeV3::Cross)
             .max_by(|a, b| {
                 let na = a.position.notional(marks[a.position.coin().code()]);
                 let nb = b.position.notional(marks[b.position.coin().code()]);

@@ -4,7 +4,7 @@ use common_entity::{LogEntry, StateMachineV2};
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::FundingRate;
 use example_core_entity::perp::fund::funding::UserFunding;
-use example_core_entity::perp::trade::perp_position_v2::{MarginModeV2, PerpPositionV3};
+use example_core_entity::perp::trade::perp_position_v3::{MarginModeV3, PerpPositionV3};
 use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event};
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -134,7 +134,7 @@ fn validate_positions(
         if position.coin() != cmd.symbol.base {
             return Err(SettleHyperliquidPerpFundingError::PositionMarketMismatch);
         }
-        if position.margin_mode() != MarginModeV2::Cross {
+        if position.margin_mode() != MarginModeV3::Cross {
             return Err(SettleHyperliquidPerpFundingError::UnsupportedMarginMode);
         }
     }
@@ -151,8 +151,8 @@ fn derive_funding_payments(
     for position in &state.positions {
         let Some(usdc) = position.funding_usdc_delta(cmd.oracle_price, cmd.funding_rate)
             .map_err(|error| match error {
-                example_core_entity::perp::trade::perp_position_v2::PerpPositionV2Error::InvalidPrice => SettleHyperliquidPerpFundingError::InvalidOraclePrice,
-                example_core_entity::perp::trade::perp_position_v2::PerpPositionV2Error::ArithmeticOverflow => SettleHyperliquidPerpFundingError::ArithmeticOverflow,
+                example_core_entity::perp::trade::perp_position_v3::PerpPositionV3Error::InvalidPrice => SettleHyperliquidPerpFundingError::InvalidOraclePrice,
+                example_core_entity::perp::trade::perp_position_v3::PerpPositionV3Error::ArithmeticOverflow => SettleHyperliquidPerpFundingError::ArithmeticOverflow,
                 _ => SettleHyperliquidPerpFundingError::ArithmeticOverflow,
             })? else { continue };
 
@@ -245,11 +245,11 @@ mod tests {
     use common_entity::LogEntrySequencer;
     use example_core_entity::account::coin::Coin;
     use example_core_entity::common::UserId;
-    use example_core_entity::perp::trade::perp_position_v2::FundingAccumulatorV2;
+    use example_core_entity::perp::trade::perp_position_v3::FundingAccumulatorV3;
 
     use super::*;
 
-    fn position(id: u64, user: u64, size: i64, mode: MarginModeV2) -> PerpPositionV3 {
+    fn position(id: u64, user: u64, size: i64, mode: MarginModeV3) -> PerpPositionV3 {
         PerpPositionV3::new(
             id,
             UserId(user),
@@ -258,9 +258,9 @@ mod tests {
             Decimal::from(50_000),
             Decimal::from(10),
             mode,
-            (mode == MarginModeV2::Isolated).then_some(Decimal::from(1_000)),
+            (mode == MarginModeV3::Isolated).then_some(Decimal::from(1_000)),
             Decimal::ZERO,
-            FundingAccumulatorV2::default(),
+            FundingAccumulatorV3::default(),
             Decimal::ZERO,
             3,
         )
@@ -300,8 +300,8 @@ mod tests {
     fn creates_long_payment_and_short_receipt_and_updates_balances() {
         let state = UserFundingState {
             positions: vec![
-                position(11, 1, 2, MarginModeV2::Cross),
-                position(12, 2, -2, MarginModeV2::Cross),
+                position(11, 1, 2, MarginModeV3::Cross),
+                position(12, 2, -2, MarginModeV3::Cross),
             ],
             margin_balances: vec![balance(1, 100), balance(2, 100)],
         };
@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn preserves_hyperliquid_ten_decimal_funding_rate_precision() {
         let state = UserFundingState {
-            positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
+            positions: vec![position(11, 1, 2, MarginModeV3::Cross)],
             margin_balances: vec![balance(1, 100)],
         };
 
@@ -341,8 +341,8 @@ mod tests {
     fn aggregates_multiple_positions_before_updating_one_balance() {
         let state = UserFundingState {
             positions: vec![
-                position(11, 1, 1, MarginModeV2::Cross),
-                position(12, 1, 2, MarginModeV2::Cross),
+                position(11, 1, 1, MarginModeV3::Cross),
+                position(12, 1, 2, MarginModeV3::Cross),
             ],
             margin_balances: vec![balance(1, 100)],
         };
@@ -360,7 +360,7 @@ mod tests {
     #[test]
     fn zero_rate_creates_no_payment_or_balance_change() {
         let state = UserFundingState {
-            positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
+            positions: vec![position(11, 1, 2, MarginModeV3::Cross)],
             margin_balances: vec![balance(1, 100)],
         };
 
@@ -375,8 +375,8 @@ mod tests {
     fn negative_rate_reverses_long_and_short_directions() {
         let state = UserFundingState {
             positions: vec![
-                position(11, 1, 2, MarginModeV2::Cross),
-                position(12, 2, -2, MarginModeV2::Cross),
+                position(11, 1, 2, MarginModeV3::Cross),
+                position(12, 2, -2, MarginModeV3::Cross),
             ],
             margin_balances: vec![balance(1, 100), balance(2, 100)],
         };
@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn rejects_mismatched_position_isolated_margin_and_insufficient_balance() {
         let cross = UserFundingState {
-            positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
+            positions: vec![position(11, 1, 2, MarginModeV3::Cross)],
             margin_balances: vec![balance(1, 5)],
         };
         assert_eq!(
@@ -407,7 +407,7 @@ mod tests {
         );
 
         let isolated = UserFundingState {
-            positions: vec![position(11, 1, 2, MarginModeV2::Isolated)],
+            positions: vec![position(11, 1, 2, MarginModeV3::Isolated)],
             margin_balances: vec![balance(1, 100)],
         };
         assert_eq!(
@@ -416,7 +416,7 @@ mod tests {
         );
 
         let missing_balance = UserFundingState {
-            positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
+            positions: vec![position(11, 1, 2, MarginModeV3::Cross)],
             margin_balances: vec![],
         };
         assert_eq!(
@@ -426,7 +426,7 @@ mod tests {
         );
 
         let wrong_asset = UserFundingState {
-            positions: vec![position(11, 1, 2, MarginModeV2::Cross)],
+            positions: vec![position(11, 1, 2, MarginModeV3::Cross)],
             margin_balances: vec![BalanceV2::new(
                 1,
                 1,

@@ -6,7 +6,7 @@ use crate::entity::common::{FundingRate, UserId};
 use crate::entity::hyperliquid_account::usdc::Usdc;
 use crate::entity::perp::fund::funding_payment::FundingPayment;
 use crate::entity::perp::fund::price::Price;
-use crate::entity::perp::trade::perp_position_v2::PerpPositionV3;
+use crate::entity::perp::trade::perp_position_v3::PerpPositionV3;
 
 pub type Size = Decimal;
 pub type TxHash = [u8; 32];

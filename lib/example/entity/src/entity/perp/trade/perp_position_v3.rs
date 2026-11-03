@@ -1,3 +1,4 @@
+use common_entity::Fsm;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 ///
 /// 大白话说，核心区别就是：仓位亏损时从哪里扣钱，以及会不会影响其他仓位。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MarginModeV2 {
+pub enum MarginModeV3 {
     /// 全仓：所有全仓仓位共用账户的 Cross 保证金池。
     ///
     /// 一个全仓仓位发生亏损时，可能会动用共享资金，因此也可能影响同一账户的其他全仓仓位。
@@ -24,28 +25,19 @@ pub enum MarginModeV2 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FundingAccumulatorV2 {
+pub struct FundingAccumulatorV3 {
     pub all_time: Decimal,
     pub since_open: Decimal,
     pub since_change: Decimal,
 }
-impl Default for FundingAccumulatorV2 {
+impl Default for FundingAccumulatorV3 {
     fn default() -> Self {
         Self { all_time: Decimal::ZERO, since_open: Decimal::ZERO, since_change: Decimal::ZERO }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PerpPositionMetricsV2 {
-    pub position_value: Decimal,
-    pub unrealized_pnl: Decimal,
-    pub margin_used: Decimal,
-    ///这个仓位用保证金赚的“收益率”，不是账户总收益率。
-    pub return_on_equity: Option<Decimal>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum PerpPositionV2Error {
+pub enum PerpPositionV3Error {
     #[error("quantity must be non-zero")]
     InvalidQuantity,
     #[error("price must be greater than zero")]
@@ -58,6 +50,29 @@ pub enum PerpPositionV2Error {
     InvalidState,
     #[error("arithmetic overflow")]
     ArithmeticOverflow,
+    #[error("isolated margin is invalid")]
+    InvalidIsolatedMargin,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PerpPositionV3State {
+    Active,
+}
+
+#[derive(Debug, Clone)]
+pub enum PerpPositionV3Event {
+    TradeFilled { trade: PerpTradeV3, logical_ts: u64 },
+    FundingSettled { payment: FundingPayment, logical_ts: u64 },
+    LeverageUpdated { leverage: Decimal, margin_mode: MarginModeV3, logical_ts: u64 },
+    IsolatedMarginAdjusted { delta: Decimal, logical_ts: u64 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerpPositionV3Output {
+    TradeApplied { closed_pnl: Decimal },
+    FundingApplied { signed_amount: Decimal },
+    LeverageApplied,
+    IsolatedMarginApplied { margin_after: Decimal },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,7 +92,7 @@ pub struct PerpPositionV3 {
     /// 仓位使用的杠杆倍数。
     leverage: Decimal,
     /// 仓位采用的保证金模式。
-    margin_mode: MarginModeV2,
+    margin_mode: MarginModeV3,
     /// 逐仓模式下配置的保证金金额；全仓模式下为空。
     isolated_margin: Option<Decimal>,
     /// 该仓位累计产生的已实现盈亏。
@@ -85,7 +100,7 @@ pub struct PerpPositionV3 {
     /// 该仓位的累计费用记录。
     cum_fee: Decimal,
     /// 该仓位的累计资金费记录。
-    cum_funding: FundingAccumulatorV2,
+    cum_funding: FundingAccumulatorV3,
 
     /// 订单创建时间，单位为 Unix 纳秒。
     created_at: u64,
@@ -104,18 +119,18 @@ impl PerpPositionV3 {
         signed_size: Decimal,
         entry_price: Decimal,
         leverage: Decimal,
-        margin_mode: MarginModeV2,
+        margin_mode: MarginModeV3,
         isolated_margin: Option<Decimal>,
         realized_pnl: Decimal,
-        cum_funding: FundingAccumulatorV2,
+        cum_funding: FundingAccumulatorV3,
         cum_fee: Decimal,
         version: u64,
-    ) -> Result<Self, PerpPositionV2Error> {
+    ) -> Result<Self, PerpPositionV3Error> {
         if signed_size.is_zero() && !entry_price.is_zero() {
-            return Err(PerpPositionV2Error::InvalidState);
+            return Err(PerpPositionV3Error::InvalidState);
         }
         if !signed_size.is_zero() && entry_price <= Decimal::ZERO {
-            return Err(PerpPositionV2Error::InvalidPrice);
+            return Err(PerpPositionV3Error::InvalidPrice);
         }
         validate_margin(leverage, margin_mode, isolated_margin)?;
         Ok(Self {
@@ -135,7 +150,7 @@ impl PerpPositionV3 {
             version,
         })
     }
-    pub fn empty_slot(position_id: u64, user_id: UserId, coin: Coin) -> Self {
+    pub fn empty(position_id: u64, user_id: UserId, coin: Coin) -> Self {
         Self {
             position_id,
             user_id,
@@ -143,7 +158,7 @@ impl PerpPositionV3 {
             szi: Decimal::ZERO,
             entry_px: Decimal::ZERO,
             leverage: Decimal::ONE,
-            margin_mode: MarginModeV2::Cross,
+            margin_mode: MarginModeV3::Cross,
             isolated_margin: None,
             realized_pnl: Decimal::ZERO,
             cum_fee: Decimal::ZERO,
@@ -171,7 +186,7 @@ impl PerpPositionV3 {
     pub fn leverage(&self) -> Decimal {
         self.leverage
     }
-    pub fn margin_mode(&self) -> MarginModeV2 {
+    pub fn margin_mode(&self) -> MarginModeV3 {
         self.margin_mode
     }
     pub fn isolated_margin(&self) -> Option<Decimal> {
@@ -183,7 +198,7 @@ impl PerpPositionV3 {
     pub fn cum_fee(&self) -> Decimal {
         self.cum_fee
     }
-    pub fn cum_funding(&self) -> FundingAccumulatorV2 {
+    pub fn cum_funding(&self) -> FundingAccumulatorV3 {
         self.cum_funding
     }
     pub fn version(&self) -> u64 {
@@ -198,18 +213,14 @@ impl PerpPositionV3 {
     pub fn is_short(&self) -> bool {
         self.szi < Decimal::ZERO
     }
-    pub fn quantity(&self) -> Decimal {
-        self.szi.abs()
-    }
-
     /// 计算该仓位在指定 oracle 价格和规范化资金费率下的 USDC 变动。
     pub fn funding_usdc_delta(
         &self,
         oracle_price: Decimal,
         funding_rate: FundingRate,
-    ) -> Result<Option<Decimal>, PerpPositionV2Error> {
+    ) -> Result<Option<Decimal>, PerpPositionV3Error> {
         if oracle_price <= Decimal::ZERO {
-            return Err(PerpPositionV2Error::InvalidPrice);
+            return Err(PerpPositionV3Error::InvalidPrice);
         }
         if self.is_flat() || funding_rate.value().is_zero() {
             return Ok(None);
@@ -219,7 +230,7 @@ impl PerpPositionV3 {
             .checked_mul(oracle_price)
             .and_then(|value| value.checked_mul(funding_rate.value()))
             .and_then(|value| Decimal::ZERO.checked_sub(value))
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
         if amount.is_zero() { Ok(None) } else { Ok(Some(amount)) }
     }
 
@@ -228,42 +239,23 @@ impl PerpPositionV3 {
         self.szi.abs() * mark_price
     }
 
-    /// 浮盈
-    pub fn unrealized_pnl(&self, mark_price: Decimal) -> Decimal {
-        self.szi * (mark_price - self.entry_px)
-    }
-
-    /// 初始保证金 下单时有用，其它开仓时会减去这个
-    pub fn im(&self) -> Decimal {
-        self.szi.abs() * self.entry_px / self.leverage
-    }
-
-    pub fn side_label(&self) -> &'static str {
-        if self.is_long() {
-            "long"
-        } else if self.is_short() {
-            "short"
-        } else {
-            "flat"
-        }
-    }
-    pub fn apply_trade(
+    fn apply_trade(
         &mut self,
         signed_quantity: Decimal,
         trade_price: Decimal,
-    ) -> Result<Decimal, PerpPositionV2Error> {
+    ) -> Result<Decimal, PerpPositionV3Error> {
         if signed_quantity.is_zero() {
-            return Err(PerpPositionV2Error::InvalidQuantity);
+            return Err(PerpPositionV3Error::InvalidQuantity);
         }
         if trade_price <= Decimal::ZERO {
-            return Err(PerpPositionV2Error::InvalidPrice);
+            return Err(PerpPositionV3Error::InvalidPrice);
         }
         let old = self.szi;
         let (new_size, realized, new_entry) = if old.is_zero() {
             (signed_quantity, Decimal::ZERO, trade_price)
         } else if old.signum() == signed_quantity.signum() {
             let total =
-                old.checked_add(signed_quantity).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+                old.checked_add(signed_quantity).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
             let weighted = old
                 .abs()
                 .checked_mul(self.entry_px)
@@ -271,21 +263,21 @@ impl PerpPositionV3 {
                     signed_quantity.abs().checked_mul(trade_price).and_then(|w| v.checked_add(w))
                 })
                 .and_then(|v| v.checked_div(total.abs()))
-                .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+                .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
             (total, Decimal::ZERO, weighted)
         } else {
             let closing = old.abs().min(signed_quantity.abs());
             let delta = trade_price
                 .checked_sub(self.entry_px)
-                .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+                .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
             let pnl = closing
                 .checked_mul(delta)
                 .and_then(|v| {
                     if old.is_sign_negative() { Decimal::ZERO.checked_sub(v) } else { Some(v) }
                 })
-                .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+                .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
             let total =
-                old.checked_add(signed_quantity).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+                old.checked_add(signed_quantity).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
             (
                 total,
                 pnl,
@@ -301,8 +293,8 @@ impl PerpPositionV3 {
         let cumulative = self
             .realized_pnl
             .checked_add(realized)
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        let version = self.version.checked_add(1).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
+        let version = self.version.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
         self.szi = new_size;
         self.entry_px = new_entry;
         self.realized_pnl = cumulative;
@@ -313,142 +305,167 @@ impl PerpPositionV3 {
         }
         Ok(realized)
     }
-    fn apply_funding_amount(&mut self, signed_funding: Decimal) -> Result<(), PerpPositionV2Error> {
+    fn apply_funding_amount(&mut self, signed_funding: Decimal) -> Result<(), PerpPositionV3Error> {
         let a = self
             .cum_funding
             .all_time
             .checked_add(signed_funding)
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
         let o = self
             .cum_funding
             .since_open
             .checked_add(signed_funding)
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
         let c = self
             .cum_funding
             .since_change
             .checked_add(signed_funding)
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        let v = self.version.checked_add(1).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        self.cum_funding = FundingAccumulatorV2 { all_time: a, since_open: o, since_change: c };
+            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
+        let v = self.version.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
+        self.cum_funding = FundingAccumulatorV3 { all_time: a, since_open: o, since_change: c };
         self.version = v;
         Ok(())
     }
-    pub fn change_leverage(
+    fn change_leverage(
         &mut self,
         leverage: Decimal,
-        margin_mode: MarginModeV2,
+        margin_mode: MarginModeV3,
         isolated_margin: Option<Decimal>,
-    ) -> Result<(), PerpPositionV2Error> {
+    ) -> Result<(), PerpPositionV3Error> {
         validate_margin(leverage, margin_mode, isolated_margin)?;
-        let v = self.version.checked_add(1).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+        let v = self.version.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
         self.leverage = leverage;
         self.margin_mode = margin_mode;
         self.isolated_margin = isolated_margin;
         self.version = v;
         Ok(())
     }
-    pub fn metrics_at(
-        &self,
-        mark_price: Decimal,
-        equity: Decimal,
-    ) -> Result<PerpPositionMetricsV2, PerpPositionV2Error> {
-        if mark_price <= Decimal::ZERO {
-            return Err(PerpPositionV2Error::InvalidPrice);
-        }
-        let value = self
-            .quantity()
-            .checked_mul(mark_price)
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        let pnl = self
-            .szi
-            .checked_mul(
-                mark_price
-                    .checked_sub(self.entry_px)
-                    .ok_or(PerpPositionV2Error::ArithmeticOverflow)?,
-            )
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        let margin =
-            value.checked_div(self.leverage).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        let roe = if equity.is_zero() {
-            None
-        } else {
-            Some(pnl.checked_div(equity).ok_or(PerpPositionV2Error::ArithmeticOverflow)?)
-        };
-        Ok(PerpPositionMetricsV2 {
-            position_value: value,
-            unrealized_pnl: pnl,
-            margin_used: margin,
-            return_on_equity: roe,
-        })
-    }
 }
 fn validate_margin(
     leverage: Decimal,
-    mode: MarginModeV2,
+    mode: MarginModeV3,
     isolated: Option<Decimal>,
-) -> Result<(), PerpPositionV2Error> {
+) -> Result<(), PerpPositionV3Error> {
     if leverage <= Decimal::ZERO {
-        return Err(PerpPositionV2Error::InvalidLeverage);
+        return Err(PerpPositionV3Error::InvalidLeverage);
     }
     match mode {
-        MarginModeV2::Cross if isolated.is_some() => {
-            Err(PerpPositionV2Error::InvalidMarginConfiguration)
+        MarginModeV3::Cross if isolated.is_some() => {
+            Err(PerpPositionV3Error::InvalidMarginConfiguration)
         }
-        MarginModeV2::Isolated if isolated.is_none_or(|v| v < Decimal::ZERO) => {
-            Err(PerpPositionV2Error::InvalidMarginConfiguration)
+        MarginModeV3::Isolated if isolated.is_none_or(|v| v < Decimal::ZERO) => {
+            Err(PerpPositionV3Error::InvalidMarginConfiguration)
         }
         _ => Ok(()),
     }
 }
 
 impl PerpPositionV3 {
-    pub fn apply_trade2(&mut self, trade: &PerpTradeV3) -> Result<Decimal, PerpPositionV2Error> {
+    fn apply_trade_filled(&mut self, trade: &PerpTradeV3) -> Result<Decimal, PerpPositionV3Error> {
         if trade.kind == PerpTradeKind::InsuranceFundTransfer {
-            return Err(PerpPositionV2Error::InvalidState);
+            return Err(PerpPositionV3Error::InvalidState);
         }
         if self.coin != trade.trade_base.symbol.base {
-            return Err(PerpPositionV2Error::InvalidState);
+            return Err(PerpPositionV3Error::InvalidState);
         }
         let (signed_quantity, closed_pnl, fee) = if self.user_id == trade.trade_base.taker_user {
             let signed = match trade.trade_base.taker_side {
                 crate::OrderSide::Buy => Some(trade.trade_base.size),
                 crate::OrderSide::Sell => Decimal::ZERO.checked_sub(trade.trade_base.size),
             }
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
             (signed, trade.taker_closed_pnl, trade.trade_base.taker_fee)
         } else if self.user_id == trade.trade_base.maker_user {
             let signed = match trade.trade_base.taker_side {
                 crate::OrderSide::Buy => Decimal::ZERO.checked_sub(trade.trade_base.size),
                 crate::OrderSide::Sell => Some(trade.trade_base.size),
             }
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
+            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
             (signed, trade.maker_closed_pnl, trade.trade_base.maker_fee)
         } else {
-            return Err(PerpPositionV2Error::InvalidState);
+            return Err(PerpPositionV3Error::InvalidState);
         };
-        let old = self.clone();
-        let mut next = old.clone();
-        next.apply_trade(signed_quantity, trade.trade_base.price)?;
-        next.cum_fee =
-            old.cum_fee.checked_add(fee).ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        next.realized_pnl = old
+        let realized_pnl = self
             .realized_pnl
             .checked_add(closed_pnl)
-            .ok_or(PerpPositionV2Error::ArithmeticOverflow)?;
-        *self = next;
+            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
+        let cum_fee =
+            self.cum_fee.checked_add(fee).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
+        self.apply_trade(signed_quantity, trade.trade_base.price)?;
+        self.realized_pnl = realized_pnl;
+        self.cum_fee = cum_fee;
         Ok(closed_pnl)
     }
 
-    pub fn apply_funding(
+    fn apply_funding_settled(
         &mut self,
         trade: &FundingPayment,
-    ) -> Result<Decimal, PerpPositionV2Error> {
+    ) -> Result<Decimal, PerpPositionV3Error> {
         if self.user_id != trade.user || self.coin != trade.coin {
-            return Err(PerpPositionV2Error::InvalidState);
+            return Err(PerpPositionV3Error::InvalidState);
         }
         let signed = Decimal::from_i128_with_scale(trade.usdc.raw(), 6);
         self.apply_funding_amount(signed)?;
         Ok(signed)
+    }
+}
+
+impl Fsm for PerpPositionV3 {
+    type State = PerpPositionV3State;
+    type Event = PerpPositionV3Event;
+    type Output = PerpPositionV3Output;
+    type Error = PerpPositionV3Error;
+
+    fn transition(
+        &mut self,
+        event: Self::Event,
+    ) -> Result<(Self::State, Self::Output), Self::Error> {
+        match event {
+            PerpPositionV3Event::TradeFilled { trade, logical_ts } => {
+                let mut next = self.clone();
+                let closed_pnl = next.apply_trade_filled(&trade)?;
+                next.updated_at = logical_ts;
+                *self = next;
+                Ok((PerpPositionV3State::Active, PerpPositionV3Output::TradeApplied { closed_pnl }))
+            }
+            PerpPositionV3Event::FundingSettled { payment, logical_ts } => {
+                let mut next = self.clone();
+                let signed_amount = next.apply_funding_settled(&payment)?;
+                next.updated_at = logical_ts;
+                *self = next;
+                Ok((
+                    PerpPositionV3State::Active,
+                    PerpPositionV3Output::FundingApplied { signed_amount },
+                ))
+            }
+            PerpPositionV3Event::LeverageUpdated { leverage, margin_mode, logical_ts } => {
+                let mut next = self.clone();
+                next.change_leverage(leverage, margin_mode, next.isolated_margin)?;
+                next.updated_at = logical_ts;
+                *self = next;
+                Ok((PerpPositionV3State::Active, PerpPositionV3Output::LeverageApplied))
+            }
+            PerpPositionV3Event::IsolatedMarginAdjusted { delta, logical_ts } => {
+                if self.margin_mode != MarginModeV3::Isolated {
+                    return Err(PerpPositionV3Error::InvalidMarginConfiguration);
+                }
+                let current =
+                    self.isolated_margin.ok_or(PerpPositionV3Error::InvalidMarginConfiguration)?;
+                let margin_after =
+                    current.checked_add(delta).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
+                if margin_after < Decimal::ZERO {
+                    return Err(PerpPositionV3Error::InvalidIsolatedMargin);
+                }
+                let version =
+                    self.version.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
+                self.isolated_margin = Some(margin_after);
+                self.version = version;
+                self.updated_at = logical_ts;
+                Ok((
+                    PerpPositionV3State::Active,
+                    PerpPositionV3Output::IsolatedMarginApplied { margin_after },
+                ))
+            }
+        }
     }
 }
