@@ -1,6 +1,6 @@
 /// 与业务无关的实体有限状态机契约。
 ///
-/// `transition` 调用业务方法并变更状态，怎么避免改了部份又返回错误的情况。先做各种领域检查，最后完成数据修改
+/// 实现应先完成领域校验和派生，再提交实体状态；失败时不得留下部分变更。
 pub trait Fsm {
     type State;
     type Event;
@@ -13,7 +13,7 @@ pub trait Fsm {
     ) -> Result<(Self::State, Self::Output), Self::Error>;
 
     fn apply(&mut self, event: Self::Event) -> Result<(), Self::Error> {
-        self.transition(event)?;
+        let _ = self.transition(event)?;
 
         Ok(())
     }
@@ -65,7 +65,7 @@ mod tests {
     }
 
     #[test]
-    fn transition_is_pure_and_apply_commits_only_successful_transitions() {
+    fn transition_commits_successfully_and_apply_discards_output() {
         let mut machine = Machine { state: State::Ready, ver: 0 };
         assert_eq!(machine.transition(Event::Inc), Ok((State::Done, 1)));
         assert_eq!(machine.state, State::Done);
