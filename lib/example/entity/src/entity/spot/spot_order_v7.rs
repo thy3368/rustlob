@@ -10,9 +10,26 @@ use crate::spot::spot_trade_v3::{SpotTradeSettlementStatus, SpotTradeV3};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV7Event {
-    Match { makers_after: Vec<SpotOrderV7>, input: MatchSpotOrderV7Input, timestamp: u64 },
-    Modify { price: Decimal, size: Decimal, timestamp: u64 },
-    Cancel { timestamp: u64 },
+    Match {
+        makers_after: Vec<SpotOrderV7>,
+        input: MatchSpotOrderV7Input,
+        timestamp: u64,
+    },
+    ReplaceOrFill {
+        price: Decimal,
+        size: Decimal,
+        makers: Vec<SpotOrderV7>,
+        input: MatchSpotOrderV7Input,
+        timestamp: u64,
+    },
+    Modify {
+        price: Decimal,
+        size: Decimal,
+        timestamp: u64,
+    },
+    Cancel {
+        timestamp: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +120,7 @@ impl SpotOrderV7 {
         Entity::track_create_event(self)
     }
 
+    ///todo 可以remove
     pub fn match_with_input(
         &mut self,
         makers_after: Vec<SpotOrderV7>,
@@ -112,6 +130,7 @@ impl SpotOrderV7 {
             .map(|(_, output)| output)
     }
 
+    ///todo 可以remove
     pub fn modify(
         &mut self,
         price: Decimal,
@@ -119,6 +138,19 @@ impl SpotOrderV7 {
         timestamp: u64,
     ) -> Result<(), EntityError> {
         self.transition(SpotOrderV7Event::Modify { price, size, timestamp }).map(|_| ())
+    }
+
+    ///todo 可以remove
+    pub fn replace_or_fill(
+        &mut self,
+        price: Decimal,
+        size: Decimal,
+        makers: Vec<SpotOrderV7>,
+        input: MatchSpotOrderV7Input,
+        timestamp: u64,
+    ) -> Result<Option<MatchSpotOrderV7Outcome>, EntityError> {
+        self.transition(SpotOrderV7Event::ReplaceOrFill { price, size, makers, input, timestamp })
+            .map(|(_, output)| output)
     }
 }
 
@@ -144,6 +176,15 @@ impl Fsm for SpotOrderV7 {
                 adjusted_input.timestamp = timestamp;
                 let (next, outcome) =
                     compute_match(&self.order_base, makers_after, adjusted_input)?;
+                (next, Some(outcome))
+            }
+            SpotOrderV7Event::ReplaceOrFill { price, size, makers, input, timestamp } => {
+                let replaced =
+                    modified_order_without_version(&self.order_base, price, size, timestamp)?;
+                validate_replace_makers(&replaced, &makers)?;
+                let mut adjusted_input = input;
+                adjusted_input.timestamp = timestamp;
+                let (next, outcome) = compute_match(&replaced, makers, adjusted_input)?;
                 (next, Some(outcome))
             }
             SpotOrderV7Event::Modify { price, size, timestamp } => {
@@ -179,6 +220,41 @@ fn modified_order(
         .checked_add(1)
         .ok_or(EntityError::VersionOverflow { version: current.version })?;
     Ok(next)
+}
+
+fn modified_order_without_version(
+    current: &OrderBase,
+    price: Decimal,
+    size: Decimal,
+    timestamp: u64,
+) -> Result<OrderBase, EntityError> {
+    let filled =
+        current.orig_size.checked_sub(current.size).ok_or_else(|| err("invalid filled size"))?;
+    if price <= Decimal::ZERO || size <= Decimal::ZERO || size < filled {
+        return Err(err("invalid modified order"));
+    }
+    let mut next = current.clone();
+    next.limit_px = price;
+    next.orig_size = size;
+    next.size = size.checked_sub(filled).ok_or_else(|| err("size overflow"))?;
+    next.updated_at = timestamp;
+    Ok(next)
+}
+
+fn validate_replace_makers(taker: &OrderBase, makers: &[SpotOrderV7]) -> Result<(), EntityError> {
+    for maker in makers {
+        let order = &maker.order_base;
+        validate_record(order)?;
+        if order.order_id == taker.order_id
+            || order.side == taker.side
+            || order.symbol != taker.symbol
+            || !matches!(order.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
+            || !crosses(taker, order)
+        {
+            return Err(err("maker does not match replacement"));
+        }
+    }
+    Ok(())
 }
 
 fn canceled_order(current: &OrderBase, timestamp: u64) -> Result<OrderBase, EntityError> {
@@ -623,5 +699,40 @@ mod tests {
             assert!(order.transition(event).is_err());
             assert_eq!(order, before);
         }
+    }
+
+    #[test]
+    fn replace_or_fill_commits_replacement_and_match_as_one_version() {
+        let mut taker = order(1, OrderSide::Buy, 2, SpotOrderStatus::Pending, 7);
+        let maker = order(2, OrderSide::Sell, 1, SpotOrderStatus::Open, 3);
+        let mut match_input = input();
+        match_input.timestamp = 9;
+
+        let output = taker
+            .replace_or_fill(Decimal::from(101), Decimal::from(3), vec![maker], match_input, 42)
+            .unwrap()
+            .unwrap();
+        let MatchSpotOrderV7Outcome::PartiallyFilled { taker_order_after, .. } = output else {
+            panic!("expected partial fill")
+        };
+        assert_eq!(taker_order_after.order_base().limit_px, Decimal::from(101));
+        assert_eq!(taker_order_after.order_base().orig_size, Decimal::from(3));
+        assert_eq!(taker_order_after.order_base().size, Decimal::from(2));
+        assert_eq!(taker.order_base().version, 8);
+        assert_eq!(taker.order_base().updated_at, 42);
+    }
+
+    #[test]
+    fn replace_or_fill_rejects_a_mismatched_maker_without_mutation() {
+        let mut taker = order(1, OrderSide::Buy, 1, SpotOrderStatus::Open, 7);
+        let before = taker.clone();
+        let maker = order(2, OrderSide::Buy, 1, SpotOrderStatus::Open, 3);
+
+        assert!(
+            taker
+                .replace_or_fill(Decimal::from(101), Decimal::from(1), vec![maker], input(), 42)
+                .is_err()
+        );
+        assert_eq!(taker, before);
     }
 }
