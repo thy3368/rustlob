@@ -213,7 +213,8 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
         buyer_base_balance_after.credit_available(amounts.base_amount, cmd.logical_ts())?;
         seller_base_balance_after.debit_frozen(amounts.base_amount, cmd.logical_ts())?;
         if amounts.seller_quote_receipt > rust_decimal::Decimal::ZERO {
-            seller_quote_balance_after.credit_available(amounts.seller_quote_receipt, cmd.logical_ts())?;
+            seller_quote_balance_after
+                .credit_available(amounts.seller_quote_receipt, cmd.logical_ts())?;
         }
 
         Ok(UnFreezeSpotOrderV2AfterChanges {

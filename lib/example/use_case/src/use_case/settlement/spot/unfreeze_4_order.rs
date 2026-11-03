@@ -53,7 +53,7 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
 
     fn validate_state_given(
         &self,
-        cmd: &Self::Command,
+        _cmd: &Self::Command,
         _given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         Ok(())
