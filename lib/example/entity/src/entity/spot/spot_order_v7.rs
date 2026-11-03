@@ -418,27 +418,30 @@ fn compute_match(
     taker.updated_at = i.timestamp;
     let after = SpotOrderV7 { order_base: taker };
     let next = after.order_base.clone();
-    let outcome = match after.status() {
-        SpotOrderStatus::Open => MatchSpotOrderV7Outcome::Resting { taker_order_after: after },
-        SpotOrderStatus::PartiallyFilled => MatchSpotOrderV7Outcome::PartiallyFilled {
-            taker_order_after: after,
-            maker_orders_after: makers,
-            created_trades: trades,
-        },
-        SpotOrderStatus::Filled => MatchSpotOrderV7Outcome::Filled {
+    let outcome = if after.status() == SpotOrderStatus::Filled {
+        MatchSpotOrderV7Outcome::Filled {
             filled_taker_order_after: after,
             maker_orders_after: makers,
             created_trades: trades,
-        },
-        SpotOrderStatus::Canceled => MatchSpotOrderV7Outcome::CanceledAfterPartialFill {
+        }
+    } else if trades.is_empty() {
+        if after.status() == SpotOrderStatus::Rejected {
+            MatchSpotOrderV7Outcome::Rejected { rejected_taker_order_after: after }
+        } else {
+            MatchSpotOrderV7Outcome::Resting { taker_order_after: after }
+        }
+    } else if after.status() == SpotOrderStatus::Canceled {
+        MatchSpotOrderV7Outcome::CanceledAfterPartialFill {
             canceled_taker_order_after: after,
             maker_orders_after: makers,
             created_trades: trades,
-        },
-        SpotOrderStatus::Rejected => {
-            MatchSpotOrderV7Outcome::Rejected { rejected_taker_order_after: after }
         }
-        SpotOrderStatus::Pending => return Err(err("matched order remained pending")),
+    } else {
+        MatchSpotOrderV7Outcome::PartiallyFilled {
+            taker_order_after: after,
+            maker_orders_after: makers,
+            created_trades: trades,
+        }
     };
     Ok((next, outcome))
 }
