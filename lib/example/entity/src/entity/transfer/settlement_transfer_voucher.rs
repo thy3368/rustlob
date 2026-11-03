@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, EntityUseCaseApiSurface,
-    FieldDiff, FinancialClassification, FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff,
+    FinancialClassification, FourColorArchetype,
 };
 use serde::{Deserialize, Serialize};
 
@@ -676,10 +676,6 @@ impl Entity for SettlementTransferVoucher {
 
     fn financial_classification() -> FinancialClassification {
         FinancialClassification::AccountingVoucher
-    }
-
-    fn use_case_api_surface() -> EntityUseCaseApiSurface {
-        EntityUseCaseApiSurface::MinimalBusinessApi
     }
 
     fn lsn(&self) -> u64 {

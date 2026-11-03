@@ -241,9 +241,6 @@ impl Entity for SpotOrderV7 {
     fn aggregate_role() -> common_entity::AggregateRole {
         common_entity::AggregateRole::AggregateRoot
     }
-    fn use_case_api_surface() -> common_entity::EntityUseCaseApiSurface {
-        common_entity::EntityUseCaseApiSurface::MinimalBusinessApi
-    }
     fn replay_field_type(name: &str) -> u8 {
         if matches!(name, "updated_at" | "version") { 1 } else { 0 }
     }

@@ -29,7 +29,6 @@ Before writing or reviewing tests, read the relevant shared constraints from the
 
 - Entity behavior BDD:
   - `.agents/skills/shared/entity_method_constraints.md`
-  - `.agents/skills/shared/entity_use_case_api_policy.md`
 - Use case BDD:
   - `.agents/skills/shared/use_case_entity_constraints.md`
   - `.agents/skills/shared/changes_pair_first_rule.md`

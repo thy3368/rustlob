@@ -69,16 +69,12 @@
 - `four_color_archetype() -> FourColorArchetype`
 - `mutation_model() -> EntityMutationModel`
 - `aggregate_role() -> AggregateRole`
-- `use_case_api_surface() -> EntityUseCaseApiSurface`
-- `use_case_api_policy() -> EntityUseCaseApiPolicy`
 
 ### Default Values And Override Semantics
 
 - `four_color_archetype()` 默认是 `FourColorArchetype::Unclassified`
 - `mutation_model()` 默认是 `EntityMutationModel::VersionedMutable`
 - `aggregate_role()` 默认是 `AggregateRole::Unclassified`
-- `use_case_api_surface()` 默认是 `EntityUseCaseApiSurface::LegacyUnconstrained`
-- `use_case_api_policy()` 由 `use_case_api_surface()` 映射得出
 
 `entity.rs` 对 override 语义有直接说明：
 
@@ -134,4 +130,3 @@
 若后续仍需要这些规范，应放到独立 architecture policy 文档，而不是继续写进 shared
 constraints。当前 `Entity` 对 `use case` API 收敛的架构政策落点见：
 
-- `.agents/skills/shared/entity_use_case_api_policy.md`

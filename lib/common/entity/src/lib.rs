@@ -9,8 +9,8 @@ mod use_case;
 
 pub use entity_v2::Fsm;
 pub use entity_v2::entity::{
-    AggregateRole, Entity, EntityLifecycle, EntityMutationModel, EntityUseCaseApiPolicy,
-    EntityUseCaseApiSurface, FieldDiff, FinancialClassification, FourColorArchetype,
+    AggregateRole, Entity, EntityLifecycle, EntityMutationModel, FieldDiff,
+    FinancialClassification, FourColorArchetype,
 };
 pub use entity_v2::entity_field_change::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayEventFieldParseError,

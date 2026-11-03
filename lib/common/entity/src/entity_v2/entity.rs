@@ -153,63 +153,6 @@ impl AggregateRole {
     }
 }
 
-//todo remove
-/// entity 对 use case 暴露 API 面的治理强度。
-///
-/// 该分类不直接限制 Rust 语法层面的 `pub fn`，而是为 architecture policy 与静态 checker
-/// 提供显式 opt-in 信号。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EntityUseCaseApiSurface {
-    /// 旧实体默认值，不对 use case API 面做强治理。
-    LegacyUnconstrained,
-    /// 对 use case 只暴露最小高语义业务 API。
-    MinimalBusinessApi,
-}
-
-impl EntityUseCaseApiSurface {
-    /// 返回稳定的治理标签字符串。
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::LegacyUnconstrained => "legacy_unconstrained",
-            Self::MinimalBusinessApi => "minimal_business_api",
-        }
-    }
-}
-
-//todo remove
-/// entity 面向 use case 暴露 API 的治理条款映射。
-///
-/// 该结构是工程元数据落点；真正的执行仍依赖独立 checker 与 reviewer judgement。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct EntityUseCaseApiPolicy {
-    /// 是否允许把原始内部集合直接公开给 use case。
-    pub allow_raw_child_collections: bool,
-    /// 是否允许把宽构造器作为 use case 主入口公开。
-    pub allow_public_wide_constructor: bool,
-    /// 是否要求 use case-facing 查询优先暴露高语义业务结论。
-    pub require_high_semantic_queries: bool,
-}
-
-impl EntityUseCaseApiPolicy {
-    /// 旧实体或未治理实体的默认政策。
-    pub const fn legacy_unconstrained() -> Self {
-        Self {
-            allow_raw_child_collections: true,
-            allow_public_wide_constructor: true,
-            require_high_semantic_queries: false,
-        }
-    }
-
-    /// 最小高语义业务 API 面的政策。
-    pub const fn minimal_business_api() -> Self {
-        Self {
-            allow_raw_child_collections: false,
-            allow_public_wide_constructor: false,
-            require_high_semantic_queries: true,
-        }
-    }
-}
-
 /// 可复用的字段级 diff 契约。
 ///
 /// 纯值对象可以只实现该 trait 来复用 [`EntityFieldChange`] 表达字段变化；
@@ -319,39 +262,6 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
         Self: Sized,
     {
         AggregateRole::Unclassified
-    }
-
-    /// 返回该实体面向 use case 的 API 收敛治理强度。
-    ///
-    /// 默认值是 [`EntityUseCaseApiSurface::LegacyUnconstrained`]，用于兼容旧实体与未治理实体。
-    /// 若实体希望对 use case 只暴露最小高语义业务 API，应 override 为
-    /// [`EntityUseCaseApiSurface::MinimalBusinessApi`]，再由独立 checker 执行静态治理。
-    /// 其目标之一，是避免 use case 绕过聚合根，直接把聚合成员或原始成员材料当作主业务入口。
-    #[inline]
-    fn use_case_api_surface() -> EntityUseCaseApiSurface
-    where
-        Self: Sized,
-    {
-        EntityUseCaseApiSurface::LegacyUnconstrained
-    }
-
-    /// 返回由 `use_case_api_surface()` 推导出的 use case API 治理政策。
-    ///
-    /// 该元数据只表达工程治理配置，不会自动阻止额外 `pub fn` 暴露。
-    /// 当 policy 收敛到最小业务 API 面时，目标之一同样是防止 use case 绕过聚合根直连成员材料。
-    #[inline]
-    fn use_case_api_policy() -> EntityUseCaseApiPolicy
-    where
-        Self: Sized,
-    {
-        match Self::use_case_api_surface() {
-            EntityUseCaseApiSurface::LegacyUnconstrained => {
-                EntityUseCaseApiPolicy::legacy_unconstrained()
-            }
-            EntityUseCaseApiSurface::MinimalBusinessApi => {
-                EntityUseCaseApiPolicy::minimal_business_api()
-            }
-        }
     }
 
     fn lsn(&self) -> u64;

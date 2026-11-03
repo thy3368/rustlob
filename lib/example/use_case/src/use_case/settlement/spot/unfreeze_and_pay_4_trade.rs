@@ -1,7 +1,7 @@
-use common_entity::{LogEntry, StateMachineV2};
+use common_entity::{Fsm, LogEntry, StateMachineV2};
 use example_core_entity::spot::spot_order_primitives::OrderSide;
 use example_core_entity::spot::spot_trade_v3::{
-    SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3,
+    SpotTradeEvent, SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3,
 };
 use example_core_entity::{BalanceV2, BalanceV2Error, Open};
 use serde::{Deserialize, Serialize};
@@ -203,7 +203,8 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let amounts = given_state.trade.settlement_amounts()?;
         let mut trade_after = given_state.trade.clone();
-        trade_after.mark_settled()?;
+        Fsm::apply(&mut trade_after, SpotTradeEvent::Settle)
+            .map_err(|_| UnFreezeSpotOrderV2Error::DuplicateSettlement)?;
         let mut buyer_base_balance_after = given_state.buyer_base_balance.clone();
         let mut buyer_quote_balance_after = given_state.buyer_quote_balance.clone();
         let mut seller_base_balance_after = given_state.seller_base_balance.clone();
