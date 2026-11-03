@@ -37,12 +37,13 @@ mod tests {
     use std::fmt;
     use std::sync::{Arc, Mutex};
 
-    use common_entity::{EntityReplayableEvent, stable_string_entity_id};
+    use common_entity::{stable_string_entity_id, EntityReplayableEvent};
+    use example_core_entity::common::identifiers::OrderId;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
-        ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderId,
-        OrderSide, OrderTif, OrderType, SpotBlockAppliedChanges, SpotBlockCommand,
-        SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotOrderV2,
+        ModifySpotOrderV2Cmd, ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, OrderSide,
+        OrderTif, OrderType, SpotBlockAppliedChanges, SpotBlockCommand, SpotBlockItemError,
+        SpotBlockItemResult, SpotBlockState, SpotOrderV2,
     };
 
     use super::*;

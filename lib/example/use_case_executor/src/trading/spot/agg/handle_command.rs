@@ -67,8 +67,9 @@ pub fn handler(commands: Vec<LogEntry<SpotBlockCommand>>) -> Vec<SpotBlockComman
 #[cfg(test)]
 mod tests {
     use common_entity::ExecutionError;
+    use example_core_entity::common::identifiers::OrderId;
     use example_core_use_case::{
-        CancelSpotOrderV2Lookup, ModifySpotOrderV2OrderType, OrderId, PlaceOnlySpotOrderV2OrderCmd,
+        CancelSpotOrderV2Lookup, ModifySpotOrderV2OrderType, PlaceOnlySpotOrderV2OrderCmd,
         PlaceOnlySpotOrderV2OrderType,
     };
     use example_outbound_adapter::{

@@ -227,3 +227,123 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use common_entity::{LogEntrySequencer, StateMachineV2};
+    use example_core_entity::account::coin::Coin;
+    use example_core_entity::account::symbol::Symbol;
+    use example_core_entity::entity::common::UserId;
+    use example_core_entity::entity::common::common_trade::TradeBase;
+    use rust_decimal::Decimal;
+
+    use super::*;
+
+    const LOGICAL_TS: u64 = 500;
+
+    fn balance(
+        party: u64,
+        account: u64,
+        coin: Coin,
+        available: i64,
+        frozen: i64,
+    ) -> BalanceV2<Open> {
+        BalanceV2::new(
+            party,
+            account,
+            u64::from(coin.index()),
+            Decimal::from(available),
+            Decimal::from(frozen),
+            4,
+            100,
+        )
+    }
+
+    fn state(side: OrderSide, seller_fee: i64) -> UnFreezeSpotOrderV2State {
+        let (buyer, seller) = match side {
+            OrderSide::Buy => (10, 20),
+            OrderSide::Sell => (20, 10),
+        };
+        UnFreezeSpotOrderV2State {
+            trade: SpotTradeV3 {
+                comon_trade: TradeBase {
+                    trade_id: 7,
+                    symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+                    taker_user: UserId(10),
+                    maker_user: UserId(20),
+                    taker_order_id: 1,
+                    maker_order_id: 2,
+                    taker_side: side,
+                    price: Decimal::from(2),
+                    size: Decimal::from(3),
+                    taker_fee: if side == OrderSide::Buy {
+                        Decimal::ONE
+                    } else {
+                        Decimal::from(seller_fee)
+                    },
+                    maker_fee: if side == OrderSide::Buy {
+                        Decimal::from(seller_fee)
+                    } else {
+                        Decimal::from(2)
+                    },
+                    created_at: 0,
+                    updated_at: 0,
+                    version: 0,
+                },
+                settlement_status: SpotTradeSettlementStatus::Unsettled,
+            },
+            buyer_base_balance: balance(buyer, buyer, Coin::BTC, 10, 0),
+            buyer_quote_balance: balance(buyer, buyer, Coin::USDT, 10, 20),
+            seller_base_balance: balance(seller, seller, Coin::BTC, 10, 20),
+            seller_quote_balance: balance(seller, seller, Coin::USDT, 10, 0),
+        }
+    }
+
+    fn command() -> LogEntry<UnFreezeSpotOrderV2Cmd> {
+        LogEntrySequencer::from_metadata(
+            1,
+            LOGICAL_TS,
+            1,
+            1,
+            UnFreezeSpotOrderV2Cmd { trade_id: 7 },
+        )
+    }
+
+    #[test]
+    fn settles_taker_buy_and_preserves_inputs() {
+        let given = state(OrderSide::Buy, 2);
+        let original = given.clone();
+        let changed =
+            UnFreeze4SpotOrderV2UseCase.compute_state_changed_only(&command(), &given).unwrap();
+
+        assert_eq!(given, original);
+        assert_eq!(changed.trade_after.settlement_status, SpotTradeSettlementStatus::Settled);
+        assert_eq!(changed.buyer_quote_balance_after.frozen(), Decimal::from(13));
+        assert_eq!(changed.buyer_base_balance_after.available(), Decimal::from(13));
+        assert_eq!(changed.seller_base_balance_after.frozen(), Decimal::from(17));
+        assert_eq!(changed.seller_quote_balance_after.available(), Decimal::from(14));
+        for balance in [
+            &changed.buyer_quote_balance_after,
+            &changed.buyer_base_balance_after,
+            &changed.seller_base_balance_after,
+            &changed.seller_quote_balance_after,
+        ] {
+            assert_eq!(balance.version(), 5);
+            assert_eq!(balance.record().updated_at(), LOGICAL_TS);
+        }
+    }
+
+    #[test]
+    fn taker_sell_maps_parties_and_zero_receipt_does_not_touch_seller_quote() {
+        let given = state(OrderSide::Sell, 6);
+        let changed =
+            UnFreeze4SpotOrderV2UseCase.compute_state_changed_only(&command(), &given).unwrap();
+
+        assert_eq!(changed.buyer_base_balance_after.party_id(), 20);
+        assert_eq!(changed.seller_base_balance_after.party_id(), 10);
+        assert_eq!(changed.buyer_quote_balance_after.frozen(), Decimal::from(12));
+        assert_eq!(changed.seller_quote_balance_after.available(), Decimal::from(10));
+        assert_eq!(changed.seller_quote_balance_after.version(), 4);
+        assert_eq!(changed.seller_quote_balance_after.record().updated_at(), 100);
+    }
+}

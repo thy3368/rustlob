@@ -40,10 +40,10 @@ mod tests {
     use example_core_entity::spot::spot_order_v2::OrderGroupRelation;
     use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
     use example_core_use_case::{
-        CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase, OrderId,
+        CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
     };
     use rust_decimal::Decimal;
-
+    use example_core_entity::common::identifiers::OrderId;
     use super::*;
 
     #[derive(Debug, Clone, PartialEq, Eq)]

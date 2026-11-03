@@ -1,9 +1,10 @@
 use common_entity::{ExecutionCommandSpec, ExecutionError, LogEntry};
 use example_core_use_case::{
-    ModifySpotOrderV2Cmd, ModifySpotOrderV2OrderType, ModifySpotOrderV2UseCase, OrderId,
+    ModifySpotOrderV2Cmd, ModifySpotOrderV2OrderType, ModifySpotOrderV2UseCase,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use example_core_use_case::common::identifiers::OrderId;
 pub use use_case_executor::trading::spot::modify_spot_order_v2_executor::execute_modify_spot_order_v2;
 
 use crate::bootstrap::on_command::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
