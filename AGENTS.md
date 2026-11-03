@@ -26,4 +26,12 @@
 - 发布前门控包含 API 兼容性、性能、完整覆盖率和上线证据审查。
 - Git hook 可以被本地绕过；CI 结果是合并的最终准入条件。
 
+## MUTATION TESTING 经验
+
+- 针对单个 use case 文件执行变异测试时，优先限定 package、file 和测试过滤条件，减少 workspace 中无关测试的影响：
+  `cargo mutants --package <crate> --file '<path>' --no-shuffle --baseline skip --cargo-test-arg '<test-filter>'`。
+- 首次运行应保留默认 baseline，确认完整 crate 测试状态；如果 workspace 中已有与目标文件无关的失败，不能把这些失败误判为目标变异问题。此时记录失败测试，并使用 `--baseline skip` 配合目标测试过滤器继续定位。
+- 每个存活 mutant 都应补充针对业务边界的行为测试，不修改生产逻辑迎合 mutant。尤其要覆盖比较运算的边界值，例如 `< 0` 必须同时测试负数、零和正数，避免 `<= 0` 这类变异存活。
+- 变异测试完成后应区分 `caught`、`missed` 和 `unviable`：`missed` 必须补测试；`unviable` 通常是编译不可行的变异，需要记录数量和原因；完整 crate 的既有失败应单独报告。
+
 

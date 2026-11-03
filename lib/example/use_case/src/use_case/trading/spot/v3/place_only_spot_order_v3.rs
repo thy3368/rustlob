@@ -510,6 +510,18 @@ mod tests {
         }
     }
 
+    #[test]
+    fn accepts_zero_and_positive_taker_fee() {
+        for fee in [Decimal::ZERO, Decimal::new(1, 4)] {
+            let mut candidate = order(1);
+            candidate.taker_max_fee = fee;
+            assert_eq!(
+                PlaceOnlySpotOrderV3UseCase.check_command(&log(PlaceOnlySpotOrderV3Cmd::Single(candidate))),
+                Ok(())
+            );
+        }
+    }
+
     #[rstest]
     #[case("empty", PlaceOnlySpotOrderV3Error::ChildrenRequired)]
     #[case("parent_trigger", PlaceOnlySpotOrderV3Error::ParentMustBeLimit)]
