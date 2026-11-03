@@ -5,7 +5,7 @@ use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::FundingRate;
 use example_core_entity::perp::fund::funding::UserFunding;
 use example_core_entity::perp::trade::perp_position_v2::{MarginModeV2, PerpPositionV3};
-use example_core_entity::{BalanceV2, BalanceV2Error};
+use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event};
 use rust_decimal::Decimal;
 use thiserror::Error;
 
@@ -205,12 +205,20 @@ fn derive_changed_balances(
         let before = balance.clone();
         let mut after = before.clone();
         if delta.is_sign_positive() {
-            after.credit_available(*delta, cmd.logical_ts()).map_err(map_balance_error)?;
+            common_entity::Fsm::apply(
+                &mut after,
+                BalanceV2Event::CreditAvailable { amount: *delta, timestamp: cmd.logical_ts() },
+            )
+            .map_err(map_balance_error)?;
         } else {
             let amount = Decimal::ZERO
                 .checked_sub(*delta)
                 .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-            after.debit_available(amount, cmd.logical_ts()).map_err(map_balance_error)?;
+            common_entity::Fsm::apply(
+                &mut after,
+                BalanceV2Event::DebitAvailable { amount, timestamp: cmd.logical_ts() },
+            )
+            .map_err(map_balance_error)?;
         }
         changed.push(after);
     }

@@ -4,7 +4,7 @@ use common_entity::{
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
-use example_core_entity::{BalanceV2, BalanceV2Error, Open, SpotAmountConversionError};
+use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event, SpotAmountConversionError};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -17,19 +17,19 @@ pub struct CancelSpotOrderV3Cmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3State {
     pub order: SpotOrderV3Any,
-    pub balance: BalanceV2<Open>,
+    pub balance: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3AfterChanges {
     pub canceled_order: SpotOrderV3Any,
-    pub balance: BalanceV2<Open>,
+    pub balance: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV3Any>,
-    pub updated_balance: UpdatedEntityPair<example_core_entity::BalanceV2Record>,
+    pub updated_balance: UpdatedEntityPair<BalanceV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -141,7 +141,14 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
             return Err(CancelSpotOrderV3Error::AssetMismatch);
         }
         let mut balance = given_state.balance.clone();
-        balance.unfreeze_and_pay(requirement.amount(), Decimal::ZERO, cmd.logical_ts())?;
+        common_entity::Fsm::apply(
+            &mut balance,
+            BalanceV2Event::UnfreezeAndPay {
+                unfreeze_amount: requirement.amount(),
+                payment_amount: Decimal::ZERO,
+                timestamp: cmd.logical_ts(),
+            },
+        )?;
         Ok(CancelSpotOrderV3AfterChanges {
             canceled_order: SpotOrderV3Any::Canceled(canceled_order),
             balance,
@@ -158,10 +165,7 @@ impl StateMachineV2Diff for CancelSpotOrderV3UseCase {
     ) -> Result<Self::StateDiff, Self::Error> {
         Ok(CancelSpotOrderV3Changes {
             updated_order: UpdatedEntityPair::new(given_state.order, after.canceled_order),
-            updated_balance: UpdatedEntityPair::new(
-                given_state.balance.into_record(),
-                after.balance.into_record(),
-            ),
+            updated_balance: UpdatedEntityPair::new(given_state.balance, after.balance),
         })
     }
 }

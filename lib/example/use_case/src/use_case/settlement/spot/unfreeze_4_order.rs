@@ -1,6 +1,6 @@
 use common_entity::{LogEntry, StateMachineV2};
 use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
-use example_core_entity::{BalanceV2, BalanceV2Error, Open, SpotAmountConversionError};
+use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event, SpotAmountConversionError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -12,12 +12,12 @@ pub struct UnFreezeSpotOrderV2Cmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnFreezeSpotOrderV2State {
     pub order: SpotOrderV3Any,
-    pub balance: BalanceV2<Open>,
+    pub balance: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnFreezeSpotOrderV2AfterChanges {
-    pub balance_after: BalanceV2<Open>,
+    pub balance_after: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -70,7 +70,10 @@ impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
         };
         let requirement = pending_order.freeze_requirement()?;
         let mut balance_after = given_state.balance.clone();
-        balance_after.freeze(requirement.amount(), cmd.logical_ts())?;
+        common_entity::Fsm::apply(
+            &mut balance_after,
+            BalanceV2Event::Freeze { amount: requirement.amount(), timestamp: cmd.logical_ts() },
+        )?;
         Ok(UnFreezeSpotOrderV2AfterChanges { balance_after })
     }
 }

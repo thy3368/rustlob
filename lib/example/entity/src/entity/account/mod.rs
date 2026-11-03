@@ -15,7 +15,7 @@ pub use balance_ledger_reason::BalanceLedgerReason;
 pub use balance_ledger_v2::{
     BalanceLedgerOperation, BalanceLedgerV2 as BalanceLedgerEntry, BalanceLedgerV2,
 };
-pub use balance_v2::{BalanceV2, BalanceV2Error, BalanceV2Record, BalanceV2Status, Closed, Open};
+pub use balance_v2::{BalanceV2, BalanceV2Error, BalanceV2Event, BalanceV2Status};
 pub use spot_account::{AccountStatus, SpotAccount};
 
 pub use crate::entity::transfer::settlement_transfer_voucher::{

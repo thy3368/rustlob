@@ -3,7 +3,7 @@ use example_core_entity::spot::spot_order_primitives::OrderSide;
 use example_core_entity::spot::spot_trade_v3::{
     SpotTradeEvent, SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3,
 };
-use example_core_entity::{BalanceV2, BalanceV2Error, Open};
+use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -91,19 +91,19 @@ pub struct UnFreezeSpotOrderV2Cmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnFreezeSpotOrderV2State {
     pub trade: SpotTradeV3,
-    pub buyer_base_balance: BalanceV2<Open>,
-    pub buyer_quote_balance: BalanceV2<Open>,
-    pub seller_base_balance: BalanceV2<Open>,
-    pub seller_quote_balance: BalanceV2<Open>,
+    pub buyer_base_balance: BalanceV2,
+    pub buyer_quote_balance: BalanceV2,
+    pub seller_base_balance: BalanceV2,
+    pub seller_quote_balance: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnFreezeSpotOrderV2AfterChanges {
     pub trade_after: SpotTradeV3,
-    pub buyer_base_balance_after: BalanceV2<Open>,
-    pub buyer_quote_balance_after: BalanceV2<Open>,
-    pub seller_base_balance_after: BalanceV2<Open>,
-    pub seller_quote_balance_after: BalanceV2<Open>,
+    pub buyer_base_balance_after: BalanceV2,
+    pub buyer_quote_balance_after: BalanceV2,
+    pub seller_base_balance_after: BalanceV2,
+    pub seller_quote_balance_after: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -210,12 +210,35 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
         let mut seller_base_balance_after = given_state.seller_base_balance.clone();
         let mut seller_quote_balance_after = given_state.seller_quote_balance.clone();
 
-        buyer_quote_balance_after.debit_frozen(amounts.buyer_quote_payment, cmd.logical_ts())?;
-        buyer_base_balance_after.credit_available(amounts.base_amount, cmd.logical_ts())?;
-        seller_base_balance_after.debit_frozen(amounts.base_amount, cmd.logical_ts())?;
+        Fsm::apply(
+            &mut buyer_quote_balance_after,
+            BalanceV2Event::DebitFrozen {
+                amount: amounts.buyer_quote_payment,
+                timestamp: cmd.logical_ts(),
+            },
+        )?;
+        Fsm::apply(
+            &mut buyer_base_balance_after,
+            BalanceV2Event::CreditAvailable {
+                amount: amounts.base_amount,
+                timestamp: cmd.logical_ts(),
+            },
+        )?;
+        Fsm::apply(
+            &mut seller_base_balance_after,
+            BalanceV2Event::DebitFrozen {
+                amount: amounts.base_amount,
+                timestamp: cmd.logical_ts(),
+            },
+        )?;
         if amounts.seller_quote_receipt > rust_decimal::Decimal::ZERO {
-            seller_quote_balance_after
-                .credit_available(amounts.seller_quote_receipt, cmd.logical_ts())?;
+            Fsm::apply(
+                &mut seller_quote_balance_after,
+                BalanceV2Event::CreditAvailable {
+                    amount: amounts.seller_quote_receipt,
+                    timestamp: cmd.logical_ts(),
+                },
+            )?;
         }
 
         Ok(UnFreezeSpotOrderV2AfterChanges {
@@ -241,13 +264,7 @@ mod tests {
 
     const LOGICAL_TS: u64 = 500;
 
-    fn balance(
-        party: u64,
-        account: u64,
-        coin: Coin,
-        available: i64,
-        frozen: i64,
-    ) -> BalanceV2<Open> {
+    fn balance(party: u64, account: u64, coin: Coin, available: i64, frozen: i64) -> BalanceV2 {
         BalanceV2::new(
             party,
             account,
@@ -329,7 +346,7 @@ mod tests {
             &changed.seller_quote_balance_after,
         ] {
             assert_eq!(balance.version(), 5);
-            assert_eq!(balance.record().updated_at(), LOGICAL_TS);
+            assert_eq!(balance.updated_at(), LOGICAL_TS);
         }
     }
 
@@ -344,6 +361,6 @@ mod tests {
         assert_eq!(changed.buyer_quote_balance_after.frozen(), Decimal::from(12));
         assert_eq!(changed.seller_quote_balance_after.available(), Decimal::from(10));
         assert_eq!(changed.seller_quote_balance_after.version(), 4);
-        assert_eq!(changed.seller_quote_balance_after.record().updated_at(), 100);
+        assert_eq!(changed.seller_quote_balance_after.updated_at(), 100);
     }
 }
