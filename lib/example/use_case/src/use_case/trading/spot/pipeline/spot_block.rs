@@ -4,9 +4,10 @@ use common_entity::{
     Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     StateMachineV2Diff,
 };
+use example_core_entity::common::identifiers::OrderId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use example_core_entity::common::identifiers::OrderId;
+
 use crate::entity::{Balance, OrderSide, OrderType, SpotOrderStatus, SpotOrderV2};
 use crate::{
     ActivateMatchSpotOrderV2Changes, ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error,

@@ -1,3 +1,4 @@
+use common_entity::Fsm;
 use rust_decimal::Decimal;
 use thiserror::Error;
 
@@ -25,9 +26,30 @@ pub enum SpotTradeSettlementError {
     SellerFeeExceedsProceeds,
 }
 
+/// 现货成交的结算生命周期状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpotTradeSettlementStatus {
+    Unsettled,
+    Settled,
+}
+
+/// 现货成交支持的生命周期事件。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpotTradeEvent {
+    Settle,
+}
+
+/// 现货成交状态迁移错误。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum SpotTradeStateError {
+    #[error("spot trade settlement was already completed")]
+    AlreadySettled,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotTradeV3 {
     pub comon_trade: TradeBase,
+    pub settlement_status: SpotTradeSettlementStatus,
 }
 
 impl SpotTradeV3 {
@@ -54,6 +76,9 @@ impl SpotTradeV3 {
             OrderSide::Buy => (trade.taker_fee, trade.maker_fee),
             OrderSide::Sell => (trade.maker_fee, trade.taker_fee),
         };
+        if seller_fee > quote_notional {
+            return Err(SpotTradeSettlementError::SellerFeeExceedsProceeds);
+        }
         let buyer_quote_payment = quote_notional
             .checked_add(buyer_fee)
             .ok_or(SpotTradeSettlementError::ArithmeticOverflow)?;
@@ -79,11 +104,37 @@ impl SpotTradeV3 {
     }
 }
 
+impl Fsm for SpotTradeV3 {
+    type State = SpotTradeSettlementStatus;
+    type Event = SpotTradeEvent;
+    type Output = ();
+    type Error = SpotTradeStateError;
+
+    fn transition(
+        &mut self,
+        event: Self::Event,
+    ) -> Result<(Self::State, Self::Output), Self::Error> {
+        match (self.settlement_status, event) {
+            (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle) => {
+                self.settlement_status = SpotTradeSettlementStatus::Settled;
+                Ok((self.settlement_status, ()))
+            }
+            (SpotTradeSettlementStatus::Settled, SpotTradeEvent::Settle) => {
+                Err(SpotTradeStateError::AlreadySettled)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use common_entity::Fsm;
     use rust_decimal::Decimal;
 
-    use super::{SpotTradeSettlementError, SpotTradeV3};
+    use super::{
+        SpotTradeEvent, SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeStateError,
+        SpotTradeV3,
+    };
     use crate::OrderSide;
     use crate::account::coin::Coin;
     use crate::account::symbol::Symbol;
@@ -108,6 +159,7 @@ mod tests {
                 updated_at: 0,
                 version: 0,
             },
+            settlement_status: SpotTradeSettlementStatus::Unsettled,
         }
     }
 
@@ -133,5 +185,19 @@ mod tests {
             trade(OrderSide::Buy, 1, 7).settlement_amounts(),
             Err(SpotTradeSettlementError::SellerFeeExceedsProceeds)
         );
+    }
+
+    #[test]
+    fn apply_transitions_directly_and_preserves_state_on_error() {
+        let mut trade = trade(OrderSide::Buy, 1, 2);
+
+        Fsm::apply(&mut trade, SpotTradeEvent::Settle).unwrap();
+        assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
+
+        assert_eq!(
+            Fsm::apply(&mut trade, SpotTradeEvent::Settle),
+            Err(SpotTradeStateError::AlreadySettled)
+        );
+        assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
     }
 }

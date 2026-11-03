@@ -87,6 +87,39 @@ pub struct OrderBase {
     pub version: u64,
 }
 
+// ironstate 的图分析会为携带数据的状态构造一个代表值。
+impl Default for OrderBase {
+    fn default() -> Self {
+        Self {
+            owner: UserId(0),
+            order_id: 0,
+            symbol: Symbol::new(
+                0,
+                crate::account::coin::Coin::BTC,
+                crate::account::coin::Coin::USDT,
+            ),
+            side: OrderSide::Buy,
+            limit_px: Decimal::ONE,
+            size: Decimal::ONE,
+            orig_size: Decimal::ONE,
+            execution: CommonOrderExecution::Limit,
+            tif: OrderTif::Gtc,
+            trigger: CommonOrderTrigger::None,
+            trigger_px: None,
+            group_relation: OrderGroupRelation::Standalone,
+            is_position_tpsl: false,
+            reduce_only: false,
+            status: SpotOrderStatus::Pending,
+            buy_quote_fee_reserve_limit: Decimal::ZERO,
+            buy_quote_fee_reserve_consumed: Decimal::ZERO,
+            cloid: None,
+            created_at: 0,
+            updated_at: 0,
+            version: 0,
+        }
+    }
+}
+
 impl OrderBase {
     pub fn effective_tif(&self) -> OrderTif {
         match self.execution {

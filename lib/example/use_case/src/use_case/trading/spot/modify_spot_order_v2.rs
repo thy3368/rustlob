@@ -4,9 +4,10 @@ use common_entity::{
     Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     StateMachineV2Diff, UpdatedEntityPair,
 };
+use example_core_entity::common::identifiers::OrderId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use example_core_entity::common::identifiers::OrderId;
+
 use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::common_entity::account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2,

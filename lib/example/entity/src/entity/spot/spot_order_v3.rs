@@ -815,6 +815,7 @@ fn execute_match(
             updated_at: input.timestamp,
             version: 0,
         },
+        settlement_status: super::spot_trade_v3::SpotTradeSettlementStatus::Unsettled,
     };
     Ok((next_taker, next_maker, trade))
 }

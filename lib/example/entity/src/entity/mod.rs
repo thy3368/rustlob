@@ -59,9 +59,9 @@ pub use perp::trade::hyperliquid_perp_trade::{
 };
 pub use perp::trade::perp_order_v3::PerpOrderV3;
 pub use perp::trade::perp_position::{
-    HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode, HyperliquidPerpPositionError,
-    HyperliquidPerpPositionLeverageOutcome, HyperliquidPerpPositionStatus,
-    HyperliquidPerpPositionTradeOutcome, PerpPosition, required_position_margin,
+    required_position_margin, HyperliquidPerpFundingDirection, HyperliquidPerpMarginMode,
+    HyperliquidPerpPositionError, HyperliquidPerpPositionLeverageOutcome,
+    HyperliquidPerpPositionStatus, HyperliquidPerpPositionTradeOutcome, PerpPosition,
 };
 pub use perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 pub use reservation::{
@@ -71,7 +71,6 @@ pub use reservation::{
 use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
 pub use spot::spot_order_v3::{SpotOrderStage, SpotOrderV3, SpotOrderV3Any};
-pub use spot::spot_order_v5::{SpotOrderV5, SpotOrderV5Error, MatchSpotOrderV5Input, MatchSpotOrderV5Result, TriggerSpotOrderV5Result};
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
     OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderStatusReason,
