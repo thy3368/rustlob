@@ -160,17 +160,9 @@ pub enum ExchangeActionWire {
         payload: JsonObjectWire,
     },
     #[serde(rename = "cancel")]
-    Cancel {
-        cancels: Vec<ExchangeCancelWire>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        f: Option<bool>,
-    },
+    Cancel { cancels: Vec<ExchangeCancelWire> },
     #[serde(rename = "cancelByCloid")]
-    CancelByCloid {
-        cancels: Vec<ExchangeCancelByCloidWire>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        f: Option<bool>,
-    },
+    CancelByCloid { cancels: Vec<ExchangeCancelByCloidWire> },
     #[serde(rename = "claimRewards")]
     ClaimRewards {
         #[serde(flatten)]

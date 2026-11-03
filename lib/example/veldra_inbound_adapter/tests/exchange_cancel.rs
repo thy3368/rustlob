@@ -39,14 +39,6 @@ use serde_json::{Value, json};
         "error": "Invalid `action.cancels[].o`. Expected a positive numeric oid."
     })
 )]
-#[case::false_fast_flag(
-    false_fast_flag_cancel_request_value(),
-    StatusCode::BAD_REQUEST,
-    json!({
-        "status": "err",
-        "error": "Invalid `action.f`. Omit `f` unless fast cancel is enabled."
-    })
-)]
 #[actix_web::test]
 async fn cancel_http_contract_matches_public_wire_shape(
     #[case] payload: Value,
@@ -140,22 +132,6 @@ fn invalid_order_id_cancel_request_value() -> Value {
         "action": {
             "type": "cancel",
             "cancels": [{ "a": 10000, "o": 0 }]
-        },
-        "nonce": 1710000000000u64,
-        "signature": {
-            "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
-            "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
-            "v": 27
-        }
-    })
-}
-
-fn false_fast_flag_cancel_request_value() -> Value {
-    json!({
-        "action": {
-            "type": "cancel",
-            "cancels": [{ "a": 10000, "o": 77738308 }],
-            "f": false
         },
         "nonce": 1710000000000u64,
         "signature": {

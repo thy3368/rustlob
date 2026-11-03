@@ -70,13 +70,20 @@ pub struct BalanceV2Record {
     party_id: u64,
     account_id: u64,
     /// 可能是coin
+    #[serde(rename = "asset_id", alias = "coin_idx")]
     coin_idx: u64,
 
     available: Decimal,
     frozen: Decimal,
-    version: u64,
+
     #[serde(default)]
     status: BalanceV2Status,
+    version: u64,
+    #[serde(default)]
+    pub created_at: u64,
+    /// 订单最后更新时间，单位为 Unix 纳秒。
+    #[serde(default)]
+    pub updated_at: u64,
 }
 
 impl BalanceV2Record {
@@ -108,6 +115,16 @@ impl BalanceV2Record {
     /// 返回实体版本。
     pub fn version(&self) -> u64 {
         self.version
+    }
+
+    /// 返回余额创建时间（Unix 纳秒）。
+    pub fn created_at(&self) -> u64 {
+        self.created_at
+    }
+
+    /// 返回余额最后更新时间（Unix 纳秒）。
+    pub fn updated_at(&self) -> u64 {
+        self.updated_at
     }
 
     /// 返回持久化生命周期状态。
@@ -178,20 +195,23 @@ impl BalanceV2<Open> {
     pub fn new(
         party_id: u64,
         account_id: u64,
-        asset_id: u64,
+        coin_idx: u64,
         available: Decimal,
         frozen: Decimal,
         version: u64,
+        created_at: u64,
     ) -> Self {
         Self {
             record: BalanceV2Record {
                 party_id,
                 account_id,
-                coin_idx: asset_id,
+                coin_idx,
                 available,
                 frozen,
                 version,
                 status: BalanceV2Status::Open,
+                created_at,
+                updated_at: created_at,
             },
             stage: PhantomData,
         }
@@ -200,7 +220,7 @@ impl BalanceV2<Open> {
     /// 可 BDD 规格化的聚合根行为：冻结可用余额。
     ///
     /// 将指定金额从可用余额转入冻结余额；校验失败时余额和版本保持不变。
-    pub fn freeze(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
+    pub fn freeze(&mut self, amount: Decimal, timestamp: u64) -> Result<(), BalanceV2Error> {
         if self.record.status != BalanceV2Status::Open {
             return Err(BalanceV2Error::BalanceClosed);
         }
@@ -221,6 +241,7 @@ impl BalanceV2<Open> {
         self.record.available = available;
         self.record.frozen = frozen;
         self.record.version = version;
+        self.record.updated_at = timestamp;
         Ok(())
     }
 
@@ -232,6 +253,7 @@ impl BalanceV2<Open> {
         &mut self,
         unfreeze_amount: Decimal,
         payment_amount: Decimal,
+        timestamp: u64,
     ) -> Result<(), BalanceV2Error> {
         if self.record.status != BalanceV2Status::Open {
             return Err(BalanceV2Error::BalanceClosed);
@@ -262,11 +284,12 @@ impl BalanceV2<Open> {
         self.record.available = available;
         self.record.frozen = frozen;
         self.record.version = version;
+        self.record.updated_at = timestamp;
         Ok(())
     }
 
     /// 将成交消耗额从冻结余额中扣除，不释放订单的剩余冻结额。//todo 可用 unfreeze_and_pay平替
-    pub fn debit_frozen(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
+    pub fn debit_frozen(&mut self, amount: Decimal, timestamp: u64) -> Result<(), BalanceV2Error> {
         if self.record.status != BalanceV2Status::Open {
             return Err(BalanceV2Error::BalanceClosed);
         }
@@ -283,11 +306,16 @@ impl BalanceV2<Open> {
             self.record.version.checked_add(1).ok_or(BalanceV2Error::ArithmeticOverflow)?;
         self.record.frozen = frozen;
         self.record.version = version;
+        self.record.updated_at = timestamp;
         Ok(())
     }
 
     /// 将成交所得加入可用余额。
-    pub fn credit_available(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
+    pub fn credit_available(
+        &mut self,
+        amount: Decimal,
+        timestamp: u64,
+    ) -> Result<(), BalanceV2Error> {
         if self.record.status != BalanceV2Status::Open {
             return Err(BalanceV2Error::BalanceClosed);
         }
@@ -301,13 +329,18 @@ impl BalanceV2<Open> {
             self.record.version.checked_add(1).ok_or(BalanceV2Error::ArithmeticOverflow)?;
         self.record.available = available;
         self.record.version = version;
+        self.record.updated_at = timestamp;
         Ok(())
     }
 
     /// 可 BDD 规格化的聚合根行为：从可用余额直接支付。
     ///
     /// 金额必须为正且不得超过当前可用余额；校验或计算失败时余额和版本保持不变。
-    pub fn debit_available(&mut self, amount: Decimal) -> Result<(), BalanceV2Error> {
+    pub fn debit_available(
+        &mut self,
+        amount: Decimal,
+        timestamp: u64,
+    ) -> Result<(), BalanceV2Error> {
         if self.record.status != BalanceV2Status::Open {
             return Err(BalanceV2Error::BalanceClosed);
         }
@@ -324,11 +357,12 @@ impl BalanceV2<Open> {
             self.record.version.checked_add(1).ok_or(BalanceV2Error::ArithmeticOverflow)?;
         self.record.available = available;
         self.record.version = version;
+        self.record.updated_at = timestamp;
         Ok(())
     }
 
     /// 将余额关闭。仅可用余额和冻结余额都为零时成功；失败会返回未改变的开放余额。
-    pub fn close(self) -> Result<BalanceV2<Closed>, (Self, BalanceV2Error)> {
+    pub fn close(self, timestamp: u64) -> Result<BalanceV2<Closed>, (Self, BalanceV2Error)> {
         if self.record.available != Decimal::ZERO || self.record.frozen != Decimal::ZERO {
             return Err((self, BalanceV2Error::CannotCloseNonZeroBalance));
         }
@@ -339,6 +373,7 @@ impl BalanceV2<Open> {
         let mut record = self.record;
         record.status = BalanceV2Status::Closed;
         record.version = version;
+        record.updated_at = timestamp;
 
         Ok(BalanceV2 { record, stage: PhantomData })
     }
@@ -397,11 +432,13 @@ impl FieldDiff for BalanceV2Record {
             EntityFieldChange::new("available", "", self.available.to_string()),
             EntityFieldChange::new("frozen", "", self.frozen.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
+            EntityFieldChange::new("created_at", "", self.created_at.to_string()),
+            EntityFieldChange::new("updated_at", "", self.updated_at.to_string()),
         ]
     }
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-        let mut changes = Vec::with_capacity(6);
+        let mut changes = Vec::with_capacity(8);
         if self.party_id != other.party_id {
             changes.push(EntityFieldChange::new(
                 "party_id",
@@ -444,6 +481,20 @@ impl FieldDiff for BalanceV2Record {
                 other.status.as_str(),
             ));
         }
+        if self.created_at != other.created_at {
+            changes.push(EntityFieldChange::new(
+                "created_at",
+                self.created_at.to_string(),
+                other.created_at.to_string(),
+            ));
+        }
+        if self.updated_at != other.updated_at {
+            changes.push(EntityFieldChange::new(
+                "updated_at",
+                self.updated_at.to_string(),
+                other.updated_at.to_string(),
+            ));
+        }
         changes
     }
 }
@@ -474,7 +525,7 @@ impl Entity for BalanceV2Record {
 
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "account_id" | "asset_id" => 0,
+            "account_id" | "asset_id" | "created_at" | "updated_at" => 0,
             "available" | "frozen" => 1,
             "status" => 0,
             _ => 0,
@@ -495,7 +546,7 @@ mod tests {
     }
 
     fn balance() -> BalanceV2<Open> {
-        BalanceV2::new(1, 2, 3, amount(1_000), Decimal::ZERO, 3)
+        BalanceV2::new(1, 2, 3, amount(1_000), Decimal::ZERO, 3, 100)
     }
 
     #[test]
@@ -511,8 +562,10 @@ mod tests {
                 balance.available(),
                 balance.frozen(),
                 balance.version(),
+                balance.record().created_at(),
+                balance.record().updated_at(),
             ),
-            (1, 2, 3, amount(1_000), Decimal::ZERO, 3)
+            (1, 2, 3, amount(1_000), Decimal::ZERO, 3, 100, 100)
         );
     }
 
@@ -520,13 +573,15 @@ mod tests {
     fn freeze_then_unfreeze_and_pay_updates_amounts_and_version() {
         let mut balance = balance();
 
-        balance.freeze(amount(100)).unwrap();
+        balance.freeze(amount(100), 101).unwrap();
+        assert_eq!((balance.record().created_at(), balance.record().updated_at()), (100, 101));
         assert_eq!(
             (balance.available(), balance.frozen(), balance.version()),
             (amount(900), amount(100), 4)
         );
 
-        balance.unfreeze_and_pay(amount(20), amount(80)).unwrap();
+        balance.unfreeze_and_pay(amount(20), amount(80), 102).unwrap();
+        assert_eq!((balance.record().created_at(), balance.record().updated_at()), (100, 102));
         assert_eq!(
             (balance.available(), balance.frozen(), balance.version()),
             (amount(920), Decimal::ZERO, 5)
@@ -535,13 +590,13 @@ mod tests {
 
     #[test]
     fn fractional_amounts_are_preserved_across_transitions() {
-        let mut balance = BalanceV2::new(1, 2, 3, Decimal::new(125, 2), Decimal::ZERO, 3);
+        let mut balance = BalanceV2::new(1, 2, 3, Decimal::new(125, 2), Decimal::ZERO, 3, 100);
 
-        balance.freeze(Decimal::new(125, 3)).unwrap();
+        balance.freeze(Decimal::new(125, 3), 101).unwrap();
         assert_eq!(balance.available(), Decimal::new(1_125, 3));
         assert_eq!(balance.frozen(), Decimal::new(125, 3));
 
-        balance.unfreeze_and_pay(Decimal::new(25, 3), Decimal::new(1, 1)).unwrap();
+        balance.unfreeze_and_pay(Decimal::new(25, 3), Decimal::new(1, 1), 102).unwrap();
         assert_eq!(balance.available(), Decimal::new(115, 2));
         assert_eq!(balance.frozen(), Decimal::ZERO);
     }
@@ -549,26 +604,29 @@ mod tests {
     #[test]
     fn failed_amount_transitions_leave_balance_unchanged() {
         let mut balance = balance();
-        balance.freeze(amount(100)).unwrap();
+        balance.freeze(amount(100), 101).unwrap();
         let before = balance.clone();
 
-        assert_eq!(balance.freeze(Decimal::ZERO), Err(BalanceV2Error::InvalidAmount));
-        assert_eq!(balance.freeze(amount(-1)), Err(BalanceV2Error::InvalidAmount));
-        assert_eq!(balance.freeze(amount(901)), Err(BalanceV2Error::InsufficientAvailableBalance));
+        assert_eq!(balance.freeze(Decimal::ZERO, 200), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(balance.freeze(amount(-1), 200), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(
+            balance.freeze(amount(901), 200),
+            Err(BalanceV2Error::InsufficientAvailableBalance)
+        );
         assert_eq!(balance, before);
         assert_eq!(
-            balance.unfreeze_and_pay(amount(20), amount(81)),
+            balance.unfreeze_and_pay(amount(20), amount(81), 200),
             Err(BalanceV2Error::InsufficientFrozenBalance)
         );
         assert_eq!(
-            balance.unfreeze_and_pay(Decimal::ZERO, amount(80)),
+            balance.unfreeze_and_pay(Decimal::ZERO, amount(80), 200),
             Err(BalanceV2Error::InvalidAmount)
         );
         assert_eq!(
-            balance.unfreeze_and_pay(amount(-1), amount(80)),
+            balance.unfreeze_and_pay(amount(-1), amount(80), 200),
             Err(BalanceV2Error::InvalidAmount)
         );
-        balance.unfreeze_and_pay(amount(20), Decimal::ZERO).unwrap();
+        balance.unfreeze_and_pay(amount(20), Decimal::ZERO, 102).unwrap();
         assert_eq!(
             (balance.available(), balance.frozen(), balance.version()),
             (amount(920), amount(80), 5)
@@ -577,28 +635,28 @@ mod tests {
 
     #[test]
     fn amount_and_version_overflow_leave_balance_unchanged() {
-        let mut balance = BalanceV2::new(1, 2, 3, amount(1_000), Decimal::MAX, 1);
+        let mut balance = BalanceV2::new(1, 2, 3, amount(1_000), Decimal::MAX, 1, 100);
         let before = balance.clone();
-        assert_eq!(balance.freeze(amount(100)), Err(BalanceV2Error::ArithmeticOverflow));
+        assert_eq!(balance.freeze(amount(100), 200), Err(BalanceV2Error::ArithmeticOverflow));
         assert_eq!(balance, before);
 
-        let mut balance = BalanceV2::new(1, 2, 3, amount(1_000), Decimal::ZERO, u64::MAX);
+        let mut balance = BalanceV2::new(1, 2, 3, amount(1_000), Decimal::ZERO, u64::MAX, 100);
         let before = balance.clone();
-        assert_eq!(balance.freeze(amount(100)), Err(BalanceV2Error::ArithmeticOverflow));
+        assert_eq!(balance.freeze(amount(100), 200), Err(BalanceV2Error::ArithmeticOverflow));
         assert_eq!(balance, before);
 
-        let mut balance = BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::MAX, 1);
+        let mut balance = BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::MAX, 1, 100);
         let before = balance.clone();
         assert_eq!(
-            balance.unfreeze_and_pay(Decimal::MAX, amount(1)),
+            balance.unfreeze_and_pay(Decimal::MAX, amount(1), 200),
             Err(BalanceV2Error::ArithmeticOverflow)
         );
         assert_eq!(balance, before);
 
-        let mut balance = BalanceV2::new(1, 2, 3, Decimal::MAX, amount(2), 1);
+        let mut balance = BalanceV2::new(1, 2, 3, Decimal::MAX, amount(2), 1, 100);
         let before = balance.clone();
         assert_eq!(
-            balance.unfreeze_and_pay(amount(1), amount(1)),
+            balance.unfreeze_and_pay(amount(1), amount(1), 200),
             Err(BalanceV2Error::ArithmeticOverflow)
         );
         assert_eq!(balance, before);
@@ -606,13 +664,13 @@ mod tests {
 
     #[test]
     fn debit_frozen_and_credit_available_apply_checked_transitions() {
-        let mut balance = BalanceV2::new(1, 2, 3, amount(10), amount(50), 4);
-        balance.debit_frozen(amount(20)).unwrap();
+        let mut balance = BalanceV2::new(1, 2, 3, amount(10), amount(50), 4, 100);
+        balance.debit_frozen(amount(20), 101).unwrap();
         assert_eq!(
             (balance.available(), balance.frozen(), balance.version()),
             (amount(10), amount(30), 5)
         );
-        balance.credit_available(amount(7)).unwrap();
+        balance.credit_available(amount(7), 102).unwrap();
         assert_eq!(
             (balance.available(), balance.frozen(), balance.version()),
             (amount(17), amount(30), 6)
@@ -623,7 +681,7 @@ mod tests {
     fn debit_available_updates_amount_and_preserves_state_on_failure() {
         let mut balance = balance();
 
-        balance.debit_available(amount(250)).unwrap();
+        balance.debit_available(amount(250), 101).unwrap();
         assert_eq!(
             (balance.available(), balance.frozen(), balance.version()),
             (amount(750), Decimal::ZERO, 4)
@@ -631,32 +689,41 @@ mod tests {
 
         let before = balance.clone();
         assert_eq!(
-            balance.debit_available(amount(751)),
+            balance.debit_available(amount(751), 200),
             Err(BalanceV2Error::InsufficientAvailableBalance)
         );
-        assert_eq!(balance.debit_available(Decimal::ZERO), Err(BalanceV2Error::InvalidAmount));
-        assert_eq!(balance.debit_available(amount(-1)), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(balance.debit_available(Decimal::ZERO, 200), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(balance.debit_available(amount(-1), 200), Err(BalanceV2Error::InvalidAmount));
         assert_eq!(balance, before);
 
-        let mut overflow = BalanceV2::new(1, 2, 3, amount(1_000), Decimal::ZERO, u64::MAX);
+        let mut overflow = BalanceV2::new(1, 2, 3, amount(1_000), Decimal::ZERO, u64::MAX, 100);
         let before = overflow.clone();
-        assert_eq!(overflow.debit_available(amount(1)), Err(BalanceV2Error::ArithmeticOverflow));
+        assert_eq!(
+            overflow.debit_available(amount(1), 200),
+            Err(BalanceV2Error::ArithmeticOverflow)
+        );
         assert_eq!(overflow, before);
     }
 
     #[test]
     fn debit_and_credit_failures_leave_balance_unchanged() {
-        let mut balance = BalanceV2::new(1, 2, 3, Decimal::MAX, amount(5), 4);
+        let mut balance = BalanceV2::new(1, 2, 3, Decimal::MAX, amount(5), 4, 100);
         let before = balance.clone();
-        assert_eq!(balance.debit_frozen(Decimal::ZERO), Err(BalanceV2Error::InvalidAmount));
-        assert_eq!(balance.debit_frozen(amount(6)), Err(BalanceV2Error::InsufficientFrozenBalance));
-        assert_eq!(balance.credit_available(amount(1)), Err(BalanceV2Error::ArithmeticOverflow));
-        assert_eq!(balance.credit_available(amount(-1)), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(balance.debit_frozen(Decimal::ZERO, 200), Err(BalanceV2Error::InvalidAmount));
+        assert_eq!(
+            balance.debit_frozen(amount(6), 200),
+            Err(BalanceV2Error::InsufficientFrozenBalance)
+        );
+        assert_eq!(
+            balance.credit_available(amount(1), 200),
+            Err(BalanceV2Error::ArithmeticOverflow)
+        );
+        assert_eq!(balance.credit_available(amount(-1), 200), Err(BalanceV2Error::InvalidAmount));
         assert_eq!(balance, before);
 
-        let mut balance = BalanceV2::new(1, 2, 3, Decimal::ZERO, amount(5), u64::MAX);
+        let mut balance = BalanceV2::new(1, 2, 3, Decimal::ZERO, amount(5), u64::MAX, 100);
         let before = balance.clone();
-        assert_eq!(balance.debit_frozen(amount(1)), Err(BalanceV2Error::ArithmeticOverflow));
+        assert_eq!(balance.debit_frozen(amount(1), 200), Err(BalanceV2Error::ArithmeticOverflow));
         assert_eq!(balance, before);
     }
 
@@ -664,12 +731,12 @@ mod tests {
     fn close_requires_zero_balance_and_returns_original_on_failure() {
         let available_nonzero = balance();
         let before = available_nonzero.clone();
-        let (returned, error) = available_nonzero.close().unwrap_err();
+        let (returned, error) = available_nonzero.close(200).unwrap_err();
         assert_eq!(error, BalanceV2Error::CannotCloseNonZeroBalance);
         assert_eq!(returned, before);
 
-        let frozen_nonzero = BalanceV2::new(1, 2, 3, Decimal::ZERO, amount(10), 4);
-        let (returned, error) = frozen_nonzero.close().unwrap_err();
+        let frozen_nonzero = BalanceV2::new(1, 2, 3, Decimal::ZERO, amount(10), 4, 100);
+        let (returned, error) = frozen_nonzero.close(200).unwrap_err();
         assert_eq!(error, BalanceV2Error::CannotCloseNonZeroBalance);
         assert_eq!(
             (returned.available(), returned.frozen(), returned.version()),
@@ -680,14 +747,14 @@ mod tests {
     #[test]
     fn zero_balance_closes_once_and_advances_version() {
         let closed: BalanceV2<Closed> =
-            BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, 7).close().unwrap();
+            BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, 7, 100).close(200).unwrap();
         assert_eq!(closed.status(), BalanceV2Status::Closed);
         assert_eq!(closed.version(), 8);
         assert_eq!(closed.record().available(), Decimal::ZERO);
         assert_eq!(closed.record().frozen(), Decimal::ZERO);
 
-        let open = BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, u64::MAX);
-        let (returned, error) = open.close().unwrap_err();
+        let open = BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, u64::MAX, 100);
+        let (returned, error) = open.close(200).unwrap_err();
         assert_eq!(error, BalanceV2Error::ArithmeticOverflow);
         assert_eq!(returned.version(), u64::MAX);
         assert_eq!(returned.status(), BalanceV2Status::Open);
@@ -699,7 +766,7 @@ mod tests {
         let encoded = serde_json::to_value(&open).unwrap();
         assert_eq!(encoded["status"], json!("open"));
 
-        let fractional = BalanceV2::new(1, 2, 3, Decimal::new(125, 2), Decimal::new(25, 2), 3);
+        let fractional = BalanceV2::new(1, 2, 3, Decimal::new(125, 2), Decimal::new(25, 2), 3, 100);
         let fractional_json = serde_json::to_value(&fractional).unwrap();
         let decoded_fractional: BalanceV2<Open> = serde_json::from_value(fractional_json).unwrap();
         assert_eq!(decoded_fractional.available(), Decimal::new(125, 2));
@@ -715,9 +782,10 @@ mod tests {
         });
         let decoded: BalanceV2<Open> = serde_json::from_value(old_json).unwrap();
         assert_eq!(decoded.status(), BalanceV2Status::Open);
+        assert_eq!((decoded.record().created_at(), decoded.record().updated_at()), (0, 0));
 
         let closed: BalanceV2<Closed> =
-            BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, 7).close().unwrap();
+            BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, 7, 100).close(200).unwrap();
         let closed_json = serde_json::to_value(&closed).unwrap();
         assert!(serde_json::from_value::<BalanceV2<Open>>(closed_json.clone()).is_err());
         assert!(serde_json::from_value::<BalanceV2<Closed>>(encoded).is_err());
@@ -727,15 +795,33 @@ mod tests {
 
     #[test]
     fn close_record_diff_and_replay_keep_stable_entity_metadata() {
-        let open = BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, 7);
+        let open = BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, 7, 100);
         let before = open.into_record();
-        let after =
-            BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, 7).close().unwrap().into_record();
+        let after = BalanceV2::new(1, 2, 3, Decimal::ZERO, Decimal::ZERO, 7, 100)
+            .close(200)
+            .unwrap()
+            .into_record();
 
-        assert_eq!(before.diff(&after), vec![EntityFieldChange::new("status", "open", "closed")]);
+        assert_eq!(
+            before.diff(&after),
+            vec![
+                EntityFieldChange::new("status", "open", "closed"),
+                EntityFieldChange::new("updated_at", "100", "200"),
+            ]
+        );
         assert!(
             before.created_field_changes().contains(&EntityFieldChange::new("status", "", "open"))
         );
+        assert!(before.created_field_changes().contains(&EntityFieldChange::new(
+            "created_at",
+            "",
+            "100"
+        )));
+        assert!(before.created_field_changes().contains(&EntityFieldChange::new(
+            "updated_at",
+            "",
+            "100"
+        )));
 
         let event = after.track_update_event_from(&before).unwrap();
         assert_eq!(event.previous_lsn, 7);
@@ -744,8 +830,11 @@ mod tests {
         assert_eq!(event.entity_type, 12);
         assert_eq!(event.p, 2);
         assert_eq!(event.field_value("status"), Some(b"closed".as_slice()));
+        assert_eq!(event.field_value("updated_at"), Some(b"200".as_slice()));
         assert_eq!(BalanceV2Record::replay_field_type("status"), 0);
         assert_eq!(BalanceV2Record::replay_field_type("available"), 1);
+        assert_eq!(BalanceV2Record::replay_field_type("created_at"), 0);
+        assert_eq!(BalanceV2Record::replay_field_type("updated_at"), 0);
         assert!(BalanceV2Record::is_derived());
     }
 

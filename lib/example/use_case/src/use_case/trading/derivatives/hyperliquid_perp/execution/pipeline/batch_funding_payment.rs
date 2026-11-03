@@ -205,12 +205,12 @@ fn derive_changed_balances(
         let before = balance.clone();
         let mut after = before.clone();
         if delta.is_sign_positive() {
-            after.credit_available(*delta).map_err(map_balance_error)?;
+            after.credit_available(*delta, cmd.logical_ts()).map_err(map_balance_error)?;
         } else {
             let amount = Decimal::ZERO
                 .checked_sub(*delta)
                 .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
-            after.debit_available(amount).map_err(map_balance_error)?;
+            after.debit_available(amount, cmd.logical_ts()).map_err(map_balance_error)?;
         }
         changed.push(after);
     }
@@ -284,6 +284,7 @@ mod tests {
             Decimal::from(available),
             Decimal::ZERO,
             4,
+            0,
         )
     }
 
@@ -425,6 +426,7 @@ mod tests {
                 Decimal::from(100),
                 Decimal::ZERO,
                 4,
+                0,
             )],
         };
         assert_eq!(

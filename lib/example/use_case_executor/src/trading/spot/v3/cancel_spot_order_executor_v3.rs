@@ -40,7 +40,7 @@ mod tests {
     use example_core_entity::spot::spot_order_v2::OrderGroupRelation;
     use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
     use example_core_use_case::{
-        CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
+        CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase, OrderId,
     };
     use rust_decimal::Decimal;
 
@@ -80,6 +80,7 @@ mod tests {
                     u64::from(Coin::USDT.index()),
                     Decimal::ZERO,
                     Decimal::from(100),
+                    0,
                     0,
                 ),
             })
@@ -131,22 +132,18 @@ mod tests {
         }
     }
 
-    fn command(cloid: &str) -> LogEntry<CancelSpotOrderV3Cmd> {
-        LogEntrySequencer::from_metadata(
-            7,
-            100,
-            1,
-            2,
-            CancelSpotOrderV3Cmd { cloid: cloid.to_string() },
-        )
+    fn command(order_id: OrderId) -> LogEntry<CancelSpotOrderV3Cmd> {
+        LogEntrySequencer::from_metadata(7, 100, 1, 2, CancelSpotOrderV3Cmd { order_id })
     }
 
     #[test]
     fn cancel_executor_projects_and_sends_update_event() {
         let outbound = FakeOutbound::default();
-        let result =
-            execute_cancel_spot_order_v3_with_outbound(&command("client-order-11"), &outbound)
-                .expect("cancel should execute");
+        let result = execute_cancel_spot_order_v3_with_outbound(
+            &command(OrderId::Cloid("client-order-11".into())),
+            &outbound,
+        )
+        .expect("cancel should execute");
 
         assert_eq!(result.changes.updated_order.before.order_base().status, SpotOrderStatus::Open);
         assert_eq!(
@@ -164,12 +161,23 @@ mod tests {
     #[test]
     fn empty_cloid_fails_before_loading_state() {
         let outbound = FakeOutbound::default();
-        let result = execute_cancel_spot_order_v3_with_outbound(&command(" "), &outbound);
+        let result = execute_cancel_spot_order_v3_with_outbound(
+            &command(OrderId::Cloid(" ".into())),
+            &outbound,
+        );
 
         assert!(matches!(
             result,
             Err(ExecutionError::Business(CancelSpotOrderV3Error::EmptyCloid))
         ));
         assert!(outbound.persisted.lock().expect("persist lock").is_empty());
+    }
+
+    #[test]
+    fn numeric_oid_executes() {
+        let outbound = FakeOutbound::default();
+        let result =
+            execute_cancel_spot_order_v3_with_outbound(&command(OrderId::Oid(11)), &outbound);
+        assert!(result.is_ok());
     }
 }

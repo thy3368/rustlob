@@ -6,7 +6,7 @@ use common_entity::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
+use example_core_entity::common::identifiers::OrderId;
 use crate::entity::{Balance, OrderSide, OrderType, SpotOrderStatus, SpotOrderV2};
 use crate::{
     ActivateMatchSpotOrderV2Changes, ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error,
@@ -15,7 +15,7 @@ use crate::{
     ActivateSpotOrderV2UseCase, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
     CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
-    ModifySpotOrderV2Error, ModifySpotOrderV2State, ModifySpotOrderV2UseCase, OrderId,
+    ModifySpotOrderV2Error, ModifySpotOrderV2State, ModifySpotOrderV2UseCase,
     PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2State,
     PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
 };

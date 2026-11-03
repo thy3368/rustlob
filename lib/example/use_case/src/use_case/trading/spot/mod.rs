@@ -41,7 +41,7 @@ pub use match_spot_order_v4::{
 pub use modify_spot_order_v2::{
     ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
     ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
-    ModifySpotOrderV2UseCase, OrderId,
+    ModifySpotOrderV2UseCase,
 };
 pub use pending_trigger_spot_order_source::PendingTriggerSpotOrderSource;
 pub use pipeline::activate_match_spot_order_v2::{

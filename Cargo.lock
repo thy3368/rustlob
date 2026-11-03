@@ -2956,6 +2956,7 @@ dependencies = [
  "rust_decimal_macros",
  "serde",
  "serde_json",
+ "tabular-center",
  "thiserror 1.0.69",
 ]
 
@@ -9098,6 +9099,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "tabular-center"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2b51b33de918534e983449b29cd6871987e29b59f3a93d4d755f17c9cad9c56"
 
 [[package]]
 name = "tap"

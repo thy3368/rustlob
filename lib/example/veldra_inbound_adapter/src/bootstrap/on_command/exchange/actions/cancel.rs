@@ -21,8 +21,6 @@ pub enum CancelContractError {
     EmptyCancels,
     #[error("Invalid `action.cancels[].o`. Expected a positive numeric oid.")]
     InvalidOrderId,
-    #[error("Invalid `action.f`. Omit `f` unless fast cancel is enabled.")]
-    InvalidFastFlag,
 }
 
 pub mod reply {
@@ -52,7 +50,6 @@ pub(crate) struct ActionWire {
     #[serde(rename = "type")]
     type_: String,
     cancels: Vec<CancelItemWire>,
-    f: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,9 +132,6 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.cancels.is_empty() {
         return Err(ExchangeHttpError::contract(CancelContractError::EmptyCancels));
-    }
-    if matches!(request.action.f, Some(false)) {
-        return Err(ExchangeHttpError::contract(CancelContractError::InvalidFastFlag));
     }
     for cancel in &request.action.cancels {
         if cancel.o == 0 {

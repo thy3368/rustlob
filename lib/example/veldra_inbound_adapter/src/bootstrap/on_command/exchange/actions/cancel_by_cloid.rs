@@ -26,8 +26,6 @@ pub enum CancelByCloidContractError {
     EmptyCancels,
     #[error("Invalid `action.cancels[].cloid`. Expected a 128-bit hex client order id.")]
     InvalidCloid,
-    #[error("Invalid `action.f`. `f` must be omitted when false.")]
-    InvalidFastFlag,
 }
 
 pub mod reply {
@@ -47,7 +45,6 @@ pub(crate) struct ActionWire {
     #[serde(rename = "type")]
     type_: String,
     cancels: Vec<CancelWire>,
-    f: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,9 +78,6 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.cancels.is_empty() {
         return Err(ExchangeHttpError::contract(CancelByCloidContractError::EmptyCancels));
-    }
-    if matches!(request.action.f, Some(false)) {
-        return Err(ExchangeHttpError::contract(CancelByCloidContractError::InvalidFastFlag));
     }
     for cancel in &request.action.cancels {
         validate_cloid(&cancel.cloid)
@@ -148,28 +142,6 @@ mod tests {
         let request = parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
             .expect("request should parse");
         assert_eq!(request.action.cancels.len(), 1);
-    }
-
-    #[test]
-    fn rejects_false_fast_flag() {
-        let request = parse_json_request::<RequestWire, ExchangeHttpError>(
-            br#"{
-                "action": {
-                    "type": "cancelByCloid",
-                    "cancels": [{ "asset": 10000, "cloid": "0x1234567890abcdef1234567890abcdef" }],
-                    "f": false
-                },
-                "nonce": 1710000000000,
-                "signature": {
-                    "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
-                    "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
-                    "v": 27
-                }
-            }"#,
-        )
-        .expect("request parses");
-        let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(error.to_string(), "Invalid `action.f`. `f` must be omitted when false.");
     }
 
     #[test]

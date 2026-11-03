@@ -2,12 +2,12 @@ use common_entity::{
     EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
     StateMachineV2Diff, UpdatedEntityPair,
 };
+use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
 use example_core_entity::{BalanceV2, BalanceV2Error, Open, SpotAmountConversionError};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use example_core_entity::common::identifiers::OrderId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CancelSpotOrderV3Cmd {
