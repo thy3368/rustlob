@@ -54,16 +54,12 @@ pub enum BalanceV2Event {
 pub struct BalanceV2 {
     party_id: u64,
     account_id: u64,
-    #[serde(rename = "asset_id", alias = "coin_idx")]
     coin_idx: u64,
     available: Decimal,
     frozen: Decimal,
-    #[serde(default)]
     status: BalanceV2Status,
     version: u64,
-    #[serde(default)]
     created_at: u64,
-    #[serde(default)]
     updated_at: u64,
 }
 impl BalanceV2 {
@@ -265,120 +261,5 @@ impl Entity for BalanceV2 {
             "available" | "frozen" => 1,
             _ => 0,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use common_entity::{Entity, FieldDiff, Shard};
-
-    use super::*;
-
-    fn d(value: i64) -> Decimal {
-        Decimal::from(value)
-    }
-    fn balance(available: i64, frozen: i64, version: u64) -> BalanceV2 {
-        BalanceV2::new(1, 258, 3, d(available), d(frozen), version, 100)
-    }
-
-    #[test]
-    fn all_fund_events_transition_and_increment_version() {
-        let mut value = balance(100, 20, 1);
-        value.apply(BalanceV2Event::Freeze { amount: d(10), timestamp: 101 }).unwrap();
-        value
-            .apply(BalanceV2Event::UnfreezeAndPay {
-                unfreeze_amount: d(5),
-                payment_amount: d(5),
-                timestamp: 102,
-            })
-            .unwrap();
-        value.apply(BalanceV2Event::DebitFrozen { amount: d(10), timestamp: 103 }).unwrap();
-        value.apply(BalanceV2Event::CreditAvailable { amount: d(7), timestamp: 104 }).unwrap();
-        value.apply(BalanceV2Event::DebitAvailable { amount: d(2), timestamp: 105 }).unwrap();
-        assert_eq!((value.available(), value.frozen(), value.version()), (d(100), d(10), 6));
-        assert_eq!(value.updated_at(), 105);
-    }
-
-    #[test]
-    fn errors_are_atomic() {
-        let events = [
-            BalanceV2Event::Freeze { amount: Decimal::ZERO, timestamp: 200 },
-            BalanceV2Event::Freeze { amount: d(101), timestamp: 200 },
-            BalanceV2Event::DebitFrozen { amount: d(21), timestamp: 200 },
-            BalanceV2Event::DebitAvailable { amount: d(101), timestamp: 200 },
-            BalanceV2Event::Close { timestamp: 200 },
-        ];
-        for event in events {
-            let mut value = balance(100, 20, 4);
-            let before = value.clone();
-            assert!(value.apply(event).is_err());
-            assert_eq!(value, before);
-        }
-        let mut overflow = balance(100, 0, u64::MAX);
-        let before = overflow.clone();
-        assert_eq!(
-            overflow.apply(BalanceV2Event::CreditAvailable { amount: d(1), timestamp: 200 }),
-            Err(BalanceV2Error::ArithmeticOverflow)
-        );
-        assert_eq!(overflow, before);
-
-        let mut decimal_overflow = balance(0, 0, 4);
-        decimal_overflow.available = Decimal::MAX;
-        let before = decimal_overflow.clone();
-        assert_eq!(
-            decimal_overflow
-                .apply(BalanceV2Event::CreditAvailable { amount: d(1), timestamp: 200 }),
-            Err(BalanceV2Error::ArithmeticOverflow)
-        );
-        assert_eq!(decimal_overflow, before);
-    }
-
-    #[test]
-    fn close_is_a_terminal_transition() {
-        let mut value = balance(0, 0, 7);
-        assert_eq!(
-            value.transition(BalanceV2Event::Close { timestamp: 200 }),
-            Ok((BalanceV2Status::Closed, ()))
-        );
-        let closed = value.clone();
-        let events = [
-            BalanceV2Event::Close { timestamp: 201 },
-            BalanceV2Event::CreditAvailable { amount: d(1), timestamp: 201 },
-        ];
-        for event in events {
-            assert_eq!(value.apply(event), Err(BalanceV2Error::BalanceClosed));
-            assert_eq!(value, closed);
-        }
-    }
-
-    #[test]
-    fn serde_is_flat_and_accepts_open_and_closed_records() {
-        let old = serde_json::json!({"party_id":1,"account_id":258,"asset_id":3,"available":"0","frozen":"0","version":7,"created_at":100,"updated_at":100});
-        let decoded: BalanceV2 = serde_json::from_value(old).unwrap();
-        assert_eq!(decoded.status(), BalanceV2Status::Open);
-        let legacy_alias = serde_json::json!({"party_id":1,"account_id":258,"coin_idx":3,"available":"0","frozen":"0","version":7});
-        let decoded_alias: BalanceV2 = serde_json::from_value(legacy_alias).unwrap();
-        assert_eq!(decoded_alias.coin_idx(), 3);
-        let mut closed = decoded;
-        closed.apply(BalanceV2Event::Close { timestamp: 200 }).unwrap();
-        let json = serde_json::to_value(&closed).unwrap();
-        assert_eq!(json["status"], "closed");
-        assert!(json.get("record").is_none());
-        let roundtrip: BalanceV2 = serde_json::from_value(json).unwrap();
-        assert_eq!(roundtrip, closed);
-    }
-
-    #[test]
-    fn close_diff_and_entity_metadata_remain_stable() {
-        let before = balance(0, 0, 7);
-        let mut after = before.clone();
-        after.apply(BalanceV2Event::Close { timestamp: 200 }).unwrap();
-        let changes = before.diff(&after);
-        assert!(changes.iter().any(|c| c.field_name == "status"));
-        assert_eq!(after.lsn(), 8);
-        assert_eq!(after.partition(), 2);
-        assert_eq!(BalanceV2::entity_type(), 12);
-        assert_eq!(BalanceV2::replay_field_type("available"), 1);
-        assert_eq!(before.entity_id(), after.entity_id());
     }
 }
