@@ -1,6 +1,6 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff, UpdatedEntityPair,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff, UpdatedEntityPair,
 };
 use example_core_entity::OrderSide;
 use thiserror::Error;
@@ -114,7 +114,7 @@ impl ReplayableChanges for MatchHyperliquidPerpOrderChanges {
     }
 }
 
-impl StateMachineV2 for MatchHyperliquidPerpOrderUseCase {
+impl UseCase for MatchHyperliquidPerpOrderUseCase {
     type Command = LogEntry<MatchHyperliquidPerpOrderCmd>;
     type StateGiven = MatchHyperliquidPerpOrderState;
     type Error = MatchHyperliquidPerpOrderError;
@@ -275,7 +275,7 @@ impl MatchHyperliquidPerpOrderUseCase {
         "MatchingEngine"
     }
 }
-impl StateMachineV2Diff for MatchHyperliquidPerpOrderUseCase {
+impl StateDiff for MatchHyperliquidPerpOrderUseCase {
     type StateDiff = MatchHyperliquidPerpOrderChanges;
     fn do_compute_state_diff(
         _: MatchHyperliquidPerpOrderState,

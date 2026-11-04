@@ -1,5 +1,5 @@
 use common_entity::{
-    LogEntry, LogEntrySequencer, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
+    LogEntry, LogEntrySequencer, ReplayableChanges, UseCase, StateDiff,
 };
 use example_core_entity::BalanceV2;
 use example_core_entity::account::coin::Coin;

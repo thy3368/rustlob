@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
     UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
@@ -1187,7 +1187,7 @@ pub struct MatchSpotOrderV3State {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchSpotOrderV3UseCase;
 
-impl StateMachineV2 for MatchSpotOrderV3UseCase {
+impl UseCase for MatchSpotOrderV3UseCase {
     type Command = LogEntry<MatchSpotOrderV3Cmd>;
     type StateGiven = MatchSpotOrderV3State;
     type Error = MatchSpotOrderV3Error;
@@ -1252,7 +1252,7 @@ impl StateMachineV2 for MatchSpotOrderV3UseCase {
     }
 }
 
-impl StateMachineV2Diff for MatchSpotOrderV3UseCase {
+impl StateDiff for MatchSpotOrderV3UseCase {
     type StateDiff = MatchSpotOrderV3Changes;
 
     fn do_compute_state_diff(

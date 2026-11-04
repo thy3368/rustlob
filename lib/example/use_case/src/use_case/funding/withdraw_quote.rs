@@ -1,6 +1,6 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff, UpdatedEntityPair,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff, UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,7 +46,7 @@ impl ReplayableChanges for WithdrawQuoteChanges {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WithdrawQuoteUseCase;
 
-impl StateMachineV2 for WithdrawQuoteUseCase {
+impl UseCase for WithdrawQuoteUseCase {
     type Command = LogEntry<WithdrawQuoteCmd>;
     type StateGiven = WithdrawQuoteState;
     type Error = WithdrawQuoteError;
@@ -95,7 +95,7 @@ impl WithdrawQuoteUseCase {
         "Treasury"
     }
 }
-impl StateMachineV2Diff for WithdrawQuoteUseCase {
+impl StateDiff for WithdrawQuoteUseCase {
     type StateDiff = WithdrawQuoteChanges;
     fn do_compute_state_diff(
         _: WithdrawQuoteState,

@@ -1,6 +1,6 @@
 use common_entity::{
     EntityReplayableEvent, ExecutionError, ExecutionResult, LogEntry, ReplayableChanges,
-    StateMachineExecutor, StateMachineV2Diff, StateSink, StateSource,
+    UseCaseExecutor, StateDiff, StateSink, StateSource,
 };
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,
@@ -35,7 +35,7 @@ where
             Error = <OB as StateSink<PlaceOnlySpotOrderV2UseCase>>::Error,
         > + StateSink<PlaceOnlySpotOrderV2UseCase>,
 {
-    StateMachineExecutor.execute::<PlaceOnlySpotOrderV2UseCase, OB, OB>(
+    UseCaseExecutor.execute::<PlaceOnlySpotOrderV2UseCase, OB, OB>(
         &PlaceOnlySpotOrderV2UseCase,
         command,
         outbound,

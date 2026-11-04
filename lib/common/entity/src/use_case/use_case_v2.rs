@@ -441,7 +441,7 @@ use crate::{ReplayableChanges, action_type};
 /// 也可以是一组相关动作的命令族。
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
 /// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
-pub trait StateMachineV2: Clone + Debug + Send + Sync {
+pub trait UseCase: Clone + Debug + Send + Sync {
     type Command: LogEntryMetadata;
 
     type StateGiven;
@@ -456,7 +456,6 @@ pub trait StateMachineV2: Clone + Debug + Send + Sync {
     type StateChanged;
 
     /// 对命令本身做不依赖 `GivenState` 的快速校验。
-    #[action_type(kind = "pre_check_command")]
     fn check_command(&self, _cmd: &Self::Command) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -465,7 +464,6 @@ pub trait StateMachineV2: Clone + Debug + Send + Sync {
     ///
     /// `GivenState` 可以由多个聚合和上下文字段组成。实现者应在这里显式拒绝
     /// branch mismatch 或 state mismatch，而不是把这些不匹配静默吞掉。
-    #[action_type(kind = "validate_against_given_state")]
     fn validate_state_given(
         &self,
         _cmd: &Self::Command,
@@ -479,7 +477,6 @@ pub trait StateMachineV2: Clone + Debug + Send + Sync {
     /// 该方法不是对外稳定入口。外部应始终走
     /// `pre_check_command() -> validate_against_given_state() -> compute_after_changes_unchecked()`
     /// 的统一链路。
-    #[action_type(kind = "compute_after_changes_unchecked")]
     fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
@@ -502,7 +499,7 @@ pub trait StateMachineV2: Clone + Debug + Send + Sync {
 /// 只有当当前 family 需要稳定 replay、持久化、diff 或审计真相时，才需要实现该 trait。
 /// 默认链路仍然保持单一真相路径：先复用 family 的 after 计算，再从 `GivenState`
 /// 提取 case 级 before 并合并成 replayable changes。
-pub trait StateMachineV2Diff: StateMachineV2 {
+pub trait StateDiff: UseCase {
     /// 最终可 replay 的 before/after changes。
     type StateDiff: ReplayableChanges;
 

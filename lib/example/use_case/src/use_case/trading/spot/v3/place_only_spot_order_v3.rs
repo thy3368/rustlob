@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff,
 };
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
@@ -111,7 +111,7 @@ pub enum PlaceOnlySpotOrderV3Error {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceOnlySpotOrderV3UseCase;
 
-impl StateMachineV2 for PlaceOnlySpotOrderV3UseCase {
+impl UseCase for PlaceOnlySpotOrderV3UseCase {
     type Command = LogEntry<PlaceOnlySpotOrderV3Cmd>;
     type StateGiven = PlaceOnlySpotOrderV3State;
     type Error = PlaceOnlySpotOrderV3Error;
@@ -165,7 +165,7 @@ impl StateMachineV2 for PlaceOnlySpotOrderV3UseCase {
     }
 }
 
-impl StateMachineV2Diff for PlaceOnlySpotOrderV3UseCase {
+impl StateDiff for PlaceOnlySpotOrderV3UseCase {
     type StateDiff = PlaceOnlySpotOrderV3Changes;
 
     fn do_compute_state_diff(

@@ -1,5 +1,5 @@
 use common_entity::{
-    ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
+    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Changes, ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error,
@@ -34,7 +34,7 @@ where
             Error = <OB as StateSink<ActivateMatchSpotOrderV2UseCase>>::Error,
         > + StateSink<ActivateMatchSpotOrderV2UseCase>,
 {
-    StateMachineExecutor.execute::<ActivateMatchSpotOrderV2UseCase, OB, OB>(
+    UseCaseExecutor.execute::<ActivateMatchSpotOrderV2UseCase, OB, OB>(
         &ActivateMatchSpotOrderV2UseCase,
         command,
         outbound,

@@ -1,4 +1,4 @@
-use common_entity::{Fsm, LogEntry, StateMachineV2};
+use common_entity::{Fsm, LogEntry, UseCase};
 use example_core_entity::spot::spot_order_primitives::OrderSide;
 use example_core_entity::spot::spot_trade_v3::{
     SpotTradeEvent, SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3,
@@ -131,7 +131,7 @@ pub enum UnFreezeSpotOrderV2Error {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct UnFreeze4SpotOrderV2UseCase;
 
-impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
+impl UseCase for UnFreeze4SpotOrderV2UseCase {
     type Command = LogEntry<UnFreezeSpotOrderV2Cmd>;
     type StateGiven = UnFreezeSpotOrderV2State;
     type Error = UnFreezeSpotOrderV2Error;
@@ -253,7 +253,7 @@ impl StateMachineV2 for UnFreeze4SpotOrderV2UseCase {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{LogEntrySequencer, StateMachineV2};
+    use common_entity::{LogEntrySequencer, UseCase};
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::entity::common::UserId;

@@ -1,4 +1,4 @@
-use common_entity::{LogEntry, StateMachineV2};
+use common_entity::{LogEntry, UseCase};
 use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
 use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event, SpotAmountConversionError};
 use serde::{Deserialize, Serialize};
@@ -41,7 +41,7 @@ pub enum FreezeSpotOrderV2Error {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Freeze4SpotOrderV2UseCase;
 
-impl StateMachineV2 for Freeze4SpotOrderV2UseCase {
+impl UseCase for Freeze4SpotOrderV2UseCase {
     type Command = LogEntry<FreezeSpotOrderV2Cmd>;
     type StateGiven = FreezeSpotOrderV2State;
     type Error = FreezeSpotOrderV2Error;

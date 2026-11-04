@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
 };
 use thiserror::Error;
 
@@ -78,7 +78,7 @@ impl ReplayableChanges for GenerateSpotKlinesFromHistoricalTradesChanges {
     }
 }
 
-impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
+impl UseCase for GenerateSpotKlinesFromHistoricalTradesUseCase {
     type Command = LogEntry<GenerateSpotKlinesFromHistoricalTradesCmd>;
     type StateGiven = GenerateSpotKlinesFromHistoricalTradesState;
     type Error = GenerateSpotKlinesFromHistoricalTradesError;
@@ -186,7 +186,7 @@ impl StateMachineV2 for GenerateSpotKlinesFromHistoricalTradesUseCase {
     }
 }
 
-impl StateMachineV2Diff for GenerateSpotKlinesFromHistoricalTradesUseCase {
+impl StateDiff for GenerateSpotKlinesFromHistoricalTradesUseCase {
     type StateDiff = GenerateSpotKlinesFromHistoricalTradesChanges;
 
     fn do_compute_state_diff(

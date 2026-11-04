@@ -1,6 +1,6 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff, UpdatedEntityPair,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff, UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -44,7 +44,7 @@ impl ReplayableChanges for DepositQuoteChanges {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DepositQuoteUseCase;
 
-impl StateMachineV2 for DepositQuoteUseCase {
+impl UseCase for DepositQuoteUseCase {
     type Command = LogEntry<DepositQuoteCmd>;
     type StateGiven = DepositQuoteState;
     type Error = DepositQuoteError;
@@ -89,7 +89,7 @@ impl DepositQuoteUseCase {
         "Treasury"
     }
 }
-impl StateMachineV2Diff for DepositQuoteUseCase {
+impl StateDiff for DepositQuoteUseCase {
     type StateDiff = DepositQuoteChanges;
     fn do_compute_state_diff(
         _: DepositQuoteState,

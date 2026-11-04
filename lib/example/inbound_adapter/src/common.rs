@@ -3,7 +3,7 @@ use anyhow::Error as AnyError;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, LogEntry, StateMachineExecutor, StateMachineV2Diff,
+    EntityReplayableEvent, ExecutionError, LogEntry, UseCaseExecutor, StateDiff,
     StateSink, StateSource,
 };
 use example_core_use_case::{
@@ -270,12 +270,12 @@ pub(crate) fn execute_with_mapper<U, OB, E, M>(
     mapper: &M,
 ) -> Result<M::Reply, ExecutionError<U::Error, E>>
 where
-    U: StateMachineV2Diff,
+    U: StateDiff,
     OB: Send + Sync + StateSource<U, Error = E> + StateSink<U, Error = E>,
     E: std::error::Error + 'static,
     M: InboundReplyMapper,
 {
-    let executor = StateMachineExecutor;
+    let executor = UseCaseExecutor;
     let result = executor.execute(use_case, &command, outbound, outbound)?;
     Ok(mapper.map(result.events))
 }

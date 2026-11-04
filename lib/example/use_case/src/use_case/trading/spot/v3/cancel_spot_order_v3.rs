@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff, UpdatedEntityPair,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff, UpdatedEntityPair,
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
@@ -61,7 +61,7 @@ pub enum CancelSpotOrderV3Error {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CancelSpotOrderV3UseCase;
 
-impl StateMachineV2 for CancelSpotOrderV3UseCase {
+impl UseCase for CancelSpotOrderV3UseCase {
     type Command = LogEntry<CancelSpotOrderV3Cmd>;
     type StateGiven = CancelSpotOrderV3State;
     type Error = CancelSpotOrderV3Error;
@@ -156,7 +156,7 @@ impl StateMachineV2 for CancelSpotOrderV3UseCase {
     }
 }
 
-impl StateMachineV2Diff for CancelSpotOrderV3UseCase {
+impl StateDiff for CancelSpotOrderV3UseCase {
     type StateDiff = CancelSpotOrderV3Changes;
 
     fn do_compute_state_diff(

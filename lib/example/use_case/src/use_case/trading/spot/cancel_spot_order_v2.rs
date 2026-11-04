@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
     UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
@@ -106,7 +106,7 @@ impl ReplayableChanges for CancelSpotOrderV2Changes {
     }
 }
 
-impl StateMachineV2 for CancelSpotOrderV2UseCase {
+impl UseCase for CancelSpotOrderV2UseCase {
     type Command = LogEntry<CancelSpotOrderV2Cmd>;
     type StateGiven = CancelSpotOrderV2State;
     type Error = CancelSpotOrderV2Error;
@@ -174,7 +174,7 @@ impl StateMachineV2 for CancelSpotOrderV2UseCase {
     }
 }
 
-impl StateMachineV2Diff for CancelSpotOrderV2UseCase {
+impl StateDiff for CancelSpotOrderV2UseCase {
     type StateDiff = CancelSpotOrderV2Changes;
 
     fn do_compute_state_diff(

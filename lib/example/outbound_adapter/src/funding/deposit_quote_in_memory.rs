@@ -1,4 +1,4 @@
-use common_entity::{EntityReplayableEvent, LogEntry, StateMachineV2Diff, StateSink, StateSource};
+use common_entity::{EntityReplayableEvent, LogEntry, StateDiff, StateSink, StateSource};
 use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
 
 use crate::shared::{

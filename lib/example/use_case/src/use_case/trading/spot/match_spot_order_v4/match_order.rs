@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2, StateMachineV2Diff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
     UpdatedEntityPair,
 };
 use serde::{Deserialize, Serialize};
@@ -124,7 +124,7 @@ pub struct MatchSpotOrderV4State {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchSpotOrderV4UseCase;
 
-impl StateMachineV2 for MatchSpotOrderV4UseCase {
+impl UseCase for MatchSpotOrderV4UseCase {
     type Command = LogEntry<MatchSpotOrderV4Cmd>;
     type StateGiven = MatchSpotOrderV4State;
     type Error = MatchSpotOrderV4Error;
@@ -185,7 +185,7 @@ impl StateMachineV2 for MatchSpotOrderV4UseCase {
     }
 }
 
-impl StateMachineV2Diff for MatchSpotOrderV4UseCase {
+impl StateDiff for MatchSpotOrderV4UseCase {
     type StateDiff = MatchSpotOrderV4Changes;
 
     fn do_compute_state_diff(

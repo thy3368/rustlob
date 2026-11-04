@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use common_entity::{LogEntry, StateMachineV2};
+use common_entity::{LogEntry, UseCase};
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::FundingRate;
 use example_core_entity::perp::fund::funding::UserFunding;
@@ -80,7 +80,7 @@ pub struct UserFundingChanges {
     pub changed_margin_balances: Vec<BalanceV2>,
 }
 
-impl StateMachineV2 for UserFundingUseCase {
+impl UseCase for UserFundingUseCase {
     type Command = LogEntry<UserFundingCmd>;
     type StateGiven = UserFundingState;
     type Error = SettleHyperliquidPerpFundingError;

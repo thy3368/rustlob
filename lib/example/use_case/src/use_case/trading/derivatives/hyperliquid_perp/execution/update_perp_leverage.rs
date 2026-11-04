@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
     UpdatedEntityPair,
 };
 use thiserror::Error;
@@ -88,7 +88,7 @@ impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
     }
 }
 
-impl StateMachineV2 for UpdateHyperliquidPerpLeverageUseCase {
+impl UseCase for UpdateHyperliquidPerpLeverageUseCase {
     type Command = LogEntry<UpdateHyperliquidPerpLeverageCmd>;
     type StateGiven = UpdateHyperliquidPerpLeverageState;
     type Error = UpdateHyperliquidPerpLeverageError;
@@ -207,7 +207,7 @@ fn map_leverage_setting_error(
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{LogEntry, ReplayableChanges, StateMachineV2};
+    use common_entity::{LogEntry, ReplayableChanges, UseCase};
 
     use super::*;
     use crate::common_entity::HyperliquidPerpPositionStatus;

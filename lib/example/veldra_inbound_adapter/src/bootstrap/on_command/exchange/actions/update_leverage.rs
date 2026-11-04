@@ -1,4 +1,4 @@
-use common_entity::{EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineV2};
+use common_entity::{EntityError, EntityReplayableEvent, ReplayableChanges, UseCase};
 use example_core_use_case::common_entity::{
     HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode,
 };

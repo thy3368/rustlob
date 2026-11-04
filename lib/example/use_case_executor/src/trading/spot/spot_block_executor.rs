@@ -1,5 +1,5 @@
 use common_entity::{
-    ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
+    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{SpotBlockChanges, SpotBlockCmd, SpotBlockError, SpotBlockUseCase};
 use example_outbound_adapter::{DefaultSpotBlockOutbound, DefaultSpotBlockOutboundError};
@@ -24,7 +24,7 @@ where
     OB: StateSource<SpotBlockUseCase, Error = <OB as StateSink<SpotBlockUseCase>>::Error>
         + StateSink<SpotBlockUseCase>,
 {
-    StateMachineExecutor.execute::<SpotBlockUseCase, OB, OB>(
+    UseCaseExecutor.execute::<SpotBlockUseCase, OB, OB>(
         &SpotBlockUseCase,
         command,
         outbound,

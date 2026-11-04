@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff, UpdatedEntityPair,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff, UpdatedEntityPair,
 };
 use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
 use rust_decimal::Decimal;
@@ -88,7 +88,7 @@ impl ReplayableChanges for ModifySpotOrderV3Changes {
     }
 }
 
-impl StateMachineV2 for ModifySpotOrderV3UseCase {
+impl UseCase for ModifySpotOrderV3UseCase {
     type Command = LogEntry<ModifySpotOrderV3Cmd>;
     type StateGiven = ModifySpotOrderV3State;
     type Error = ModifySpotOrderV2Error;
@@ -157,7 +157,7 @@ impl StateMachineV2 for ModifySpotOrderV3UseCase {
     }
 }
 
-impl StateMachineV2Diff for ModifySpotOrderV3UseCase {
+impl StateDiff for ModifySpotOrderV3UseCase {
     type StateDiff = ModifySpotOrderV3Changes;
 
     fn do_compute_state_diff(

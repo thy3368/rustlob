@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -65,7 +65,7 @@ impl ReplayableChanges for ActivateMatchSpotOrderV2Changes {
     }
 }
 
-impl StateMachineV2 for ActivateMatchSpotOrderV2UseCase {
+impl UseCase for ActivateMatchSpotOrderV2UseCase {
     type Command = LogEntry<ActivateMatchSpotOrderV2Cmd>;
     type StateGiven = ActivateMatchSpotOrderV2State;
     type Error = ActivateMatchSpotOrderV2Error;
@@ -112,7 +112,7 @@ impl StateMachineV2 for ActivateMatchSpotOrderV2UseCase {
     }
 }
 
-impl StateMachineV2Diff for ActivateMatchSpotOrderV2UseCase {
+impl StateDiff for ActivateMatchSpotOrderV2UseCase {
     type StateDiff = ActivateMatchSpotOrderV2Changes;
 
     fn do_compute_state_diff(

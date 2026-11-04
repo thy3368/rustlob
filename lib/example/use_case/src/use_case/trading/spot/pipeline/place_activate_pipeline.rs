@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff,
 };
 use thiserror::Error;
 
@@ -91,7 +91,7 @@ impl ReplayableChanges for PlaceActivateV2Changes {
     }
 }
 
-impl StateMachineV2 for PlaceActivateV2UseCase {
+impl UseCase for PlaceActivateV2UseCase {
     type Command = LogEntry<PlaceActivateV2Cmd>;
     type StateGiven = PlaceActivateV2State;
     type Error = PlaceActivateV2Error;
@@ -180,7 +180,7 @@ impl StateMachineV2 for PlaceActivateV2UseCase {
     }
 }
 
-impl StateMachineV2Diff for PlaceActivateV2UseCase {
+impl StateDiff for PlaceActivateV2UseCase {
     type StateDiff = PlaceActivateV2Changes;
     fn do_compute_state_diff(
         state: Self::StateGiven,

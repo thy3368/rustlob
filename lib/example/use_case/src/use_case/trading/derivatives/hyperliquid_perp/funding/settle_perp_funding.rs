@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashSet};
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff, UpdatedEntityPair,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff, UpdatedEntityPair,
 };
 use thiserror::Error;
 
@@ -129,7 +129,7 @@ impl ReplayableChanges for SettleHyperliquidPerpFundingChanges {
     }
 }
 
-impl StateMachineV2 for SettleHyperliquidPerpFundingUseCase {
+impl UseCase for SettleHyperliquidPerpFundingUseCase {
     type Command = LogEntry<SettleHyperliquidPerpFundingCmd>;
     type StateGiven = SettleHyperliquidPerpFundingState;
     type Error = SettleHyperliquidPerpFundingError;
@@ -248,7 +248,7 @@ impl SettleHyperliquidPerpFundingUseCase {
         "ClearingHouse"
     }
 }
-impl StateMachineV2Diff for SettleHyperliquidPerpFundingUseCase {
+impl StateDiff for SettleHyperliquidPerpFundingUseCase {
     type StateDiff = SettleHyperliquidPerpFundingChanges;
     fn do_compute_state_diff(
         _: SettleHyperliquidPerpFundingState,

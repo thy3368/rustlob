@@ -24,7 +24,7 @@ pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSeque
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::execution_command_spec::ExecutionCommandSpec;
 pub use use_case::executor::{
-    ExecutionError, ExecutionResult, StateMachineExecutor, StateSink, StateSource,
+    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
 };
 pub use use_case::log_entry::LogEntry;
 pub use use_case::log_entry_repo::LogEntryRepo;
@@ -33,12 +33,12 @@ pub use use_case::shard::Shard;
 /// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
-pub use use_case::state_machine_v2::StateMachineV2 as MultiAggregateUseCaseUnchecked;
+pub use use_case::use_case_v2::UseCase as MultiAggregateUseCaseUnchecked;
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
-pub use use_case::state_machine_v2::StateMachineV2Diff as MultiAggregateUseCaseBeforeAfter;
-pub use use_case::state_machine_v2::{StateMachineV2, StateMachineV2Diff};
+pub use use_case::use_case_v2::StateDiff as MultiAggregateUseCaseBeforeAfter;
+pub use use_case::use_case_v2::{UseCase, StateDiff};
 pub use use_case::support::{ReplayableChanges, UpdatedEntityPair};
 
 /// Error raised while tracking entity state into replayable events.

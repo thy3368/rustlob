@@ -5,7 +5,7 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, LogEntry, StateMachineExecutor, StateSink, StateSource,
+    EntityReplayableEvent, ExecutionError, LogEntry, UseCaseExecutor, StateSink, StateSource,
 };
 use example_core_use_case::{
     PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
@@ -125,7 +125,7 @@ where
         > + StateSink<PlaceMatchSpotOrderV2UseCase>,
 {
     let command = request.into_command(lsn, logical_ts, client_id, request_id);
-    let result = StateMachineExecutor.execute::<PlaceMatchSpotOrderV2UseCase, OB, OB>(
+    let result = UseCaseExecutor.execute::<PlaceMatchSpotOrderV2UseCase, OB, OB>(
         &PlaceMatchSpotOrderV2UseCase,
         &command,
         outbound,

@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
-    StateMachineV2Diff, UpdatedEntityPair,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
+    StateDiff, UpdatedEntityPair,
 };
 use example_core_entity::common::identifiers::OrderId;
 use serde::{Deserialize, Serialize};
@@ -160,7 +160,7 @@ impl ReplayableChanges for ModifySpotOrderV2Changes {
     }
 }
 
-impl StateMachineV2 for ModifySpotOrderV2UseCase {
+impl UseCase for ModifySpotOrderV2UseCase {
     type Command = LogEntry<ModifySpotOrderV2Cmd>;
     type StateGiven = ModifySpotOrderV2State;
     type Error = ModifySpotOrderV2Error;
@@ -279,7 +279,7 @@ impl StateMachineV2 for ModifySpotOrderV2UseCase {
     }
 }
 
-impl StateMachineV2Diff for ModifySpotOrderV2UseCase {
+impl StateDiff for ModifySpotOrderV2UseCase {
     type StateDiff = ModifySpotOrderV2Changes;
 
     fn do_compute_state_diff(

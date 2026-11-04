@@ -1,13 +1,13 @@
 use std::collections::HashSet;
 
 use crate::use_case::log_entry::LogEntryMetadata;
-use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateMachineV2Diff};
+use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateDiff};
 
 /// 多聚合 MI state-machine family 的运行时编排器。
 ///
 /// 该类型只固定 adapter / outbound 之间的执行顺序，不承载业务规则。
 #[derive(Debug, Clone, Copy, Default)]
-pub struct StateMachineExecutor;
+pub struct UseCaseExecutor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionResult<C> {
@@ -31,7 +31,7 @@ pub enum ExecutionError<BE, OE> {
 /// MI family runtime 所需的 authoritative given state source port。
 pub trait StateSource<F>: Send + Sync
 where
-    F: StateMachineV2Diff,
+    F: StateDiff,
 {
     type Error: std::error::Error;
 
@@ -41,7 +41,7 @@ where
 /// MI family runtime 所需的事件副作用 outbound port。
 pub trait StateSink<F>: Send + Sync
 where
-    F: StateMachineV2Diff,
+    F: StateDiff,
 {
     type Error: std::error::Error;
 
@@ -50,7 +50,7 @@ where
     fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
 }
 
-impl StateMachineExecutor {
+impl UseCaseExecutor {
     /// 执行一个 MI family use case 的运行时编排。
     ///
     /// adapter 应在调用前完成 request 到 on_command 的转换。state source 基于 on_command 加载
@@ -72,7 +72,7 @@ impl StateMachineExecutor {
         state_sink: &OB,
     ) -> ExecutionOutcome<F::StateDiff, F::Error, OB::Error>
     where
-        F: StateMachineV2Diff,
+        F: StateDiff,
         SS: StateSource<F, Error = OB::Error>,
         OB: StateSink<F>,
     {

@@ -1,4 +1,4 @@
-use common_entity::{LogEntry, ReplayableChanges, StateMachineV2};
+use common_entity::{LogEntry, ReplayableChanges, UseCase};
 
 use super::*;
 use crate::HyperliquidPerpOrderSide;

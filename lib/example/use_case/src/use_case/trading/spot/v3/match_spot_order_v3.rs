@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use common_entity::{EntityError, LogEntry, StateMachineV2};
+use common_entity::{EntityError, LogEntry, UseCase};
 use example_core_entity::SpotOrderV3;
 use example_core_entity::spot::spot_order_v3::{
     MatchResult, MatchSpotOrderV3Input, Pending, SpotOrderV3Any,
@@ -46,7 +46,7 @@ pub struct MatchSpotOrderV3State {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchSpotOrderV3UseCase;
 
-impl StateMachineV2 for MatchSpotOrderV3UseCase {
+impl UseCase for MatchSpotOrderV3UseCase {
     type Command = LogEntry<MatchSpotOrderV3Cmd>;
     type StateGiven = MatchSpotOrderV3State;
     type Error = MatchSpotOrderV3Error;

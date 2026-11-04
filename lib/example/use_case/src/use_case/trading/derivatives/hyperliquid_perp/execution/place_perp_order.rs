@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateMachineV2,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
     UpdatedEntityPair, action_type,
 };
 use example_core_entity::OrderSide;
@@ -201,7 +201,7 @@ impl ReplayableChanges for PlaceHyperliquidPerpOrderChanges {
     }
 }
 
-impl StateMachineV2 for PlaceHyperliquidPerpOrderUseCase {
+impl UseCase for PlaceHyperliquidPerpOrderUseCase {
     type Command = LogEntry<PlaceHyperliquidPerpOrderCmd>;
     type StateGiven = PlaceHyperliquidPerpOrderState;
     type Error = PlaceHyperliquidPerpOrderError;
