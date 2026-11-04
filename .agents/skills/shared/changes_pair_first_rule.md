@@ -1,6 +1,6 @@
-# StateMachineV2Diff Pair-First Shared Rule
+# StateDiff Pair-First Shared Rule
 
-这些约束适用于 `StateMachineV2Diff::StateDiff` 与 replayable changes。编写、评审、测试或文档化 update changes 前先遵守本规则。
+这些约束适用于 `StateDiff` 与 replayable changes。编写、评审、测试或文档化 update changes 前先遵守本规则。
 
 ## Authoritative Truth
 
@@ -17,6 +17,6 @@
 
 ## Calibration
 
-在 `StateMachineV2Diff` update changes 中，取消订单应以订单 pair 表达。事件、reply 和测试断言从 pair 的 `after` 投影，不再并列保存重复的 `cancelled_order_after`。
+在 `StateDiff` update changes 中，取消订单应以订单 pair 表达。事件、reply 和测试断言从 pair 的 `after` 投影，不再并列保存重复的 `cancelled_order_after`。
 
 Review 将 duplicate pair + duplicate `*_after` 视为 violation。Happy-path tests 先断言 pair，再断言 `to_replayable_events()` 的一致性；Rustdoc 明确指出 pair 是 authoritative truth。

@@ -102,7 +102,7 @@ Those are mechanics. The comments should explain why this scenario exists.
 
 ## 6. Changes First, Event Order Second
 
-For `StateMachineV2`, the first assertion target is `StateChanged`; replayable cases then assert `StateMachineV2Diff::StateDiff`:
+For `UseCase`, the first assertion target is `StateChanged`; replayable cases then assert `StateDiff`:
 - created trades
 - updated maker/taker entities
 - before/after snapshots

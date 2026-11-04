@@ -1,7 +1,7 @@
 # Entity Method Constraints
 
 这是 entity 方法设计的 shared architecture policy。它不是
-`lib/common/entity/src/entity.rs` 或 `StateMachineV2` 的代码事实源；分类事实仍以
+`lib/common/entity/src/entity.rs` 或 `UseCase` 的代码事实源；分类事实仍以
 `.agents/skills/shared/entity_four_color_classification.md` 为准，`use case` / `entity`
 边界事实仍以 `.agents/skills/shared/use_case_entity_constraints.md` 为准。
 
@@ -102,8 +102,8 @@ impl Fsm for Entity {
 
 ## Boundary And Current Calibration
 
-`Fsm` 负责单实体或单 aggregate 的状态转换；`StateMachineV2` 负责跨 aggregate 的 use-case 编排；
-`StateMachineV2Diff` 负责 before/after diff 和 replay。不要用 FSM 取代后两者。
+`Fsm` 负责单实体或单 aggregate 的状态转换；`UseCase` 负责跨 aggregate 的 use-case 编排；
+`StateDiff` 负责 before/after diff 和 replay。不要用 FSM 取代后两者。
 
 以下实体用于校准不同的 `State` / `Event` / `Output` / `Error` 形态：
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline business-definition checker for RustLOB StateMachineV2 use cases."""
+"""Offline business-definition checker for RustLOB UseCase implementations."""
 
 from __future__ import annotations
 
@@ -12,7 +12,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_ROOT = ROOT / "lib" / "example" / "use_case"
-IMPL_RE = re.compile(r"impl(?:\s*<[^>]*>)?[^\n]*\bStateMachineV2\s+for\s+")
+USE_CASE_IMPL_RE = re.compile(
+    r"\bimpl\b(?:\s*<[^>{}]*>)?\s+(?:[^\n{]*\s+)?\bUseCase\s+for\b"
+)
+STATE_DIFF_IMPL_RE = re.compile(
+    r"\bimpl\b(?:\s*<[^>{}]*>)?\s+(?:[^\n{]*\s+)?\bStateDiff\s+for\b"
+)
 INFRA_RE = re.compile(
     r"\b(sqlx|diesel|reqwest|axum|kafka|redis|repository|database|http|broker)\b",
     re.IGNORECASE,
@@ -21,7 +26,7 @@ INFRA_RE = re.compile(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Score RustLOB StateMachineV2 files as business use cases."
+        description="Score RustLOB UseCase files as business use cases."
     )
     parser.add_argument("paths", nargs="*", help="Rust files or directories to inspect")
     parser.add_argument("--all", action="store_true", help="inspect all example use cases")
@@ -43,7 +48,7 @@ def rust_files(paths: list[Path]) -> list[Path]:
 
 def inspect(path: Path) -> dict[str, object] | None:
     source = path.read_text(encoding="utf-8")
-    if not IMPL_RE.search(source):
+    if not USE_CASE_IMPL_RE.search(source):
         return None
 
     findings: list[str] = []
@@ -63,10 +68,10 @@ def inspect(path: Path) -> dict[str, object] | None:
             refactors.append(repair)
             clean -= 7
 
-    has_diff = "StateMachineV2Diff" in source
+    has_diff = bool(STATE_DIFF_IMPL_RE.search(source))
     has_replay = "ReplayableChanges" in source
     if has_diff and not has_replay:
-        findings.append("StateMachineV2Diff lacks an explicit ReplayableChanges projection")
+        findings.append("StateDiff lacks an explicit ReplayableChanges projection")
         refactors.append("implement ReplayableChanges for the typed StateDiff")
         clean -= 8
 
@@ -98,7 +103,7 @@ def inspect(path: Path) -> dict[str, object] | None:
     return {
         "path": relative,
         "layer_mapping": {
-            "core.use_case": "StateMachineV2 business validation and state transition",
+            "core.use_case": "UseCase business validation and state transition",
             "core.entity": "reusable entity behavior and invariants",
             "adapter.outbound": "StateSource and StateSink implementations",
             "infra": "database, broker, HTTP, and runtime details",
@@ -174,7 +179,7 @@ def main() -> int:
         return 2
 
     if not results:
-        print("no StateMachineV2 implementation found", file=sys.stderr)
+        print("no UseCase implementation found", file=sys.stderr)
         return 2
 
     if args.json:

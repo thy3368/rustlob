@@ -1,6 +1,6 @@
 ---
 name: use-case-happy-test-tdd
-description: Write RustLOB `StateMachineV2` happy-path specification tests or run strict TDD repair, including replay projections through `StateMachineV2Diff` when required.
+description: Write RustLOB `UseCase` happy-path specification tests or run strict TDD repair, including replay projections through `StateDiff` when required.
 ---
 
 # Use Case Happy Test TDD
@@ -14,7 +14,7 @@ Use this as the happy-path entry point for current RustLOB state-machine use cas
 
 ## Read First
 
-- Contract: `lib/common/entity/src/use_case/state_machine_v2.rs`
+- Contract: `lib/common/entity/src/use_case/use_case_v2.rs`
 - Calibration test: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order/compute_replayable_events_happy_path.rs`
 - Calibration implementation: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order.rs`
 - Pair-first rule: `.agents/skills/shared/changes_pair_first_rule.md`
@@ -24,7 +24,7 @@ Use this as the happy-path entry point for current RustLOB state-machine use cas
 
 ## Scope
 
-Test `StateMachineV2::compute_state_changed()` and, when replay truth matters, `StateMachineV2Diff::compute_state_diff()` plus `ReplayableChanges::to_replayable_events()`.
+Test `UseCase::compute_state_changed()` and, when replay truth matters, `StateDiff::compute_state_diff()` plus `ReplayableChanges::to_replayable_events()`.
 
 Do not test `StateMachineExecutor` outbound adapter details, databases, brokers, HTTP, query adapters, or legacy query execution here. Command rejection and loaded-state rejection belong in focused `check_command()` and `validate_state_given()` tests, not the happy-path file.
 

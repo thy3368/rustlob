@@ -1,6 +1,6 @@
 ---
 name: check-use-case-definition
-description: Check whether RustLOB `StateMachineV2` implementations are defined as business use cases, score files or directories, and explain rubric failures.
+description: Check whether RustLOB `UseCase` implementations are defined as business use cases, score files or directories, and explain rubric failures.
 ---
 
 # Check Use Case Definition
@@ -19,7 +19,7 @@ The checker evaluates:
 - business command identity
 - separation of `check_command`, `validate_state_given`, and `compute_state_changed_only`
 - typed `StateChanged`
-- optional `StateMachineV2Diff` and `ReplayableChanges`
+- optional `StateDiff` and `ReplayableChanges`
 - entity/use-case boundaries
 - absence of adapter, database, persistence, publish, and transport concerns in core
 

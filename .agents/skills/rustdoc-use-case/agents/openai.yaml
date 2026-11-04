@@ -1,4 +1,4 @@
 interface:
   display_name: "Rustdoc Use Case"
   short_description: "Document RustLOB use cases with Rustdoc and doctest"
-  default_prompt: "Use $rustdoc-use-case to document RustLOB StateMachineV2 and StateMachineV2Diff use cases, including commands, errors, StateChanged, replayable StateDiff, pair-first update truth, boundary behavior, and minimal doctests."
+  default_prompt: "Use $rustdoc-use-case to document RustLOB UseCase and StateDiff use cases, including commands, errors, StateChanged, replayable StateDiff, pair-first update truth, boundary behavior, and minimal doctests."

@@ -7,7 +7,7 @@
 本文件只保留能被以下代码直接支撑的事实：
 
 - `lib/common/entity/src/entity.rs`
-- `lib/common/entity/src/use_case/state_machine_v2.rs`
+- `lib/common/entity/src/use_case/use_case_v2.rs`
 
 如果需要更强的架构政策、建模偏好或工程约束，应引用独立的 architecture policy 文档或 skill，
 不要把那些规则伪装成这两个 trait 的代码事实。
@@ -16,8 +16,8 @@
 
 - `lib/common/entity/src/entity.rs`
   - `Entity` trait 是 `entity / aggregate / MI metadata / replay version` 语义事实源。
-- `lib/common/entity/src/use_case/state_machine_v2.rs`
-  - `StateMachineV2` 与 `StateMachineV2Diff` 是 command-style `use case` 契约事实源。
+- `lib/common/entity/src/use_case/use_case_v2.rs`
+  - `UseCase` 与 `StateDiff` 是 command-style `use case` 契约事实源。
 
 ## Use Case Facts From Current State Machine Traits
 
@@ -38,7 +38,7 @@
 - 聚合间协作不应下放到任一聚合根或聚合成员内部去直接访问、装载、调用或导航其它聚合。
 - `ReplayableChanges::to_replayable_events()` 从 `StateDiff` 投影后续可持久化、可回放、可发布的事实。
 
-`StateMachineV2` 注释明确说它不负责：
+`UseCase` 注释明确说它不负责：
 
 - DB 访问或其他状态加载
 - replayable events 的发布或持久化执行
@@ -104,7 +104,7 @@
 ## Boundary Policy References
 
 以下规则是 use case / entity 边界上的 architecture policy，不是 `Entity` 或
-`StateMachineV2` trait 本身的代码事实。方法分类和 admission 细则见
+`UseCase` trait 本身的代码事实。方法分类和 admission 细则见
 `.agents/skills/shared/entity_method_constraints.md`。
 
 - `use case` 可编排单据流/单据链，例如
@@ -125,7 +125,7 @@
 - 构造器必须优先 `pub(crate)`
 - 禁止公开内部集合
 - `helper/query method` 是否应成为主交互面
-- 任何超出 `Entity` / `StateMachineV2` 注释与签名的风格化 OO 规则
+- 任何超出 `Entity` / `UseCase` 注释与签名的风格化 OO 规则
 
 若后续仍需要这些规范，应放到独立 architecture policy 文档，而不是继续写进 shared
 constraints。当前 `Entity` 对 `use case` API 收敛的架构政策落点见：

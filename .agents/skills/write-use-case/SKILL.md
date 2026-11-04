@@ -1,6 +1,6 @@
 ---
 name: write-use-case
-description: Write or refactor RustLOB command-style use cases built on `StateMachineV2` and, when replayable before/after truth is required, `StateMachineV2Diff`.
+description: Write or refactor RustLOB command-style use cases built on `UseCase` and, when replayable before/after truth is required, `StateDiff`.
 ---
 
 # Write Use Case
@@ -9,7 +9,7 @@ Implement business rules in the state machine. Keep state loading, persistence, 
 
 ## Read First
 
-- Contract: `lib/common/entity/src/use_case/state_machine_v2.rs`
+- Contract: `lib/common/entity/src/use_case/use_case_v2.rs`
 - Runtime orchestration: `lib/common/entity/src/use_case/executor.rs`
 - Calibration use case: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order.rs`
 - Happy-path specification: `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/place_perp_order/compute_replayable_events_happy_path.rs`
@@ -21,7 +21,7 @@ Source code is authoritative if these instructions drift.
 
 ## Core Contract
 
-Define domain-specific `Error`, `Command`, `StateGiven`, `StateChanged`, and the use-case type. Implement `StateMachineV2`:
+Define domain-specific `Error`, `Command`, `StateGiven`, `StateChanged`, and the use-case type. Implement `UseCase`:
 
 - `Command` is the business command and implements the required log-entry metadata contract.
 - `StateGiven` is loaded authoritative domain state, never a repository handle.
@@ -35,7 +35,7 @@ Keep `compute_state_changed()` deterministic for the same command and state. Put
 
 ## Replayable Truth
 
-Implement `StateMachineV2Diff` only when persistence, replay, diff, or audit needs owned before/after truth:
+Implement `StateDiff` only when persistence, replay, diff, or audit needs owned before/after truth:
 
 - `StateDiff` implements `ReplayableChanges`.
 - `do_compute_state_diff(StateGiven, StateChanged)` merges authoritative before truth with after truth.
@@ -52,7 +52,7 @@ Use `StateMachineExecutor`, `StateSource`, and `StateSink` only in adapter/runti
 ```text
 check_command
 -> StateSource::load_given_state
--> StateMachineV2Diff::compute_state_diff
+-> StateDiff::compute_state_diff
 -> ReplayableChanges::to_replayable_events
 -> write command lsn and logical_ts into every event
 -> StateSink::persist

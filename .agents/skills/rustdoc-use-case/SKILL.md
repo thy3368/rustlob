@@ -1,20 +1,20 @@
 ---
 name: rustdoc-use-case
-description: Write Rustdoc for RustLOB `StateMachineV2` and `StateMachineV2Diff` use cases, including commands, errors, state truth, replayable diffs, and boundary behavior.
+description: Write Rustdoc for RustLOB `UseCase` and `StateDiff` use cases, including commands, errors, state truth, replayable diffs, and boundary behavior.
 ---
 
 # Rustdoc Use Case
 
 Document the public business contract an adapter author needs. Start from:
 
-- `lib/common/entity/src/use_case/state_machine_v2.rs`
+- `lib/common/entity/src/use_case/use_case_v2.rs`
 - `lib/common/entity/src/use_case/executor.rs`
 - `lib/example/use_case/src/use_case/trading/derivatives/hyperliquid_perp/execution/match_perp_order.rs`
 - `.agents/skills/shared/changes_pair_first_rule.md`
 
 ## Contract Vocabulary
 
-- `Command` corresponds to `StateMachineV2::Command` and describes the requested business action.
+- `Command` corresponds to `UseCase::Command` and describes the requested business action.
 - `StateGiven` is authoritative loaded state.
 - `StateChanged` is the after truth returned by `compute_state_changed()`.
 - `StateDiff` is replay/persist before/after truth and implements `ReplayableChanges`.
