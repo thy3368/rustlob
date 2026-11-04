@@ -21,7 +21,7 @@
 
 ## 适用范围与非目标
 
-本文件用于 `design-use-case-group`、`review-mi-causal-chain` 及相关 skill 的概念校准，帮助判断：
+本文件用于 `review-mi-causal-chain` 及相关 skill 的概念校准，帮助判断：
 
 - 某个对象是否应作为独立 `MI`
 - 某个 `MI` 是主事实、派生事实、资金事实还是审计凭证事实
