@@ -4042,6 +4042,11 @@ dependencies = [
 [[package]]
 name = "hyperliquid_node"
 version = "0.1.0"
+dependencies = [
+ "rust_decimal",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "iana-time-zone"
