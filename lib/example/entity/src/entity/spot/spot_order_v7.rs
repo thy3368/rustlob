@@ -11,7 +11,7 @@ use crate::spot::spot_trade_v3::{SpotTradeSettlementStatus, SpotTradeV3};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV7Event {
     Match {
-        makers_after: Vec<SpotOrderV7>,
+        makers: Vec<SpotOrderV7>,
         input: MatchSpotOrderV7Input,
         timestamp: u64,
     },
@@ -123,10 +123,10 @@ impl SpotOrderV7 {
     ///todo 可以remove
     pub fn match_with_input(
         &mut self,
-        makers_after: Vec<SpotOrderV7>,
+        makers: Vec<SpotOrderV7>,
         input: MatchSpotOrderV7Input,
     ) -> Result<Option<MatchSpotOrderV7Outcome>, EntityError> {
-        self.transition(SpotOrderV7Event::Match { makers_after, timestamp: input.timestamp, input })
+        self.transition(SpotOrderV7Event::Match { makers, timestamp: input.timestamp, input })
             .map(|(_, output)| output)
     }
 
@@ -171,11 +171,10 @@ impl Fsm for SpotOrderV7 {
             return Err(err("order is terminal"));
         }
         let (next, output) = match event {
-            SpotOrderV7Event::Match { makers_after, input, timestamp } => {
+            SpotOrderV7Event::Match { makers, input, timestamp } => {
                 let mut adjusted_input = input;
                 adjusted_input.timestamp = timestamp;
-                let (next, outcome) =
-                    compute_match(&self.order_base, makers_after, adjusted_input)?;
+                let (next, outcome) = compute_match(&self.order_base, makers, adjusted_input)?;
                 (next, Some(outcome))
             }
             SpotOrderV7Event::ReplaceOrFill { price, size, makers, input, timestamp } => {

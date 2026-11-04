@@ -10,7 +10,7 @@
 
 ```rust
 enum SpotOrderV7Event {
-    Match { makers_after: Vec<SpotOrderV7>, input: MatchSpotOrderV7Input, timestamp: u64 },
+    Match { makers: Vec<SpotOrderV7>, input: MatchSpotOrderV7Input, timestamp: u64 },
     Modify { price: Decimal, size: Decimal, timestamp: u64 },
     Cancel { timestamp: u64 },
 }
