@@ -2952,6 +2952,7 @@ dependencies = [
  "entity",
  "lob_repo_v2",
  "proptest",
+ "rstest",
  "rust_decimal",
  "rust_decimal_macros",
  "serde",

@@ -16,6 +16,7 @@ lob_repo_v2 = { path = "../../common/lob_repo_v2" }
 rust_decimal_macros = "1.40.0"
 [dev-dependencies]
 proptest = "1"
+rstest = "0.23"
 
 
 
