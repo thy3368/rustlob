@@ -1,4 +1,4 @@
-use common_entity::{UseCase, StateDiff};
+use common_entity::{StateDiff, UseCase};
 
 use crate::SpotTrade;
 use crate::use_case::trading::spot::{MatchSpotOrderV3Changes, MatchSpotOrderV3UseCase};

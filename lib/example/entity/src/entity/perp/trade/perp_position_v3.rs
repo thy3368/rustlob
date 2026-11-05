@@ -1,4 +1,4 @@
-use common_entity::Fsm;
+use common_entity::{Entity, EntityFieldChange, FieldDiff, Fsm, Shard};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
 use serde::{Deserialize, Serialize};
@@ -8,6 +8,8 @@ use crate::account::coin::Coin;
 use crate::entity::common::{FundingRate, UserId};
 use crate::perp::fund::funding_payment::FundingPayment;
 use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
+
+const PERP_POSITION_V3_ENTITY_TYPE: u8 = 11;
 
 /// 仓位使用的保证金方式。
 ///
@@ -63,6 +65,7 @@ pub enum PerpPositionV3State {
 pub enum PerpPositionV3Event {
     TradeFilled { trade: PerpTradeV3, logical_ts: u64 },
     FundingSettled { payment: FundingPayment, logical_ts: u64 },
+    FundingAmountSettled { user_id: UserId, coin: Coin, signed_amount: Decimal, logical_ts: u64 },
     LeverageUpdated { leverage: Decimal, margin_mode: MarginModeV3, logical_ts: u64 },
     IsolatedMarginAdjusted { delta: Decimal, logical_ts: u64 },
 }
@@ -204,6 +207,12 @@ impl PerpPositionV3 {
     pub fn version(&self) -> u64 {
         self.version
     }
+    pub fn created_at(&self) -> u64 {
+        self.created_at
+    }
+    pub fn updated_at(&self) -> u64 {
+        self.updated_at
+    }
     pub fn is_flat(&self) -> bool {
         self.szi.is_zero()
     }
@@ -341,6 +350,95 @@ impl PerpPositionV3 {
         Ok(())
     }
 }
+
+impl FieldDiff for PerpPositionV3 {
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        position_fields(self, "")
+    }
+
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+        let before = position_field_values(self);
+        let after = position_field_values(other);
+        before
+            .into_iter()
+            .zip(after)
+            .filter(|((_, before), (_, after))| before != after)
+            .map(|((name, before), (_, after))| EntityFieldChange::new(name, before, after))
+            .collect()
+    }
+}
+
+fn position_fields(position: &PerpPositionV3, before: &str) -> Vec<EntityFieldChange> {
+    position_field_values(position)
+        .into_iter()
+        .map(|(name, after)| EntityFieldChange::new(name, before, after))
+        .collect()
+}
+
+fn position_field_values(position: &PerpPositionV3) -> Vec<(&'static str, String)> {
+    vec![
+        ("user_id", position.user_id.0.to_string()),
+        ("coin", position.coin.to_string()),
+        ("szi", position.szi.to_string()),
+        ("entry_px", position.entry_px.to_string()),
+        ("leverage", position.leverage.to_string()),
+        ("margin_mode", format!("{:?}", position.margin_mode)),
+        (
+            "isolated_margin",
+            position.isolated_margin.map(|value| value.to_string()).unwrap_or_default(),
+        ),
+        ("realized_pnl", position.realized_pnl.to_string()),
+        ("cum_fee", position.cum_fee.to_string()),
+        ("funding_all_time", position.cum_funding.all_time.to_string()),
+        ("funding_since_open", position.cum_funding.since_open.to_string()),
+        ("funding_since_change", position.cum_funding.since_change.to_string()),
+        ("created_at", position.created_at.to_string()),
+        ("updated_at", position.updated_at.to_string()),
+    ]
+}
+
+impl Shard for PerpPositionV3 {
+    fn partition(&self) -> u8 {
+        (self.user_id.0 % 256) as u8
+    }
+
+    fn party_id(&self) -> u64 {
+        self.user_id.0
+    }
+}
+
+impl Entity for PerpPositionV3 {
+    fn entity_id(&self) -> u64 {
+        self.position_id
+    }
+
+    fn is_derived() -> bool {
+        false
+    }
+
+    fn entity_type() -> u8 {
+        PERP_POSITION_V3_ENTITY_TYPE
+    }
+
+    fn lsn(&self) -> u64 {
+        self.version
+    }
+
+    fn replay_field_type(field_name: &str) -> u8 {
+        match field_name {
+            "szi"
+            | "entry_px"
+            | "leverage"
+            | "isolated_margin"
+            | "realized_pnl"
+            | "cum_fee"
+            | "funding_all_time"
+            | "funding_since_open"
+            | "funding_since_change" => 1,
+            _ => 0,
+        }
+    }
+}
 fn validate_margin(
     leverage: Decimal,
     mode: MarginModeV3,
@@ -431,6 +529,24 @@ impl Fsm for PerpPositionV3 {
             PerpPositionV3Event::FundingSettled { payment, logical_ts } => {
                 let mut next = self.clone();
                 let signed_amount = next.apply_funding_settled(&payment)?;
+                next.updated_at = logical_ts;
+                *self = next;
+                Ok((
+                    PerpPositionV3State::Active,
+                    PerpPositionV3Output::FundingApplied { signed_amount },
+                ))
+            }
+            PerpPositionV3Event::FundingAmountSettled {
+                user_id,
+                coin,
+                signed_amount,
+                logical_ts,
+            } => {
+                if self.user_id != user_id || self.coin != coin {
+                    return Err(PerpPositionV3Error::InvalidState);
+                }
+                let mut next = self.clone();
+                next.apply_funding_amount(signed_amount)?;
                 next.updated_at = logical_ts;
                 *self = next;
                 Ok((

@@ -1,123 +1,74 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff,
+    Entity, EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges,
     UpdatedEntityPair, UseCase,
 };
+use rust_decimal::Decimal;
 use thiserror::Error;
 
-use crate::entity::{Balance, HyperliquidPerpPositionError, HyperliquidPerpTrade, PerpPosition};
-use crate::support::concat3;
+use crate::entity::{
+    BalanceV2, BalanceV2Error, BalanceV2Event, PerpPositionV3, PerpPositionV3Error,
+    PerpPositionV3Event, PerpTradeV3, UserId,
+};
 
-const FEE_BPS_DENOMINATOR: u64 = 10_000;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettleHyperliquidPerpTradeCmd {
+    pub operator: UserId,
+    pub settlement_batch_id: u64,
+    pub trade_ids: Vec<u64>,
+}
 
-/// 清结算 Hyperliquid perp 成交可能产生的业务拒绝原因。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettleHyperliquidPerpTradeState {
+    pub trades: Vec<PerpTradeV3>,
+    pub positions: Vec<PerpPositionV3>,
+    pub margin_balances: Vec<BalanceV2>,
+    pub settled_trade_ids: Vec<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SettleHyperliquidPerpTradeError {
-    /// 业务发起方不能为空。
-    #[error("party_id must not be empty")]
-    InvalidPartyId,
-    /// 清结算批次 ID 不能为空。
-    #[error("settlement_batch_id must not be empty")]
+    #[error("settlement batch id must be non-zero")]
     InvalidSettlementBatchId,
-    /// 清结算命令必须包含至少一笔 trade。
-    #[error("trade_ids must not be empty")]
+    #[error("trade ids must not be empty")]
     EmptyTradeIds,
-    /// 命令 trade id 与已加载 trade 不一致。
     #[error("trade ids do not match loaded trades")]
     TradeIdsMismatch,
-    /// trade 已经清结算。
     #[error("trade was already settled")]
     TradeAlreadySettled,
-    /// 已加载仓位缺少对应账户的合约仓位槽位。
-    #[error("position slot was not found")]
-    PositionNotFound,
-    /// 已加载仓位账户、asset 或 symbol 与成交不一致。
-    #[error("position does not match trade account or market")]
+    #[error("position slot was not found or mismatched")]
     PositionMismatch,
-    /// 仓位状态、数量或保证金不一致。
-    #[error("position state is inconsistent")]
-    InconsistentPositionState,
-    /// 仓位杠杆必须至少为 1。
-    #[error("position leverage must be greater than or equal to one")]
-    InvalidLeverage,
-    /// 已加载账户缺少保证金币种余额。
     #[error("margin balance was not found")]
     MarginBalanceNotFound,
-    /// 保证金余额资产必须等于 state.margin_asset_id。
-    #[error("margin balance asset does not match state margin asset")]
-    InvalidMarginBalance,
-    /// 可用保证金余额不足以支付手续费、亏损或追加仓位保证金。
-    #[error("insufficient available margin balance")]
+    #[error("insufficient available margin")]
     InsufficientAvailableMargin,
-    /// 冻结保证金余额不足以释放仓位保证金。
-    #[error("insufficient frozen margin balance")]
-    InsufficientFrozenMargin,
-    /// 生成清结算结果时发生整数溢出。
-    #[error("arithmetic overflow while deriving settlement result")]
+    #[error("arithmetic overflow while settling trades")]
     ArithmeticOverflow,
 }
 
-/// 批量清结算 Hyperliquid perp 成交的命令。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SettleHyperliquidPerpTradeCmd {
-    /// 发起清结算的业务主体。
-    pub party_id: String,
-    /// 清结算批次 ID，用于稳定生成 settlement id。
-    pub settlement_batch_id: String,
-    /// 本批次要清结算的 trade id，顺序必须和已加载 trades 一致。
-    pub trade_ids: Vec<String>,
-}
-
-/// 清结算 Hyperliquid perp 成交时需要的已加载业务状态。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SettleHyperliquidPerpTradeState {
-    /// 要清结算的成交事实。
-    pub trades: Vec<HyperliquidPerpTrade>,
-    /// 本批次涉及账户在成交合约上的仓位槽位；空仓但可创建仓位时传 `version == 0` 的 flat 槽位。
-    pub positions: Vec<PerpPosition>,
-    /// 本批次涉及账户的 Cross 保证金币种余额。
-    pub margin_balances: Vec<Balance>,
-    /// Cross 保证金币种，例如 `USDC`。
-    pub margin_asset_id: String,
-    /// 平台手续费账户 ID，用于手续费流水。
-    pub fee_account_id: String,
-    /// taker 手续费 bps，分母为 10_000。
-    pub taker_fee_bps: u64,
-    /// maker 手续费 bps，分母为 10_000。
-    pub maker_fee_bps: u64,
-    /// 已经完成清结算的 trade id，用于 core 层幂等拒绝。
-    pub settled_trade_ids: Vec<String>,
-}
-
-/// Use case that settles matched Hyperliquid perp trades into positions and Cross margin balances.
-///
-/// 用例处理成交落仓位、Cross 保证金重算、已实现 PnL 和手续费；资金费、强平和 ADL
-/// 由独立 use case 处理。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SettleHyperliquidPerpTradeUseCase;
 
-/// 批量清结算成交后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpTradeChanges {
-    /// 本批次仓位槽位的 before/after，顺序与输入状态稳定对齐。
-    pub changed_positions: Vec<UpdatedEntityPair<PerpPosition>>,
-    /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。
-    pub changed_margin_balances: Vec<UpdatedEntityPair<Balance>>,
+    pub changed_positions: Vec<UpdatedEntityPair<PerpPositionV3>>,
+    pub changed_margin_balances: Vec<UpdatedEntityPair<BalanceV2>>,
 }
 
 impl ReplayableChanges for SettleHyperliquidPerpTradeChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
-        let mut events = Vec::with_capacity(0);
-        for position in &self.changed_positions {
-            if position.before.version == 0 && !position.after.is_flat() {
-                events.push(position.after.track_create_event()?);
-            } else if position.before != position.after {
-                events.push(position.after.track_update_event_from(&position.before)?);
+        let mut events =
+            Vec::with_capacity(self.changed_positions.len() + self.changed_margin_balances.len());
+        for pair in &self.changed_positions {
+            if pair.before.version() == 0 && pair.before.is_flat() {
+                events.push(pair.after.track_create_event()?);
+            } else {
+                events.push(pair.after.track_update_event_from(&pair.before)?);
             }
         }
-        for balance in &self.changed_margin_balances {
-            events.push(balance.after.track_update_event_from(&balance.before)?);
+        for pair in &self.changed_margin_balances {
+            events.push(pair.after.track_update_event_from(&pair.before)?);
         }
         Ok(events)
     }
@@ -130,10 +81,7 @@ impl UseCase for SettleHyperliquidPerpTradeUseCase {
     type StateChanged = SettleHyperliquidPerpTradeChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        if cmd.party_id.is_empty() {
-            return Err(SettleHyperliquidPerpTradeError::InvalidPartyId);
-        }
-        if cmd.settlement_batch_id.is_empty() {
+        if cmd.settlement_batch_id == 0 {
             return Err(SettleHyperliquidPerpTradeError::InvalidSettlementBatchId);
         }
         if cmd.trade_ids.is_empty() {
@@ -147,10 +95,20 @@ impl UseCase for SettleHyperliquidPerpTradeUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        validate_trade_ids_match(cmd, state)?;
-        ensure_not_settled(state)?;
-        let outcome = derive_settlement_outcome(cmd, state)?;
-        validate_balances_can_apply(state, &outcome.balance_deltas)
+        if cmd.trade_ids.len() != state.trades.len()
+            || cmd
+                .trade_ids
+                .iter()
+                .zip(&state.trades)
+                .any(|(id, trade)| *id != trade.trade_base.trade_id)
+        {
+            return Err(SettleHyperliquidPerpTradeError::TradeIdsMismatch);
+        }
+        let settled: HashSet<u64> = state.settled_trade_ids.iter().copied().collect();
+        if cmd.trade_ids.iter().any(|id| settled.contains(id)) {
+            return Err(SettleHyperliquidPerpTradeError::TradeAlreadySettled);
+        }
+        derive_changes(cmd, state).map(|_| ())
     }
 
     fn compute_state_changed_only(
@@ -158,298 +116,85 @@ impl UseCase for SettleHyperliquidPerpTradeUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let outcome = derive_settlement_outcome(cmd, state)?;
-        validate_balances_can_apply(state, &outcome.balance_deltas)?;
-
-        let changed_positions = state
-            .positions
-            .iter()
-            .filter_map(|position| {
-                let key = position_key(
-                    &position.account_id,
-                    position.perp_asset_id,
-                    position.coin.as_str(),
-                );
-                outcome
-                    .positions
-                    .get(&key)
-                    .cloned()
-                    .map(|after| UpdatedEntityPair { before: position.clone(), after })
-            })
-            .collect::<Vec<_>>();
-        let mut changed_margin_balances = Vec::with_capacity(0);
-        for balance in &state.margin_balances {
-            let key = balance.business_entity_id();
-            let Some(delta) = outcome.balance_deltas.get(&key) else {
-                continue;
-            };
-            let next_available = apply_signed_delta(balance.available, delta.available_delta)?;
-            let next_frozen = apply_signed_delta(balance.frozen, delta.frozen_delta)?;
-            let next_version = balance
-                .version
-                .checked_add(1)
-                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            let next_balance = Balance::new_with_snapshot_facts(
-                balance.party_id,
-                balance.account_id,
-                balance.asset_id,
-                next_available,
-                next_frozen,
-                balance.entry_notional(),
-                balance.identifier().map(str::to_string),
-                next_version,
-            );
-            changed_margin_balances
-                .push(UpdatedEntityPair { before: balance.clone(), after: next_balance });
-        }
-
-        Ok(SettleHyperliquidPerpTradeChanges { changed_positions, changed_margin_balances })
+        derive_changes(cmd, state)
     }
 }
 
-impl SettleHyperliquidPerpTradeUseCase {
-    pub const fn role(&self) -> &'static str {
-        "ClearingHouse"
-    }
-}
-impl StateDiff for SettleHyperliquidPerpTradeUseCase {
-    type StateDiff = SettleHyperliquidPerpTradeChanges;
-    fn do_compute_state_diff(
-        _: SettleHyperliquidPerpTradeState,
-        changed: Self::StateChanged,
-    ) -> Result<Self::StateDiff, Self::Error> {
-        Ok(changed)
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-struct BalanceDelta {
-    available_delta: i128,
-    frozen_delta: i128,
-}
-
-#[derive(Debug, Clone)]
-struct SettlementOutcome {
-    positions: BTreeMap<String, PerpPosition>,
-    balance_deltas: BTreeMap<String, BalanceDelta>,
-}
-
-fn validate_trade_ids_match(
-    cmd: &SettleHyperliquidPerpTradeCmd,
+fn derive_changes(
+    cmd: &LogEntry<SettleHyperliquidPerpTradeCmd>,
     state: &SettleHyperliquidPerpTradeState,
-) -> Result<(), SettleHyperliquidPerpTradeError> {
-    if cmd.trade_ids.len() != state.trades.len() {
-        return Err(SettleHyperliquidPerpTradeError::TradeIdsMismatch);
-    }
-    if cmd.trade_ids.iter().zip(&state.trades).any(|(trade_id, trade)| trade_id != &trade.trade_id)
-    {
-        return Err(SettleHyperliquidPerpTradeError::TradeIdsMismatch);
-    }
-    Ok(())
-}
+) -> Result<SettleHyperliquidPerpTradeChanges, SettleHyperliquidPerpTradeError> {
+    let mut positions: BTreeMap<(u64, u32), PerpPositionV3> = state
+        .positions
+        .iter()
+        .cloned()
+        .map(|position| ((position.user_id().0, position.coin().index()), position))
+        .collect();
+    let mut balance_deltas: BTreeMap<u64, Decimal> = BTreeMap::new();
+    let mut changed_positions = Vec::with_capacity(state.trades.len() * 2);
 
-fn ensure_not_settled(
-    state: &SettleHyperliquidPerpTradeState,
-) -> Result<(), SettleHyperliquidPerpTradeError> {
-    let settled: HashSet<&str> = state.settled_trade_ids.iter().map(String::as_str).collect();
-    if state.trades.iter().any(|trade| settled.contains(trade.trade_id.as_str())) {
-        return Err(SettleHyperliquidPerpTradeError::TradeAlreadySettled);
-    }
-    Ok(())
-}
-
-fn derive_settlement_outcome(
-    cmd: &SettleHyperliquidPerpTradeCmd,
-    state: &SettleHyperliquidPerpTradeState,
-) -> Result<SettlementOutcome, SettleHyperliquidPerpTradeError> {
-    let mut positions = position_map(state.positions.clone().into_iter());
-    let mut balance_deltas: BTreeMap<String, BalanceDelta> = BTreeMap::new();
     for trade in &state.trades {
-        let notional =
-            trade.notional_quote().ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-        let taker_fee = fee_from_bps(notional, state.taker_fee_bps)?;
-        let maker_fee = fee_from_bps(notional, state.maker_fee_bps)?;
+        for (user, pnl, fee) in [
+            (trade.trade_base.taker_user, trade.taker_closed_pnl, trade.trade_base.taker_fee),
+            (trade.trade_base.maker_user, trade.maker_closed_pnl, trade.trade_base.maker_fee),
+        ] {
+            let key = (user.0, trade.trade_base.symbol.base.index());
+            let before = positions
+                .get(&key)
+                .cloned()
+                .ok_or(SettleHyperliquidPerpTradeError::PositionMismatch)?;
+            let mut after = before.clone();
+            after
+                .apply(PerpPositionV3Event::TradeFilled {
+                    trade: trade.clone(),
+                    logical_ts: cmd.logical_ts(),
+                })
+                .map_err(map_position_error)?;
+            positions.insert(key, after.clone());
+            changed_positions.push(UpdatedEntityPair { before, after });
 
-        let taker_position_key =
-            position_key(&trade.taker_account_id, trade.asset, trade.symbol.as_str());
-        let maker_position_key =
-            position_key(&trade.maker_account_id, trade.asset, trade.symbol.as_str());
-        let Some(taker_position) = positions.get(&taker_position_key).cloned() else {
-            return Err(SettleHyperliquidPerpTradeError::PositionNotFound);
-        };
-        let Some(maker_position) = positions.get(&maker_position_key).cloned() else {
-            return Err(SettleHyperliquidPerpTradeError::PositionNotFound);
-        };
-        validate_position_for_trade(&taker_position, trade.taker_account_id.as_str(), trade)?;
-        validate_position_for_trade(&maker_position, trade.maker_account_id.as_str(), trade)?;
-
-        let settlement = trade
-            .settle_into_positions(&taker_position, &maker_position)
-            .map_err(map_position_error)?;
-
-        add_margin_delta(
-            &mut balance_deltas,
-            trade.taker_account_id.as_str(),
-            state.margin_asset_id.as_str(),
-            settlement.taker_outcome.required_margin_delta,
-        )?;
-        add_available_delta(
-            &mut balance_deltas,
-            trade.taker_account_id.as_str(),
-            state.margin_asset_id.as_str(),
-            i128::from(settlement.taker_outcome.realized_pnl_delta)
-                .checked_sub(i128::from(taker_fee))
-                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
-        )?;
-        add_margin_delta(
-            &mut balance_deltas,
-            trade.maker_account_id.as_str(),
-            state.margin_asset_id.as_str(),
-            settlement.maker_outcome.required_margin_delta,
-        )?;
-        add_available_delta(
-            &mut balance_deltas,
-            trade.maker_account_id.as_str(),
-            state.margin_asset_id.as_str(),
-            i128::from(settlement.maker_outcome.realized_pnl_delta)
-                .checked_sub(i128::from(maker_fee))
-                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
-        )?;
-
-        positions.insert(taker_position_key, settlement.taker_position_after);
-        positions.insert(maker_position_key, settlement.maker_position_after);
+            let delta =
+                pnl.checked_sub(fee).ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+            let total = balance_deltas.entry(user.0).or_default();
+            *total = total
+                .checked_add(delta)
+                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+        }
     }
 
-    Ok(SettlementOutcome { positions, balance_deltas })
+    let mut changed_margin_balances = Vec::with_capacity(balance_deltas.len());
+    for (account_id, delta) in balance_deltas {
+        if delta.is_zero() {
+            continue;
+        }
+        let before = state
+            .margin_balances
+            .iter()
+            .find(|balance| balance.account_id() == account_id)
+            .cloned()
+            .ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
+        let mut after = before.clone();
+        let event = if delta.is_sign_positive() {
+            BalanceV2Event::CreditAvailable { amount: delta, timestamp: cmd.logical_ts() }
+        } else {
+            BalanceV2Event::DebitAvailable { amount: delta.abs(), timestamp: cmd.logical_ts() }
+        };
+        after.apply(event).map_err(map_balance_error)?;
+        changed_margin_balances.push(UpdatedEntityPair { before, after });
+    }
+
+    Ok(SettleHyperliquidPerpTradeChanges { changed_positions, changed_margin_balances })
 }
 
-fn validate_position_for_trade(
-    position: &PerpPosition,
-    account_id: &str,
-    trade: &HyperliquidPerpTrade,
-) -> Result<(), SettleHyperliquidPerpTradeError> {
-    if !position.belongs_to_account(account_id)
-        || !position.trades_asset(trade.asset)
-        || !position.trades_symbol(trade.symbol.as_str())
-    {
-        return Err(SettleHyperliquidPerpTradeError::PositionMismatch);
-    }
-    if position.leverage == 0 {
-        return Err(SettleHyperliquidPerpTradeError::InvalidLeverage);
-    }
-    if !position.has_consistent_state() {
-        return Err(SettleHyperliquidPerpTradeError::InconsistentPositionState);
-    }
-    Ok(())
+fn map_position_error(_: PerpPositionV3Error) -> SettleHyperliquidPerpTradeError {
+    SettleHyperliquidPerpTradeError::PositionMismatch
 }
 
-fn map_position_error(error: HyperliquidPerpPositionError) -> SettleHyperliquidPerpTradeError {
+fn map_balance_error(error: BalanceV2Error) -> SettleHyperliquidPerpTradeError {
     match error {
-        HyperliquidPerpPositionError::InvalidTradeQty
-        | HyperliquidPerpPositionError::InvalidTradePrice
-        | HyperliquidPerpPositionError::InconsistentState
-        | HyperliquidPerpPositionError::MarginModeMismatch => {
-            SettleHyperliquidPerpTradeError::InconsistentPositionState
+        BalanceV2Error::InsufficientAvailableBalance => {
+            SettleHyperliquidPerpTradeError::InsufficientAvailableMargin
         }
-        HyperliquidPerpPositionError::InvalidLeverage => {
-            SettleHyperliquidPerpTradeError::InvalidLeverage
-        }
-        HyperliquidPerpPositionError::ArithmeticOverflow => {
-            SettleHyperliquidPerpTradeError::ArithmeticOverflow
-        }
+        _ => SettleHyperliquidPerpTradeError::ArithmeticOverflow,
     }
-}
-
-fn validate_balances_can_apply(
-    state: &SettleHyperliquidPerpTradeState,
-    deltas: &BTreeMap<String, BalanceDelta>,
-) -> Result<(), SettleHyperliquidPerpTradeError> {
-    let balances = balance_map(&state.margin_balances);
-    for (key, delta) in deltas {
-        let balance =
-            balances.get(key).ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
-        if !balance.is_asset(common_entity::stable_string_entity_id(&state.margin_asset_id)) {
-            return Err(SettleHyperliquidPerpTradeError::InvalidMarginBalance);
-        }
-        if apply_signed_delta(balance.available, delta.available_delta).is_err() {
-            return Err(SettleHyperliquidPerpTradeError::InsufficientAvailableMargin);
-        }
-        if apply_signed_delta(balance.frozen, delta.frozen_delta).is_err() {
-            return Err(SettleHyperliquidPerpTradeError::InsufficientFrozenMargin);
-        }
-    }
-    Ok(())
-}
-
-fn fee_from_bps(notional: u64, fee_bps: u64) -> Result<u64, SettleHyperliquidPerpTradeError> {
-    notional
-        .checked_mul(fee_bps)
-        .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)
-        .map(|value| value / FEE_BPS_DENOMINATOR)
-}
-
-fn add_margin_delta(
-    deltas: &mut BTreeMap<String, BalanceDelta>,
-    account_id: &str,
-    asset_id: &str,
-    required_margin_delta: i128,
-) -> Result<(), SettleHyperliquidPerpTradeError> {
-    let delta = deltas.entry(balance_key(account_id, asset_id)).or_default();
-    delta.available_delta = delta
-        .available_delta
-        .checked_sub(required_margin_delta)
-        .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-    delta.frozen_delta = delta
-        .frozen_delta
-        .checked_add(required_margin_delta)
-        .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-    Ok(())
-}
-
-fn add_available_delta(
-    deltas: &mut BTreeMap<String, BalanceDelta>,
-    account_id: &str,
-    asset_id: &str,
-    amount: i128,
-) -> Result<(), SettleHyperliquidPerpTradeError> {
-    let delta = deltas.entry(balance_key(account_id, asset_id)).or_default();
-    delta.available_delta = delta
-        .available_delta
-        .checked_add(amount)
-        .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-    Ok(())
-}
-
-fn apply_signed_delta(value: u64, delta: i128) -> Result<u64, SettleHyperliquidPerpTradeError> {
-    let next = i128::from(value)
-        .checked_add(delta)
-        .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-    if next < 0 || next > i128::from(u64::MAX) {
-        return Err(SettleHyperliquidPerpTradeError::ArithmeticOverflow);
-    }
-    Ok(next as u64)
-}
-
-fn position_map(positions: impl Iterator<Item = PerpPosition>) -> BTreeMap<String, PerpPosition> {
-    positions
-        .map(|position| {
-            (
-                position_key(&position.account_id, position.perp_asset_id, position.coin.as_str()),
-                position,
-            )
-        })
-        .collect()
-}
-
-fn balance_map(balances: &[Balance]) -> HashMap<String, &Balance> {
-    balances.iter().map(|balance| (balance.business_entity_id(), balance)).collect()
-}
-
-fn position_key(account_id: &str, asset: u32, symbol: &str) -> String {
-    let asset = asset.to_string();
-    concat3(account_id, ":", concat3(asset.as_str(), ":", symbol).as_str())
-}
-
-fn balance_key(account_id: &str, asset_id: &str) -> String {
-    concat3(account_id, ":", asset_id)
 }

@@ -30,7 +30,7 @@ pub use trading::{
     CancelSpotOrderV2UseCase, GenerateSpotKlinesFromHistoricalTradesChanges,
     GenerateSpotKlinesFromHistoricalTradesCmd, GenerateSpotKlinesFromHistoricalTradesError,
     GenerateSpotKlinesFromHistoricalTradesState, GenerateSpotKlinesFromHistoricalTradesUseCase,
-    HyperliquidPerpMarginMode, MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd,
+    MarginModeV3, MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd,
     MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
     MatchHyperliquidPerpOrderUseCase, MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Changes,
     MatchSpotOrderV3Cmd, MatchSpotOrderV3Error, MatchSpotOrderV3State, MatchSpotOrderV3UseCase,

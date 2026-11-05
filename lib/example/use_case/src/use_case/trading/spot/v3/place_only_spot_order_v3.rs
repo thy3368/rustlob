@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
-    StateDiff,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UseCase,
 };
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};

@@ -28,4 +28,4 @@ pub use funding::{
     SettleHyperliquidPerpFundingUseCase,
 };
 
-pub use crate::entity::HyperliquidPerpMarginMode;
+pub use crate::entity::MarginModeV3;

@@ -1,6 +1,5 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
-    StateDiff,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UseCase,
 };
 use thiserror::Error;
 

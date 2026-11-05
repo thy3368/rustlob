@@ -3,7 +3,7 @@ pub mod spot;
 pub mod derivatives;
 
 pub use derivatives::{
-    HyperliquidPerpMarginMode, MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd,
+    MarginModeV3, MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd,
     MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
     MatchHyperliquidPerpOrderUseCase, PlaceHyperliquidPerpOrderChanges,
     PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,

@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use common_entity::{EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase};
 use example_core_entity::hyperliquid_account::perp_clearinghouse_state_v3::PerpClearinghouseStateV3;
-use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -79,17 +78,19 @@ impl UseCase for PerpLiquidation {
             for (symbol, state) in &given_state.order_states {
                 let position = &state.position;
                 let mark = cmd.mark_prices.get(symbol).ok_or(LiquidationError::MissingMarkPrice)?;
-                let aggressive_price = mark.to_u64().ok_or(LiquidationError::InvalidMarkPrice)?;
-                let size = position.qty();
-                if size == 0 {
+                let aggressive_price = *mark;
+                let size = position.signed_size().abs();
+                if size.is_zero() {
                     continue;
                 }
-                let is_buy = position.is_short();
                 let child = PlaceHyperliquidPerpOrderCmd {
-                    party_id: state.account_id.clone(),
-                    asset: position.perp_asset_id,
-                    symbol: symbol.clone(),
-                    is_buy,
+                    user_id: position.user_id(),
+                    symbol: state.market_symbol,
+                    side: if position.is_short() {
+                        crate::entity::OrderSide::Buy
+                    } else {
+                        crate::entity::OrderSide::Sell
+                    },
                     size,
                     reduce_only: true,
                     execution: PlaceHyperliquidPerpOrderExecution::Market { aggressive_price },

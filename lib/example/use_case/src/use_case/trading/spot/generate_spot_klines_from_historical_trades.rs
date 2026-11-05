@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UseCase,
 };
 use thiserror::Error;
 

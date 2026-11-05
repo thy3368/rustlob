@@ -5,7 +5,7 @@ pub mod usds_m_future;
 pub mod hyperliquid_perp;
 
 pub use hyperliquid_perp::{
-    HyperliquidPerpMarginMode, MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd,
+    MarginModeV3, MatchHyperliquidPerpOrderChanges, MatchHyperliquidPerpOrderCmd,
     MatchHyperliquidPerpOrderError, MatchHyperliquidPerpOrderState,
     MatchHyperliquidPerpOrderUseCase, PlaceHyperliquidPerpOrderChanges,
     PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,

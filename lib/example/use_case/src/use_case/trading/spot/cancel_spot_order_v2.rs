@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
-    UpdatedEntityPair,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
+    UseCase,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

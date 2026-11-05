@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
-    StateDiff, UpdatedEntityPair,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
+    UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;

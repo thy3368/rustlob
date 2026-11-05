@@ -24,7 +24,9 @@ pub struct Symbol {
 }
 
 impl Symbol {
-    pub fn id(&self) -> u32 { self.id.0 }
+    pub fn id(&self) -> u32 {
+        self.id.0
+    }
     pub fn new(id: u32, base: Coin, quote: Coin) -> Self {
         Symbol { id: SymbolId(id), base, quote }
     }

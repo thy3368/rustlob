@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
-    StateDiff, UpdatedEntityPair,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff,
+    UpdatedEntityPair, UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
 use serde::{Deserialize, Serialize};
