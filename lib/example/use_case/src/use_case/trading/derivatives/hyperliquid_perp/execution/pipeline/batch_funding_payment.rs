@@ -1,9 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use common_entity::{LogEntry, UseCase};
+use common_entity::{
+    Entity, EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges,
+    UpdatedEntityPair, UseCase,
+};
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::FundingRate;
-use example_core_entity::perp::fund::funding::UserFunding;
+use example_core_entity::perp::fund::funding::{
+    UserFunding, UserFundingError, UserFundingEvent, UserFundingOutput,
+};
 use example_core_entity::perp::trade::perp_position_v3::{MarginModeV3, PerpPositionV3};
 use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event};
 use rust_decimal::Decimal;
@@ -65,6 +70,8 @@ pub enum SettleHyperliquidPerpFundingError {
     BalanceClosed,
     #[error("arithmetic overflow while deriving funding settlement")]
     ArithmeticOverflow,
+    #[error("funding transition failed: {0}")]
+    FundingTransition(#[from] UserFundingError),
 }
 
 /// Use case that settles one Hyperliquid perp funding batch into funding facts and balance deltas.
@@ -76,8 +83,21 @@ pub struct UserFundingUseCase;
 pub struct UserFundingChanges {
     /// 本批次新创建的资金费事实。
     pub created_funding_payment: Vec<UserFunding>,
+    /// 每条资金费从 pending 到 settled 的权威前后态。
+    pub funding_updates: Vec<UpdatedEntityPair<UserFunding>>,
     /// 本批次实际受影响保证金余额的 after 快照，顺序与输入状态稳定对齐。
     pub changed_margin_balances: Vec<BalanceV2>,
+}
+
+impl ReplayableChanges for UserFundingChanges {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+        let mut events = Vec::with_capacity(self.funding_updates.len() * 2);
+        for pair in &self.funding_updates {
+            events.push(pair.before.track_create_event()?);
+            events.push(pair.to_replayable_event()?);
+        }
+        Ok(events)
+    }
 }
 
 impl UseCase for UserFundingUseCase {
@@ -105,7 +125,7 @@ impl UseCase for UserFundingUseCase {
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         validate_positions(cmd, state)?;
-        let (_, deltas) = derive_funding_payments(cmd, state)?;
+        let (_, _, deltas) = derive_funding_payments(cmd, state)?;
         derive_changed_balances(cmd, state, &deltas).map(|_| ())
     }
 
@@ -114,9 +134,10 @@ impl UseCase for UserFundingUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let (created_funding_payment, deltas) = derive_funding_payments(cmd, state)?;
+        let (created_funding_payment, funding_updates, deltas) =
+            derive_funding_payments(cmd, state)?;
         let changed_margin_balances = derive_changed_balances(cmd, state, &deltas)?;
-        Ok(UserFundingChanges { created_funding_payment, changed_margin_balances })
+        Ok(UserFundingChanges { created_funding_payment, funding_updates, changed_margin_balances })
     }
 }
 
@@ -144,8 +165,12 @@ fn validate_positions(
 fn derive_funding_payments(
     cmd: &LogEntry<UserFundingCmd>,
     state: &UserFundingState,
-) -> Result<(Vec<UserFunding>, BTreeMap<u64, Decimal>), SettleHyperliquidPerpFundingError> {
+) -> Result<
+    (Vec<UserFunding>, Vec<UpdatedEntityPair<UserFunding>>, BTreeMap<u64, Decimal>),
+    SettleHyperliquidPerpFundingError,
+> {
     let mut payments = Vec::with_capacity(state.positions.len());
+    let mut updates = Vec::with_capacity(state.positions.len());
     let mut deltas = BTreeMap::<u64, Decimal>::new();
 
     for position in &state.positions {
@@ -157,22 +182,29 @@ fn derive_funding_payments(
             })? else { continue };
 
         let funding_key = format!("{}:{}", cmd.funding_batch_id, position.position_key());
-        payments.push(UserFunding::new(
+        let mut payment = UserFunding::new(
             common_entity::stable_string_entity_id(&funding_key),
+            position.user_id().0,
             cmd.symbol,
             usdc,
             position.signed_size(),
             cmd.funding_rate,
             None,
             cmd.funding_time,
-            cmd.funding_time,
-        ));
-        let delta = deltas.entry(position.user_id().0).or_default();
-        *delta =
-            delta.checked_add(usdc).ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
+        );
+        let pending = payment.clone();
+        let (_, impact) =
+            payment.transition(UserFundingEvent::Settle { settled_at: cmd.funding_time })?;
+        let UserFundingOutput::BalanceImpact { party_id, signed_usdc_delta, .. } = impact;
+        updates.push(UpdatedEntityPair::new(pending, payment.clone()));
+        payments.push(payment);
+        let delta = deltas.entry(party_id).or_default();
+        *delta = delta
+            .checked_add(signed_usdc_delta)
+            .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
     }
 
-    Ok((payments, deltas))
+    Ok((payments, updates, deltas))
 }
 
 fn derive_changed_balances(
@@ -311,6 +343,20 @@ mod tests {
             .unwrap();
 
         assert_eq!(changed.created_funding_payment.len(), 2);
+        assert!(changed.created_funding_payment.iter().all(|funding| funding.state()
+            == example_core_entity::perp::fund::funding::UserFundingState::Settled
+            && funding.version() == 2));
+        assert_eq!(changed.funding_updates.len(), 2);
+        assert!(changed.funding_updates.iter().all(|pair| {
+            pair.before.state()
+                == example_core_entity::perp::fund::funding::UserFundingState::Pending
+                && pair.after.state()
+                    == example_core_entity::perp::fund::funding::UserFundingState::Settled
+        }));
+        let events = changed.to_replayable_events().unwrap();
+        assert_eq!(events.len(), 4);
+        assert!(events[0].is_created());
+        assert!(events[1].is_updated());
         assert_eq!(changed.created_funding_payment[0].usdc(), Decimal::from(-10));
         assert_eq!(changed.created_funding_payment[1].usdc(), Decimal::from(10));
         assert_eq!(changed.created_funding_payment[0].funding_rate(), Decimal::new(1, 4));
