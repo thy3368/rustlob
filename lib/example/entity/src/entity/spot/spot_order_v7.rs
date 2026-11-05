@@ -1,5 +1,6 @@
 use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff, Fsm, Shard};
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 
 use crate::account::coin::{CoinAmount, CoinAmountError};
 use crate::entity::common::common_order::{OrderBase, SpotAmountConversionError};
@@ -7,6 +8,7 @@ use crate::entity::common::common_trade::TradeBase;
 use crate::entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
 use crate::entity::spot::spot_order_v2::OrderGroupRelation;
 use crate::spot::spot_trade_v3::{SpotTradeSettlementStatus, SpotTradeV3};
+use lob_repo_v2::lob::LobOrder;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV7Event {
@@ -324,6 +326,23 @@ impl Shard for SpotOrderV7 {
     fn partition(&self) -> u8 {
         self.order_base.symbol.base.index() as u8
     }
+}
+
+impl LobOrder for SpotOrderV7 {
+    type Side = OrderSide;
+    fn entity_type() -> u8 { <Self as Entity>::entity_type() }
+    fn entity_id(&self) -> u64 { self.order_base.order_id }
+    fn asset(&self) -> u32 { self.order_base.symbol.id() }
+    fn side(&self) -> Self::Side { self.order_base.side }
+    fn is_buy_side(side: Self::Side) -> bool { side == OrderSide::Buy }
+    fn price(&self) -> u64 { self.order_base.limit_px.to_u64().unwrap_or(0) }
+    fn qty(&self) -> u64 { self.order_base.orig_size.to_u64().unwrap_or(0) }
+    fn filled_qty(&self) -> u64 { (self.order_base.orig_size - self.order_base.size).to_u64().unwrap_or(0) }
+    fn created_at(&self) -> u64 { self.order_base.created_at }
+    fn entity_ver(&self) -> u64 { self.order_base.version }
+    fn is_active(&self) -> bool { matches!(self.status(), SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) && self.order_base.size > Decimal::ZERO }
+    fn from_replay_event(_: &common_entity::EntityReplayableEvent, _: u64) -> Result<Self, lob_repo_v2::LobError> { Err(lob_repo_v2::LobError::Event("SpotOrderV7 replay construction is not wired".into())) }
+    fn apply_replay_event(self, _: &common_entity::EntityReplayableEvent) -> Result<Self, lob_repo_v2::LobError> { Err(lob_repo_v2::LobError::Event("SpotOrderV7 replay update is not wired".into())) }
 }
 
 fn err(s: &str) -> EntityError {
