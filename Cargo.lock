@@ -3016,6 +3016,7 @@ dependencies = [
  "example_outbound_adapter",
  "futures-util",
  "rstest",
+ "rust_decimal",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

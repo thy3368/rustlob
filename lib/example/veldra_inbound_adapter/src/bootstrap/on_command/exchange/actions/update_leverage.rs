@@ -1,12 +1,12 @@
 use common_entity::{EntityError, EntityReplayableEvent, ReplayableChanges, UseCase};
-use example_core_use_case::common_entity::{
-    HyperliquidPerpLeverageSetting, HyperliquidPerpMarginMode,
-};
+use example_core_use_case::account::coin::Coin;
+use example_core_use_case::account::symbol::Symbol;
 use example_core_use_case::{
-    UpdateHyperliquidPerpLeverageChanges, UpdateHyperliquidPerpLeverageCmd,
-    UpdateHyperliquidPerpLeverageError, UpdateHyperliquidPerpLeverageState,
-    UpdateHyperliquidPerpLeverageUseCase,
+    FundingAccumulatorV3, MarginModeV3, PerpPositionV3, UpdateHyperliquidPerpLeverageChanges,
+    UpdateHyperliquidPerpLeverageCmd, UpdateHyperliquidPerpLeverageError,
+    UpdateHyperliquidPerpLeverageState, UpdateHyperliquidPerpLeverageUseCase, UserId,
 };
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::bootstrap::on_command::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
@@ -116,22 +116,10 @@ impl UpdateLeverageOutbound for DefaultUpdateLeverageOutbound {
         &self,
         cmd: &UpdateHyperliquidPerpLeverageCmd,
     ) -> Result<UpdateHyperliquidPerpLeverageState, Self::Error> {
-        let margin_mode = if cmd.is_cross {
-            HyperliquidPerpMarginMode::Cross
-        } else {
-            HyperliquidPerpMarginMode::Isolated
-        };
-        let before_leverage = if cmd.leverage == 1 { 2 } else { 1 };
+        let before_leverage =
+            if cmd.leverage == Decimal::ONE { Decimal::from(2) } else { Decimal::ONE };
         Ok(UpdateHyperliquidPerpLeverageState {
-            account_id: cmd.party_id.clone(),
-            leverage_setting: HyperliquidPerpLeverageSetting::new(
-                cmd.party_id.clone(),
-                cmd.asset,
-                margin_mode,
-                before_leverage,
-                1,
-            ),
-            position: None,
+            position: position_for_command(cmd, before_leverage),
         })
     }
 
@@ -189,10 +177,10 @@ where
 {
     let use_case = UpdateHyperliquidPerpLeverageUseCase;
     let payload = UpdateHyperliquidPerpLeverageCmd {
-        party_id: request.party_id.clone(),
-        asset: request.asset,
-        is_cross: request.is_cross,
-        leverage: request.leverage,
+        user_id: UserId(common_entity::stable_string_entity_id(&request.party_id)),
+        symbol: Symbol::new(request.asset, Coin::BTC, Coin::USDC),
+        margin_mode: if request.is_cross { MarginModeV3::Cross } else { MarginModeV3::Isolated },
+        leverage: Decimal::from(request.leverage),
     };
     let cmd = common_entity::LogEntrySequencer::from_metadata(
         lsn, logical_ts, client_id, request_id, payload,
@@ -220,6 +208,31 @@ where
     Ok(changes)
 }
 
+fn position_for_command(
+    cmd: &UpdateHyperliquidPerpLeverageCmd,
+    leverage: Decimal,
+) -> PerpPositionV3 {
+    if cmd.margin_mode == MarginModeV3::Cross && leverage == Decimal::ONE {
+        return PerpPositionV3::empty(u64::from(cmd.symbol.id()), cmd.user_id, cmd.symbol.base);
+    }
+
+    PerpPositionV3::new(
+        u64::from(cmd.symbol.id()),
+        cmd.user_id,
+        cmd.symbol.base,
+        Decimal::ZERO,
+        Decimal::ZERO,
+        leverage,
+        cmd.margin_mode,
+        (cmd.margin_mode == MarginModeV3::Isolated).then_some(Decimal::ONE),
+        Decimal::ZERO,
+        FundingAccumulatorV3::default(),
+        Decimal::ZERO,
+        0,
+    )
+    .expect("adapter fixture must construct a valid position")
+}
+
 async fn execute(
     request: RequestWire,
 ) -> Result<reply::UpdateLeverageResponseWire, ExchangeHttpError> {
@@ -245,6 +258,27 @@ mod tests {
                 .expect("request should parse");
         assert_eq!(request.action.type_, "updateLeverage");
         assert_eq!(request.action.leverage, 5);
+    }
+
+    #[test]
+    fn maps_vault_address_and_default_party_to_stable_user_ids() {
+        let mut wire =
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_update_leverage_json())
+                .expect("request should parse");
+        wire.common.vault_address = Some("trader-1".to_string());
+        let explicit = UpdateLeverageRequest::from_wire(wire);
+
+        let default = UpdateLeverageRequest::from_wire(
+            parse_json_request::<RequestWire, ExchangeHttpError>(valid_update_leverage_json())
+                .expect("request should parse"),
+        );
+
+        assert_eq!(explicit.party_id, "trader-1");
+        assert_eq!(default.party_id, DEFAULT_EXCHANGE_PARTY_ID);
+        assert_ne!(
+            common_entity::stable_string_entity_id(&explicit.party_id),
+            common_entity::stable_string_entity_id(&default.party_id)
+        );
     }
 
     #[test]
@@ -321,24 +355,28 @@ mod tests {
         assert_eq!(
             seen_cmd,
             UpdateHyperliquidPerpLeverageCmd {
-                party_id: "trader-1".to_string(),
-                asset: 7,
-                is_cross: true,
-                leverage: 9,
+                user_id: UserId(common_entity::stable_string_entity_id("trader-1")),
+                symbol: Symbol::new(7, Coin::BTC, Coin::USDC),
+                margin_mode: MarginModeV3::Cross,
+                leverage: Decimal::from(9),
             }
         );
-        assert_eq!(changes.changed_leverage_setting.before.leverage, 4);
-        assert_eq!(changes.changed_leverage_setting.after.leverage, 9);
-        assert_eq!(changes.changed_leverage_setting.before.version, 1);
-        assert_eq!(changes.changed_leverage_setting.after.version, 2);
+        assert_eq!(changes.changed_position.before.leverage(), Decimal::from(4));
+        assert_eq!(changes.changed_position.after.leverage(), Decimal::from(9));
+        assert_eq!(changes.changed_position.before.version(), 0);
+        assert_eq!(changes.changed_position.after.version(), 1);
 
         let events = changes.to_replayable_events().expect("events should project");
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());
-        assert_eq!(events[0].field_changes.len(), 1);
-        assert_eq!(events[0].field_changes[0].field_name_as_str().ok(), Some("leverage"));
-        assert_eq!(events[0].field_changes[0].old_value_bytes(), b"4");
-        assert_eq!(events[0].field_changes[0].new_value_bytes(), b"9");
+        assert_eq!(events[0].field_changes.len(), 2);
+        let leverage_change = events[0]
+            .field_changes
+            .iter()
+            .find(|change| change.field_name_as_str().ok() == Some("leverage"))
+            .expect("leverage field change should be projected");
+        assert_eq!(leverage_change.old_value_bytes(), b"4");
+        assert_eq!(leverage_change.new_value_bytes(), b"9");
     }
 
     #[test]
@@ -414,7 +452,7 @@ mod tests {
     impl std::error::Error for FakeOutboundError {}
 
     struct ObservingUpdateLeverageOutbound {
-        before_leverage: u64,
+        before_leverage: Decimal,
         steps: RefCell<Vec<&'static str>>,
         seen_cmd: RefCell<Option<UpdateHyperliquidPerpLeverageCmd>>,
         event_batches: RefCell<Vec<(&'static str, Vec<EntityReplayableEvent>)>>,
@@ -423,7 +461,7 @@ mod tests {
     impl ObservingUpdateLeverageOutbound {
         fn new(before_leverage: u64) -> Self {
             Self {
-                before_leverage,
+                before_leverage: Decimal::from(before_leverage),
                 steps: RefCell::new(Vec::new()),
                 seen_cmd: RefCell::new(None),
                 event_batches: RefCell::new(Vec::new()),
@@ -440,21 +478,8 @@ mod tests {
         ) -> Result<UpdateHyperliquidPerpLeverageState, Self::Error> {
             self.steps.borrow_mut().push("load_given_state");
             self.seen_cmd.borrow_mut().replace(cmd.clone());
-            let margin_mode = if cmd.is_cross {
-                HyperliquidPerpMarginMode::Cross
-            } else {
-                HyperliquidPerpMarginMode::Isolated
-            };
             Ok(UpdateHyperliquidPerpLeverageState {
-                account_id: cmd.party_id.clone(),
-                leverage_setting: HyperliquidPerpLeverageSetting::new(
-                    cmd.party_id.clone(),
-                    cmd.asset,
-                    margin_mode,
-                    self.before_leverage,
-                    1,
-                ),
-                position: None,
+                position: position_for_command(cmd, self.before_leverage),
             })
         }
 
