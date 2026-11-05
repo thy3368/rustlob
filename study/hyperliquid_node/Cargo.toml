@@ -6,9 +6,11 @@ publish = false
 description = "Deployment package for an official Hyperliquid non-validator node"
 
 [dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rust_decimal = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread"] }
 
 [lib]
 path = "src/lib.rs"

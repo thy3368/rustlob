@@ -25,4 +25,20 @@ Compose 以 root 启动 visor 是有意的：官方 visor 的签名自更新流�
 ./stop_node.sh
 ```
 
+## 获取 replica_cmds 元始块
+
+Rust 客户端要求调用方显式传入 `hl_getBlock` RPC URL。下面的命令请求
+`block_number=0`，在终端打印完整 block，并把完整 JSON-RPC 响应写入指定文件：
+
+```bash
+cargo run -p hyperliquid_node --bin fetch_genesis_block -- \
+  http://127.0.0.1:3000/replica_cmds \
+  /tmp/hyperliquid_block_0.json
+```
+
+`replica_cmds` 是节点 RPC endpoint，官方公共 `https://rpc.hyperliquid.xyz` 当前不提供此路径；
+请使用自建节点地址或确认过的第三方 replica endpoint。调用方可直接替换 URL；客户端内部不固定网络。代码调用使用
+`replica_rpc::get_block(rpc_url, 0)`，返回值同时提供完整原始 JSON、原始 `result`
+块和 `ReplicaBlock` 强类型访问器。价格与数量保持为字符串，避免浮点精度损失。
+
 数据只写入 `runtime/hl/hyperliquid_data`（RocksDB/节点状态）、`runtime/hl/data`（导出数据）和 `runtime/config`（生成的 gossip 配置），均已被 Git 忽略。停止容器不会删除这些目录，重新运行会复用已有状态。
