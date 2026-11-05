@@ -54,7 +54,7 @@ impl UseCase for PerpLiquidation {
         let clearinghouse_state = &given_state.clearinghouse_state;
         if cmd.liquidation_id.is_empty()
             || cmd.maintenance_margin_rate.is_sign_negative()
-            || cmd.mark_prices.values().any(|p| !p.is_positive())
+            || cmd.mark_prices.values().any(|p| !p.is_sign_positive())
         {
             return Err(LiquidationError::InvalidCommand);
         }

@@ -1,109 +1,61 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff,
-    UpdatedEntityPair, UseCase,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UpdatedEntityPair,
+    UseCase,
 };
-use example_core_entity::OrderSide;
+use rust_decimal::Decimal;
 use thiserror::Error;
 
-use crate::entity::{HyperliquidPerpOrder, HyperliquidPerpOrderStatus, HyperliquidPerpTrade};
-use crate::support::concat3;
+use crate::entity::common::common_trade::TradeBase;
+use crate::entity::{OrderSide, PerpOrderV3, PerpTradeKind, PerpTradeV3, SpotOrderStatus, UserId};
 
-/// 撮合 Hyperliquid perp taker 订单时需要的已加载业务状态。
-///
-/// `maker_orders` 必须已经由 adapter 或订单簿按撮合优先级排好序；
-/// core use case 只按 Vec 顺序从头到尾撮合。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchHyperliquidPerpOrderState {
-    /// 本次作为主动吃单方的订单。
-    pub taker_order: HyperliquidPerpOrder,
-    /// 已按撮合优先级排好的被动挂单。
-    pub maker_orders: Vec<HyperliquidPerpOrder>,
-}
-
-/// 执行一次 Hyperliquid perp 撮合批次的命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchHyperliquidPerpOrderCmd {
-    /// 发起撮合的业务账户，应等于 taker 订单账户。
-    pub party_id: String,
-    /// 本次撮合的 taker 订单 Hyperliquid perp `oid`。
+    pub operator: UserId,
     pub taker_order_id: u64,
-    /// 一次撮合批次 ID，用于稳定生成多条 trade id。
-    pub match_id: String,
-    /// 本次成交批次的稳定执行时间，单位毫秒。
-    pub executed_at_ms: u64,
+    pub match_id: u64,
+    pub executed_at: u64,
 }
 
-/// Hyperliquid perp 撮合可能产生的业务拒绝原因。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchHyperliquidPerpOrderState {
+    pub taker_order: PerpOrderV3,
+    pub maker_orders: Vec<PerpOrderV3>,
+    pub taker_fee_rate: Decimal,
+    pub maker_fee_rate: Decimal,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum MatchHyperliquidPerpOrderError {
-    /// 业务发起方不能为空。
-    #[error("party_id must not be empty")]
-    InvalidPartyId,
-    /// taker order id 不能为空。
-    #[error("taker_order_id must not be empty")]
-    InvalidTakerOrderId,
-    /// match id 不能为空。
-    #[error("match_id must not be empty")]
-    InvalidMatchId,
-    /// 命令 taker id 和已加载 taker 订单不一致。
-    #[error("taker order does not match on_command")]
+    #[error("taker order id and match id must be non-zero")]
+    InvalidCommand,
+    #[error("taker order does not match command")]
     TakerOrderMismatch,
-    /// taker 订单不属于命令账户。
-    #[error("taker order does not belong to on_command party")]
-    TakerOwnerMismatch,
-    /// 订单生命周期状态不允许继续撮合。
     #[error("order is not matchable")]
     OrderNotMatchable,
-    /// 订单状态和已成交数量不一致。
-    #[error("order execution state is inconsistent")]
-    InconsistentOrderState,
-    /// maker 和 taker 必须方向相反。
-    #[error("maker order has the same side as taker")]
-    SameSideMaker,
-    /// maker 必须是限价单，成交价取 maker 限价。
-    #[error("maker order must be a limit order")]
-    MakerMustBeLimit,
-    /// maker 和 taker 必须交易同一 perp asset。
-    #[error("maker order trades a different asset")]
-    AssetMismatch,
-    /// maker 和 taker 必须交易同一展示合约。
-    #[error("maker order trades a different symbol")]
-    SymbolMismatch,
-    /// maker 订单不能和 taker 是同一张订单。
-    #[error("maker order must not be the taker order")]
-    MakerIsTaker,
-    /// 按当前 maker 顺序没有任何可成交结果。
-    #[error("no Hyperliquid perp trades were matched")]
+    #[error("maker order is incompatible with taker")]
+    IncompatibleMaker,
+    #[error("no trades were matched")]
     NoTradesMatched,
-    /// 生成撮合结果时发生整数溢出。
-    #[error("arithmetic overflow while deriving match result")]
+    #[error("arithmetic overflow while matching")]
     ArithmeticOverflow,
 }
 
-/// Use case that matches one Hyperliquid perp taker order against pre-sorted maker orders.
-///
-/// 用例只负责订单撮合、成交事实创建和订单成交状态更新；仓位、保证金、手续费、PnL、
-/// 资金费和清算由后续 use case 处理。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MatchHyperliquidPerpOrderUseCase;
 
-/// 完成一轮撮合后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchHyperliquidPerpOrderChanges {
-    /// 本批次新创建的成交事实。
-    pub created_trades: Vec<HyperliquidPerpTrade>,
-    /// 按撮合发生顺序返回的 maker before/after。
-    pub updated_maker_orders: Vec<UpdatedEntityPair<HyperliquidPerpOrder>>,
-    /// 撮合后的 taker before/after。
-    pub updated_taker_order: UpdatedEntityPair<HyperliquidPerpOrder>,
+    pub created_trades: Vec<PerpTradeV3>,
+    pub updated_maker_orders: Vec<UpdatedEntityPair<PerpOrderV3>>,
+    pub updated_taker_order: UpdatedEntityPair<PerpOrderV3>,
 }
 
 impl ReplayableChanges for MatchHyperliquidPerpOrderChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
-        let mut events = Vec::with_capacity(0);
-        for (trade, maker_order) in self.created_trades.iter().zip(&self.updated_maker_orders) {
+        let mut events = Vec::with_capacity(self.created_trades.len() * 2 + 1);
+        for (trade, maker) in self.created_trades.iter().zip(&self.updated_maker_orders) {
             events.push(trade.track_create_event()?);
-            events.push(maker_order.after.track_update_event_from(&maker_order.before)?);
+            events.push(maker.after.track_update_event_from(&maker.before)?);
         }
         events.push(
             self.updated_taker_order
@@ -121,14 +73,8 @@ impl UseCase for MatchHyperliquidPerpOrderUseCase {
     type StateChanged = MatchHyperliquidPerpOrderChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        if cmd.party_id.is_empty() {
-            return Err(MatchHyperliquidPerpOrderError::InvalidPartyId);
-        }
-        if cmd.taker_order_id == 0 {
-            return Err(MatchHyperliquidPerpOrderError::InvalidTakerOrderId);
-        }
-        if cmd.match_id.is_empty() {
-            return Err(MatchHyperliquidPerpOrderError::InvalidMatchId);
+        if cmd.taker_order_id == 0 || cmd.match_id == 0 {
+            return Err(MatchHyperliquidPerpOrderError::InvalidCommand);
         }
         Ok(())
     }
@@ -138,34 +84,23 @@ impl UseCase for MatchHyperliquidPerpOrderUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        let taker = &state.taker_order;
-        if taker.order_id != cmd.taker_order_id {
+        if state.taker_order.comon_order.order_id != cmd.taker_order_id {
             return Err(MatchHyperliquidPerpOrderError::TakerOrderMismatch);
         }
-        if !taker.belongs_to_account(&cmd.party_id) {
-            return Err(MatchHyperliquidPerpOrderError::TakerOwnerMismatch);
+        validate_matchable(&state.taker_order)?;
+        if state.taker_fee_rate < Decimal::ZERO || state.maker_fee_rate < Decimal::ZERO {
+            return Err(MatchHyperliquidPerpOrderError::InvalidCommand);
         }
-        validate_matchable_order(taker)?;
-
         for maker in &state.maker_orders {
-            validate_matchable_order(maker)?;
-            if maker.order_id == taker.order_id {
-                return Err(MatchHyperliquidPerpOrderError::MakerIsTaker);
-            }
-            if maker.side == taker.side {
-                return Err(MatchHyperliquidPerpOrderError::SameSideMaker);
-            }
-            if maker.limit_price().is_none() {
-                return Err(MatchHyperliquidPerpOrderError::MakerMustBeLimit);
-            }
-            if !maker.trades_asset(taker.asset) {
-                return Err(MatchHyperliquidPerpOrderError::AssetMismatch);
-            }
-            if !maker.trades_symbol(taker.symbol.as_str()) {
-                return Err(MatchHyperliquidPerpOrderError::SymbolMismatch);
+            validate_matchable(maker)?;
+            if maker.comon_order.order_id == cmd.taker_order_id
+                || maker.comon_order.side == state.taker_order.comon_order.side
+                || maker.comon_order.symbol != state.taker_order.comon_order.symbol
+                || maker.comon_order.execution != crate::entity::common::CommonOrderExecution::Limit
+            {
+                return Err(MatchHyperliquidPerpOrderError::IncompatibleMaker);
             }
         }
-
         Ok(())
     }
 
@@ -174,144 +109,130 @@ impl UseCase for MatchHyperliquidPerpOrderUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let state = state.clone();
-        let mut taker_order_after = state.taker_order.clone();
-        let mut taker_remaining = remaining_qty(&taker_order_after)?;
-        let mut total_taker_fill = 0_u64;
-        let mut created_trades = Vec::with_capacity(0);
-        let mut updated_maker_orders = Vec::with_capacity(0);
+        let mut taker = state.taker_order.clone();
+        let taker_before = taker.clone();
+        let mut created_trades = Vec::new();
+        let mut updated_maker_orders = Vec::new();
 
-        for (trade_index, maker_order) in state.maker_orders.iter().enumerate() {
-            if taker_remaining == 0 {
+        for (index, maker_before) in state.maker_orders.iter().enumerate() {
+            if taker.comon_order.size.is_zero() {
                 break;
             }
-
-            let maker_price = maker_order
-                .limit_price()
-                .ok_or(MatchHyperliquidPerpOrderError::MakerMustBeLimit)?;
-            if !can_cross(taker_order_after.side, taker_order_after.order_price(), maker_price) {
+            if !crosses(
+                taker.comon_order.side,
+                taker.comon_order.limit_px,
+                maker_before.comon_order.limit_px,
+            ) {
                 break;
             }
-
-            let maker_remaining = remaining_qty(maker_order)?;
-            let trade_qty = taker_remaining.min(maker_remaining);
-            if trade_qty == 0 {
+            let fill = taker.comon_order.size.min(maker_before.comon_order.size);
+            if fill <= Decimal::ZERO {
                 continue;
             }
-            let trade_suffix = trade_index
-                .checked_add(1)
+            let mut maker_after = maker_before.clone();
+            apply_fill(&mut maker_after, fill, cmd.executed_at)?;
+            apply_fill(&mut taker, fill, cmd.executed_at)?;
+            let trade_id = cmd
+                .match_id
+                .checked_mul(1_000_000)
+                .and_then(|base| base.checked_add(index as u64 + 1))
                 .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-
-            let trade = HyperliquidPerpTrade::new(
-                concat3(cmd.match_id.as_str(), "-", trade_suffix.to_string().as_str()),
-                cmd.match_id.clone(),
-                taker_order_after.asset,
-                taker_order_after.symbol.clone(),
-                taker_order_after.order_id,
-                maker_order.order_id,
-                taker_order_after.account_id.clone(),
-                maker_order.account_id.clone(),
-                taker_order_after.side,
-                maker_price,
-                trade_qty,
-                cmd.executed_at_ms,
-            );
-            created_trades.push(trade);
-
-            let mut next_maker_order = maker_order.clone();
-            let next_maker_filled = next_maker_order
-                .filled_sz
-                .checked_add(trade_qty)
+            let notional = fill
+                .checked_mul(maker_before.comon_order.limit_px)
                 .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-            let next_maker_status = matched_status(next_maker_order.sz, next_maker_filled);
-            let next_maker_version = next_maker_order
-                .version
-                .checked_add(1)
+            let taker_fee = notional
+                .checked_mul(state.taker_fee_rate)
                 .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-            next_maker_order.filled_sz = next_maker_filled;
-            next_maker_order.status = next_maker_status;
-            next_maker_order.version = next_maker_version;
+            let maker_fee = notional
+                .checked_mul(state.maker_fee_rate)
+                .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+            created_trades.push(PerpTradeV3 {
+                trade_base: TradeBase {
+                    trade_id,
+                    symbol: taker.comon_order.symbol,
+                    taker_user: taker.comon_order.owner,
+                    maker_user: maker_before.comon_order.owner,
+                    taker_order_id: taker.comon_order.order_id,
+                    maker_order_id: maker_before.comon_order.order_id,
+                    taker_side: taker.comon_order.side,
+                    price: maker_before.comon_order.limit_px,
+                    size: fill,
+                    taker_fee,
+                    maker_fee,
+                    created_at: cmd.executed_at,
+                    updated_at: cmd.executed_at,
+                    version: 0,
+                },
+                kind: if taker.is_liquidation {
+                    PerpTradeKind::Liquidation
+                } else {
+                    PerpTradeKind::Normal
+                },
+                reference_id: Some(cmd.match_id.to_string()),
+                taker_start_position: Decimal::ZERO,
+                maker_start_position: Decimal::ZERO,
+                taker_closed_pnl: Decimal::ZERO,
+                maker_closed_pnl: Decimal::ZERO,
+            });
             updated_maker_orders
-                .push(UpdatedEntityPair { before: maker_order.clone(), after: next_maker_order });
-
-            taker_remaining = taker_remaining
-                .checked_sub(trade_qty)
-                .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-            total_taker_fill = total_taker_fill
-                .checked_add(trade_qty)
-                .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+                .push(UpdatedEntityPair { before: maker_before.clone(), after: maker_after });
         }
-
-        if total_taker_fill == 0 {
+        if created_trades.is_empty() {
             return Err(MatchHyperliquidPerpOrderError::NoTradesMatched);
         }
-
-        let next_taker_filled = taker_order_after
-            .filled_sz
-            .checked_add(total_taker_fill)
-            .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-        let next_taker_status = matched_status(taker_order_after.sz, next_taker_filled);
-        let next_taker_version = taker_order_after
+        taker.comon_order.version = taker_before
+            .comon_order
             .version
             .checked_add(1)
             .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
-        taker_order_after.filled_sz = next_taker_filled;
-        taker_order_after.status = next_taker_status;
-        taker_order_after.version = next_taker_version;
-
         Ok(MatchHyperliquidPerpOrderChanges {
             created_trades,
             updated_maker_orders,
-            updated_taker_order: UpdatedEntityPair {
-                before: state.taker_order,
-                after: taker_order_after,
-            },
+            updated_taker_order: UpdatedEntityPair { before: taker_before, after: taker },
         })
     }
 }
 
-impl MatchHyperliquidPerpOrderUseCase {
-    pub const fn role(&self) -> &'static str {
-        "MatchingEngine"
-    }
-}
-impl StateDiff for MatchHyperliquidPerpOrderUseCase {
-    type StateDiff = MatchHyperliquidPerpOrderChanges;
-    fn do_compute_state_diff(
-        _: MatchHyperliquidPerpOrderState,
-        changed: Self::StateChanged,
-    ) -> Result<Self::StateDiff, Self::Error> {
-        Ok(changed)
-    }
-}
-
-fn validate_matchable_order(
-    order: &HyperliquidPerpOrder,
-) -> Result<(), MatchHyperliquidPerpOrderError> {
-    if !order.has_consistent_execution_state() {
-        return Err(MatchHyperliquidPerpOrderError::InconsistentOrderState);
-    }
-    if !order.is_matchable() {
+fn validate_matchable(order: &PerpOrderV3) -> Result<(), MatchHyperliquidPerpOrderError> {
+    if order.comon_order.size <= Decimal::ZERO
+        || order.comon_order.limit_px <= Decimal::ZERO
+        || !matches!(
+            order.comon_order.status,
+            SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+        )
+    {
         return Err(MatchHyperliquidPerpOrderError::OrderNotMatchable);
     }
     Ok(())
 }
 
-fn remaining_qty(order: &HyperliquidPerpOrder) -> Result<u64, MatchHyperliquidPerpOrderError> {
-    order.remaining_qty().ok_or(MatchHyperliquidPerpOrderError::InconsistentOrderState)
-}
-
-fn can_cross(taker_side: OrderSide, taker_price: u64, maker_price: u64) -> bool {
-    match taker_side {
+fn crosses(side: OrderSide, taker_price: Decimal, maker_price: Decimal) -> bool {
+    match side {
         OrderSide::Buy => taker_price >= maker_price,
         OrderSide::Sell => taker_price <= maker_price,
     }
 }
 
-fn matched_status(qty: u64, filled_qty: u64) -> HyperliquidPerpOrderStatus {
-    if filled_qty == qty {
-        HyperliquidPerpOrderStatus::Filled
+fn apply_fill(
+    order: &mut PerpOrderV3,
+    fill: Decimal,
+    timestamp: u64,
+) -> Result<(), MatchHyperliquidPerpOrderError> {
+    order.comon_order.size = order
+        .comon_order
+        .size
+        .checked_sub(fill)
+        .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+    order.comon_order.status = if order.comon_order.size.is_zero() {
+        SpotOrderStatus::Filled
     } else {
-        HyperliquidPerpOrderStatus::PartiallyFilled
-    }
+        SpotOrderStatus::PartiallyFilled
+    };
+    order.comon_order.version = order
+        .comon_order
+        .version
+        .checked_add(1)
+        .ok_or(MatchHyperliquidPerpOrderError::ArithmeticOverflow)?;
+    order.comon_order.updated_at = timestamp;
+    Ok(())
 }

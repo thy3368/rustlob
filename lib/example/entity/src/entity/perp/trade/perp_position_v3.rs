@@ -466,31 +466,26 @@ impl PerpPositionV3 {
         if self.coin != trade.trade_base.symbol.base {
             return Err(PerpPositionV3Error::InvalidState);
         }
-        let (signed_quantity, closed_pnl, fee) = if self.user_id == trade.trade_base.taker_user {
+        let (signed_quantity, fee) = if self.user_id == trade.trade_base.taker_user {
             let signed = match trade.trade_base.taker_side {
                 crate::OrderSide::Buy => Some(trade.trade_base.size),
                 crate::OrderSide::Sell => Decimal::ZERO.checked_sub(trade.trade_base.size),
             }
             .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            (signed, trade.taker_closed_pnl, trade.trade_base.taker_fee)
+            (signed, trade.trade_base.taker_fee)
         } else if self.user_id == trade.trade_base.maker_user {
             let signed = match trade.trade_base.taker_side {
                 crate::OrderSide::Buy => Decimal::ZERO.checked_sub(trade.trade_base.size),
                 crate::OrderSide::Sell => Some(trade.trade_base.size),
             }
             .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            (signed, trade.maker_closed_pnl, trade.trade_base.maker_fee)
+            (signed, trade.trade_base.maker_fee)
         } else {
             return Err(PerpPositionV3Error::InvalidState);
         };
-        let realized_pnl = self
-            .realized_pnl
-            .checked_add(closed_pnl)
-            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
         let cum_fee =
             self.cum_fee.checked_add(fee).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        self.apply_trade(signed_quantity, trade.trade_base.price)?;
-        self.realized_pnl = realized_pnl;
+        let closed_pnl = self.apply_trade(signed_quantity, trade.trade_base.price)?;
         self.cum_fee = cum_fee;
         Ok(closed_pnl)
     }
@@ -583,5 +578,101 @@ impl Fsm for PerpPositionV3 {
                 ))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_entity::{Entity, Fsm};
+    use rust_decimal::Decimal;
+
+    use super::*;
+    use crate::account::symbol::Symbol;
+    use crate::entity::common::common_trade::TradeBase;
+    use crate::{OrderSide, PerpTradeKind};
+
+    fn trade(side: OrderSide, price: i64, size: i64, fee: Decimal) -> PerpTradeV3 {
+        PerpTradeV3 {
+            trade_base: TradeBase {
+                trade_id: 8,
+                symbol: Symbol::new(1, Coin::BTC, Coin::USDC),
+                taker_user: UserId(7),
+                maker_user: UserId(9),
+                taker_order_id: 10,
+                maker_order_id: 11,
+                taker_side: side,
+                price: Decimal::from(price),
+                size: Decimal::from(size),
+                taker_fee: fee,
+                maker_fee: Decimal::ZERO,
+                created_at: 1,
+                updated_at: 1,
+                version: 0,
+            },
+            kind: PerpTradeKind::Normal,
+            reference_id: None,
+            taker_start_position: Decimal::ZERO,
+            maker_start_position: Decimal::ZERO,
+            taker_closed_pnl: Decimal::ZERO,
+            maker_closed_pnl: Decimal::ZERO,
+        }
+    }
+
+    #[test]
+    fn trade_output_uses_position_truth_for_closed_pnl_and_tracks_fee() {
+        let mut position = PerpPositionV3::new(
+            1,
+            UserId(7),
+            Coin::BTC,
+            Decimal::from(2),
+            Decimal::from(100),
+            Decimal::from(5),
+            MarginModeV3::Cross,
+            None,
+            Decimal::ZERO,
+            FundingAccumulatorV3::default(),
+            Decimal::ZERO,
+            4,
+        )
+        .unwrap();
+
+        let (_, output) = position
+            .transition(PerpPositionV3Event::TradeFilled {
+                trade: trade(OrderSide::Sell, 110, 1, Decimal::new(25, 2)),
+                logical_ts: 9,
+            })
+            .unwrap();
+
+        assert_eq!(output, PerpPositionV3Output::TradeApplied { closed_pnl: Decimal::TEN });
+        assert_eq!(position.realized_pnl(), Decimal::TEN);
+        assert_eq!(position.cum_fee(), Decimal::new(25, 2));
+        assert_eq!(position.version(), 5);
+    }
+
+    #[test]
+    fn failed_transition_is_atomic_and_success_projects_single_step_update() {
+        let mut position = PerpPositionV3::empty(1, UserId(7), Coin::BTC);
+        let before_failure = position.clone();
+        assert_eq!(
+            position.apply(PerpPositionV3Event::TradeFilled {
+                trade: trade(OrderSide::Buy, 0, 1, Decimal::ZERO),
+                logical_ts: 9,
+            }),
+            Err(PerpPositionV3Error::InvalidPrice)
+        );
+        assert_eq!(position, before_failure);
+
+        let before = position.clone();
+        position
+            .apply(PerpPositionV3Event::LeverageUpdated {
+                leverage: Decimal::from(3),
+                margin_mode: MarginModeV3::Cross,
+                logical_ts: 10,
+            })
+            .unwrap();
+        let event = position.track_update_event_from(&before).unwrap();
+        assert_eq!(event.entity_id, 1);
+        assert_eq!(event.entity_type, 11);
+        assert_eq!(position.version(), before.version() + 1);
     }
 }

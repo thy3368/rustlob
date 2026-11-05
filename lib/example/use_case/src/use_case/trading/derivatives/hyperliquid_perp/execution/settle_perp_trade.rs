@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::entity::{
     BalanceV2, BalanceV2Error, BalanceV2Event, PerpPositionV3, PerpPositionV3Error,
-    PerpPositionV3Event, PerpTradeV3, UserId,
+    PerpPositionV3Event, PerpPositionV3Output, PerpTradeV3, UserId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,9 +134,9 @@ fn derive_changes(
     let mut changed_positions = Vec::with_capacity(state.trades.len() * 2);
 
     for trade in &state.trades {
-        for (user, pnl, fee) in [
-            (trade.trade_base.taker_user, trade.taker_closed_pnl, trade.trade_base.taker_fee),
-            (trade.trade_base.maker_user, trade.maker_closed_pnl, trade.trade_base.maker_fee),
+        for (user, fee) in [
+            (trade.trade_base.taker_user, trade.trade_base.taker_fee),
+            (trade.trade_base.maker_user, trade.trade_base.maker_fee),
         ] {
             let key = (user.0, trade.trade_base.symbol.base.index());
             let before = positions
@@ -144,17 +144,21 @@ fn derive_changes(
                 .cloned()
                 .ok_or(SettleHyperliquidPerpTradeError::PositionMismatch)?;
             let mut after = before.clone();
-            after
-                .apply(PerpPositionV3Event::TradeFilled {
+            let (_, output) = after
+                .transition(PerpPositionV3Event::TradeFilled {
                     trade: trade.clone(),
                     logical_ts: cmd.logical_ts(),
                 })
                 .map_err(map_position_error)?;
+            let PerpPositionV3Output::TradeApplied { closed_pnl } = output else {
+                return Err(SettleHyperliquidPerpTradeError::PositionMismatch);
+            };
             positions.insert(key, after.clone());
             changed_positions.push(UpdatedEntityPair { before, after });
 
-            let delta =
-                pnl.checked_sub(fee).ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
+            let delta = closed_pnl
+                .checked_sub(fee)
+                .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
             let total = balance_deltas.entry(user.0).or_default();
             *total = total
                 .checked_add(delta)
