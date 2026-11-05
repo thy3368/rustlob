@@ -7,8 +7,7 @@ use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,
     PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
-    PlaceOnlySpotOrderV2Cmd, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, ReservationStatus, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2,
+    PlaceOnlySpotOrderV2Cmd, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2,
     SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;

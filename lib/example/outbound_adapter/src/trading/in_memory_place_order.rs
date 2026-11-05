@@ -2,8 +2,7 @@ use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,
-    PendingTriggerSpotOrderSource, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, ReservationStatus, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2,
+    PendingTriggerSpotOrderSource, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2,
     SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
@@ -416,161 +415,6 @@ fn decode_status_reason(
     Ok(Some(reason))
 }
 
-fn decode_embedded_order_reservation(
-    event: &EntityReplayableEvent,
-) -> Result<Reservation, PlaceOrderOutboundError> {
-    decode_embedded_reservation(event, false)
-}
-
-fn decode_embedded_order_fee_reservation(
-    event: &EntityReplayableEvent,
-) -> Result<Reservation, PlaceOrderOutboundError> {
-    decode_embedded_reservation(event, true)
-}
-
-fn decode_embedded_reservation(
-    event: &EntityReplayableEvent,
-    fee: bool,
-) -> Result<Reservation, PlaceOrderOutboundError> {
-    let order_id =
-        event_string_field(event, "order_id").ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-    let account_id = event_string_field(event, "account_id")
-        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-    let reservation_id = reservation_string_field(event, fee, "id")
-        .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-    Ok(Reservation {
-        reservation_id,
-        owner_account_id: account_id,
-        caused_by_order_id: order_id
-            .parse()
-            .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?,
-        market_kind: ReservationMarketKind::Spot,
-        reservation_kind: decode_reservation_kind(
-            reservation_string_field(event, fee, "kind")
-                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
-                .as_str(),
-        )?,
-        asset_id: reservation_string_field(event, fee, "asset_id")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        original_amount: reservation_u64_field(event, fee, "original_amount")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        consumed_amount: reservation_u64_field(event, fee, "consumed_amount")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        released_amount: reservation_u64_field(event, fee, "released_amount")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        remaining_amount: reservation_u64_field(event, fee, "remaining_amount")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        status: decode_reservation_status(
-            reservation_string_field(event, fee, "status")
-                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
-                .as_str(),
-        )?,
-        close_reason: None,
-        version: 1,
-    })
-}
-
-fn reservation_string_field(
-    event: &EntityReplayableEvent,
-    fee: bool,
-    suffix: &str,
-) -> Option<String> {
-    let field_name =
-        if fee { format!("fee_reservation_{suffix}") } else { format!("reservation_{suffix}") };
-    event_string_field(event, field_name.as_str())
-}
-
-fn reservation_u64_field(event: &EntityReplayableEvent, fee: bool, suffix: &str) -> Option<u64> {
-    let field_name =
-        if fee { format!("fee_reservation_{suffix}") } else { format!("reservation_{suffix}") };
-    event_u64_field(event, field_name.as_str())
-}
-
-pub(crate) fn decode_created_reservation(
-    event: &EntityReplayableEvent,
-) -> Result<Reservation, PlaceOrderOutboundError> {
-    Ok(Reservation {
-        reservation_id: event_string_field(event, "reservation_id")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        owner_account_id: event_string_field(event, "owner_account_id")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        caused_by_order_id: event_u64_field(event, "caused_by_order_id")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        market_kind: decode_market_kind(
-            event_string_field(event, "market_kind")
-                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
-                .as_str(),
-        )?,
-        reservation_kind: decode_reservation_kind(
-            event_string_field(event, "reservation_kind")
-                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
-                .as_str(),
-        )?,
-        asset_id: event_string_field(event, "asset_id")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        original_amount: event_u64_field(event, "original_amount")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        consumed_amount: event_u64_field(event, "consumed_amount")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        released_amount: event_u64_field(event, "released_amount")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        remaining_amount: event_u64_field(event, "remaining_amount")
-            .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?,
-        status: decode_reservation_status(
-            event_string_field(event, "status")
-                .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?
-                .as_str(),
-        )?,
-        close_reason: decode_optional_close_reason(
-            event_string_field(event, "close_reason").as_deref(),
-        )?,
-        version: event.lsn,
-    })
-}
-
-fn decode_market_kind(value: &str) -> Result<ReservationMarketKind, PlaceOrderOutboundError> {
-    match value {
-        "spot" => Ok(ReservationMarketKind::Spot),
-        "perp" => Ok(ReservationMarketKind::Perp),
-        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
-    }
-}
-
-fn decode_reservation_kind(value: &str) -> Result<ReservationKind, PlaceOrderOutboundError> {
-    match value {
-        "spot_buy_quote" => Ok(ReservationKind::SpotBuyQuote),
-        "spot_sell_base" => Ok(ReservationKind::SpotSellBase),
-        "spot_buy_fee_quote" => Ok(ReservationKind::SpotBuyFeeQuote),
-        "spot_sell_fee_quote" => Ok(ReservationKind::SpotSellFeeQuote),
-        "perp_open_margin" => Ok(ReservationKind::PerpOpenMargin),
-        "perp_flip_net_new_margin" => Ok(ReservationKind::PerpFlipNetNewMargin),
-        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
-    }
-}
-
-fn decode_reservation_status(value: &str) -> Result<ReservationStatus, PlaceOrderOutboundError> {
-    match value {
-        "active" => Ok(ReservationStatus::Active),
-        "exhausted_by_consume" => Ok(ReservationStatus::ExhaustedByConsume),
-        "closed_by_release" => Ok(ReservationStatus::ClosedByRelease),
-        "closed_mixed" => Ok(ReservationStatus::ClosedMixed),
-        _ => Err(PlaceOrderOutboundError::EventDecodeFailed),
-    }
-}
-
-fn decode_optional_close_reason(
-    value: Option<&str>,
-) -> Result<Option<ReservationCloseReason>, PlaceOrderOutboundError> {
-    match value {
-        None | Some("") => Ok(None),
-        Some("filled") => Ok(Some(ReservationCloseReason::Filled)),
-        Some("canceled") => Ok(Some(ReservationCloseReason::Canceled)),
-        Some("rejected") => Ok(Some(ReservationCloseReason::Rejected)),
-        Some("ioc_remainder_canceled") => Ok(Some(ReservationCloseReason::IocRemainderCanceled)),
-        Some("expired") => Ok(Some(ReservationCloseReason::Expired)),
-        Some(_) => Err(PlaceOrderOutboundError::EventDecodeFailed),
-    }
-}
 
 pub fn base_asset_id_for(symbol: &str) -> &str {
     match symbol {
@@ -663,8 +507,6 @@ pub(crate) fn apply_order_update_event(
     if let Some(client_order_id) = event_string_field(event, "client_order_id") {
         order.cloid = (!client_order_id.is_empty()).then_some(client_order_id.clone());
     }
-    apply_reservation_update(&mut order.reservation, event, false)?;
-    apply_reservation_update(&mut order.fee_reservation, event, true)?;
     order.version = event.lsn;
     Ok(())
 }
@@ -738,42 +580,8 @@ pub(crate) fn decode_order_from_event(
         .unwrap_or(false);
     order.group_relation =
         decode_group_relation(event_string_field(event, "group_relation").as_deref())?;
-    order.reservation = decode_embedded_order_reservation(event)?;
-    order.fee_reservation = decode_embedded_order_fee_reservation(event)?;
     order.updated_at = updated_at;
     Ok(order)
-}
-
-fn apply_reservation_update(
-    reservation: &mut Reservation,
-    event: &EntityReplayableEvent,
-    fee: bool,
-) -> Result<(), PlaceOrderOutboundError> {
-    if let Some(value) = reservation_string_field(event, fee, "id") {
-        reservation.reservation_id = value;
-    }
-    if let Some(value) = reservation_string_field(event, fee, "asset_id") {
-        reservation.asset_id = value;
-    }
-    if let Some(value) = reservation_string_field(event, fee, "kind") {
-        reservation.reservation_kind = decode_reservation_kind(value.as_str())?;
-    }
-    if let Some(value) = reservation_string_field(event, fee, "status") {
-        reservation.status = decode_reservation_status(value.as_str())?;
-    }
-    if let Some(value) = reservation_u64_field(event, fee, "original_amount") {
-        reservation.original_amount = value;
-    }
-    if let Some(value) = reservation_u64_field(event, fee, "consumed_amount") {
-        reservation.consumed_amount = value;
-    }
-    if let Some(value) = reservation_u64_field(event, fee, "released_amount") {
-        reservation.released_amount = value;
-    }
-    if let Some(value) = reservation_u64_field(event, fee, "remaining_amount") {
-        reservation.remaining_amount = value;
-    }
-    Ok(())
 }
 
 fn decode_status_value(value: &str) -> Result<SpotOrderStatus, PlaceOrderOutboundError> {

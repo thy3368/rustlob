@@ -18,7 +18,7 @@ const SPOT_ORDER_V2_ENTITY_TYPE: u8 = 3;
 /// `SpotOrderV2` 的冻结资产角色。
 ///
 /// 它只表达订单视角的 `Base` / `Quote` 业务角色，不绑定余额 ID、asset_id
-/// 或 reservation_id。具体映射由 use case 在聚合外完成。
+/// 或外部冻结标识。具体映射由 use case 在聚合外完成。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderHoldAsset {
     Base,
@@ -57,7 +57,7 @@ impl SpotTradeFeeRole {
 ///
 /// 当前 spot v2 统一按 quote 计价手续费上界冻结，冻结数量按
 /// `ceil(order_quote_notional * max_fee_bps / 10_000)` 计算。
-/// 它只表达订单侧 requirement，不直接持有 authoritative reservation remaining。
+/// 它只表达订单侧 requirement，不直接持有外部冻结剩余状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotOrderFeeHoldRequirement {
     /// fee 预冻结资产角色。spot 现阶段统一为 quote。
@@ -86,8 +86,8 @@ pub struct SpotOrderHoldRequirements {
 
 /// 单笔成交在订单侧应消耗的手续费需求。
 ///
-/// 该结构只表达“如果这笔 trade 由当前订单承担 fee，应 consume 多少 fee reservation”。
-/// authoritative consume/release 仍由 reservation / settlement use case 驱动。
+/// 该结构只表达“如果这笔 trade 由当前订单承担 fee，应 consume 多少手续费冻结”。
+/// 实际 consume/release 仍由 settlement use case 驱动。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotOrderFeeConsumeRequirement {
     /// fee consume 资产角色。spot 现阶段统一为 quote。
@@ -311,9 +311,9 @@ pub struct ActivatePendingSpotOrderV2Input {
     pub base_asset_id: String,
     /// quote 资产 ID。
     pub quote_asset_id: String,
-    /// maker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
+    /// maker 手续费 bps，用于订单侧手续费最坏情况预冻结。
     pub maker_fee_bps: u64,
-    /// taker 手续费 bps，用于订单内 fee reservation 最坏情况预冻结。
+    /// taker 手续费 bps，用于订单侧手续费最坏情况预冻结。
     pub taker_fee_bps: u64,
     /// 订单进入撮合执行阶段的时间，单位为 Unix 纳秒。
     pub timestamp: u64,
@@ -380,7 +380,7 @@ impl SpotOrderV2 {
         OrderType::Limit { tif: OrderTif::Gtc }
     }
 
-    /// 创建未触发条件单；该状态不生成 principal / fee reservation。
+    /// 创建未触发条件单；该状态不生成 principal / fee 冻结。
     #[allow(clippy::too_many_arguments)]
     pub fn new_pending_trigger(
         order_id: u64,
@@ -418,7 +418,7 @@ impl SpotOrderV2 {
 
     /// 创建尚未进入撮合执行阶段的普通限价订单。
     ///
-    /// 订单创建只记录用户意图；principal / fee reservation 在撮合入口激活时生成。
+    /// 订单创建只记录用户意图；principal / fee 冻结需求在撮合入口激活时生成。
     #[allow(clippy::too_many_arguments)]
     pub fn new_pending_limit(
         order_id: u64,
@@ -707,8 +707,8 @@ impl SpotOrderV2 {
 
     /// 返回一笔真实成交在订单侧应 consume 的 fee requirement。
     ///
-    /// 该方法只表达订单事实，不推进 reservation remaining。真实 consume 必须由
-    /// trade settlement use case 在 authoritative reservation 上执行。
+    /// 该方法只表达订单事实，不推进外部冻结状态。真实 consume 必须由
+    /// trade settlement use case 执行。
     pub fn fee_consume_requirement_for_trade(
         &self,
         trade_qty: u64,
@@ -1016,7 +1016,7 @@ impl SpotOrderV2 {
 
     /// 可 BDD 规格化的聚合根行为：撤销现货订单并派生解冻流水。
     ///
-    /// 该方法释放订单内 principal reservation，并返回下游余额流水单据；
+    /// 该方法返回订单侧允许释放的 principal 冻结需求；
     /// 实际余额落账仍由 use case 编排。
     pub fn cancel(
         &mut self,
