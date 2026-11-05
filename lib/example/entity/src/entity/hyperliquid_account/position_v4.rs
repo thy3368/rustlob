@@ -7,6 +7,8 @@ use rust_decimal::prelude::Signed;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::account::coin::Coin;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MarginMode {
     Cross,
@@ -95,7 +97,7 @@ pub enum PositionError {
 pub struct PositionV4 {
     position_id: u64,
     account_id: u64,
-    coin: String,
+    coin: Coin,
     state: PositionState,
     szi: Decimal,
     entry_px: Decimal,
@@ -106,11 +108,11 @@ pub struct PositionV4 {
     updated_at: u64,
 }
 impl PositionV4 {
-    pub fn empty(position_id: u64, account_id: u64, coin: impl Into<String>) -> Self {
+    pub fn empty(position_id: u64, account_id: u64, coin: Coin) -> Self {
         Self {
             position_id,
             account_id,
-            coin: coin.into(),
+            coin,
             state: PositionState::Empty,
             szi: Decimal::ZERO,
             entry_px: Decimal::ZERO,
@@ -124,7 +126,7 @@ impl PositionV4 {
     pub fn new(
         position_id: u64,
         account_id: u64,
-        coin: impl Into<String>,
+        coin: Coin,
         leverage: Leverage,
         created_at: u64,
     ) -> Result<Self, PositionError> {
@@ -141,8 +143,8 @@ impl PositionV4 {
     pub fn account_id(&self) -> u64 {
         self.account_id
     }
-    pub fn coin(&self) -> &str {
-        &self.coin
+    pub fn coin(&self) -> Coin {
+        self.coin
     }
     pub fn state(&self) -> PositionState {
         self.state
@@ -416,5 +418,27 @@ impl Entity for PositionV4 {
     }
     fn replay_field_type(_: &str) -> u8 {
         1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Leverage, MarginMode, PositionV4};
+    use crate::account::coin::Coin;
+
+    #[test]
+    fn constructors_preserve_coin() {
+        let empty = PositionV4::empty(1, 2, Coin::BTC);
+        assert_eq!(empty.coin(), Coin::BTC);
+
+        let position = PositionV4::new(
+            3,
+            4,
+            Coin::ETH,
+            Leverage { leverage_type: MarginMode::Cross, value: 5, raw_usd: None },
+            10,
+        )
+        .expect("valid leverage should construct a position");
+        assert_eq!(position.coin(), Coin::ETH);
     }
 }

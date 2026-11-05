@@ -4043,9 +4043,11 @@ dependencies = [
 name = "hyperliquid_node"
 version = "0.1.0"
 dependencies = [
+ "reqwest 0.12.28",
  "rust_decimal",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

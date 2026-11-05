@@ -34,3 +34,5 @@
 //!
 //! 当前这组 mutation 已统一按 `StateMachineV2` 建模：
 //! `Changes` 是业务第一真相，事件只从 `Changes` 投影。
+
+pub mod perp_liquidation;

@@ -5,15 +5,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::perp::trade::perp_position_v3::{MarginModeV3, PerpPositionV3};
 
-struct PerpClearinghouseStateV3 {
-    margin_summary: MarginSummary,       // 全账户（cross + isolated 合计）
-    cross_margin_summary: MarginSummary, // 仅 cross 部分
-    cross_maintenance_margin_used: Decimal, // 所有 cross 仓位 MM 之和
-    withdrawable: Decimal,               // 还能提多少 USDC
-    asset_positions: Vec<AssetPosition>, // 逐仓位列表
-    time: u64,                           // ms 时间戳
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PerpClearinghouseStateV3 {
+    pub margin_summary: MarginSummary,
+    pub cross_margin_summary: MarginSummary,
+    pub cross_maintenance_margin_used: Decimal,
+    pub withdrawable: Decimal,
+    pub asset_positions: Vec<AssetPosition>,
+    pub time: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct MarginSummary {
     account_value: Decimal,     // 账户权益 = raw_usd + 全部 uPnL
     total_ntl_pos: Decimal,     // 所有仓位名义值总和
@@ -21,14 +24,15 @@ struct MarginSummary {
     total_margin_used: Decimal, // 所有仓位 IM 占用总和
 }
 
-struct AssetPosition {
-    position_type: PositionType, // OneWay（目前只有单向）
-    position: PerpPositionV3,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetPosition {
+    pub position_type: PositionType,
+    pub position: PerpPositionV3,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum PositionType {
+pub enum PositionType {
     /// 单向持仓：一个币种一个净仓位，szi 正负表示多空
     OneWay,
     // 预留扩展：
@@ -37,13 +41,26 @@ enum PositionType {
 }
 
 impl PerpClearinghouseStateV3 {
+    pub fn new(cross_equity: Decimal, cross_mm: Decimal, positions: Vec<AssetPosition>, time: u64) -> Self {
+        let summary = MarginSummary { account_value: cross_equity, total_ntl_pos: Decimal::ZERO, total_raw_usd: cross_equity, total_margin_used: Decimal::ZERO };
+        Self { margin_summary: summary.clone(), cross_margin_summary: summary, cross_maintenance_margin_used: cross_mm, withdrawable: Decimal::ZERO, asset_positions: positions, time }
+    }
+    pub fn positions(&self) -> &[AssetPosition] { &self.asset_positions }
+    pub fn apply_mark_price_updated(&mut self, logical_ts: u64, cross_equity: Decimal, cross_mm: Decimal) -> Result<(), &'static str> {
+        if logical_ts < self.time || cross_mm.is_sign_negative() { return Err("invalid risk snapshot"); }
+        self.cross_margin_summary.account_value = cross_equity;
+        self.margin_summary.account_value = cross_equity;
+        self.cross_maintenance_margin_used = cross_mm;
+        self.time = logical_ts;
+        Ok(())
+    }
     /// 全账户权益（含浮盈）
     fn equity(&self) -> Decimal {
         self.margin_summary.account_value
     }
 
     /// cross 池权益
-    fn cross_equity(&self) -> Decimal {
+    pub fn cross_equity(&self) -> Decimal {
         self.cross_margin_summary.account_value
     }
 
@@ -58,7 +75,7 @@ impl PerpClearinghouseStateV3 {
     }
 
     /// cross 强平红线
-    fn cross_mm_required(&self) -> Decimal {
+    pub fn cross_mm_required(&self) -> Decimal {
         self.cross_maintenance_margin_used
     }
 
@@ -71,31 +88,19 @@ impl PerpClearinghouseStateV3 {
     }
 
     /// 快照时间
-    fn snapshot_at(&self) -> u64 {
+    pub fn snapshot_at(&self) -> u64 {
         self.time
     }
 }
 
 impl PerpClearinghouseStateV3 {
-    /// 遍历所有仓位
-    fn positions(&self) -> &[AssetPosition] {
-        &self.asset_positions
-    }
-
-    /// 找某个币的仓位
-    fn position_of(&self, coin: &str) -> Option<&PerpPositionV3> {
-        self.asset_positions.iter().find(|p| p.position.coin().code() == coin).map(|p| &p.position)
-    }
-}
-
-impl PerpClearinghouseStateV3 {
     /// cross 账户级是否可强平
-    fn cross_liquidatable(&self) -> bool {
+    pub fn cross_liquidatable(&self) -> bool {
         self.cross_margin_summary.account_value < self.cross_maintenance_margin_used
     }
 
     /// 是否进入 backstop 区（equity < 2/3 MM）
-    fn cross_backstop_zone(&self) -> bool {
+    pub fn cross_backstop_zone(&self) -> bool {
         let threshold =
             self.cross_maintenance_margin_used * Decimal::new(2, 0) / Decimal::new(3, 0);
         self.cross_margin_summary.account_value < threshold
