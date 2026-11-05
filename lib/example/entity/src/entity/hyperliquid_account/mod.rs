@@ -8,6 +8,7 @@ pub mod spot_clearinghouse_state;
 
 pub mod all_state;
 
+pub mod position_v4;
 pub mod usdc;
 
 pub use perp_clearinghouse_state::{

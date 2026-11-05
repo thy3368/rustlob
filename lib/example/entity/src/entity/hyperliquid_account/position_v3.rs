@@ -42,7 +42,7 @@ pub struct PositionV3 {
     position_value: Decimal, // szi * mark
     unrealized_pnl: Decimal, // (mark - entry) * szi
     return_on_equity: Decimal,
-    liquidation_px: Option<Decimal>, // 展示用，实时算
+    liquidation_px: Option<Decimal>, // 强平价，实时算
     margin_used: Decimal,            // IM = |ntl| / leverage
     max_leverage: u8,
 
