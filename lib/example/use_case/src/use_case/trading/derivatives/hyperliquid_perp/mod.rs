@@ -3,6 +3,11 @@ pub mod funding;
 pub mod query;
 pub mod risk;
 
+pub use risk::perp_liquidation::{
+    LiquidationCmd, LiquidationError, LiquidationState, PerpLiquidation,
+    PlaceOnlySpotOrderV3AfterChanges,
+};
+
 pub mod pipeline;
 
 pub use execution::{

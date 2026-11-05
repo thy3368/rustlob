@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, LogEntry, UseCaseExecutor, StateSink, StateSource,
+    EntityReplayableEvent, ExecutionError, LogEntry, StateSink, StateSource, UseCaseExecutor,
 };
 use example_core_use_case::{
     PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
@@ -143,14 +143,10 @@ impl crate::common::InboundReplyMapper for PlaceOrderCliReplyMapper {
 
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
         let order_id = find_u64_field(&events, "order_id").unwrap_or(0);
-        let principal_reservation_amount =
-            find_last_u64_field(&events, "reservation_original_amount").unwrap_or(0);
         let remaining_quote = find_u64_field(&events, "available").unwrap_or(0);
 
         PlaceOrderCliResponse {
-            summary: format!(
-                "accepted order_id={order_id} principal_reservation_amount={principal_reservation_amount} remaining_quote={remaining_quote}"
-            ),
+            summary: format!("accepted order_id={order_id} remaining_quote={remaining_quote}"),
             order_id,
         }
     }

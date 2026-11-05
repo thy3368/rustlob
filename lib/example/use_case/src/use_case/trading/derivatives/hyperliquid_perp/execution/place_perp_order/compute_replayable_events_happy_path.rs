@@ -102,6 +102,7 @@ fn limit_cmd() -> PlaceHyperliquidPerpOrderCmd {
             time_in_force: HyperliquidPerpOrderTimeInForce::Gtc,
         },
         cloid: Some("client-order-1".to_string()),
+        liquidation_id: None,
     }
 }
 

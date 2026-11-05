@@ -182,7 +182,6 @@ impl LocalQueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Reservation, ReservationKind, ReservationMarketKind};
 
     fn open_order(order_id: u64, symbol: &str) -> HyperliquidPerpOrder {
         let mut order = HyperliquidPerpOrder::new(
@@ -197,18 +196,6 @@ mod tests {
             5,
             false,
             Some(format!("cloid-{order_id}")),
-            Some(
-                Reservation::new(
-                    format!("reservation:{order_id}"),
-                    "trader-1".to_string(),
-                    order_id,
-                    ReservationMarketKind::Perp,
-                    ReservationKind::PerpOpenMargin,
-                    "USDC".to_string(),
-                    1,
-                )
-                .unwrap(),
-            ),
         );
         order.version = 3;
         order
@@ -227,18 +214,6 @@ mod tests {
             8,
             true,
             Some(format!("cloid-{order_id}")),
-            Some(
-                Reservation::new(
-                    format!("reservation:{order_id}"),
-                    "trader-1".to_string(),
-                    order_id,
-                    ReservationMarketKind::Perp,
-                    ReservationKind::PerpOpenMargin,
-                    "USDC".to_string(),
-                    1,
-                )
-                .unwrap(),
-            ),
         )
         .with_execution_state(HyperliquidPerpOrderStatus::PartiallyFilled, 3);
         order.version = 5;

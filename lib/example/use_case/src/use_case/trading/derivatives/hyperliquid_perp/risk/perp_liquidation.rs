@@ -1,6 +1,15 @@
-use common_entity::{LogEntry, UseCase};
+use std::collections::BTreeMap;
+
+use common_entity::{EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase};
 use example_core_entity::hyperliquid_account::perp_clearinghouse_state_v3::PerpClearinghouseStateV3;
+use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use crate::{
+    PlaceHyperliquidPerpOrderChanges, PlaceHyperliquidPerpOrderCmd, PlaceHyperliquidPerpOrderError,
+    PlaceHyperliquidPerpOrderExecution, PlaceHyperliquidPerpOrderUseCase,
+};
 
 /// 创建委托所需的完整事实；价格和数量按 Decimal 精确解析，不舍入。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -18,13 +27,15 @@ pub enum PlaceOnlySpotOrderV3AfterChanges {
     NoAction,
     Backstop { liquidation_id: String },
     Adl { liquidation_id: String },
-    Orders { liquidation_id: String, position_count: usize },
+    Orders { liquidation_id: String, orders: Vec<PlaceHyperliquidPerpOrderChanges> },
 }
 
 /// 现货改单所需的 authoritative 状态快照。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiquidationState {
     pub clearinghouse_state: PerpClearinghouseStateV3,
+    /// 每个活动仓位对应的普通 perp 下单 authoritative state。
+    pub order_states: BTreeMap<String, crate::PlaceHyperliquidPerpOrderState>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -64,17 +75,64 @@ impl UseCase for PerpLiquidation {
             });
         }
         if equity <= mm {
+            let mut orders = Vec::new();
+            for (symbol, state) in &given_state.order_states {
+                let position = &state.position;
+                let mark = cmd.mark_prices.get(symbol).ok_or(LiquidationError::MissingMarkPrice)?;
+                let aggressive_price = mark.to_u64().ok_or(LiquidationError::InvalidMarkPrice)?;
+                let size = position.qty();
+                if size == 0 {
+                    continue;
+                }
+                let is_buy = position.is_short();
+                let child = PlaceHyperliquidPerpOrderCmd {
+                    party_id: state.account_id.clone(),
+                    asset: position.perp_asset_id,
+                    symbol: symbol.clone(),
+                    is_buy,
+                    size,
+                    reduce_only: true,
+                    execution: PlaceHyperliquidPerpOrderExecution::Market { aggressive_price },
+                    cloid: None,
+                    liquidation_id: Some(cmd.liquidation_id.clone()),
+                };
+                let child_log = common_entity::LogEntrySequencer::derive(cmd, child);
+                let changes = PlaceHyperliquidPerpOrderUseCase
+                    .compute_state_changed(&child_log, state)
+                    .map_err(|source| LiquidationError::Order { symbol: symbol.clone(), source })?;
+                orders.push(changes);
+            }
             return Ok(PlaceOnlySpotOrderV3AfterChanges::Orders {
                 liquidation_id: cmd.liquidation_id.clone(),
-                position_count: clearinghouse_state.positions().len(),
+                orders,
             });
         }
         Ok(PlaceOnlySpotOrderV3AfterChanges::NoAction)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LiquidationError {
+    #[error("invalid liquidation command")]
     InvalidCommand,
+    #[error("liquidation snapshot is stale")]
     StaleSnapshot,
+    #[error("mark price is missing")]
+    MissingMarkPrice,
+    #[error("mark price cannot be represented as an order price")]
+    InvalidMarkPrice,
+    #[error("liquidation order for {symbol} failed: {source}")]
+    Order { symbol: String, source: PlaceHyperliquidPerpOrderError },
+}
+
+impl ReplayableChanges for PlaceOnlySpotOrderV3AfterChanges {
+    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+        match self {
+            Self::Orders { orders, .. } => orders.iter().try_fold(Vec::new(), |mut all, order| {
+                all.extend(order.to_replayable_events()?);
+                Ok(all)
+            }),
+            _ => Ok(Vec::new()),
+        }
+    }
 }

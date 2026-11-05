@@ -11,11 +11,6 @@ use super::spot_order_primitives::{
     option_status_reason_value, push_change,
 };
 use super::spot_trade::SpotTrade;
-use crate::entity::{
-    BalanceLedgerEntryV2Error, BalanceLedgerReason, BalanceLedgerV2, Reservation,
-    ReservationCloseReason, ReservationError, ReservationKind, ReservationMarketKind,
-    ReservationStatus,
-};
 use crate::support::{concat2, concat3};
 
 const SPOT_ORDER_V2_ENTITY_TYPE: u8 = 3;
@@ -73,6 +68,20 @@ pub struct SpotOrderFeeHoldRequirement {
     pub worst_case_role: SpotTradeFeeRole,
     /// 对应的最坏费率，单位为 bps，分母固定 10_000。
     pub fee_bps: u64,
+}
+
+/// 订单 principal 冻结需求。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotOrderHoldRequirement {
+    pub asset: SpotOrderHoldAsset,
+    pub amount: u64,
+}
+
+/// 订单当前 principal 与 fee 的完整冻结需求。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotOrderHoldRequirements {
+    pub principal: SpotOrderHoldRequirement,
+    pub fee: SpotOrderFeeHoldRequirement,
 }
 
 /// 单笔成交在订单侧应消耗的手续费需求。
@@ -195,8 +204,6 @@ pub struct MatchSpotOrderV2Outcome {
 /// 撤单行为输入。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderV2Input {
-    /// 被释放冻结余额对应的余额实体 ID。
-    pub balance_entity_id: String,
     /// 撤单时间，单位为 Unix 纳秒。
     pub timestamp: u64,
 }
@@ -204,8 +211,8 @@ pub struct CancelSpotOrderV2Input {
 /// 撤单行为结果。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderV2Outcome {
-    /// 本次撤单直接派生的解冻流水；未触发条件单撤销时没有冻结可释放。
-    pub unfreeze_ledger_entry: Option<BalanceLedgerV2>,
+    /// 本次撤单应释放的冻结需求；Pending 订单没有冻结。
+    pub release_requirements: Option<SpotOrderHoldRequirements>,
 }
 
 /// `SpotOrderV2` 三个聚合行为入口的业务错误。
@@ -241,12 +248,6 @@ pub enum SpotOrderV2BehaviorError {
     /// 订单行为推导发生整数溢出。
     #[error("arithmetic overflow while deriving spot order behavior")]
     ArithmeticOverflow,
-    /// principal reservation 行为失败。
-    #[error("reservation behavior failed: {0}")]
-    Reservation(#[from] ReservationError),
-    /// 余额流水派生失败。
-    #[error("balance ledger entry derivation failed: {0}")]
-    BalanceLedger(#[from] BalanceLedgerEntryV2Error),
 }
 
 impl From<SpotOrderV2MatchError> for SpotOrderV2BehaviorError {
@@ -361,13 +362,6 @@ pub struct SpotOrderV2 {
     pub status: SpotOrderStatus,
     /// Hyperliquid 细分状态原因。
     pub status_reason: Option<SpotOrderStatusReason>, //todo delete
-    /// 订单 principal 冻结凭证。//todo delete
-    pub reservation: Reservation,
-    /// 订单 fee 冻结凭证。
-    ///
-    /// v3 下单/撤单用例以订单聚合内的 fee reservation 为权威状态；余额流水仍负责
-    /// 表达冻结资金的审计变化。
-    pub fee_reservation: Reservation, //todo delete
 
     // /// 冻结费
     // pub taker_max_fee: u64,
@@ -401,10 +395,6 @@ impl SpotOrderV2 {
         version: u64,
         created_at: u64,
     ) -> Self {
-        let reservation =
-            Self::empty_pending_reservation(order_id, account_id.as_str(), side, false);
-        let fee_reservation =
-            Self::empty_pending_reservation(order_id, account_id.as_str(), side, true);
         Self {
             order_id,
             asset,
@@ -419,8 +409,6 @@ impl SpotOrderV2 {
             filled_size: 0,
             status: SpotOrderStatus::Pending,
             status_reason: None,
-            reservation,
-            fee_reservation,
             cloid: client_order_id,
             created_at,
             updated_at: created_at,
@@ -445,10 +433,6 @@ impl SpotOrderV2 {
         version: u64,
         created_at: u64,
     ) -> Self {
-        let reservation =
-            Self::empty_pending_reservation(order_id, account_id.as_str(), side, false);
-        let fee_reservation =
-            Self::empty_pending_reservation(order_id, account_id.as_str(), side, true);
         Self {
             order_id,
             asset,
@@ -463,8 +447,6 @@ impl SpotOrderV2 {
             filled_size: 0,
             status: SpotOrderStatus::Pending,
             status_reason: None,
-            reservation,
-            fee_reservation,
             cloid: client_order_id,
             created_at,
             updated_at: created_at,
@@ -475,170 +457,68 @@ impl SpotOrderV2 {
     /// 可 BDD 规格化的聚合根行为：激活 Pending 订单并生成冻结需求。
     ///
     /// 该行为只负责订单自身从 Pending 到 Open 的生命周期推进，以及 principal / fee
-    /// reservation 的订单侧事实生成；Trigger 是否满足触发条件由上层流程保证。
+    /// requirement 的订单侧事实生成；Trigger 是否满足触发条件由上层流程保证。
     pub fn activate_pending(
         &mut self,
         input: ActivatePendingSpotOrderV2Input,
-    ) -> Result<(), SpotOrderV2BehaviorError> {
+    ) -> Result<SpotOrderHoldRequirements, SpotOrderV2BehaviorError> {
         if !self.is_pending() {
             return Err(SpotOrderV2BehaviorError::OrderNotMatchable);
         }
 
-        let reservation = Self::principal_reservation(
-            self.order_id,
-            self.account_id.as_str(),
-            self.side,
-            self.size,
-            self.limit_price,
-            input.base_asset_id.as_str(),
-            input.quote_asset_id.as_str(),
-        )?;
-        let fee_reservation = Self::fee_reservation(
-            self.order_id,
-            self.account_id.as_str(),
-            self.side,
-            self.size,
-            self.limit_price,
-            input.quote_asset_id.as_str(),
-            input.maker_fee_bps,
-            input.taker_fee_bps,
-        )?;
+        let requirements =
+            self.hold_requirements_for_qty(self.size, input.maker_fee_bps, input.taker_fee_bps)?;
         let next_version = self.next_version()?;
 
         self.filled_size = 0;
         self.status = SpotOrderStatus::Open;
         self.status_reason = None;
-        self.reservation = reservation;
-        self.fee_reservation = fee_reservation;
         self.version = next_version;
         self.updated_at = input.timestamp;
-        Ok(())
+        Ok(requirements)
     }
 
-    /// 为 spot 订单构造 principal reservation。
-    #[allow(clippy::too_many_arguments)]
-    pub fn principal_reservation(
-        order_id: u64,
-        account_id: &str,
-        side: OrderSide,
+    fn hold_requirements_for_qty(
+        &self,
         qty: u64,
-        order_price: u64,
-        base_asset_id: &str,
-        quote_asset_id: &str,
-    ) -> Result<Reservation, ReservationError> {
-        let (kind, asset_id, amount) = match side {
-            OrderSide::Buy => (
-                ReservationKind::SpotBuyQuote,
-                quote_asset_id.to_string(),
-                quote_notional(qty, order_price).ok_or(ReservationError::ArithmeticOverflow)?,
-            ),
-            OrderSide::Sell => (ReservationKind::SpotSellBase, base_asset_id.to_string(), qty),
-        };
-        Reservation::new(
-            concat2("reservation:", order_id.to_string().as_str()),
-            account_id.to_string(),
-            order_id,
-            ReservationMarketKind::Spot,
-            kind,
-            asset_id,
-            amount,
-        )
-    }
-
-    /// 为 spot 订单构造 fee reservation。
-    #[allow(clippy::too_many_arguments)]
-    pub fn fee_reservation(
-        order_id: u64,
-        account_id: &str,
-        side: OrderSide,
-        qty: u64,
-        order_price: u64,
-        quote_asset_id: &str,
         maker_fee_bps: u64,
         taker_fee_bps: u64,
-    ) -> Result<Reservation, ReservationError> {
-        let fee_bps = maker_fee_bps.max(taker_fee_bps);
-        let amount = if fee_bps == 0 {
-            return Ok(Self::empty_zero_fee_reservation(
-                order_id,
-                account_id,
-                side,
-                quote_asset_id,
-            ));
-        } else {
-            let notional =
-                quote_notional(qty, order_price).ok_or(ReservationError::ArithmeticOverflow)?;
-            fee_amount_round_up(notional, fee_bps).ok_or(ReservationError::ArithmeticOverflow)?
+    ) -> Result<SpotOrderHoldRequirements, SpotOrderV2BehaviorError> {
+        let principal = SpotOrderHoldRequirement {
+            asset: self.hold_asset(),
+            amount: match self.side {
+                OrderSide::Buy => quote_notional(qty, self.limit_price)
+                    .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?,
+                OrderSide::Sell => qty,
+            },
         };
-        let kind = match side {
-            OrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
-            OrderSide::Sell => ReservationKind::SpotSellFeeQuote,
+        let (worst_case_role, fee_bps) = Self::max_fee_role_and_bps(maker_fee_bps, taker_fee_bps);
+        let fee_notional = quote_notional(qty, self.limit_price)
+            .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
+        let fee = SpotOrderFeeHoldRequirement {
+            asset: SpotOrderHoldAsset::Quote,
+            amount: fee_amount_round_up(fee_notional, fee_bps)
+                .ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?,
+            worst_case_role,
+            fee_bps,
         };
-        Reservation::new(
-            concat3("reservation:", order_id.to_string().as_str(), ":fee"),
-            account_id.to_string(),
-            order_id,
-            ReservationMarketKind::Spot,
-            kind,
-            quote_asset_id.to_string(),
-            amount,
-        )
+        Ok(SpotOrderHoldRequirements { principal, fee })
     }
 
-    fn empty_zero_fee_reservation(
-        order_id: u64,
-        account_id: &str,
-        side: OrderSide,
-        quote_asset_id: &str,
-    ) -> Reservation {
-        let reservation_kind = match side {
-            OrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
-            OrderSide::Sell => ReservationKind::SpotSellFeeQuote,
-        };
-        Reservation {
-            reservation_id: concat3("reservation:", order_id.to_string().as_str(), ":fee"),
-            owner_account_id: account_id.to_string(),
-            caused_by_order_id: order_id,
-            market_kind: ReservationMarketKind::Spot,
-            reservation_kind,
-            asset_id: quote_asset_id.to_string(),
-            original_amount: 0,
-            consumed_amount: 0,
-            released_amount: 0,
-            remaining_amount: 0,
-            status: ReservationStatus::ClosedByRelease,
-            close_reason: None,
-            version: 1,
+    /// 返回订单当前剩余数量对应的冻结需求；终态订单不再有 active hold。
+    pub fn active_hold_requirements(
+        &self,
+        maker_fee_bps: u64,
+        taker_fee_bps: u64,
+    ) -> Result<Option<SpotOrderHoldRequirements>, SpotOrderV2BehaviorError> {
+        if !matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
+            return Ok(None);
         }
-    }
-
-    fn empty_pending_reservation(
-        order_id: u64,
-        account_id: &str,
-        side: OrderSide,
-        fee: bool,
-    ) -> Reservation {
-        let reservation_kind = match (side, fee) {
-            (OrderSide::Buy, false) => ReservationKind::SpotBuyQuote,
-            (OrderSide::Sell, false) => ReservationKind::SpotSellBase,
-            (OrderSide::Buy, true) => ReservationKind::SpotBuyFeeQuote,
-            (OrderSide::Sell, true) => ReservationKind::SpotSellFeeQuote,
-        };
-        let suffix = if fee { ":fee:pending" } else { ":pending" };
-        Reservation {
-            reservation_id: concat3("reservation:", order_id.to_string().as_str(), suffix),
-            owner_account_id: account_id.to_string(),
-            caused_by_order_id: order_id,
-            market_kind: ReservationMarketKind::Spot,
-            reservation_kind,
-            asset_id: "UNRESERVED".to_string(),
-            original_amount: 0,
-            consumed_amount: 0,
-            released_amount: 0,
-            remaining_amount: 0,
-            status: ReservationStatus::ClosedByRelease,
-            close_reason: None,
-            version: 1,
+        let remaining = self.remaining_qty().ok_or(SpotOrderV2BehaviorError::ArithmeticOverflow)?;
+        if remaining == 0 {
+            Ok(None)
+        } else {
+            self.hold_requirements_for_qty(remaining, maker_fee_bps, taker_fee_bps).map(Some)
         }
     }
 
@@ -732,24 +612,6 @@ impl SpotOrderV2 {
         }
     }
 
-    /// 返回 active lifecycle 的 principal reservation；未触发条件单返回 `None`。
-    pub fn active_reservation(&self) -> Option<&Reservation> {
-        if matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
-            Some(&self.reservation)
-        } else {
-            None
-        }
-    }
-
-    /// 返回 active lifecycle 的 fee reservation；未触发条件单返回 `None`。
-    pub fn active_fee_reservation(&self) -> Option<&Reservation> {
-        if matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
-            Some(&self.fee_reservation)
-        } else {
-            None
-        }
-    }
-
     /// 返回订单是否属于指定账户。
     pub fn belongs_to_account(&self, account_id: &str) -> bool {
         self.account_id == account_id
@@ -803,26 +665,11 @@ impl SpotOrderV2 {
         self.size.checked_sub(self.filled_size)
     }
 
-    /// 返回订单建立时的 quote 冻结快照。
-    fn initial_quote_hold_snapshot(&self) -> Option<u64> {
-        quote_notional(self.size, self.order_price())
-    }
-
     fn hold_asset(&self) -> SpotOrderHoldAsset {
         match self.side {
             OrderSide::Buy => SpotOrderHoldAsset::Quote,
             OrderSide::Sell => SpotOrderHoldAsset::Base,
         }
-    }
-
-    fn release_snapshot_amount(&self) -> Option<u64> {
-        let amount = self.reservation.remaining_amount;
-        if amount == 0 { None } else { Some(amount) }
-    }
-
-    fn fee_release_remaining_amount(&self) -> Option<u64> {
-        let amount = self.fee_reservation.remaining_amount;
-        if amount == 0 { None } else { Some(amount) }
     }
 
     fn fee_hold_asset(&self) -> SpotOrderHoldAsset {
@@ -835,37 +682,6 @@ impl SpotOrderV2 {
         } else {
             (SpotTradeFeeRole::Taker, taker_fee_bps)
         }
-    }
-
-    fn quote_fee_amount_with_bps_round_up(&self, fee_bps: u64) -> Option<u64> {
-        let notional = self.initial_quote_hold_snapshot()?;
-        fee_amount_round_up(notional, fee_bps)
-    }
-
-    /// 返回订单在终态下允许释放的冻结需求。
-    ///
-    /// 该方法只表达订单侧语义，不直接读取 reservation / balance 当前 remaining hold。
-    fn terminal_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
-        let reason = match self.status {
-            SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled => {
-                return None;
-            }
-            SpotOrderStatus::Filled => SpotOrderReleaseReason::FilledCleanup,
-            SpotOrderStatus::Canceled => {
-                if self.time_in_force() == OrderTif::Ioc {
-                    SpotOrderReleaseReason::IocUnfilled
-                } else {
-                    SpotOrderReleaseReason::Canceled
-                }
-            }
-            SpotOrderStatus::Rejected => SpotOrderReleaseReason::Rejected,
-        };
-
-        Some(SpotOrderReleaseRequirement {
-            asset: self.hold_asset(),
-            amount: self.release_snapshot_amount()?,
-            reason,
-        })
     }
 
     /// 返回下单阶段 fee 按最坏角色费率的预冻结需求。
@@ -883,20 +699,9 @@ impl SpotOrderV2 {
         let (worst_case_role, fee_bps) = Self::max_fee_role_and_bps(maker_fee_bps, taker_fee_bps);
         Some(SpotOrderFeeHoldRequirement {
             asset: self.fee_hold_asset(),
-            amount: self.quote_fee_amount_with_bps_round_up(fee_bps)?,
+            amount: fee_amount_round_up(quote_notional(self.size, self.order_price())?, fee_bps)?,
             worst_case_role,
             fee_bps,
-        })
-    }
-
-    /// 返回订单终态下允许释放 fee reservation remainder 的订单侧 requirement。
-    fn fee_terminal_release_requirement(&self) -> Option<SpotOrderReleaseRequirement> {
-        let principal_release = self.terminal_release_requirement()?;
-
-        Some(SpotOrderReleaseRequirement {
-            asset: self.fee_hold_asset(),
-            amount: self.fee_release_remaining_amount()?,
-            reason: principal_release.reason,
         })
     }
 
@@ -928,10 +733,37 @@ impl SpotOrderV2 {
     /// 返回订单终态下允许释放的 principal / fee requirement。
     pub fn terminal_release_requirements(
         &self,
-        _maker_fee_bps: u64,
-        _taker_fee_bps: u64,
+        maker_fee_bps: u64,
+        taker_fee_bps: u64,
     ) -> (Option<SpotOrderReleaseRequirement>, Option<SpotOrderReleaseRequirement>) {
-        (self.terminal_release_requirement(), self.fee_terminal_release_requirement())
+        let reason = match self.status {
+            SpotOrderStatus::Filled => SpotOrderReleaseReason::FilledCleanup,
+            SpotOrderStatus::Canceled if self.time_in_force() == OrderTif::Ioc => {
+                SpotOrderReleaseReason::IocUnfilled
+            }
+            SpotOrderStatus::Canceled => SpotOrderReleaseReason::Canceled,
+            SpotOrderStatus::Rejected => SpotOrderReleaseReason::Rejected,
+            _ => return (None, None),
+        };
+        let Ok(requirements) = self.hold_requirements_for_qty(
+            self.remaining_qty().unwrap_or_default(),
+            maker_fee_bps,
+            taker_fee_bps,
+        ) else {
+            return (None, None);
+        };
+        (
+            (requirements.principal.amount > 0).then_some(SpotOrderReleaseRequirement {
+                asset: requirements.principal.asset,
+                amount: requirements.principal.amount,
+                reason,
+            }),
+            (requirements.fee.amount > 0).then_some(SpotOrderReleaseRequirement {
+                asset: requirements.fee.asset,
+                amount: requirements.fee.amount,
+                reason,
+            }),
+        )
     }
 
     /// 返回该订单是否允许撤销。
@@ -1196,7 +1028,7 @@ impl SpotOrderV2 {
             self.status = SpotOrderStatus::Canceled;
             self.status_reason = Some(SpotOrderStatusReason::CanceledByUser);
             self.updated_at = input.timestamp;
-            return Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: None });
+            return Ok(CancelSpotOrderV2Outcome { release_requirements: None });
         }
 
         if !matches!(self.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
@@ -1207,27 +1039,9 @@ impl SpotOrderV2 {
             return Err(SpotOrderV2BehaviorError::OrderNotCancelable);
         }
 
-        let release_amount = self.reservation.remaining_amount;
-        if release_amount == 0 {
-            return Err(SpotOrderV2BehaviorError::Reservation(ReservationError::InvalidAmount));
-        }
-
-        let mut released_reservation = self.reservation.clone();
-        released_reservation.release(release_amount, Some(ReservationCloseReason::Canceled))?;
-        let unfreeze_ledger_entry = BalanceLedgerV2::unfreeze(
-            common_entity::stable_string_entity_id(&concat2(
-                "balance-ledger:unfreeze:",
-                self.order_id.to_string().as_str(),
-            )),
-            self.account_id.clone(),
-            self.reservation.asset_id.clone(),
-            input.balance_entity_id,
-            release_amount,
-            BalanceLedgerReason::UnfreezeForCancel { order_id: self.order_id },
-        )?;
+        let release_requirements = self.active_hold_requirements(0, 0)?;
         let next_version = self.next_version()?;
 
-        self.reservation = released_reservation;
         self.transition_to(
             next_version,
             SpotOrderStatus::Canceled,
@@ -1235,7 +1049,7 @@ impl SpotOrderV2 {
             input.timestamp,
         );
 
-        Ok(CancelSpotOrderV2Outcome { unfreeze_ledger_entry: Some(unfreeze_ledger_entry) })
+        Ok(CancelSpotOrderV2Outcome { release_requirements })
     }
 
     /// 按 IOC 部分成交后取消剩余数量语义关闭订单。
@@ -1446,74 +1260,6 @@ impl FieldDiff for SpotOrderV2 {
                 "",
                 option_status_reason_value(self.status_reason),
             ),
-            EntityFieldChange::new("reservation_id", "", self.reservation.reservation_id.clone()),
-            EntityFieldChange::new("reservation_asset_id", "", self.reservation.asset_id.clone()),
-            EntityFieldChange::new(
-                "reservation_kind",
-                "",
-                self.reservation.reservation_kind.as_str(),
-            ),
-            EntityFieldChange::new(
-                "reservation_original_amount",
-                "",
-                self.reservation.original_amount.to_string(),
-            ),
-            EntityFieldChange::new(
-                "reservation_consumed_amount",
-                "",
-                self.reservation.consumed_amount.to_string(),
-            ),
-            EntityFieldChange::new(
-                "reservation_released_amount",
-                "",
-                self.reservation.released_amount.to_string(),
-            ),
-            EntityFieldChange::new(
-                "reservation_remaining_amount",
-                "",
-                self.reservation.remaining_amount.to_string(),
-            ),
-            EntityFieldChange::new("reservation_status", "", self.reservation.status.as_str()),
-            EntityFieldChange::new(
-                "fee_reservation_id",
-                "",
-                self.fee_reservation.reservation_id.clone(),
-            ),
-            EntityFieldChange::new(
-                "fee_reservation_asset_id",
-                "",
-                self.fee_reservation.asset_id.clone(),
-            ),
-            EntityFieldChange::new(
-                "fee_reservation_kind",
-                "",
-                self.fee_reservation.reservation_kind.as_str(),
-            ),
-            EntityFieldChange::new(
-                "fee_reservation_original_amount",
-                "",
-                self.fee_reservation.original_amount.to_string(),
-            ),
-            EntityFieldChange::new(
-                "fee_reservation_consumed_amount",
-                "",
-                self.fee_reservation.consumed_amount.to_string(),
-            ),
-            EntityFieldChange::new(
-                "fee_reservation_released_amount",
-                "",
-                self.fee_reservation.released_amount.to_string(),
-            ),
-            EntityFieldChange::new(
-                "fee_reservation_remaining_amount",
-                "",
-                self.fee_reservation.remaining_amount.to_string(),
-            ),
-            EntityFieldChange::new(
-                "fee_reservation_status",
-                "",
-                self.fee_reservation.status.as_str(),
-            ),
             EntityFieldChange::new("client_order_id", "", self.cloid.clone().unwrap_or_default()),
         ]
     }
@@ -1590,102 +1336,6 @@ impl FieldDiff for SpotOrderV2 {
         );
         push_change(
             &mut changes,
-            "reservation_id",
-            &self.reservation.reservation_id,
-            &other.reservation.reservation_id,
-        );
-        push_change(
-            &mut changes,
-            "reservation_asset_id",
-            &self.reservation.asset_id,
-            &other.reservation.asset_id,
-        );
-        push_change(
-            &mut changes,
-            "reservation_kind",
-            self.reservation.reservation_kind.as_str(),
-            other.reservation.reservation_kind.as_str(),
-        );
-        push_change(
-            &mut changes,
-            "reservation_original_amount",
-            self.reservation.original_amount.to_string(),
-            other.reservation.original_amount.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "reservation_consumed_amount",
-            self.reservation.consumed_amount.to_string(),
-            other.reservation.consumed_amount.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "reservation_released_amount",
-            self.reservation.released_amount.to_string(),
-            other.reservation.released_amount.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "reservation_remaining_amount",
-            self.reservation.remaining_amount.to_string(),
-            other.reservation.remaining_amount.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "reservation_status",
-            self.reservation.status.as_str(),
-            other.reservation.status.as_str(),
-        );
-        push_change(
-            &mut changes,
-            "fee_reservation_id",
-            &self.fee_reservation.reservation_id,
-            &other.fee_reservation.reservation_id,
-        );
-        push_change(
-            &mut changes,
-            "fee_reservation_asset_id",
-            &self.fee_reservation.asset_id,
-            &other.fee_reservation.asset_id,
-        );
-        push_change(
-            &mut changes,
-            "fee_reservation_kind",
-            self.fee_reservation.reservation_kind.as_str(),
-            other.fee_reservation.reservation_kind.as_str(),
-        );
-        push_change(
-            &mut changes,
-            "fee_reservation_original_amount",
-            self.fee_reservation.original_amount.to_string(),
-            other.fee_reservation.original_amount.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "fee_reservation_consumed_amount",
-            self.fee_reservation.consumed_amount.to_string(),
-            other.fee_reservation.consumed_amount.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "fee_reservation_released_amount",
-            self.fee_reservation.released_amount.to_string(),
-            other.fee_reservation.released_amount.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "fee_reservation_remaining_amount",
-            self.fee_reservation.remaining_amount.to_string(),
-            other.fee_reservation.remaining_amount.to_string(),
-        );
-        push_change(
-            &mut changes,
-            "fee_reservation_status",
-            self.fee_reservation.status.as_str(),
-            other.fee_reservation.status.as_str(),
-        );
-        push_change(
-            &mut changes,
             "client_order_id",
             self.cloid.clone().unwrap_or_default(),
             other.cloid.clone().unwrap_or_default(),
@@ -1731,42 +1381,11 @@ impl Entity for SpotOrderV2 {
     }
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "order_id"
-            | "account_id"
-            | "symbol"
-            | "side"
-            | "order_type"
-            | "effective_tif"
-            | "trigger_price"
-            | "tpsl"
-            | "reduce_only"
-            | "group_relation"
-            | "status"
-            | "status_reason"
-            | "client_order_id"
-            | "reservation_id"
-            | "reservation_asset_id"
-            | "reservation_kind"
-            | "reservation_status"
-            | "fee_reservation_id"
-            | "fee_reservation_asset_id"
-            | "fee_reservation_kind"
-            | "fee_reservation_status" => 0,
-            "asset"
-            | "qty"
-            | "filled_qty"
-            | "created_at"
-            | "updated_at"
-            | "limit_price"
-            | "version"
-            | "reservation_original_amount"
-            | "reservation_consumed_amount"
-            | "reservation_released_amount"
-            | "reservation_remaining_amount"
-            | "fee_reservation_original_amount"
-            | "fee_reservation_consumed_amount"
-            | "fee_reservation_released_amount"
-            | "fee_reservation_remaining_amount" => 1,
+            "order_id" | "account_id" | "symbol" | "side" | "order_type" | "effective_tif"
+            | "trigger_price" | "tpsl" | "reduce_only" | "group_relation" | "status"
+            | "status_reason" | "client_order_id" => 0,
+            "asset" | "qty" | "filled_qty" | "created_at" | "updated_at" | "limit_price"
+            | "version" => 1,
             _ => 0,
         }
     }
@@ -1845,7 +1464,7 @@ impl EntityLifecycle for SpotOrderV2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::{OrderTriggerRole, ReservationKind, ReservationStatus};
+    use crate::entity::OrderTriggerRole;
 
     fn activation_input(maker_fee_bps: u64, taker_fee_bps: u64) -> ActivatePendingSpotOrderV2Input {
         ActivatePendingSpotOrderV2Input {
@@ -1874,23 +1493,20 @@ mod tests {
     }
 
     #[test]
-    fn pending_limit_order_activation_builds_open_order_reservations() {
+    fn pending_limit_order_activation_returns_hold_requirements() {
         let mut order = pending_order(OrderType::Limit { tif: OrderTif::Gtc });
 
-        order.activate_pending(activation_input(5, 10)).expect("pending limit should activate");
+        let requirements =
+            order.activate_pending(activation_input(5, 10)).expect("pending limit should activate");
 
         assert_eq!(order.status, SpotOrderStatus::Open);
         assert_eq!(order.filled_size, 0);
         assert_eq!(order.version, 2);
         assert_eq!(order.updated_at, 10);
-        assert_eq!(order.reservation.asset_id, "USDT");
-        assert_eq!(order.reservation.original_amount, 200);
-        assert_eq!(order.reservation.reservation_kind, ReservationKind::SpotBuyQuote);
-        assert_eq!(order.reservation.status, ReservationStatus::Active);
-        assert_eq!(order.fee_reservation.asset_id, "USDT");
-        assert_eq!(order.fee_reservation.original_amount, 1);
-        assert_eq!(order.fee_reservation.reservation_kind, ReservationKind::SpotBuyFeeQuote);
-        assert_eq!(order.fee_reservation.status, ReservationStatus::Active);
+        assert_eq!(requirements.principal.asset, SpotOrderHoldAsset::Quote);
+        assert_eq!(requirements.principal.amount, 200);
+        assert_eq!(requirements.fee.asset, SpotOrderHoldAsset::Quote);
+        assert_eq!(requirements.fee.amount, 1);
     }
 
     #[test]
@@ -1914,13 +1530,15 @@ mod tests {
             1,
         );
 
-        order.activate_pending(activation_input(5, 10)).expect("pending trigger should activate");
+        let requirements = order
+            .activate_pending(activation_input(5, 10))
+            .expect("pending trigger should activate");
 
         assert_eq!(order.status, SpotOrderStatus::Open);
         assert_eq!(order.order_type, trigger_type);
-        assert_eq!(order.reservation.asset_id, "BTC");
-        assert_eq!(order.reservation.original_amount, 2);
-        assert_eq!(order.fee_reservation.asset_id, "USDT");
+        assert_eq!(requirements.principal.asset, SpotOrderHoldAsset::Base);
+        assert_eq!(requirements.principal.amount, 2);
+        assert_eq!(requirements.fee.asset, SpotOrderHoldAsset::Quote);
     }
 
     #[test]

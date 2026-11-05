@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
-    UpdatedEntityPair,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
+    UseCase,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -12,7 +12,8 @@ use crate::common_entity::account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerV2,
 };
 use crate::common_entity::{
-    ActivatePendingSpotOrderV2Input, Balance, Reservation, SpotOrderV2, SpotOrderV2BehaviorError,
+    ActivatePendingSpotOrderV2Input, Balance, SpotOrderHoldAsset, SpotOrderHoldRequirement,
+    SpotOrderV2, SpotOrderV2BehaviorError,
 };
 use crate::support::{concat2, concat3};
 
@@ -150,21 +151,24 @@ impl UseCase for ActivateSpotOrderV2UseCase {
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut activated_order_after = state.pending_order.clone();
-        activated_order_after.activate_pending(ActivatePendingSpotOrderV2Input {
-            base_asset_id: state.base_asset_id.clone(),
-            quote_asset_id: state.quote_asset_id.clone(),
-            maker_fee_bps: state.maker_fee_bps,
-            taker_fee_bps: state.taker_fee_bps,
-            timestamp: cmd.logical_ts(),
-        })?;
+        let requirements =
+            activated_order_after.activate_pending(ActivatePendingSpotOrderV2Input {
+                base_asset_id: state.base_asset_id.clone(),
+                quote_asset_id: state.quote_asset_id.clone(),
+                maker_fee_bps: state.maker_fee_bps,
+                taker_fee_bps: state.taker_fee_bps,
+                timestamp: cmd.logical_ts(),
+            })?;
         // 订单版本由改变它的命令 LSN 定义；激活行为内部的递增版本仅是实体默认值。
         activated_order_after.version = cmd.lsn();
 
         let mut balance_book = BalanceMap::new(&state.balances);
         let mut created_balance_ledger_entries = Vec::with_capacity(2);
-        let principal_entry = apply_freeze_for_reservation(
+        let principal_entry = apply_freeze_for_requirement(
             &activated_order_after,
-            &activated_order_after.reservation,
+            requirements.principal,
+            &state.base_asset_id,
+            &state.quote_asset_id,
             concat2(
                 "balance-ledger:freeze:",
                 activated_order_after.order_id().to_string().as_str(),
@@ -173,10 +177,15 @@ impl UseCase for ActivateSpotOrderV2UseCase {
         )?;
         created_balance_ledger_entries.push(principal_entry);
 
-        if activated_order_after.fee_reservation.original_amount > 0 {
-            let fee_entry = apply_freeze_for_reservation(
+        if requirements.fee.amount > 0 {
+            let fee_entry = apply_freeze_for_requirement(
                 &activated_order_after,
-                &activated_order_after.fee_reservation,
+                SpotOrderHoldRequirement {
+                    asset: requirements.fee.asset,
+                    amount: requirements.fee.amount,
+                },
+                &state.base_asset_id,
+                &state.quote_asset_id,
                 concat3(
                     "balance-ledger:freeze:",
                     activated_order_after.order_id().to_string().as_str(),
@@ -239,31 +248,25 @@ fn validate_activation_state(
         return Err(ActivateSpotOrderV2Error::InvalidQuoteAssetId);
     }
 
-    let principal_reservation = SpotOrderV2::principal_reservation(
-        state.pending_order.order_id(),
-        state.pending_order.account_id(),
-        state.pending_order.side(),
-        state.pending_order.qty(),
-        state.pending_order.order_price(),
-        &state.base_asset_id,
-        &state.quote_asset_id,
-    )
-    .map_err(SpotOrderV2BehaviorError::from)?;
-    ensure_balance_exists(&state.balances, &principal_reservation)?;
-
-    let fee_reservation = SpotOrderV2::fee_reservation(
-        state.pending_order.order_id(),
-        state.pending_order.account_id(),
-        state.pending_order.side(),
-        state.pending_order.qty(),
-        state.pending_order.order_price(),
-        &state.quote_asset_id,
-        state.maker_fee_bps,
-        state.taker_fee_bps,
-    )
-    .map_err(SpotOrderV2BehaviorError::from)?;
-    if fee_reservation.original_amount > 0 {
-        ensure_balance_exists(&state.balances, &fee_reservation)?;
+    let mut order = state.pending_order.clone();
+    let requirements = order.activate_pending(ActivatePendingSpotOrderV2Input {
+        base_asset_id: state.base_asset_id.clone(),
+        quote_asset_id: state.quote_asset_id.clone(),
+        maker_fee_bps: state.maker_fee_bps,
+        taker_fee_bps: state.taker_fee_bps,
+        timestamp: order.updated_at,
+    })?;
+    ensure_balance_exists(
+        &state.balances,
+        order.account_id(),
+        asset_id(requirements.principal.asset, state),
+    )?;
+    if requirements.fee.amount > 0 {
+        ensure_balance_exists(
+            &state.balances,
+            order.account_id(),
+            asset_id(requirements.fee.asset, state),
+        )?;
     }
 
     Ok(())
@@ -271,14 +274,14 @@ fn validate_activation_state(
 
 fn ensure_balance_exists(
     balances: &[Balance],
-    reservation: &Reservation,
+    account_id: &str,
+    asset_id: &str,
 ) -> Result<(), ActivateSpotOrderV2Error> {
     balances
         .iter()
         .find(|balance| {
-            balance.belongs_to_account(common_entity::stable_string_entity_id(
-                &reservation.owner_account_id,
-            )) && balance.is_asset(common_entity::stable_string_entity_id(&reservation.asset_id))
+            balance.belongs_to_account(common_entity::stable_string_entity_id(account_id))
+                && balance.is_asset(common_entity::stable_string_entity_id(asset_id))
         })
         .map(|_| ())
         .ok_or(ActivateSpotOrderV2Error::BalanceNotFound)
@@ -335,22 +338,35 @@ impl BalanceMap {
     }
 }
 
-fn apply_freeze_for_reservation(
+fn asset_id<'a>(asset: SpotOrderHoldAsset, state: &'a ActivateSpotOrderV2State) -> &'a str {
+    match asset {
+        SpotOrderHoldAsset::Base => &state.base_asset_id,
+        SpotOrderHoldAsset::Quote => &state.quote_asset_id,
+    }
+}
+
+fn apply_freeze_for_requirement(
     order: &SpotOrderV2,
-    reservation: &Reservation,
+    requirement: SpotOrderHoldRequirement,
+    base_asset_id: &str,
+    quote_asset_id: &str,
     entry_id: String,
     balance_book: &mut BalanceMap,
 ) -> Result<BalanceLedgerV2, ActivateSpotOrderV2Error> {
+    let asset_id = match requirement.asset {
+        SpotOrderHoldAsset::Base => base_asset_id,
+        SpotOrderHoldAsset::Quote => quote_asset_id,
+    };
     let mut entry = BalanceLedgerV2::freeze(
         entry_id,
         order.account_id().to_string(),
-        reservation.asset_id.clone(),
+        asset_id.to_string(),
         common_entity::stable_string_entity_id(order.account_id()),
-        reservation.original_amount,
+        requirement.amount,
         BalanceLedgerReason::FreezeForOrder { order_id: order.order_id() },
     )
     .map_err(ActivateSpotOrderV2Error::from)?;
-    let balance = balance_book.get_mut(order.account_id(), &reservation.asset_id)?;
+    let balance = balance_book.get_mut(order.account_id(), asset_id)?;
     entry.apply_to(balance).map_err(ActivateSpotOrderV2Error::from)?;
     Ok(entry)
 }

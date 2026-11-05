@@ -1,6 +1,6 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase,
-    UpdatedEntityPair, action_type,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UpdatedEntityPair,
+    UseCase, action_type,
 };
 use example_core_entity::OrderSide;
 use thiserror::Error;
@@ -133,6 +133,8 @@ pub struct PlaceHyperliquidPerpOrderCmd {
     pub execution: PlaceHyperliquidPerpOrderExecution,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub cloid: Option<String>,
+    /// 强平会话标识；普通下单为 `None`。
+    pub liquidation_id: Option<String>,
 }
 
 impl PlaceHyperliquidPerpOrderCmd {
@@ -215,6 +217,9 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
         if cmd.symbol.is_empty() {
             return Err(PlaceHyperliquidPerpOrderError::InvalidSymbol);
         }
+        if cmd.liquidation_id.as_deref() == Some("") {
+            return Err(PlaceHyperliquidPerpOrderError::InvalidSymbol);
+        }
         let _ = cmd.checked_size()?;
         let _ = cmd.execution.margin_price()?;
         Ok(())
@@ -229,7 +234,7 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
         let size = cmd.checked_size()?;
         let price = cmd.execution.margin_price()?;
 
-        if !state.trading_enabled {
+        if !state.trading_enabled && cmd.liquidation_id.is_none() {
             return Err(PlaceHyperliquidPerpOrderError::TradingDisabled);
         }
         if state.account_id != cmd.party_id {
@@ -336,24 +341,21 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
             time_in_force: cmd.execution.stored_time_in_force(),
             qty: size,
             client_order_id: cmd.cloid.clone(),
-            liquidation_id: None,
+            liquidation_id: cmd.liquidation_id.clone(),
             intent,
         })
         .map_err(|_| PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
 
         let created_order = place_outcome.order;
-        if created_order.reservation.is_none() {
+        let Some(mut freeze_ledger_entry) = place_outcome.freeze_ledger_entry else {
             return Ok(PlaceHyperliquidPerpOrderChanges {
                 created_order,
                 created_balance_ledger_entry: None,
                 updated_margin_balances: Vec::with_capacity(0),
             });
-        }
+        };
         let previous_balance = state.margin_balance.clone();
         let mut next_balance = previous_balance.clone();
-        let mut freeze_ledger_entry = place_outcome
-            .freeze_ledger_entry
-            .ok_or(PlaceHyperliquidPerpOrderError::ArithmeticOverflow)?;
         freeze_ledger_entry.apply_to(&mut next_balance).map_err(map_margin_ledger_error)?;
 
         Ok(PlaceHyperliquidPerpOrderChanges {

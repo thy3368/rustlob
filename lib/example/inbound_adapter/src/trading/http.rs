@@ -79,7 +79,6 @@ impl crate::common::ExampleBusinessErrorMapping for PlaceMatchSpotOrderV2Error {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceOrderHttpResponse {
     pub order_id: u64,
-    pub principal_reservation_amount: u64,
     pub remaining_quote: u64,
     pub domain_event_count: usize,
 }
@@ -93,11 +92,6 @@ impl crate::common::InboundReplyMapper for PlaceOrderHttpReplyMapper {
     fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
         PlaceOrderHttpResponse {
             order_id: find_u64_field(&events, "order_id").unwrap_or(0),
-            principal_reservation_amount: find_last_u64_field(
-                &events,
-                "reservation_original_amount",
-            )
-            .unwrap_or(0),
             remaining_quote: find_u64_field(&events, "available").unwrap_or(0),
             domain_event_count: events.len(),
         }

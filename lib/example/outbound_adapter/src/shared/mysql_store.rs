@@ -263,7 +263,6 @@ impl MySqlStore {
             balances,
             orders,
             trades: HashMap::new(),
-            reservations: HashMap::new(),
             persisted_event_count,
             published_event_count,
             broker_message_count: 0,

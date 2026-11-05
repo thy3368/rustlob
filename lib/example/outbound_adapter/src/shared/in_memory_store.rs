@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use common_entity::EntityReplayableEvent;
-use example_core_use_case::{Balance, MarketRules, Reservation, SpotOrderV2, SpotTrade};
+use example_core_use_case::{Balance, MarketRules, SpotOrderV2, SpotTrade};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 use super::StoreSnapshot;
@@ -14,7 +14,6 @@ pub(crate) struct StoreState {
     pub(crate) market_rules_by_symbol: HashMap<String, MarketRules>,
     pub(crate) orders: HashMap<u64, SpotOrderV2>,
     pub(crate) trades: HashMap<String, SpotTrade>,
-    pub(crate) reservations: HashMap<String, Reservation>,
     pub(crate) persisted_events: Vec<EntityReplayableEvent>,
     pub(crate) published_events: Vec<EntityReplayableEvent>,
     pub(crate) next_order_sequence: u64,
@@ -28,7 +27,6 @@ impl StoreState {
             market_rules_by_symbol: HashMap::new(),
             orders: HashMap::new(),
             trades: HashMap::new(),
-            reservations: HashMap::new(),
             persisted_events: Vec::new(),
             published_events: Vec::new(),
             next_order_sequence: 1,
@@ -85,12 +83,6 @@ impl InMemoryStore {
         Ok(())
     }
 
-    pub fn seed_reservation(&self, reservation: Reservation) -> Result<(), StoreError> {
-        let mut state = self.lock_state()?;
-        state.reservations.insert(reservation.reservation_id.clone(), reservation);
-        Ok(())
-    }
-
     pub fn snapshot_with_broker_depth(
         &self,
         broker_message_count: usize,
@@ -100,7 +92,6 @@ impl InMemoryStore {
             balances: state.balances.clone(),
             orders: state.orders.clone(),
             trades: state.trades.clone(),
-            reservations: state.reservations.clone(),
             persisted_event_count: state.persisted_events.len(),
             published_event_count: state.published_events.len(),
             broker_message_count,

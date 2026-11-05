@@ -1,5 +1,3 @@
-pub mod perp_funding_settlement;
-
 pub mod funding_rate_tick;
 pub mod funding_rate_tick_factory;
 
