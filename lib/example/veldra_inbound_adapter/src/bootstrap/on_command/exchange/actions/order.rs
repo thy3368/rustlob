@@ -640,7 +640,6 @@ mod tests {
             updated_maker_orders: vec![],
             updated_balances: vec![],
             created_trades,
-            created_vouchers: vec![],
             created_balance_ledger_entries: vec![],
         }
     }

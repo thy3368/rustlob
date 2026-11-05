@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
-    UpdatedEntityPair,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
+    UseCase,
 };
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
@@ -14,9 +14,9 @@ use crate::common_entity::account::balance_ledger_v2::{
 };
 use crate::common_entity::{
     Balance, OrderSide, OrderTif, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, SettlementTransferVoucher, SpotOrderStatus, spot as spot_entity,
+    ReservationMarketKind, SpotOrderStatus, spot as spot_entity,
 };
-use crate::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
+use crate::entity::transfer::settlement_transfer_purpose::SettlementTransferPurpose;
 use crate::support::{concat2, concat3, concat4};
 use crate::{MatchSpotOrderV2Input, SpotTrade};
 
@@ -38,7 +38,6 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<Balance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// 成交数量达到订单总数量，订单终止为 Filled。
@@ -47,7 +46,6 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<Balance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// IOC 部分成交后，剩余数量被取消并释放冻结。
@@ -56,7 +54,6 @@ pub enum MatchSpotOrderV3AfterChanges {
         maker_orders_after: Vec<SpotOrderV2>,
         balances_after: Vec<Balance>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     /// ALO crossing maker 或 IOC 无流动性导致拒单。
@@ -80,8 +77,8 @@ impl MatchSpotOrderV3AfterChanges {
 
 /// 撮合后的 before/after 业务变化。
 ///
-/// 更新实体只通过 `UpdatedEntityPair` 表达 authoritative before/after；成交、voucher
-/// 和 ledger 则直接表达本次撮合新产生的事实。
+/// 更新实体只通过 `UpdatedEntityPair` 表达 authoritative before/after；成交和 ledger
+/// 则直接表达本次撮合新产生的事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchSpotOrderV3Changes {
     /// 没有状态变化，也没有新增业务事实。
@@ -91,7 +88,6 @@ pub enum MatchSpotOrderV3Changes {
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
         updated_balances: Vec<UpdatedEntityPair<Balance>>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     Filled {
@@ -99,7 +95,6 @@ pub enum MatchSpotOrderV3Changes {
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
         updated_balances: Vec<UpdatedEntityPair<Balance>>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     CanceledAfterPartialFill {
@@ -107,7 +102,6 @@ pub enum MatchSpotOrderV3Changes {
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
         updated_balances: Vec<UpdatedEntityPair<Balance>>,
         created_trades: Vec<SpotTrade>,
-        created_vouchers: Vec<SettlementTransferVoucher>,
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
     Rejected {
@@ -166,7 +160,6 @@ impl MatchSpotOrderV3Changes {
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             }
             | Self::Filled {
@@ -174,7 +167,6 @@ impl MatchSpotOrderV3Changes {
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             }
             | Self::CanceledAfterPartialFill {
@@ -182,14 +174,12 @@ impl MatchSpotOrderV3Changes {
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             } => replay_events_without_taker_order(
                 updated_taker_order,
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             ),
             Self::Rejected {
@@ -219,7 +209,6 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             }
             | Self::Filled {
@@ -227,7 +216,6 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             }
             | Self::CanceledAfterPartialFill {
@@ -235,14 +223,12 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             } => replay_events(
                 Some(updated_taker_order),
                 updated_maker_orders,
                 updated_balances,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             ),
             Self::Rejected {
@@ -266,7 +252,6 @@ fn replay_events_without_taker_order(
     updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
     updated_balances: &[UpdatedEntityPair<Balance>],
     created_trades: &[SpotTrade],
-    created_vouchers: &[SettlementTransferVoucher],
     created_balance_ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let events = replay_events(
@@ -274,7 +259,6 @@ fn replay_events_without_taker_order(
         updated_maker_orders,
         updated_balances,
         created_trades,
-        created_vouchers,
         created_balance_ledger_entries,
     )?;
     Ok(events)
@@ -285,13 +269,11 @@ fn replay_events(
     updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
     updated_balances: &[UpdatedEntityPair<Balance>],
     created_trades: &[SpotTrade],
-    created_vouchers: &[SettlementTransferVoucher],
     created_balance_ledger_entries: &[BalanceLedgerV2],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let event_capacity = 1_usize
         .saturating_add(created_trades.len())
         .saturating_add(updated_maker_orders.len())
-        .saturating_add(created_vouchers.len())
         .saturating_add(created_balance_ledger_entries.len().saturating_mul(2));
     let mut events = Vec::with_capacity(event_capacity);
     if let Some(updated_taker_order) = updated_taker_order {
@@ -303,9 +285,6 @@ fn replay_events(
     }
     for maker in updated_maker_orders {
         events.push(maker.after.track_update_event_from(&maker.before)?);
-    }
-    for voucher in created_vouchers {
-        events.push(voucher.track_create_event()?);
     }
     events.extend(balance_replay_events_from_ledger_entries(
         updated_balances,
@@ -319,7 +298,6 @@ fn replay_events(
 
 struct MatchedTradeEffects {
     created_trades: Vec<SpotTrade>,
-    created_vouchers: Vec<SettlementTransferVoucher>,
     created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     total_taker_fill: u64,
 }
@@ -346,7 +324,6 @@ fn settle_matched_trades(
         ledger_entries,
     } = context;
     let mut created_trades = Vec::new();
-    let mut created_vouchers = Vec::new();
     let mut total_taker_fill = 0_u64;
 
     for (index, trade) in trades.into_iter().enumerate() {
@@ -385,15 +362,6 @@ fn settle_matched_trades(
         )?;
 
         let settlement_id = concat2("spot-settlement:", trade.trade_id.as_str());
-        let voucher = trade
-            .derive_spot_settlement_transfer_voucher_with_fees(
-                settlement_id.clone(),
-                base_asset_id,
-                quote_asset_id,
-                fee_account_id.to_string(),
-            )
-            .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
-
         apply_trade_balance_effects(
             &trade,
             TradeBalanceEffectsContext {
@@ -406,12 +374,10 @@ fn settle_matched_trades(
             },
         )?;
         created_trades.push(trade);
-        created_vouchers.push(voucher);
     }
 
     Ok(MatchedTradeEffects {
         created_trades,
-        created_vouchers,
         created_balance_ledger_entries: std::mem::take(ledger_entries),
         total_taker_fill,
     })
@@ -499,7 +465,6 @@ fn finish_matched_after(
 ) -> Result<MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Error> {
     let MatchedTradeEffects {
         created_trades,
-        created_vouchers,
         created_balance_ledger_entries: settled_balance_ledger_entries,
         total_taker_fill,
     } = settle_matched_trades(
@@ -537,7 +502,6 @@ fn finish_matched_after(
             maker_orders_after,
             balances_after,
             created_trades,
-            created_vouchers,
             created_balance_ledger_entries,
         }),
         SpotOrderStatus::Filled => Ok(MatchSpotOrderV3AfterChanges::Filled {
@@ -545,7 +509,6 @@ fn finish_matched_after(
             maker_orders_after,
             balances_after,
             created_trades,
-            created_vouchers,
             created_balance_ledger_entries,
         }),
         SpotOrderStatus::Canceled => Ok(MatchSpotOrderV3AfterChanges::CanceledAfterPartialFill {
@@ -553,7 +516,6 @@ fn finish_matched_after(
             maker_orders_after,
             balances_after,
             created_trades,
-            created_vouchers,
             created_balance_ledger_entries,
         }),
         SpotOrderStatus::Rejected => Ok(MatchSpotOrderV3AfterChanges::Rejected {
@@ -1283,7 +1245,6 @@ impl StateDiff for MatchSpotOrderV3UseCase {
                 maker_orders_after,
                 balances_after,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             } => {
                 if created_trades.is_empty() {
@@ -1303,7 +1264,6 @@ impl StateDiff for MatchSpotOrderV3UseCase {
                     updated_maker_orders,
                     updated_balances,
                     created_trades,
-                    created_vouchers,
                     created_balance_ledger_entries,
                 })
             }
@@ -1312,7 +1272,6 @@ impl StateDiff for MatchSpotOrderV3UseCase {
                 maker_orders_after,
                 balances_after,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             } => {
                 if created_trades.is_empty() {
@@ -1332,7 +1291,6 @@ impl StateDiff for MatchSpotOrderV3UseCase {
                     updated_maker_orders,
                     updated_balances,
                     created_trades,
-                    created_vouchers,
                     created_balance_ledger_entries,
                 })
             }
@@ -1341,7 +1299,6 @@ impl StateDiff for MatchSpotOrderV3UseCase {
                 maker_orders_after,
                 balances_after,
                 created_trades,
-                created_vouchers,
                 created_balance_ledger_entries,
             } => {
                 if created_trades.is_empty() {
@@ -1361,7 +1318,6 @@ impl StateDiff for MatchSpotOrderV3UseCase {
                     updated_maker_orders,
                     updated_balances,
                     created_trades,
-                    created_vouchers,
                     created_balance_ledger_entries,
                 })
             }
@@ -1433,15 +1389,6 @@ impl MatchSpotOrderV3Changes {
             Self::PartiallyFilled { created_trades, .. }
             | Self::Filled { created_trades, .. }
             | Self::CanceledAfterPartialFill { created_trades, .. } => created_trades,
-        }
-    }
-
-    pub fn created_vouchers(&self) -> &[SettlementTransferVoucher] {
-        match self {
-            Self::Resting | Self::Rejected { .. } => &[],
-            Self::PartiallyFilled { created_vouchers, .. }
-            | Self::Filled { created_vouchers, .. }
-            | Self::CanceledAfterPartialFill { created_vouchers, .. } => created_vouchers,
         }
     }
 

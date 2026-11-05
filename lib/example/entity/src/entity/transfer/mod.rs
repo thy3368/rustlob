@@ -1,1 +1,1 @@
-pub mod settlement_transfer_voucher;
+pub mod settlement_transfer_purpose;

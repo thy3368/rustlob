@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use super::balance::{Balance, BalanceError};
 use super::balance_ledger_reason::BalanceLedgerReason;
-use crate::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
+use crate::entity::transfer::settlement_transfer_purpose::SettlementTransferPurpose;
 
 const BALANCE_LEDGER_ENTRY_ENTITY_TYPE: u8 = 8;
 

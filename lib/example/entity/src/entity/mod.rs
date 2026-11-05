@@ -29,7 +29,6 @@ pub use account::balance_v2::{BalanceV2, BalanceV2Error, BalanceV2Event, Balance
 pub use account::{AccountStatus, SpotAccount};
 pub use common::common_order::SpotAmountConversionError;
 pub use common::common_trade::TradeBase;
-
 pub use market_rules::MarketRules;
 pub use option::cex::cex_option::{
     CexOptionFeeHoldRequirement, CexOptionInstrument, CexOptionInstrumentStatus, CexOptionOrder,
@@ -47,7 +46,6 @@ pub use perp::trade::hyperliquid_perp_trade::{
     HyperliquidPerpTrade, HyperliquidPerpTradePositionSettlement,
 };
 pub use perp::trade::perp_order_v3::PerpOrderV3;
-
 pub use perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
@@ -64,8 +62,4 @@ pub use spot_entity::spot_order_v2::{
     SpotOrderReleaseRequirement, SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError,
     SpotTradeFeeRole,
 };
-
-pub use transfer::settlement_transfer_voucher::{
-    SettlementKind, SettlementTransferLeg, SettlementTransferPurpose, SettlementTransferSummary,
-    SettlementTransferVoucher,
-};
+pub use transfer::settlement_transfer_purpose::SettlementTransferPurpose;

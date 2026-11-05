@@ -1,6 +1,6 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase, StateDiff,
-    UpdatedEntityPair,
+    Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
+    UseCase,
 };
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::SpotOrderV2;
@@ -12,7 +12,7 @@ use super::support::{
 };
 use crate::SpotTrade;
 use crate::common_entity::account::balance_ledger_v2::BalanceLedgerV2;
-use crate::common_entity::{Balance, SettlementTransferVoucher, spot as spot_entity};
+use crate::common_entity::{Balance, spot as spot_entity};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettleSpotTradesV4Cmd {
@@ -33,7 +33,6 @@ pub enum SettleMatchedSpotTradesV4AfterChanges {
         taker_order_after: SpotOrderV2,       //todo delete
         maker_orders_after: Vec<SpotOrderV2>, //todo delete
         balances_after: Vec<Balance>,
-        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }
@@ -41,7 +40,7 @@ pub enum SettleMatchedSpotTradesV4AfterChanges {
 /// V4 settlement use case 的 replayable changes。
 ///
 /// 撮合产生的 `SpotTrade` 不在这里重复创建；本 use case 只表达成交后的 reservation、
-/// voucher、balance ledger 与 balance 更新事实。
+/// balance ledger 与 balance 更新事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SettleSpotTradesV4Changes {
     Unchanged,
@@ -49,7 +48,6 @@ pub enum SettleSpotTradesV4Changes {
         updated_taker_order: UpdatedEntityPair<SpotOrderV2>, //todo delete
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>, //todo delete
         updated_balances: Vec<UpdatedEntityPair<Balance>>,
-        created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
         created_balance_ledger_entries: Vec<BalanceLedgerV2>,
     },
 }
@@ -64,13 +62,11 @@ impl ReplayableChanges for SettleSpotTradesV4Changes {
                 updated_taker_order,
                 updated_maker_orders,
                 updated_balances,
-                created_vouchers,
                 created_balance_ledger_entries,
             } => {
                 let mut events = Vec::with_capacity(
                     1_usize
                         .saturating_add(updated_maker_orders.len())
-                        .saturating_add(created_vouchers.len())
                         .saturating_add(created_balance_ledger_entries.len().saturating_mul(2)),
                 );
                 events.push(
@@ -80,9 +76,6 @@ impl ReplayableChanges for SettleSpotTradesV4Changes {
                 );
                 for maker in updated_maker_orders {
                     events.push(maker.after.track_update_event_from(&maker.before)?);
-                }
-                for voucher in created_vouchers {
-                    events.push(voucher.track_create_event()?);
                 }
                 events.extend(balance_replay_events_from_ledger_entries(
                     updated_balances,
@@ -178,7 +171,6 @@ impl StateDiff for SettleSpotTradesV4UseCase {
                 taker_order_after,
                 maker_orders_after,
                 balances_after,
-                created_vouchers,
                 created_balance_ledger_entries,
             } => {
                 let updated_taker_order =
@@ -190,7 +182,6 @@ impl StateDiff for SettleSpotTradesV4UseCase {
                     updated_taker_order,
                     updated_maker_orders,
                     updated_balances,
-                    created_vouchers,
                     created_balance_ledger_entries,
                 })
             }
@@ -209,7 +200,7 @@ fn compute_settlement_after(
     let mut balance_book = BalanceMap::new(&state.settlement_balances);
     let mut created_balance_ledger_entries = Vec::new();
 
-    let settlement_effects = settle_matched_trades(
+    settle_matched_trades(
         &mut taker_after,
         &mut maker_orders_after,
         &state.created_trades,
@@ -237,7 +228,6 @@ fn compute_settlement_after(
     if taker_after == state.taker_order
         && maker_orders_after == state.maker_orders
         && created_balance_ledger_entries.is_empty()
-        && settlement_effects.created_vouchers.is_empty()
     {
         return Ok(SettleMatchedSpotTradesV4AfterChanges::Unchanged);
     }
@@ -246,7 +236,6 @@ fn compute_settlement_after(
         taker_order_after: taker_after,
         maker_orders_after,
         balances_after: balance_book.into_balances(),
-        created_vouchers: settlement_effects.created_vouchers,
         created_balance_ledger_entries,
     })
 }

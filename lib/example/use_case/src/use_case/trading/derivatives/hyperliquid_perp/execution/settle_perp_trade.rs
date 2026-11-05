@@ -6,10 +6,7 @@ use common_entity::{
 };
 use thiserror::Error;
 
-use crate::entity::{
-    Balance, HyperliquidPerpPositionError, HyperliquidPerpTrade, PerpPosition,
-    SettlementTransferVoucher,
-};
+use crate::entity::{Balance, HyperliquidPerpPositionError, HyperliquidPerpTrade, PerpPosition};
 use crate::support::concat3;
 
 const FEE_BPS_DENOMINATOR: u64 = 10_000;
@@ -83,7 +80,7 @@ pub struct SettleHyperliquidPerpTradeState {
     pub margin_balances: Vec<Balance>,
     /// Cross 保证金币种，例如 `USDC`。
     pub margin_asset_id: String,
-    /// 平台手续费账户 ID，用于 perp settlement voucher fee legs。
+    /// 平台手续费账户 ID，用于手续费流水。
     pub fee_account_id: String,
     /// taker 手续费 bps，分母为 10_000。
     pub taker_fee_bps: u64,
@@ -103,8 +100,6 @@ pub struct SettleHyperliquidPerpTradeUseCase;
 /// 批量清结算成交后的业务 changes。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpTradeChanges {
-    /// 本批次新创建的 perp 清结算转账凭证。
-    pub created_vouchers: Vec<SettlementTransferVoucher>, //todo delete
     /// 本批次仓位槽位的 before/after，顺序与输入状态稳定对齐。
     pub changed_positions: Vec<UpdatedEntityPair<PerpPosition>>,
     /// 本批次实际受影响保证金余额的 before/after，顺序与输入状态稳定对齐。
@@ -114,9 +109,6 @@ pub struct SettleHyperliquidPerpTradeChanges {
 impl ReplayableChanges for SettleHyperliquidPerpTradeChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         let mut events = Vec::with_capacity(0);
-        for voucher in &self.created_vouchers {
-            events.push(voucher.track_create_event()?);
-        }
         for position in &self.changed_positions {
             if position.before.version == 0 && !position.after.is_flat() {
                 events.push(position.after.track_create_event()?);
@@ -211,11 +203,7 @@ impl UseCase for SettleHyperliquidPerpTradeUseCase {
                 .push(UpdatedEntityPair { before: balance.clone(), after: next_balance });
         }
 
-        Ok(SettleHyperliquidPerpTradeChanges {
-            created_vouchers: outcome.vouchers,
-            changed_positions,
-            changed_margin_balances,
-        })
+        Ok(SettleHyperliquidPerpTradeChanges { changed_positions, changed_margin_balances })
     }
 }
 
@@ -242,7 +230,6 @@ struct BalanceDelta {
 
 #[derive(Debug, Clone)]
 struct SettlementOutcome {
-    vouchers: Vec<SettlementTransferVoucher>,
     positions: BTreeMap<String, PerpPosition>,
     balance_deltas: BTreeMap<String, BalanceDelta>,
 }
@@ -277,9 +264,7 @@ fn derive_settlement_outcome(
 ) -> Result<SettlementOutcome, SettleHyperliquidPerpTradeError> {
     let mut positions = position_map(state.positions.clone().into_iter());
     let mut balance_deltas: BTreeMap<String, BalanceDelta> = BTreeMap::new();
-    let mut vouchers = Vec::with_capacity(state.trades.len());
-
-    for (index, trade) in state.trades.iter().enumerate() {
+    for trade in &state.trades {
         let notional =
             trade.notional_quote().ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
         let taker_fee = fee_from_bps(notional, state.taker_fee_bps)?;
@@ -331,29 +316,11 @@ fn derive_settlement_outcome(
                 .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?,
         )?;
 
-        let taker_realized_pnl = settlement.taker_outcome.realized_pnl_delta;
-        let maker_realized_pnl = settlement.maker_outcome.realized_pnl_delta;
         positions.insert(taker_position_key, settlement.taker_position_after);
         positions.insert(maker_position_key, settlement.maker_position_after);
-
-        let next_index =
-            index.checked_add(1).ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-        let settlement_id = settlement_id(cmd.settlement_batch_id.as_str(), next_index);
-        let voucher = trade
-            .derive_perp_settlement_transfer_voucher(
-                settlement_id,
-                state.margin_asset_id.as_str(),
-                state.fee_account_id.clone(),
-                taker_fee,
-                maker_fee,
-                taker_realized_pnl,
-                maker_realized_pnl,
-            )
-            .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-        vouchers.push(voucher);
     }
 
-    Ok(SettlementOutcome { vouchers, positions, balance_deltas })
+    Ok(SettlementOutcome { positions, balance_deltas })
 }
 
 fn validate_position_for_trade(
@@ -485,8 +452,4 @@ fn position_key(account_id: &str, asset: u32, symbol: &str) -> String {
 
 fn balance_key(account_id: &str, asset_id: &str) -> String {
     concat3(account_id, ":", asset_id)
-}
-
-fn settlement_id(settlement_batch_id: &str, index: usize) -> String {
-    concat3(settlement_batch_id, "-", index.to_string().as_str())
 }

@@ -11,9 +11,9 @@ use crate::common_entity::account::balance_ledger_v2::{
 };
 use crate::common_entity::{
     Balance, OrderSide, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, SettlementTransferVoucher, spot as spot_entity,
+    ReservationMarketKind, spot as spot_entity,
 };
-use crate::entity::transfer::settlement_transfer_voucher::SettlementTransferPurpose;
+use crate::entity::transfer::settlement_transfer_purpose::SettlementTransferPurpose;
 use crate::support::{concat3, concat4};
 
 pub type SettleMatchedSpotTradesV4Error = MatchSpotOrderV4Error;
@@ -282,9 +282,7 @@ pub(super) struct MatchedTradeSettlementContext<'a> {
     pub(super) ledger_entries: &'a mut Vec<BalanceLedgerV2>,
 }
 
-pub(super) struct MatchedTradeSettlementEffects {
-    pub(super) created_vouchers: Vec<SettlementTransferVoucher>,
-}
+pub(super) struct MatchedTradeSettlementEffects;
 
 pub(super) fn settle_matched_trades(
     taker_order: &mut SpotOrderV2,
@@ -300,8 +298,6 @@ pub(super) fn settle_matched_trades(
         balance_book,
         ledger_entries,
     } = context;
-    let mut created_vouchers = Vec::with_capacity(trades.len());
-
     for (index, trade) in trades.iter().enumerate() {
         let trade_notional =
             trade.notional_quote().ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
@@ -334,15 +330,6 @@ pub(super) fn settle_matched_trades(
         )?;
 
         let settlement_id = settlement_id_for_trade(settlement_id_prefix, &trade.trade_id);
-        let voucher = trade
-            .derive_spot_settlement_transfer_voucher_with_fees(
-                settlement_id.clone(),
-                base_asset_id,
-                quote_asset_id,
-                fee_account_id.to_string(),
-            )
-            .ok_or(MatchSpotOrderV4Error::ArithmeticOverflow)?;
-
         apply_trade_balance_effects(
             trade,
             TradeBalanceEffectsContext {
@@ -354,10 +341,9 @@ pub(super) fn settle_matched_trades(
                 ledger_entries,
             },
         )?;
-        created_vouchers.push(voucher);
     }
 
-    Ok(MatchedTradeSettlementEffects { created_vouchers })
+    Ok(MatchedTradeSettlementEffects)
 }
 
 fn settlement_id_for_trade(settlement_id_prefix: &str, trade_id: &str) -> String {

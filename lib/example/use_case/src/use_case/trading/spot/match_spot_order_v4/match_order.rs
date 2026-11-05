@@ -19,7 +19,7 @@ pub struct MatchSpotOrderV4Cmd {
 
 /// V4 撮合 use case 的 authoritative after truth。
 ///
-/// 这里故意只表达订单生命周期推进与本次新成交，不表达资金、voucher 或 balance ledger。
+/// 这里故意只表达订单生命周期推进与本次新成交，不表达资金或 balance ledger。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchSpotOrderV4AfterChanges {
     Resting,
