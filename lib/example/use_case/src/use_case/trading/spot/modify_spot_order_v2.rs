@@ -12,10 +12,10 @@ use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::common_entity::account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2,
 };
-use crate::common_entity::spot::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError};
-use crate::common_entity::{
-    Balance, OrderSide, OrderTif, OrderType, ReservationError, SpotOrderStatus,
+use crate::common_entity::spot::spot_order_v2::{
+    SpotOrderHoldAsset, SpotOrderV2, SpotOrderV2BehaviorError,
 };
+use crate::common_entity::{Balance, OrderSide, OrderTif, OrderType, SpotOrderStatus};
 use crate::support::concat3;
 
 // /// 定位一个已经存在的订单。
@@ -135,8 +135,6 @@ pub enum ModifySpotOrderV2Error {
     BalanceLedger(#[from] BalanceLedgerEntryV2Error),
     #[error(transparent)]
     Entity(#[from] EntityError),
-    #[error(transparent)]
-    Reservation(#[from] ReservationError),
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -221,52 +219,44 @@ impl UseCase for ModifySpotOrderV2UseCase {
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let (price, qty, tif) = parsed_limit_command(cmd)?;
-        let side = side_from_command(cmd);
         let order = &given_state.order;
-        let principal_after = SpotOrderV2::principal_reservation(
-            order.order_id(),
-            order.account_id(),
-            side,
-            qty,
-            price,
-            &given_state.base_asset_id,
-            &given_state.quote_asset_id,
-        )?;
-        let fee_after = SpotOrderV2::fee_reservation(
-            order.order_id(),
-            order.account_id(),
-            side,
-            qty,
-            price,
-            &given_state.quote_asset_id,
-            given_state.maker_fee_bps,
-            given_state.taker_fee_bps,
-        )?;
+        let holds_before = order
+            .active_hold_requirements(given_state.maker_fee_bps, given_state.taker_fee_bps)?
+            .ok_or(ModifySpotOrderV2Error::OrderNotModifiable)?;
 
         let mut order_after = order.clone();
         order_after.limit_price = price;
         order_after.size = qty;
         order_after.order_type = OrderType::Limit { tif };
         order_after.cloid = cmd.cloid.clone().or_else(|| order.cloid.clone());
-        order_after.reservation = principal_after;
-        order_after.fee_reservation = fee_after;
         order_after.updated_at = cmd.logical_ts();
         // 订单版本由改变订单的命令序列号定义，而不是当前版本的递增值。
         order_after.version = cmd.lsn();
+        let holds_after = order_after
+            .active_hold_requirements(given_state.maker_fee_bps, given_state.taker_fee_bps)?
+            .ok_or(ModifySpotOrderV2Error::OrderNotModifiable)?;
 
         let mut balance_book = BalanceMap::new(&given_state.balances);
         let mut created_balance_ledger_entries = Vec::with_capacity(2);
-        adjust_reservation_balance(
+        apply_hold_requirement_delta(
             order,
-            &order_after,
-            ReservationSlot::Principal,
+            holds_before.principal.asset,
+            holds_before.principal.amount,
+            holds_after.principal.amount,
+            "principal",
+            &given_state.base_asset_id,
+            &given_state.quote_asset_id,
             &mut balance_book,
             &mut created_balance_ledger_entries,
         )?;
-        adjust_reservation_balance(
+        apply_hold_requirement_delta(
             order,
-            &order_after,
-            ReservationSlot::Fee,
+            holds_before.fee.asset,
+            holds_before.fee.amount,
+            holds_after.fee.amount,
+            "fee",
+            &given_state.base_asset_id,
+            &given_state.quote_asset_id,
             &mut balance_book,
             &mut created_balance_ledger_entries,
         )?;
@@ -370,53 +360,46 @@ impl BalanceMap {
     }
 }
 
-enum ReservationSlot {
-    Principal,
-    Fee,
-}
-
-fn adjust_reservation_balance(
-    order_before: &SpotOrderV2,
-    order_after: &SpotOrderV2,
-    slot: ReservationSlot,
+fn apply_hold_requirement_delta(
+    order: &SpotOrderV2,
+    asset: SpotOrderHoldAsset,
+    before_amount: u64,
+    after_amount: u64,
+    label: &str,
+    base_asset_id: &str,
+    quote_asset_id: &str,
     balance_book: &mut BalanceMap,
     ledger_entries: &mut Vec<BalanceLedgerV2>,
 ) -> Result<(), ModifySpotOrderV2Error> {
-    let (old_reservation, new_reservation, label) = match slot {
-        ReservationSlot::Principal => {
-            (&order_before.reservation, &order_after.reservation, "principal")
-        }
-        ReservationSlot::Fee => {
-            (&order_before.fee_reservation, &order_after.fee_reservation, "fee")
-        }
-    };
-    let old_remaining = old_reservation.remaining_amount;
-    let new_remaining = new_reservation.remaining_amount;
-    if old_remaining == new_remaining {
+    if before_amount == after_amount {
         return Ok(());
     }
 
-    let balance = balance_book.get_mut(order_before.account_id(), &new_reservation.asset_id)?;
-    let (operation, amount, action, reason) = if new_remaining > old_remaining {
+    let asset_id = match asset {
+        SpotOrderHoldAsset::Base => base_asset_id,
+        SpotOrderHoldAsset::Quote => quote_asset_id,
+    };
+    let balance = balance_book.get_mut(order.account_id(), asset_id)?;
+    let (operation, amount, action, reason) = if after_amount > before_amount {
         (
             BalanceLedgerOperation::Freeze,
-            new_remaining
-                .checked_sub(old_remaining)
+            after_amount
+                .checked_sub(before_amount)
                 .ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?,
             "freeze",
-            BalanceLedgerReason::ModifySpotOrderFreeze { order_id: order_before.order_id() },
+            BalanceLedgerReason::ModifySpotOrderFreeze { order_id: order.order_id() },
         )
     } else {
         (
             BalanceLedgerOperation::Unfreeze,
-            old_remaining
-                .checked_sub(new_remaining)
+            before_amount
+                .checked_sub(after_amount)
                 .ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?,
             "unfreeze",
-            BalanceLedgerReason::ModifySpotOrderUnfreeze { order_id: order_before.order_id() },
+            BalanceLedgerReason::ModifySpotOrderUnfreeze { order_id: order.order_id() },
         )
     };
-    let entry_id = format!("balance-ledger:{}:modify:{label}:{action}", order_before.order_id());
+    let entry_id = format!("balance-ledger:{}:modify:{label}:{action}", order.order_id());
     let entry = apply_balance_ledger_entry(operation, entry_id, balance, amount, reason)?;
     ledger_entries.push(entry);
     Ok(())

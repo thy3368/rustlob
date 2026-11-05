@@ -4,6 +4,7 @@ use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
     UseCase,
 };
+use example_core_entity::{SpotOrderHoldAsset, SpotTradeFeeRole};
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;
@@ -12,10 +13,7 @@ use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::common_entity::account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2,
 };
-use crate::common_entity::{
-    Balance, OrderSide, OrderTif, Reservation, ReservationCloseReason, ReservationKind,
-    ReservationMarketKind, SpotOrderStatus, spot as spot_entity,
-};
+use crate::common_entity::{Balance, OrderSide, OrderTif, SpotOrderStatus, spot as spot_entity};
 use crate::entity::transfer::settlement_transfer_purpose::SettlementTransferPurpose;
 use crate::support::{concat2, concat3, concat4};
 use crate::{MatchSpotOrderV2Input, SpotTrade};
@@ -125,14 +123,8 @@ pub enum MatchSpotOrderV3Error {
     TakerAssetMismatch,
     #[error("fee account id must not be empty")]
     InvalidFeeAccountId,
-    #[error("reservation caused_by_order_id does not match order")]
-    ReservationOrderMismatch,
-    #[error("reservation kind does not match order role")]
-    ReservationKindMismatch,
-    #[error("reservation asset does not match order hold asset")]
-    ReservationAssetMismatch,
-    #[error("reservation count does not match maker order count")]
-    ReservationCountMismatch,
+    #[error("trade count does not match maker order count")]
+    TradeOrderCountMismatch,
     #[error("balance not found")]
     BalanceNotFound,
     #[error("available balance is insufficient")]
@@ -191,7 +183,6 @@ impl MatchSpotOrderV3Changes {
                 &[],
                 updated_balances,
                 &[],
-                &[],
                 created_balance_ledger_entries,
             ),
         }
@@ -239,7 +230,6 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
                 Some(updated_taker_order),
                 &[],
                 updated_balances,
-                &[],
                 &[],
                 created_balance_ledger_entries,
             ),
@@ -306,6 +296,8 @@ struct MatchedTradeSettlementContext<'a> {
     base_asset_id: &'a str,
     quote_asset_id: &'a str,
     fee_account_id: &'a str,
+    maker_fee_bps: u64,
+    taker_fee_bps: u64,
     balance_book: &'a mut BalanceMap,
     ledger_entries: &'a mut Vec<BalanceLedgerV2>,
 }
@@ -320,46 +312,42 @@ fn settle_matched_trades(
         base_asset_id,
         quote_asset_id,
         fee_account_id,
+        maker_fee_bps,
+        taker_fee_bps,
         balance_book,
         ledger_entries,
     } = context;
     let mut created_trades = Vec::new();
     let mut total_taker_fill = 0_u64;
 
-    for (index, trade) in trades.into_iter().enumerate() {
-        let trade_notional =
+    for (index, mut trade) in trades.into_iter().enumerate() {
+        let _trade_notional =
             trade.notional_quote().ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
         total_taker_fill = total_taker_fill
             .checked_add(trade.size)
             .ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
 
-        let taker_principal_consume =
-            principal_consume_amount_for_taker(taker_order, trade.size, trade_notional);
-        consume_reservation(
-            &mut taker_order.reservation,
-            taker_principal_consume,
-            ReservationCloseReason::Filled,
-        )?;
         let Some(maker_order) = maker_orders.get_mut(index) else {
-            return Err(MatchSpotOrderV3Error::BalanceNotFound);
+            return Err(MatchSpotOrderV3Error::TradeOrderCountMismatch);
         };
-        let maker_principal_consume =
-            principal_consume_amount_for_maker(maker_order, trade.size, trade_notional);
-        consume_reservation(
-            &mut maker_order.reservation,
-            maker_principal_consume,
-            ReservationCloseReason::Filled,
+        let taker_fee = taker_order.fee_consume_requirement_for_trade(
+            trade.size,
+            trade.price,
+            SpotTradeFeeRole::Taker,
+            maker_fee_bps,
+            taker_fee_bps,
         )?;
-        consume_reservation(
-            &mut taker_order.fee_reservation,
-            trade.taker_fee,
-            ReservationCloseReason::Filled,
+        let maker_fee = maker_order.fee_consume_requirement_for_trade(
+            trade.size,
+            trade.price,
+            SpotTradeFeeRole::Maker,
+            maker_fee_bps,
+            taker_fee_bps,
         )?;
-        consume_reservation(
-            &mut maker_order.fee_reservation,
-            trade.maker_fee,
-            ReservationCloseReason::Filled,
-        )?;
+        debug_assert_eq!(taker_fee.asset, SpotOrderHoldAsset::Quote);
+        debug_assert_eq!(maker_fee.asset, SpotOrderHoldAsset::Quote);
+        trade.taker_fee = taker_fee.amount;
+        trade.maker_fee = maker_fee.amount;
 
         let settlement_id = concat2("spot-settlement:", trade.trade_id.as_str());
         apply_trade_balance_effects(
@@ -442,6 +430,8 @@ fn compute_match_after(
                 &mut created_balance_ledger_entries,
                 state.maker_fee_bps,
                 state.taker_fee_bps,
+                &state.base_asset_id,
+                &state.quote_asset_id,
             )?;
             Ok(MatchSpotOrderV3AfterChanges::Rejected {
                 rejected_taker_order_after: taker_after,
@@ -475,17 +465,15 @@ fn finish_matched_after(
             base_asset_id: &state.base_asset_id,
             quote_asset_id: &state.quote_asset_id,
             fee_account_id: &state.fee_account_id,
+            maker_fee_bps: state.maker_fee_bps,
+            taker_fee_bps: state.taker_fee_bps,
             balance_book: &mut balance_book,
             ledger_entries: &mut created_balance_ledger_entries,
         },
     )?;
     created_balance_ledger_entries = settled_balance_ledger_entries;
 
-    let taker_reservation_after_match = taker_after.reservation.clone();
-    let taker_fee_reservation_after_match = taker_after.fee_reservation.clone();
     taker_after = taker_before_match;
-    taker_after.reservation = taker_reservation_after_match;
-    taker_after.fee_reservation = taker_fee_reservation_after_match;
     taker_after.finish_after_match_at_version(total_taker_fill, timestamp, version)?;
     release_remaining_for_terminal(
         &mut taker_after,
@@ -493,6 +481,8 @@ fn finish_matched_after(
         &mut created_balance_ledger_entries,
         state.maker_fee_bps,
         state.taker_fee_bps,
+        &state.base_asset_id,
+        &state.quote_asset_id,
     )?;
 
     let balances_after = balance_book.into_balances();
@@ -529,188 +519,31 @@ fn finish_matched_after(
     }
 }
 
-fn expected_principal_kind_for(side: OrderSide) -> ReservationKind {
-    match side {
-        OrderSide::Buy => ReservationKind::SpotBuyQuote,
-        OrderSide::Sell => ReservationKind::SpotSellBase,
-    }
-}
-
-fn expected_fee_kind_for(side: OrderSide) -> ReservationKind {
-    match side {
-        OrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
-        OrderSide::Sell => ReservationKind::SpotSellFeeQuote,
-    }
-}
-
-fn validate_reservation_for_order(
-    order: &SpotOrderV2,
-    reservation: &Reservation,
-    expected_kind: ReservationKind,
-    base_asset_id: &str,
-    quote_asset_id: &str,
-) -> Result<(), MatchSpotOrderV3Error> {
-    if reservation.market_kind != ReservationMarketKind::Spot {
-        return Err(MatchSpotOrderV3Error::ReservationKindMismatch);
-    }
-    if reservation.caused_by_order_id != order.order_id() {
-        return Err(MatchSpotOrderV3Error::ReservationOrderMismatch);
-    }
-    if reservation.reservation_kind != expected_kind {
-        return Err(MatchSpotOrderV3Error::ReservationKindMismatch);
-    }
-    let is_zero_fee_reservation = matches!(
-        expected_kind,
-        ReservationKind::SpotBuyFeeQuote | ReservationKind::SpotSellFeeQuote
-    ) && reservation.original_amount == 0
-        && reservation.remaining_amount == 0;
-    if !reservation.is_active() && !is_zero_fee_reservation {
-        return Err(MatchSpotOrderV3Error::ReservationKindMismatch);
-    }
-    let expected_asset = match expected_kind {
-        ReservationKind::SpotBuyQuote
-        | ReservationKind::SpotBuyFeeQuote
-        | ReservationKind::SpotSellFeeQuote => quote_asset_id,
-        ReservationKind::SpotSellBase => base_asset_id,
-        _ => return Err(MatchSpotOrderV3Error::ReservationKindMismatch),
-    };
-    if reservation.asset_id != expected_asset {
-        return Err(MatchSpotOrderV3Error::ReservationAssetMismatch);
-    }
-    Ok(())
-}
-
-pub(super) fn validate_all_reservations_for_order(
-    order: &SpotOrderV2,
-    base_asset_id: &str,
-    quote_asset_id: &str,
-) -> Result<(), MatchSpotOrderV3Error> {
-    validate_reservation_for_order(
-        order,
-        &order.reservation,
-        expected_principal_kind_for(order.side()),
-        base_asset_id,
-        quote_asset_id,
-    )?;
-    validate_reservation_for_order(
-        order,
-        &order.fee_reservation,
-        expected_fee_kind_for(order.side()),
-        base_asset_id,
-        quote_asset_id,
-    )
-}
-
-fn principal_consume_amount_for_taker(
-    order: &SpotOrderV2,
-    trade_qty: u64,
-    trade_notional: u64,
-) -> u64 {
-    match order.side() {
-        OrderSide::Buy => trade_notional,
-        OrderSide::Sell => trade_qty,
-    }
-}
-
-fn principal_consume_amount_for_maker(
-    order: &SpotOrderV2,
-    trade_qty: u64,
-    trade_notional: u64,
-) -> u64 {
-    match order.side() {
-        OrderSide::Buy => trade_notional,
-        OrderSide::Sell => trade_qty,
-    }
-}
-
-fn consume_reservation(
-    reservation: &mut Reservation,
-    amount: u64,
-    terminal_reason: ReservationCloseReason,
-) -> Result<(), MatchSpotOrderV3Error> {
-    if amount == 0 {
-        return Ok(());
-    }
-    let before = reservation.clone();
-    let close_reason = if amount == before.remaining_amount { Some(terminal_reason) } else { None };
-    reservation.consume(amount, close_reason).map_err(map_reservation_error_to_family)?;
-    Ok(())
-}
-
-enum OrderReservationSlot {
-    Principal,
-    Fee,
-}
-
 fn release_remaining_for_terminal(
     order_after: &mut SpotOrderV2,
     balance_book: &mut BalanceMap,
     ledger_entries: &mut Vec<BalanceLedgerV2>,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
+    base_asset_id: &str,
+    quote_asset_id: &str,
 ) -> Result<(), MatchSpotOrderV3Error> {
     let (principal_requirement, fee_requirement) =
         order_after.terminal_release_requirements(maker_fee_bps, taker_fee_bps);
-
-    if let Some(requirement) = principal_requirement {
-        release_order_reservation(
+    for requirement in [principal_requirement, fee_requirement].into_iter().flatten() {
+        let asset_id = match requirement.asset {
+            SpotOrderHoldAsset::Base => base_asset_id,
+            SpotOrderHoldAsset::Quote => quote_asset_id,
+        };
+        release_to_balance(
             order_after,
-            OrderReservationSlot::Principal,
+            asset_id,
             requirement.amount,
-            reservation_close_reason_for_order_release(requirement.reason),
-            balance_book,
-            ledger_entries,
-        )?;
-    }
-
-    if let Some(requirement) = fee_requirement {
-        release_order_reservation(
-            order_after,
-            OrderReservationSlot::Fee,
-            requirement.amount,
-            reservation_close_reason_for_order_release(requirement.reason),
             balance_book,
             ledger_entries,
         )?;
     }
     Ok(())
-}
-
-fn reservation_close_reason_for_order_release(
-    reason: crate::SpotOrderReleaseReason,
-) -> ReservationCloseReason {
-    match reason {
-        crate::SpotOrderReleaseReason::Canceled => ReservationCloseReason::Canceled,
-        crate::SpotOrderReleaseReason::IocUnfilled => ReservationCloseReason::IocRemainderCanceled,
-        crate::SpotOrderReleaseReason::Rejected => ReservationCloseReason::Rejected,
-        crate::SpotOrderReleaseReason::FilledCleanup => ReservationCloseReason::Filled,
-    }
-}
-
-fn release_order_reservation(
-    order: &mut SpotOrderV2,
-    slot: OrderReservationSlot,
-    max_amount: u64,
-    close_reason: ReservationCloseReason,
-    balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerV2>,
-) -> Result<(), MatchSpotOrderV3Error> {
-    let (asset_id, release_amount) = {
-        let reservation = match slot {
-            OrderReservationSlot::Principal => &mut order.reservation,
-            OrderReservationSlot::Fee => &mut order.fee_reservation,
-        };
-        let release_amount = reservation.remaining_amount.min(max_amount);
-        if release_amount == 0 {
-            return Ok(());
-        }
-        let asset_id = reservation.asset_id.clone();
-        reservation
-            .release(release_amount, Some(close_reason))
-            .map_err(map_reservation_error_to_family)?;
-        (asset_id, release_amount)
-    };
-    release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)
 }
 
 fn release_to_balance(
@@ -1008,27 +841,12 @@ fn fee_payer_for_seller(trade: &SpotTrade) -> Option<(String, u64)> {
     if amount == 0 { None } else { Some((trade.seller_account_id().to_string(), amount)) }
 }
 
-fn map_reservation_error_to_family(error: crate::ReservationError) -> MatchSpotOrderV3Error {
-    match error {
-        crate::ReservationError::ArithmeticOverflow => MatchSpotOrderV3Error::ArithmeticOverflow,
-        crate::ReservationError::AmountExceedsRemaining => {
-            MatchSpotOrderV3Error::InsufficientFrozenBalance
-        }
-        crate::ReservationError::AlreadyClosed
-        | crate::ReservationError::InvalidAmount
-        | crate::ReservationError::InvalidOriginalAmount
-        | crate::ReservationError::MissingCloseReason => {
-            MatchSpotOrderV3Error::ReservationKindMismatch
-        }
-    }
-}
-
 fn zip_pairs<T: PartialEq>(
     before: Vec<T>,
     after: Vec<T>,
 ) -> Result<Vec<UpdatedEntityPair<T>>, MatchSpotOrderV3Error> {
     if before.len() != after.len() {
-        return Err(MatchSpotOrderV3Error::ReservationCountMismatch);
+        return Err(MatchSpotOrderV3Error::TradeOrderCountMismatch);
     }
     Ok(before
         .into_iter()
@@ -1188,18 +1006,8 @@ impl UseCase for MatchSpotOrderV3UseCase {
                 SpotOrderV2MatchError::OrderNotMatchable,
             ));
         }
-        validate_all_reservations_for_order(
-            &state.taker_order,
-            &state.base_asset_id,
-            &state.quote_asset_id,
-        )?;
         for maker in &state.maker_orders {
             maker.ensure_matchable()?;
-            validate_all_reservations_for_order(
-                maker,
-                &state.base_asset_id,
-                &state.quote_asset_id,
-            )?;
         }
         state.taker_order.ensure_matchable()?;
         Ok(())
