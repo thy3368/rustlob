@@ -5,10 +5,8 @@ use common_entity::{
 };
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
-use example_core_entity::spot::spot_order_v3::Pending;
-use example_core_entity::{
-    OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV3, UserId,
-};
+use example_core_entity::spot::spot_order_v7::SpotOrderV7;
+use example_core_entity::{OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, UserId};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,24 +44,14 @@ pub type PlaceOnlySpotOrderV3State = ();
 /// 本次仅创建 Pending 事实；不进入 V2 撮合、撤单链路。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceOnlySpotOrderV3AfterChanges {
-    Single {
-        created_order: SpotOrderV3<Pending>,
-    },
-    NormalTpsl {
-        created_parent_order: SpotOrderV3<Pending>,
-        created_child_orders: Vec<SpotOrderV3<Pending>>,
-    },
+    Single { created_order: SpotOrderV7 },
+    NormalTpsl { created_parent_order: SpotOrderV7, created_child_orders: Vec<SpotOrderV7> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceOnlySpotOrderV3Changes {
-    Single {
-        created_order: SpotOrderV3<Pending>,
-    },
-    NormalTpsl {
-        created_parent_order: SpotOrderV3<Pending>,
-        created_child_orders: Vec<SpotOrderV3<Pending>>,
-    },
+    Single { created_order: SpotOrderV7 },
+    NormalTpsl { created_parent_order: SpotOrderV7, created_child_orders: Vec<SpotOrderV7> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -140,7 +128,7 @@ impl UseCase for PlaceOnlySpotOrderV3UseCase {
         match cmd.payload() {
             PlaceOnlySpotOrderV3Cmd::Single(order) => {
                 Ok(PlaceOnlySpotOrderV3AfterChanges::Single {
-                    created_order: SpotOrderV3::single(build_order(
+                    created_order: SpotOrderV7::single(build_order(
                         order,
                         cmd.lsn(),
                         cmd.logical_ts(),
@@ -154,7 +142,7 @@ impl UseCase for PlaceOnlySpotOrderV3UseCase {
                     .map(|child| build_order(child, cmd.lsn(), cmd.logical_ts()))
                     .collect::<Result<Vec<_>, _>>()?;
                 let (created_parent_order, created_child_orders) =
-                    SpotOrderV3::normal_tpsl(parent, children);
+                    SpotOrderV7::normal_tpsl(parent, children);
                 Ok(PlaceOnlySpotOrderV3AfterChanges::NormalTpsl {
                     created_parent_order,
                     created_child_orders,

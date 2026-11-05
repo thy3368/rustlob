@@ -7,5 +7,18 @@ pub use cancel_spot_order_v3::{
     CancelSpotOrderV3AfterChanges, CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd,
     CancelSpotOrderV3Error, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
 };
+pub use match_spot_order_v3::{
+    MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd,
+    MatchSpotOrderV3Error, MatchSpotOrderV3State, MatchSpotOrderV3UseCase,
+};
+pub use modify_spot_order_v3::{
+    ModifySpotOrderV2Error, ModifySpotOrderV3AfterChanges, ModifySpotOrderV3Changes,
+    ModifySpotOrderV3Cmd, ModifySpotOrderV3State, ModifySpotOrderV3UseCase,
+};
+pub use place_only_spot_order_v3::{
+    PlaceOnlySpotOrderV3AfterChanges, PlaceOnlySpotOrderV3Changes, PlaceOnlySpotOrderV3Cmd,
+    PlaceOnlySpotOrderV3Error, PlaceOnlySpotOrderV3OrderCmd, PlaceOnlySpotOrderV3OrderType,
+    PlaceOnlySpotOrderV3State, PlaceOnlySpotOrderV3UseCase,
+};
 
 pub mod pipeline;

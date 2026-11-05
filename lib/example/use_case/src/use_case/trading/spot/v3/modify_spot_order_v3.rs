@@ -1,8 +1,9 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
-    UseCase,
+    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff,
+    UpdatedEntityPair, UseCase,
 };
-use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
+use example_core_entity::SpotOrderStatus;
+use example_core_entity::spot::spot_order_v7::{SpotOrderV7, SpotOrderV7Event};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -26,13 +27,13 @@ pub struct ModifySpotOrderV3Cmd {
 /// 现货改单所需的 authoritative 状态快照。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModifySpotOrderV3State {
-    pub order: SpotOrderV3Any,
+    pub order: SpotOrderV7,
 }
 
 /// 现货改单的纯业务计算结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModifySpotOrderV3AfterChanges {
-    pub order_after: SpotOrderV3Any,
+    pub order_after: SpotOrderV7,
 }
 
 /// 现货改单的 before/after 变化。
@@ -41,7 +42,7 @@ pub struct ModifySpotOrderV3AfterChanges {
 /// 快照不在此类型中重复保存。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModifySpotOrderV3Changes {
-    pub updated_order: UpdatedEntityPair<SpotOrderV3Any>,
+    pub updated_order: UpdatedEntityPair<SpotOrderV7>,
 }
 
 /// 现货限价订单改单业务错误。
@@ -113,10 +114,8 @@ impl UseCase for ModifySpotOrderV3UseCase {
             return Err(ModifySpotOrderV2Error::OrderLookupMismatch);
         }
         if !matches!(
-            given_state.order,
-            SpotOrderV3Any::Pending(_)
-                | SpotOrderV3Any::Open(_)
-                | SpotOrderV3Any::PartiallyFilled(_)
+            given_state.order.status(),
+            SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
         ) {
             return Err(ModifySpotOrderV2Error::OrderNotModifiable);
         }
@@ -128,32 +127,19 @@ impl UseCase for ModifySpotOrderV3UseCase {
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let modified = match &given_state.order {
-            SpotOrderV3Any::Pending(order) => SpotOrderV3Any::Pending(order.modify(
-                cmd.payload().price,
-                cmd.payload().size,
-                cmd.logical_ts(),
-            )?),
-            SpotOrderV3Any::Open(order) => SpotOrderV3Any::Open(order.modify(
-                cmd.payload().price,
-                cmd.payload().size,
-                cmd.logical_ts(),
-            )?),
-            SpotOrderV3Any::PartiallyFilled(order) => SpotOrderV3Any::PartiallyFilled(
-                order.modify(cmd.payload().price, cmd.payload().size, cmd.logical_ts())?,
-            ),
-            SpotOrderV3Any::Filled(_)
-            | SpotOrderV3Any::Canceled(_)
-            | SpotOrderV3Any::Rejected(_) => {
-                return Err(ModifySpotOrderV2Error::OrderNotModifiable);
-            }
-        };
+        let mut modified = given_state.order.clone();
+        modified.transition(SpotOrderV7Event::Modify {
+            price: cmd.payload().price,
+            size: cmd.payload().size,
+            timestamp: cmd.logical_ts(),
+        })?;
         let mut base = modified.order_base().clone();
         if let Some(cloid) = &cmd.payload().cloid {
             base.cloid = Some(cloid.clone());
         }
+        // FSM 已推进版本；命令 LSN 仍是该 use case 的最终版本语义。
         base.version = cmd.lsn();
-        Ok(ModifySpotOrderV3AfterChanges { order_after: SpotOrderV3Any::from_record(base)? })
+        Ok(ModifySpotOrderV3AfterChanges { order_after: SpotOrderV7::from_record(base)? })
     }
 }
 

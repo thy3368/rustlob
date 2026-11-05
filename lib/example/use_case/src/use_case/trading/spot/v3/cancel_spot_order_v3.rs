@@ -1,10 +1,12 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
-    UseCase,
+    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff,
+    UpdatedEntityPair, UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
-use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
-use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event, SpotAmountConversionError};
+use example_core_entity::spot::spot_order_v7::{SpotOrderV7, SpotOrderV7Event};
+use example_core_entity::{
+    BalanceV2, BalanceV2Error, BalanceV2Event, SpotAmountConversionError, SpotOrderStatus,
+};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -16,19 +18,19 @@ pub struct CancelSpotOrderV3Cmd {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3State {
-    pub order: SpotOrderV3Any,
+    pub order: SpotOrderV7,
     pub balance: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3AfterChanges {
-    pub canceled_order: SpotOrderV3Any,
+    pub canceled_order: SpotOrderV7,
     pub balance: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV3Changes {
-    pub updated_order: UpdatedEntityPair<SpotOrderV3Any>,
+    pub updated_order: UpdatedEntityPair<SpotOrderV7>,
     pub updated_balance: UpdatedEntityPair<BalanceV2>,
 }
 
@@ -99,26 +101,17 @@ impl UseCase for CancelSpotOrderV3UseCase {
             }
         }
         if !matches!(
-            given_state.order,
-            SpotOrderV3Any::Pending(_)
-                | SpotOrderV3Any::Open(_)
-                | SpotOrderV3Any::PartiallyFilled(_)
+            given_state.order.status(),
+            SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
         ) {
             return Err(CancelSpotOrderV3Error::OrderNotCancelable);
         }
         if given_state.balance.party_id() != given_state.order.order_base().owner.0 {
             return Err(CancelSpotOrderV3Error::PartyMismatch);
         }
-        let requirement = match &given_state.order {
-            SpotOrderV3Any::Pending(order) => {
-                order.cancel(cmd.logical_ts())?.release_requirement()?
-            }
-            SpotOrderV3Any::Open(order) => order.cancel(cmd.logical_ts())?.release_requirement()?,
-            SpotOrderV3Any::PartiallyFilled(order) => {
-                order.cancel(cmd.logical_ts())?.release_requirement()?
-            }
-            _ => return Err(CancelSpotOrderV3Error::OrderNotCancelable),
-        };
+        let mut canceled = given_state.order.clone();
+        canceled.transition(SpotOrderV7Event::Cancel { timestamp: cmd.logical_ts() })?;
+        let requirement = canceled.release_requirement()?;
         if given_state.balance.coin_idx() != u64::from(requirement.currency().index()) {
             return Err(CancelSpotOrderV3Error::AssetMismatch);
         }
@@ -130,12 +123,8 @@ impl UseCase for CancelSpotOrderV3UseCase {
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let canceled_order = match &given_state.order {
-            SpotOrderV3Any::Pending(order) => order.cancel(cmd.logical_ts())?,
-            SpotOrderV3Any::Open(order) => order.cancel(cmd.logical_ts())?,
-            SpotOrderV3Any::PartiallyFilled(order) => order.cancel(cmd.logical_ts())?,
-            _ => return Err(CancelSpotOrderV3Error::OrderNotCancelable),
-        };
+        let mut canceled_order = given_state.order.clone();
+        canceled_order.transition(SpotOrderV7Event::Cancel { timestamp: cmd.logical_ts() })?;
         let requirement = canceled_order.release_requirement()?;
         if given_state.balance.coin_idx() != u64::from(requirement.currency().index()) {
             return Err(CancelSpotOrderV3Error::AssetMismatch);
@@ -149,10 +138,7 @@ impl UseCase for CancelSpotOrderV3UseCase {
                 timestamp: cmd.logical_ts(),
             },
         )?;
-        Ok(CancelSpotOrderV3AfterChanges {
-            canceled_order: SpotOrderV3Any::Canceled(canceled_order),
-            balance,
-        })
+        Ok(CancelSpotOrderV3AfterChanges { canceled_order, balance })
     }
 }
 
