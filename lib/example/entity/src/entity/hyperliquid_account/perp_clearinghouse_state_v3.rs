@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::perp::trade::perp_position_v3::{MarginModeV3, PerpPositionV3};
+use super::position_v4::PositionV4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PerpClearinghouseStateV3 {
@@ -16,7 +14,6 @@ pub struct PerpClearinghouseStateV3 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct MarginSummary {
     account_value: Decimal,     // 账户权益 = raw_usd + 全部 uPnL
     total_ntl_pos: Decimal,     // 所有仓位名义值总和
@@ -27,7 +24,7 @@ struct MarginSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetPosition {
     pub position_type: PositionType,
-    pub position: PerpPositionV3,
+    pub position: PositionV4,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,13 +38,39 @@ pub enum PositionType {
 }
 
 impl PerpClearinghouseStateV3 {
-    pub fn new(cross_equity: Decimal, cross_mm: Decimal, positions: Vec<AssetPosition>, time: u64) -> Self {
-        let summary = MarginSummary { account_value: cross_equity, total_ntl_pos: Decimal::ZERO, total_raw_usd: cross_equity, total_margin_used: Decimal::ZERO };
-        Self { margin_summary: summary.clone(), cross_margin_summary: summary, cross_maintenance_margin_used: cross_mm, withdrawable: Decimal::ZERO, asset_positions: positions, time }
+    pub fn new(
+        cross_equity: Decimal,
+        cross_mm: Decimal,
+        positions: Vec<AssetPosition>,
+        time: u64,
+    ) -> Self {
+        let summary = MarginSummary {
+            account_value: cross_equity,
+            total_ntl_pos: Decimal::ZERO,
+            total_raw_usd: cross_equity,
+            total_margin_used: Decimal::ZERO,
+        };
+        Self {
+            margin_summary: summary.clone(),
+            cross_margin_summary: summary,
+            cross_maintenance_margin_used: cross_mm,
+            withdrawable: Decimal::ZERO,
+            asset_positions: positions,
+            time,
+        }
     }
-    pub fn positions(&self) -> &[AssetPosition] { &self.asset_positions }
-    pub fn apply_mark_price_updated(&mut self, logical_ts: u64, cross_equity: Decimal, cross_mm: Decimal) -> Result<(), &'static str> {
-        if logical_ts < self.time || cross_mm.is_sign_negative() { return Err("invalid risk snapshot"); }
+    pub fn positions(&self) -> &[AssetPosition] {
+        &self.asset_positions
+    }
+    pub fn apply_mark_price_updated(
+        &mut self,
+        logical_ts: u64,
+        cross_equity: Decimal,
+        cross_mm: Decimal,
+    ) -> Result<(), &'static str> {
+        if logical_ts < self.time || cross_mm.is_sign_negative() {
+            return Err("invalid risk snapshot");
+        }
         self.cross_margin_summary.account_value = cross_equity;
         self.margin_summary.account_value = cross_equity;
         self.cross_maintenance_margin_used = cross_mm;
@@ -105,33 +128,6 @@ impl PerpClearinghouseStateV3 {
             self.cross_maintenance_margin_used * Decimal::new(2, 0) / Decimal::new(3, 0);
         self.cross_margin_summary.account_value < threshold
     }
-
-    /// 挑最该先平的 cross 仓位（按 notional 大/亏损大）
-    fn worst_cross_position(&self, marks: &HashMap<String, Decimal>) -> Option<&PerpPositionV3> {
-        self.asset_positions
-            .iter()
-            .filter(|ap| ap.position.margin_mode() == MarginModeV3::Cross)
-            .max_by(|a, b| {
-                let na = a.position.notional(marks[a.position.coin().code()]);
-                let nb = b.position.notional(marks[b.position.coin().code()]);
-                na.cmp(&nb)
-            })
-            .map(|ap| &ap.position)
-    }
-
-    // /// 生成强平动作（不直接执行，返回事件）
-    // fn liquidation_plan(&self, marks: &HashMap<String, Decimal>) -> LiquidationPlan {
-    //     if !self.cross_liquidatable() {
-    //         return LiquidationPlan::None;
-    //     }
-    //     if self.cross_backstop_zone() {
-    //         return LiquidationPlan::BackstopAllCross;
-    //     }
-    //     match self.worst_cross_position(marks) {
-    //         Some(p) => LiquidationPlan::MarketOrder { coin: p.coin.clone(), sz: p.szi },
-    //         None => LiquidationPlan::None,
-    //     }
-    // }
 
     /// 可提现校验
     fn can_withdraw(&self, amount: Decimal) -> bool {
