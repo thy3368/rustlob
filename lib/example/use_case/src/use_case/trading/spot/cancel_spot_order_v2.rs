@@ -14,10 +14,7 @@ use crate::common_entity::account::balance_ledger_v2::{
 use crate::common_entity::spot::spot_order_v2::{
     SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError,
 };
-use crate::common_entity::{
-    Balance, CancelSpotOrderV2Input, OrderSide, Reservation, ReservationCloseReason,
-    ReservationKind, ReservationMarketKind,
-};
+use crate::common_entity::{Balance, CancelSpotOrderV2Input, OrderSide};
 use crate::support::{concat3, concat4};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -61,14 +58,6 @@ pub struct CancelSpotOrderV2Changes {
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CancelSpotOrderV2Error {
-    #[error("reservation caused_by_order_id does not match order")]
-    ReservationOrderMismatch,
-    #[error("reservation kind does not match order role")]
-    ReservationKindMismatch,
-    #[error("reservation asset does not match order hold asset")]
-    ReservationAssetMismatch,
-    #[error("reservation count does not match maker order count")]
-    ReservationCountMismatch,
     #[error("balance not found")]
     BalanceNotFound,
     #[error("frozen balance is insufficient")]
@@ -118,18 +107,7 @@ impl UseCase for CancelSpotOrderV2UseCase {
         given_state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         let mut order_after = given_state.order.clone();
-        order_after.cancel(CancelSpotOrderV2Input {
-            balance_entity_id: balance_entity_id_for_reservation(
-                &given_state.balances,
-                &given_state.order.reservation,
-            )?,
-            timestamp: cmd.logical_ts(),
-        })?;
-        validate_all_reservations_for_order(
-            &given_state.order,
-            &given_state.base_asset_id,
-            &given_state.quote_asset_id,
-        )?;
+        order_after.cancel(CancelSpotOrderV2Input { timestamp: cmd.logical_ts() })?;
         Ok(())
     }
 
@@ -142,23 +120,14 @@ impl UseCase for CancelSpotOrderV2UseCase {
         let mut balance_book = BalanceMap::new(&given_state.balances);
         let mut created_balance_ledger_entries = Vec::with_capacity(0);
 
-        let cancel_outcome = order_after.cancel(CancelSpotOrderV2Input {
-            balance_entity_id: balance_entity_id_for_reservation(
-                &given_state.balances,
-                &given_state.order.reservation,
-            )?,
-            timestamp: cmd.logical_ts(),
-        })?;
-        if let Some(unfreeze_ledger_entry) = cancel_outcome.unfreeze_ledger_entry {
-            let unfreeze_ledger_entry =
-                apply_behavior_ledger_entry(unfreeze_ledger_entry, &mut balance_book)?;
-            created_balance_ledger_entries.push(unfreeze_ledger_entry);
-        }
+        order_after.cancel(CancelSpotOrderV2Input { timestamp: cmd.logical_ts() })?;
 
         release_remaining_for_cancel(
-            &mut order_after,
+            &order_after,
             &mut balance_book,
             &mut created_balance_ledger_entries,
+            &given_state.base_asset_id,
+            &given_state.quote_asset_id,
             given_state.maker_fee_bps,
             given_state.taker_fee_bps,
         )?;
@@ -246,128 +215,35 @@ fn balance_entity_id_for_account_asset(
         .ok_or(CancelSpotOrderV2Error::BalanceNotFound)
 }
 
-fn balance_entity_id_for_reservation(
+fn balance_entity_id_for_order(
     balances: &[Balance],
-    reservation: &Reservation,
+    order: &SpotOrderV2,
 ) -> Result<String, CancelSpotOrderV2Error> {
-    balance_entity_id_for_account_asset(
-        balances,
-        &reservation.owner_account_id,
-        &reservation.asset_id,
-    )
-}
-
-fn validate_reservation_for_order(
-    order: &SpotOrderV2,
-    reservation: &Reservation,
-    expected_kind: ReservationKind,
-    base_asset_id: &str,
-    quote_asset_id: &str,
-) -> Result<(), CancelSpotOrderV2Error> {
-    if reservation.market_kind != ReservationMarketKind::Spot {
-        return Err(CancelSpotOrderV2Error::ReservationKindMismatch);
-    }
-    if reservation.caused_by_order_id != order.order_id() {
-        return Err(CancelSpotOrderV2Error::ReservationOrderMismatch);
-    }
-    if reservation.reservation_kind != expected_kind {
-        return Err(CancelSpotOrderV2Error::ReservationKindMismatch);
-    }
-    let expected_asset = match expected_kind {
-        ReservationKind::SpotBuyQuote
-        | ReservationKind::SpotBuyFeeQuote
-        | ReservationKind::SpotSellFeeQuote => quote_asset_id,
-        ReservationKind::SpotSellBase => base_asset_id,
-        _ => return Err(CancelSpotOrderV2Error::ReservationKindMismatch),
+    let asset = match order.side() {
+        OrderSide::Buy => &order.asset().to_string(),
+        OrderSide::Sell => &order.asset().to_string(),
     };
-    if reservation.asset_id != expected_asset {
-        return Err(CancelSpotOrderV2Error::ReservationAssetMismatch);
-    }
-    Ok(())
-}
-
-fn validate_all_reservations_for_order(
-    order: &SpotOrderV2,
-    base_asset_id: &str,
-    quote_asset_id: &str,
-) -> Result<(), CancelSpotOrderV2Error> {
-    validate_reservation_for_order(
-        order,
-        &order.reservation,
-        expected_principal_kind_for(order.side()),
-        base_asset_id,
-        quote_asset_id,
-    )?;
-    validate_reservation_for_order(
-        order,
-        &order.fee_reservation,
-        expected_fee_kind_for(order.side()),
-        base_asset_id,
-        quote_asset_id,
-    )
-}
-
-fn expected_principal_kind_for(side: OrderSide) -> ReservationKind {
-    match side {
-        OrderSide::Buy => ReservationKind::SpotBuyQuote,
-        OrderSide::Sell => ReservationKind::SpotSellBase,
-    }
-}
-
-fn expected_fee_kind_for(side: OrderSide) -> ReservationKind {
-    match side {
-        OrderSide::Buy => ReservationKind::SpotBuyFeeQuote,
-        OrderSide::Sell => ReservationKind::SpotSellFeeQuote,
-    }
-}
-
-enum OrderReservationSlot {
-    Fee,
+    balance_entity_id_for_account_asset(balances, order.account_id(), asset)
 }
 
 fn release_remaining_for_cancel(
-    order: &mut SpotOrderV2,
+    order: &SpotOrderV2,
     balance_book: &mut BalanceMap,
     ledger_entries: &mut Vec<BalanceLedgerV2>,
+    base_asset_id: &str,
+    quote_asset_id: &str,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
 ) -> Result<(), CancelSpotOrderV2Error> {
-    if let Some(requirement) = order.fee_hold_requirement(maker_fee_bps, taker_fee_bps) {
-        release_order_reservation(
-            order,
-            OrderReservationSlot::Fee,
-            requirement.amount,
-            ReservationCloseReason::Canceled,
-            balance_book,
-            ledger_entries,
-        )?;
+    let (principal, fee) = order.terminal_release_requirements(maker_fee_bps, taker_fee_bps);
+    for requirement in [principal, fee].into_iter().flatten() {
+        let asset_id = match requirement.asset {
+            example_core_entity::SpotOrderHoldAsset::Base => base_asset_id.to_string(),
+            example_core_entity::SpotOrderHoldAsset::Quote => quote_asset_id.to_string(),
+        };
+        release_to_balance(order, &asset_id, requirement.amount, balance_book, ledger_entries)?;
     }
     Ok(())
-}
-
-fn release_order_reservation(
-    order: &mut SpotOrderV2,
-    slot: OrderReservationSlot,
-    max_amount: u64,
-    close_reason: ReservationCloseReason,
-    balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerV2>,
-) -> Result<(), CancelSpotOrderV2Error> {
-    let (asset_id, release_amount) = {
-        let reservation = match slot {
-            OrderReservationSlot::Fee => &mut order.fee_reservation,
-        };
-        let release_amount = reservation.remaining_amount.min(max_amount);
-        if release_amount == 0 {
-            return Ok(());
-        }
-        let asset_id = reservation.asset_id.clone();
-        reservation
-            .release(release_amount, Some(close_reason))
-            .map_err(map_reservation_error_to_cancel)?;
-        (asset_id, release_amount)
-    };
-    release_to_balance(order, &asset_id, release_amount, balance_book, ledger_entries)
 }
 
 fn release_to_balance(
@@ -551,17 +427,4 @@ fn balance_replay_events_from_ledger_entries(
         }
     }
     Ok(events)
-}
-
-fn map_reservation_error_to_cancel(error: crate::ReservationError) -> CancelSpotOrderV2Error {
-    match error {
-        crate::ReservationError::ArithmeticOverflow => CancelSpotOrderV2Error::ArithmeticOverflow,
-        crate::ReservationError::AmountExceedsRemaining => {
-            CancelSpotOrderV2Error::InsufficientFrozenBalance
-        }
-        crate::ReservationError::AlreadyClosed
-        | crate::ReservationError::InvalidAmount
-        | crate::ReservationError::InvalidOriginalAmount
-        | crate::ReservationError::MissingCloseReason => CancelSpotOrderV2Error::ArithmeticOverflow,
-    }
 }

@@ -25,6 +25,10 @@ pub use account::balance_ledger_v2::{
     BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2 as BalanceLedgerEntry,
     BalanceLedgerV2,
 };
+pub use account::balance_ledger_v3::{
+    BalanceLedgerV3, BalanceLedgerV3Error, BalanceLedgerV3Event, BalanceLedgerV3Output,
+    BalanceLedgerV3State, LedgerOperation,
+};
 pub use account::balance_v2::{BalanceV2, BalanceV2Error, BalanceV2Event, BalanceV2Status};
 pub use account::{AccountStatus, SpotAccount};
 pub use common::common_order::SpotAmountConversionError;
