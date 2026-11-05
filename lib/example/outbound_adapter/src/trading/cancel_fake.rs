@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id};
+use common_entity::{stable_string_entity_id, EntityReplayableEvent, StateSink, StateSource};
 use example_core_use_case::{
     Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
     CancelSpotOrderV2UseCase, OrderSide, OrderTif, OrderType, SpotOrderV2,
@@ -31,27 +31,6 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
         *self.observed_lookup.lock().map_err(|_| FakeSpotOrderV2CancelOutboundError)? =
             Some(request.lookup.clone());
 
-        let principal_reservation = SpotOrderV2::principal_reservation(
-            1,
-            request.party_id.as_str(),
-            OrderSide::Buy,
-            2,
-            100,
-            "BTC",
-            "USDT",
-        )
-        .map_err(|_| FakeSpotOrderV2CancelOutboundError)?;
-        let fee_reservation = SpotOrderV2::fee_reservation(
-            1,
-            request.party_id.as_str(),
-            OrderSide::Buy,
-            2,
-            100,
-            "USDT",
-            5,
-            10,
-        )
-        .map_err(|_| FakeSpotOrderV2CancelOutboundError)?;
         let mut order = SpotOrderV2::new_pending_limit(
             1,
             request.asset,
@@ -65,8 +44,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for FakeSpotOrderV2CancelOutbound {
             0,
             1,
         );
-        order.reservation = principal_reservation;
-        order.fee_reservation = fee_reservation;
+
         order.status = example_core_use_case::SpotOrderStatus::Open;
         order.version = 1;
         order.updated_at = 1;

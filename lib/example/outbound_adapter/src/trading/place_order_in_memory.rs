@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id,
+    stable_string_entity_id, Entity, EntityReplayableEvent, StateSink, StateSource,
 };
 use example_core_use_case::{
     Balance, OrderSide, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
@@ -8,15 +8,14 @@ use example_core_use_case::{
 use lob_repo_v2::lob::AssetLobV2;
 
 use super::in_memory_place_order::{
-    DEFAULT_FEE_ACCOUNT_ID, apply_order_update_event, decode_created_reservation,
-    decode_created_trade, decode_order_from_event,
+    apply_order_update_event, decode_created_trade, decode_order_from_event, DEFAULT_FEE_ACCOUNT_ID,
 };
 pub use super::in_memory_place_order::{
-    InMemoryPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for, symbol_for_asset,
+    base_asset_id_for, quote_asset_id_for, symbol_for_asset, InMemoryPlaceOrderOutbound,
 };
 use crate::shared::{
-    PlaceOrderOutboundError, SpotOrderPlacedMessage, SpotPipelineBroker, SpotPipelineMessage,
     balance_key, event_identity_field, event_string_field, event_u64_field,
+    PlaceOrderOutboundError, SpotOrderPlacedMessage, SpotPipelineBroker, SpotPipelineMessage,
 };
 
 impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
@@ -129,8 +128,6 @@ pub(crate) fn replay_events(
             && event_string_field(event, "owner_account_id").is_some()
             && event_string_field(event, "caused_by_order_id").is_some()
         {
-            let reservation = decode_created_reservation(event)?;
-            state.reservations.insert(reservation.reservation_id.clone(), reservation);
             continue;
         }
         if event.entity_type == SpotOrderV2::entity_type() && event.is_created() {

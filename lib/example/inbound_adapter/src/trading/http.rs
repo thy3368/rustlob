@@ -213,7 +213,6 @@ mod tests {
         let counts = outbound.snapshot_event_counts()?;
 
         assert_eq!(response.order_id, 11);
-        assert_eq!(response.principal_reservation_amount, 300);
         assert_eq!(response.remaining_quote, 700);
         assert_eq!(response.domain_event_count, 6);
         assert_eq!(counts, (6, 6));

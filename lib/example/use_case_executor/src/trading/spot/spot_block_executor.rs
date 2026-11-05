@@ -1,6 +1,4 @@
-use common_entity::{
-    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
-};
+use common_entity::{ExecutionError, ExecutionResult, StateSink, StateSource, UseCaseExecutor};
 use example_core_use_case::{SpotBlockChanges, SpotBlockCmd, SpotBlockError, SpotBlockUseCase};
 use example_outbound_adapter::{DefaultSpotBlockOutbound, DefaultSpotBlockOutboundError};
 
@@ -37,7 +35,7 @@ mod tests {
     use std::fmt;
     use std::sync::{Arc, Mutex};
 
-    use common_entity::{stable_string_entity_id, EntityReplayableEvent};
+    use common_entity::{EntityReplayableEvent, stable_string_entity_id};
     use example_core_entity::common::identifiers::OrderId;
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
@@ -107,24 +105,32 @@ mod tests {
             _cmd: &LogEntry<SpotBlockCmd>,
         ) -> Result<SpotBlockState, Self::Error> {
             let order = buy_order()?;
-            let frozen = order
-                .reservation
-                .remaining_amount
-                .checked_add(order.fee_reservation.remaining_amount)
+            let hold = order
+                .active_hold_requirements(5, 10)
+                .map_err(|_| FakeSpotBlockOutboundError)?
+                .ok_or(FakeSpotBlockOutboundError)?;
+            let frozen = hold
+                .principal
+                .amount
+                .checked_add(hold.fee.amount)
                 .ok_or(FakeSpotBlockOutboundError)?;
 
             Ok(SpotBlockState {
                 orders: vec![order],
                 balances: vec![Balance::new(
-                    stable_string_entity_id("buyer"),
+                    stable_string_entity_id(&format!(
+                        "{}:{}",
+                        stable_string_entity_id("buyer"),
+                        stable_string_entity_id("USDT")
+                    )),
                     stable_string_entity_id("buyer"),
                     stable_string_entity_id("USDT"),
                     100_000,
                     frozen,
                     1,
                 )],
-                base_asset_id: "BTC".to_owned(),
-                quote_asset_id: "USDT".to_owned(),
+                base_asset_id: stable_string_entity_id("BTC").to_string(),
+                quote_asset_id: stable_string_entity_id("USDT").to_string(),
                 fee_account_id: "fee".to_owned(),
                 maker_fee_bps: 5,
                 taker_fee_bps: 10,
@@ -152,7 +158,7 @@ mod tests {
         let mut order = SpotOrderV2::new_pending_limit(
             1,
             10_001,
-            "buyer".to_owned(),
+            stable_string_entity_id("buyer").to_string(),
             "BTCUSDT".to_owned(),
             OrderSide::Buy,
             2,
@@ -176,7 +182,7 @@ mod tests {
 
     fn cancel_command() -> SpotBlockCommand {
         SpotBlockCommand::Cancel(CancelSpotOrderV2Cmd {
-            party_id: "buyer".to_owned(),
+            party_id: stable_string_entity_id("buyer").to_string(),
             asset: 10_001,
             lookup: CancelSpotOrderV2Lookup::Oid(1),
         })
@@ -184,7 +190,7 @@ mod tests {
 
     fn modify_command() -> SpotBlockCommand {
         SpotBlockCommand::Modify(ModifySpotOrderV2Cmd {
-            party_id: "buyer".to_owned(),
+            party_id: stable_string_entity_id("buyer").to_string(),
             asset: 10_001,
             order_id: OrderId::Oid(1),
             is_buy: true,

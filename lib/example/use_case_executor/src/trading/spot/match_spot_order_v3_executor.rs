@@ -1,6 +1,4 @@
-use common_entity::{
-    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
-};
+use common_entity::{ExecutionError, ExecutionResult, StateSink, StateSource, UseCaseExecutor};
 use example_core_use_case::{
     MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd, MatchSpotOrderV3Error, MatchSpotOrderV3UseCase,
 };
@@ -40,7 +38,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id};
+    use common_entity::{stable_string_entity_id, EntityReplayableEvent, StateSink, StateSource};
     use example_core_use_case::{
         ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
         MatchSpotOrderV3UseCase, OrderSide, OrderTif, OrderType, SpotOrderStatus, SpotOrderV2,
@@ -174,11 +172,6 @@ mod tests {
         qty: u64,
         tif: OrderTif,
     ) -> Result<SpotOrderV2, FakePlaceSpotOrderV2OutboundError> {
-        let reservation = SpotOrderV2::principal_reservation(
-            order_id, account_id, side, qty, price, "BTC", "USDT",
-        )
-        .map_err(|_| FakePlaceSpotOrderV2OutboundError)?;
-
         let mut order = SpotOrderV2::new_pending_limit(
             order_id,
             10_001,
@@ -201,7 +194,6 @@ mod tests {
                 timestamp: 1,
             })
             .map_err(|_| FakePlaceSpotOrderV2OutboundError)?;
-        debug_assert_eq!(order.reservation, reservation);
         Ok(order)
     }
 

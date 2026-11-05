@@ -1,22 +1,22 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use axum::Json;
 use example_core_use_case::Balance;
 use example_inbound_adapter::{
-    DepositQuoteOutboundAccess, PlaceOrderOutboundAccess, WithdrawQuoteOutboundAccess,
     build_deposit_http_router, build_orders_http_router, build_withdraw_http_router,
+    DepositQuoteOutboundAccess, PlaceOrderOutboundAccess, WithdrawQuoteOutboundAccess,
 };
 use example_outbound_adapter::{
     DepositQuoteOutboundError, InMemoryDepositQuoteOutbound, InMemoryPlaceOrderOutbound,
     InMemoryStore, InMemoryWithdrawQuoteOutbound, PlaceOrderOutboundError, StoreError,
     StoreSnapshot, WithdrawQuoteOutboundError,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 #[tokio::main]
 async fn main() {
@@ -188,9 +188,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> Value {
                     "account_id": order.account_id,
                     "symbol": order.symbol,
                     "qty": order.size,
-                    "price": order.order_price(),
-                    "principal_reservation_amount": order.reservation.original_amount
-                }),
+                    "price": order.order_price()}),
             )
         })
         .collect::<serde_json::Map<String, Value>>();

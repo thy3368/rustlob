@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use actix_web::{App, HttpResponse, HttpServer, Responder, web};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use example_inbound_adapter::{
-    DepositQuoteOutboundAccess, PlaceOrderOutboundAccess, WithdrawQuoteOutboundAccess,
     build_deposit_actix_scope, build_orders_actix_scope, build_withdraw_actix_scope,
+    DepositQuoteOutboundAccess, PlaceOrderOutboundAccess, WithdrawQuoteOutboundAccess,
 };
 use example_outbound_adapter::{
     DepositQuoteOutboundError, InMemoryDepositQuoteOutbound, InMemoryPlaceOrderOutbound,
@@ -154,9 +154,7 @@ fn snapshot_json(snapshot: StoreSnapshot) -> serde_json::Value {
                 "account_id": order.account_id,
                 "symbol": order.symbol,
                 "qty": order.size,
-                "price": order.order_price(),
-                "principal_reservation_amount": order.reservation.original_amount
-            })
+                "price": order.order_price()})
         )).collect::<serde_json::Map<String, serde_json::Value>>(),
         "trades": snapshot.trades.into_iter().map(|(trade_id, trade)| (
             trade_id,

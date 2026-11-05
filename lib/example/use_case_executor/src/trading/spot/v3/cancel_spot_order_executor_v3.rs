@@ -1,5 +1,5 @@
 use common_entity::{
-    ExecutionError, ExecutionResult, LogEntry, UseCaseExecutor, StateSink, StateSource,
+    ExecutionError, ExecutionResult, LogEntry, StateSink, StateSource, UseCaseExecutor,
 };
 use example_core_use_case::{
     CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd, CancelSpotOrderV3Error,
@@ -35,15 +35,16 @@ mod tests {
     use example_core_entity::BalanceV2;
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
+    use example_core_entity::common::identifiers::OrderId;
     use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
     use example_core_entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
     use example_core_entity::spot::spot_order_v2::OrderGroupRelation;
-    use example_core_entity::spot::spot_order_v3::SpotOrderV3Any;
+    use example_core_entity::spot::spot_order_v7::SpotOrderV7;
     use example_core_use_case::{
         CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
     };
     use rust_decimal::Decimal;
-    use example_core_entity::common::identifiers::OrderId;
+
     use super::*;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +73,7 @@ mod tests {
             _cmd: &LogEntry<CancelSpotOrderV3Cmd>,
         ) -> Result<CancelSpotOrderV3State, Self::Error> {
             Ok(CancelSpotOrderV3State {
-                order: SpotOrderV3Any::from_record(order(SpotOrderStatus::Open))
+                order: SpotOrderV7::from_record(order(SpotOrderStatus::Open))
                     .map_err(|_| FakeOutboundError)?,
                 balance: BalanceV2::new(
                     7,

@@ -1,6 +1,4 @@
-use common_entity::{
-    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
-};
+use common_entity::{ExecutionError, ExecutionResult, StateSink, StateSource, UseCaseExecutor};
 use example_core_use_case::{
     ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd, ModifySpotOrderV2Error,
     ModifySpotOrderV2UseCase,
@@ -102,7 +100,7 @@ mod tests {
             let mut order = SpotOrderV2::new_pending_limit(
                 1,
                 10_001,
-                "buyer".to_owned(),
+                stable_string_entity_id("buyer").to_string(),
                 "BTCUSDT".to_owned(),
                 OrderSide::Buy,
                 2,
@@ -121,24 +119,32 @@ mod tests {
                     timestamp: 1,
                 })
                 .map_err(|_| FakeModifyOutboundError)?;
-            let frozen = order
-                .reservation
-                .remaining_amount
-                .checked_add(order.fee_reservation.remaining_amount)
+            let hold = order
+                .active_hold_requirements(5, 10)
+                .map_err(|_| FakeModifyOutboundError)?
+                .ok_or(FakeModifyOutboundError)?;
+            let frozen = hold
+                .principal
+                .amount
+                .checked_add(hold.fee.amount)
                 .ok_or(FakeModifyOutboundError)?;
 
             Ok(ModifySpotOrderV2State {
                 order,
                 balances: vec![Balance::new(
-                    stable_string_entity_id("buyer"),
+                    stable_string_entity_id(&format!(
+                        "{}:{}",
+                        stable_string_entity_id("buyer"),
+                        stable_string_entity_id("USDT")
+                    )),
                     stable_string_entity_id("buyer"),
                     stable_string_entity_id("USDT"),
                     100_000,
                     frozen,
                     1,
                 )],
-                base_asset_id: "BTC".to_owned(),
-                quote_asset_id: "USDT".to_owned(),
+                base_asset_id: stable_string_entity_id("BTC").to_string(),
+                quote_asset_id: stable_string_entity_id("USDT").to_string(),
                 maker_fee_bps: 5,
                 taker_fee_bps: 10,
             })
@@ -177,7 +183,7 @@ mod tests {
 
     fn valid_command() -> ModifySpotOrderV2Cmd {
         ModifySpotOrderV2Cmd {
-            party_id: "buyer".to_owned(),
+            party_id: stable_string_entity_id("buyer").to_string(),
             asset: 10_001,
             order_id: OrderId::Oid(1),
             is_buy: true,
