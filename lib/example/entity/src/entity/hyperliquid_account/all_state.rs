@@ -3,16 +3,17 @@ use std::collections::BTreeMap;
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 use crate::perp::trade::perp_position_v3::PerpPositionV3;
-use crate::{Balance, HyperliquidPerpOrder, SpotAccount, SpotOrderV2};
+use crate::spot::SpotOrderV7;
+use crate::{Balance, HyperliquidPerpOrder, SpotAccount};
 
 /// 三户模型
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllMatchState {
     /// 每owner一个state 三户模型
-    pub spot_lob: BTreeMap<u64, LocalLobBtree<SpotOrderV2>>,
+    pub spot_lob: BTreeMap<u64, LocalLobBtree<SpotOrderV7>>,
 
     ///条件单
-    pub spot_con_orders: BTreeMap<u64, SpotOrderV2>,
+    pub spot_con_orders: BTreeMap<u64, SpotOrderV7>,
 
     /// 每owner一个state 三户模型
     pub perp_lob: BTreeMap<u64, LocalLobBtree<HyperliquidPerpOrder>>,
