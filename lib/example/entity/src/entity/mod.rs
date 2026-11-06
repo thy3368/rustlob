@@ -30,7 +30,6 @@ pub use account::balance_ledger_v3::{
     BalanceLedgerV3State, LedgerOperation,
 };
 pub use account::balance_v2::{BalanceV2, BalanceV2Error, BalanceV2Event, BalanceV2Status};
-pub use account::{AccountStatus, SpotAccount};
 pub use common::common_order::SpotAmountConversionError;
 pub use common::common_trade::TradeBase;
 pub use market_rules::MarketRules;
@@ -62,7 +61,6 @@ pub use perp::trade::perp_trade_v3::{
 };
 use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
-pub use spot::spot_order_v3::{SpotOrderStage, SpotOrderV3, SpotOrderV3Any};
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
     OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderStatusReason,
