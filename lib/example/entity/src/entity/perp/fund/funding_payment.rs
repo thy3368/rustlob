@@ -1,7 +1,7 @@
 use super::funding_payment_factory::Size;
 use crate::account::coin::Coin;
 use crate::entity::common::{FundingRate, UserId};
-use crate::entity::hyperliquid_account::usdc::Usdc;
+use crate::entity::account::usdc::Usdc;
 
 /// 用户级资金费结算事件（L0 fact）
 /// 对应 userFunding 返回的一行

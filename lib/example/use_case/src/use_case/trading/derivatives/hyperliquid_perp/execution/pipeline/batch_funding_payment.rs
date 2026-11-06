@@ -6,7 +6,7 @@ use common_entity::{
 };
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::FundingRate;
-use example_core_entity::perp::fund::funding::{
+use example_core_entity::perp::fund::user_funding::{
     UserFunding, UserFundingError, UserFundingEvent, UserFundingOutput,
 };
 use example_core_entity::perp::trade::perp_position_v3::{MarginModeV3, PerpPositionV3};
@@ -344,14 +344,14 @@ mod tests {
 
         assert_eq!(changed.created_funding_payment.len(), 2);
         assert!(changed.created_funding_payment.iter().all(|funding| funding.state()
-            == example_core_entity::perp::fund::funding::UserFundingState::Settled
+            == example_core_entity::perp::fund::user_funding::UserFundingState::Settled
             && funding.version() == 2));
         assert_eq!(changed.funding_updates.len(), 2);
         assert!(changed.funding_updates.iter().all(|pair| {
             pair.before.state()
-                == example_core_entity::perp::fund::funding::UserFundingState::Pending
+                == example_core_entity::perp::fund::user_funding::UserFundingState::Pending
                 && pair.after.state()
-                    == example_core_entity::perp::fund::funding::UserFundingState::Settled
+                    == example_core_entity::perp::fund::user_funding::UserFundingState::Settled
         }));
         let events = changed.to_replayable_events().unwrap();
         assert_eq!(events.len(), 4);

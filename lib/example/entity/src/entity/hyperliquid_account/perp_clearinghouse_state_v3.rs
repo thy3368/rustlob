@@ -1,7 +1,7 @@
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use super::position_v4::PositionV4;
+use crate::entity::perp::trade::position_v4::PositionV4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PerpClearinghouseStateV3 {

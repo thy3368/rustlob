@@ -3,7 +3,7 @@ use rust_decimal::prelude::ToPrimitive;
 
 use crate::account::coin::Coin;
 use crate::entity::common::{FundingRate, UserId};
-use crate::entity::hyperliquid_account::usdc::Usdc;
+use crate::entity::account::usdc::Usdc;
 use crate::entity::perp::fund::funding_payment::FundingPayment;
 use crate::entity::perp::fund::price::Price;
 use crate::entity::perp::trade::perp_position_v3::PerpPositionV3;

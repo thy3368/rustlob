@@ -5,3 +5,4 @@ pub mod perp_position_v3;
 
 pub mod perp_order_v3;
 pub mod perp_trade_v3;
+pub mod position_v4;

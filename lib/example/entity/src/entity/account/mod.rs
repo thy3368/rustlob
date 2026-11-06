@@ -10,6 +10,7 @@ pub mod coin;
 
 pub mod spot_account_v2;
 pub mod symbol;
+pub mod usdc;
 
 pub use balance::BalanceError;
 pub use balance_ledger_reason::BalanceLedgerReason;

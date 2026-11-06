@@ -7,7 +7,7 @@ use common_entity::{
 use rust_decimal::Decimal;
 use thiserror::Error;
 
-use crate::entity::perp::fund::funding::{
+use crate::entity::perp::fund::user_funding::{
     UserFunding, UserFundingError, UserFundingEvent, UserFundingOutput,
 };
 use crate::entity::{
