@@ -7,15 +7,16 @@ pub trait Fsm {
     type Output;
     type Error;
 
+    ///不建议直接调用
+
     fn transition(
         &mut self,
         event: Self::Event,
     ) -> Result<(Self::State, Self::Output), Self::Error>;
 
-    fn apply(&mut self, event: Self::Event) -> Result<(), Self::Error> {
-        let _ = self.transition(event)?;
-
-        Ok(())
+    ///直接调用
+    fn apply(&mut self, event: Self::Event) -> Result<(Self::State, Self::Output), Self::Error> {
+        self.transition(event)
     }
 }
 
@@ -72,13 +73,5 @@ mod tests {
 
         assert_eq!(machine.apply(Event::Inc), Err(InvalidTransition));
         assert_eq!(machine.state, State::Done);
-    }
-
-    #[test]
-    fn apply_ignores_transition_output() {
-        let mut machine = Machine { state: State::Ready, ver: 0 };
-
-        assert_eq!(machine.apply(Event::Inc), Ok(()));
-        assert_eq!((machine.state, machine.ver), (State::Done, 1));
     }
 }

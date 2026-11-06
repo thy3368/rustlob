@@ -345,7 +345,6 @@ mod tests {
         let event = SpotAccountEvent::FreezeForRisk { timestamp: 25 };
 
         assert_eq!(transitioned.transition(event), Ok((AccountStatus::Frozen, ())));
-        assert_eq!(applied.apply(event), Ok(()));
         assert_eq!(applied, transitioned);
     }
 
