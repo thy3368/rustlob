@@ -49,12 +49,17 @@ pub use perp::trade::hyperliquid_perp_order::{
 pub use perp::trade::hyperliquid_perp_trade::{
     HyperliquidPerpTrade, HyperliquidPerpTradePositionSettlement,
 };
-pub use perp::trade::perp_order_v3::PerpOrderV3;
+pub use perp::trade::perp_order_v3::{
+    MatchPerpOrderV3Input, MatchPerpOrderV3Outcome, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
+};
 pub use perp::trade::perp_position_v3::{
     FundingAccumulatorV3, MarginModeV3, PerpPositionV3, PerpPositionV3Error, PerpPositionV3Event,
     PerpPositionV3Output, PerpPositionV3State,
 };
-pub use perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
+pub use perp::trade::perp_trade_v3::{
+    PerpTradeKind, PerpTradeV3, PerpTradeV3Error, PerpTradeV3Event, PerpTradeV3Output,
+    PerpTradeV3State,
+};
 use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
 pub use spot::spot_order_v3::{SpotOrderStage, SpotOrderV3, SpotOrderV3Any};

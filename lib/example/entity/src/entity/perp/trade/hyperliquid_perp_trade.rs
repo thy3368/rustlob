@@ -142,12 +142,14 @@ impl HyperliquidPerpTrade {
                 updated_at: self.created_at,
                 version: 0,
             },
+            state: crate::entity::PerpTradeV3State::Unsettled,
             kind: PerpTradeKind::Normal,
             reference_id: Some(self.match_id.clone()),
             taker_start_position: ts,
             maker_start_position: ms,
             taker_closed_pnl: Decimal::ZERO,
             maker_closed_pnl: Decimal::ZERO,
+            liquidation: None,
         })
     }
 }

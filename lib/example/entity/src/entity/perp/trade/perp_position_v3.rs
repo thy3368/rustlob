@@ -609,12 +609,14 @@ mod tests {
                 updated_at: 1,
                 version: 0,
             },
+            state: crate::entity::PerpTradeV3State::Unsettled,
             kind: PerpTradeKind::Normal,
             reference_id: None,
             taker_start_position: Decimal::ZERO,
             maker_start_position: Decimal::ZERO,
             taker_closed_pnl: Decimal::ZERO,
             maker_closed_pnl: Decimal::ZERO,
+            liquidation: None,
         }
     }
 
