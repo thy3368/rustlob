@@ -8,6 +8,7 @@ pub mod spot_account;
 
 pub mod coin;
 
+pub mod spot_account_v2;
 pub mod symbol;
 
 pub use balance::BalanceError;
