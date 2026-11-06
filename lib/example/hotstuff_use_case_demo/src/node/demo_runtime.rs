@@ -8,7 +8,7 @@ use example_core_use_case::{
     ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
     OrderSide, OrderTif, OrderType, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
     SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult,
-    SpotBlockState, SpotBlockUseCase, SpotOrderV2,
+    SpotBlockState, SpotBlockUseCase, SpotOrderHoldAsset, SpotOrderV2,
 };
 use hotstuff_rs::app::{
     App, ProduceBlockRequest, ProduceBlockResponse, ValidateBlockRequest, ValidateBlockResponse,
@@ -284,10 +284,14 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
         _request: &LogEntry<SpotBlockCmd>,
     ) -> Result<SpotBlockState, Self::Error> {
         let cancel_order = demo_buy_order()?;
-        let buyer_frozen = cancel_order
-            .reservation
-            .remaining_amount
-            .checked_add(cancel_order.fee_reservation.remaining_amount)
+        let cancel_hold = cancel_order
+            .active_hold_requirements(5, 10)
+            .map_err(|_| DemoSpotBlockOutboundError)?
+            .ok_or(DemoSpotBlockOutboundError)?;
+        let buyer_frozen = cancel_hold
+            .principal
+            .amount
+            .checked_add(cancel_hold.fee.amount)
             .ok_or(DemoSpotBlockOutboundError)?;
 
         Ok(SpotBlockState {
@@ -365,17 +369,6 @@ fn demo_sell_order(
     price: u64,
     qty: u64,
 ) -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
-    let reservation = SpotOrderV2::principal_reservation(
-        order_id,
-        account_id,
-        OrderSide::Sell,
-        qty,
-        price,
-        "BTC",
-        "USDT",
-    )
-    .map_err(|_| DemoSpotBlockOutboundError)?;
-
     let mut order = SpotOrderV2::new_pending_limit(
         order_id,
         10_001,
@@ -389,7 +382,7 @@ fn demo_sell_order(
         0,
         1,
     );
-    order
+    let hold_requirements = order
         .activate_pending(ActivatePendingSpotOrderV2Input {
             base_asset_id: "BTC".to_string(),
             quote_asset_id: "USDT".to_string(),
@@ -398,7 +391,8 @@ fn demo_sell_order(
             timestamp: 1,
         })
         .map_err(|_| DemoSpotBlockOutboundError)?;
-    debug_assert_eq!(order.reservation, reservation);
+    debug_assert_eq!(hold_requirements.principal.asset, SpotOrderHoldAsset::Base);
+    debug_assert_eq!(hold_requirements.principal.amount, qty);
     Ok(order)
 }
 
@@ -575,4 +569,31 @@ pub fn demo_validator_set_state(verifying_keys: &[VerifyingKey]) -> ValidatorSet
 
 pub fn deterministic_signing_keys() -> Vec<SigningKey> {
     (1..=NODE_COUNT).map(|seed| SigningKey::from_bytes(&[seed as u8; 32])).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn demo_buy_order_has_expected_active_hold_requirements()
+    -> Result<(), DemoSpotBlockOutboundError> {
+        let order = demo_buy_order()?;
+        let requirements = order
+            .active_hold_requirements(5, 10)
+            .map_err(|_| DemoSpotBlockOutboundError)?
+            .ok_or(DemoSpotBlockOutboundError)?;
+        let total = requirements
+            .principal
+            .amount
+            .checked_add(requirements.fee.amount)
+            .ok_or(DemoSpotBlockOutboundError)?;
+
+        assert_eq!(requirements.principal.asset, SpotOrderHoldAsset::Quote);
+        assert_eq!(requirements.principal.amount, 200);
+        assert_eq!(requirements.fee.asset, SpotOrderHoldAsset::Quote);
+        assert_eq!(requirements.fee.amount, 1);
+        assert_eq!(total, 201);
+        Ok(())
+    }
 }
