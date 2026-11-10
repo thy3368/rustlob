@@ -7,6 +7,7 @@ pub mod common;
 pub use common::{DecimalValueError, FundingRate, FundingRate2};
 
 pub mod hyperliquid_account;
+pub use hyperliquid_account::{ScheduledCancel, ScheduledCancelError};
 pub use market_data::{
     KlineAggregationError, KlineCandle, KlineInterval, KlineUpdate, SpotKlineAggregator,
     SpotKlineTradeInput,
@@ -63,14 +64,10 @@ use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
 pub use spot::spot_trade::SpotTrade;
 pub use spot_entity::spot_order_primitives::{
-    OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderStatusReason,
+    OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus,
+    SpotOrderStatusReason, SpotTradeFeeRole,
 };
-pub use spot_entity::spot_order_v2::{
-    ActivatePendingSpotOrderV2Input, CancelSpotOrderV2Input, CancelSpotOrderV2Outcome,
-    MatchSpotOrderV2Input, MatchSpotOrderV2Outcome, OrderGroupRelation,
-    SpotOrderFeeConsumeRequirement, SpotOrderFeeHoldRequirement, SpotOrderHoldAsset,
-    SpotOrderHoldRequirement, SpotOrderHoldRequirements, SpotOrderReleaseReason,
-    SpotOrderReleaseRequirement, SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError,
-    SpotTradeFeeRole,
+pub use spot_entity::spot_order_v7::{
+    MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7, SpotOrderV7Event,
 };
 pub use transfer::settlement_transfer_purpose::SettlementTransferPurpose;

@@ -6,8 +6,9 @@ use rust_decimal::prelude::ToPrimitive;
 use crate::account::coin::{CoinAmount, CoinAmountError};
 use crate::entity::common::common_order::{OrderBase, SpotAmountConversionError};
 use crate::entity::common::common_trade::TradeBase;
-use crate::entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
-use crate::entity::spot::spot_order_v2::OrderGroupRelation;
+use crate::entity::spot::spot_order_primitives::{
+    OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus,
+};
 use crate::spot::spot_trade_v3::{SpotTradeSettlementStatus, SpotTradeV3};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

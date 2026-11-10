@@ -46,6 +46,34 @@ pub enum OrderTriggerRole {
     StopLoss,
 }
 
+/// 现货订单在 `normalTpsl` 中承担的关系角色。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum OrderGroupRelation {
+    /// 不属于父子订单组。
+    #[default]
+    Standalone,
+    /// `normalTpsl` entry 父单。
+    NormalTpslParent,
+    /// `normalTpsl` TP/SL 子单及其父单 Hyperliquid spot `oid`。
+    NormalTpslChild { parent_order_id: u64 },
+}
+
+/// 现货成交中的手续费角色。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpotTradeFeeRole {
+    Maker,
+    Taker,
+}
+
+impl SpotTradeFeeRole {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Maker => "maker",
+            Self::Taker => "taker",
+        }
+    }
+}
+
 /// Hyperliquid 现货订单类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderType {
