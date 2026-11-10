@@ -3001,6 +3001,7 @@ dependencies = [
  "lob_repo_v2",
  "mysql 24.0.0",
  "openraft",
+ "rust_decimal",
  "serde",
  "thiserror 1.0.69",
 ]

@@ -28,6 +28,8 @@ pub enum SpotOrderV7Event {
     Modify {
         price: Decimal,
         size: Decimal,
+        tif: Option<crate::entity::spot::spot_order_primitives::OrderTif>,
+        cloid: Option<String>,
         timestamp: u64,
     },
     Cancel {
@@ -140,7 +142,8 @@ impl SpotOrderV7 {
         size: Decimal,
         timestamp: u64,
     ) -> Result<(), EntityError> {
-        self.transition(SpotOrderV7Event::Modify { price, size, timestamp }).map(|_| ())
+        self.apply(SpotOrderV7Event::Modify { price, size, tif: None, cloid: None, timestamp })
+            .map(|_| ())
     }
 
     ///todo 可以remove
@@ -189,8 +192,15 @@ impl Fsm for SpotOrderV7 {
                 let (next, outcome) = compute_match(&replaced, makers, adjusted_input)?;
                 (next, Some(outcome))
             }
-            SpotOrderV7Event::Modify { price, size, timestamp } => {
-                (modified_order(&self.order_base, price, size, timestamp)?, None)
+            SpotOrderV7Event::Modify { price, size, tif, cloid, timestamp } => {
+                let mut next = modified_order(&self.order_base, price, size, timestamp)?;
+                if let Some(tif) = tif {
+                    next.tif = tif;
+                }
+                if let Some(cloid) = cloid {
+                    next.cloid = Some(cloid);
+                }
+                (next, None)
             }
             SpotOrderV7Event::Cancel { timestamp } => {
                 (canceled_order(&self.order_base, timestamp)?, None)

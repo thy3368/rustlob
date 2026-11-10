@@ -96,6 +96,8 @@ fn event(kind: EventKind) -> SpotOrderV7Event {
         EventKind::Modify => SpotOrderV7Event::Modify {
             price: Decimal::from(101),
             size: Decimal::from(2),
+            tif: None,
+            cloid: None,
             timestamp: EVENT_TIMESTAMP,
         },
         EventKind::Cancel => SpotOrderV7Event::Cancel { timestamp: EVENT_TIMESTAMP },
@@ -179,6 +181,8 @@ fn modify_preserves_status_and_updates_order_facts(#[case] status: SpotOrderStat
         .transition(SpotOrderV7Event::Modify {
             price: Decimal::from(105),
             size: Decimal::from(4),
+            tif: None,
+            cloid: None,
             timestamp: EVENT_TIMESTAMP,
         })
         .unwrap();
