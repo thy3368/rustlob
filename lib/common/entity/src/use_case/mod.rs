@@ -5,7 +5,9 @@ pub mod executor;
 pub mod log_entry;
 pub mod log_entry_repo;
 pub mod rewal_log_entry_repo;
-pub mod use_case_v2;
 pub mod support;
+pub mod use_case_v2;
 
 pub mod shard;
+
+pub mod query;

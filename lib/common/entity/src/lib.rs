@@ -22,24 +22,27 @@ pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer
 pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::event_handler::EntityReplayableEventHandler;
-pub use use_case::execution_command_spec::ExecutionCommandSpec;
+pub use use_case::execution_command_spec::Request2Command;
 pub use use_case::executor::{
-    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
+    ExecutionError, ExecutionResult, StateSink, StateSource, UseCaseExecutor,
 };
 pub use use_case::log_entry::LogEntry;
 pub use use_case::log_entry_repo::LogEntryRepo;
+pub use use_case::query::{
+    ComputeView, QueryExecutionError, QueryExecutor, QueryUseCase, ReadModelSource,
+};
 pub use use_case::rewal_log_entry_repo::{RewalLogEntryRepo, RewalLogEntryRepoError};
 pub use use_case::shard::Shard;
-/// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
-///
-/// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
-pub use use_case::use_case_v2::UseCase as MultiAggregateUseCaseUnchecked;
+pub use use_case::support::{ReplayableChanges, UpdatedEntityPair};
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的 before/after case truth 扩展称呼。
 pub use use_case::use_case_v2::StateDiff as MultiAggregateUseCaseBeforeAfter;
-pub use use_case::use_case_v2::{UseCase, StateDiff};
-pub use use_case::support::{ReplayableChanges, UpdatedEntityPair};
+/// 文档首选称呼：多聚合 `use-case family` 的最低实现契约。
+///
+/// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
+pub use use_case::use_case_v2::UseCase as MultiAggregateUseCaseUnchecked;
+pub use use_case::use_case_v2::{StateDiff, UseCase};
 
 /// Error raised while tracking entity state into replayable events.
 #[derive(Debug, Clone, PartialEq, Eq)]
