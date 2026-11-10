@@ -1,11 +1,11 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff,
+    Entity, EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff,
     UpdatedEntityPair, UseCase,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{Balance, BalanceError};
+use crate::entity::{BalanceV2, BalanceV2Error, BalanceV2Event};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DepositQuoteCmd {
@@ -15,7 +15,7 @@ pub struct DepositQuoteCmd {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepositQuoteState {
-    pub quote_balance: Balance,
+    pub quote_balance: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -28,7 +28,7 @@ pub enum DepositQuoteError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepositQuoteChanges {
-    pub updated_quote_balance: UpdatedEntityPair<Balance>,
+    pub updated_quote_balance: UpdatedEntityPair<BalanceV2>,
 }
 
 impl ReplayableChanges for DepositQuoteChanges {
@@ -73,7 +73,12 @@ impl UseCase for DepositQuoteUseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let quote_balance_before = state.quote_balance.clone();
         let mut quote_balance_after = quote_balance_before.clone();
-        quote_balance_after.credit_available(cmd.amount).map_err(map_balance_error)?;
+        quote_balance_after
+            .apply(BalanceV2Event::CreditAvailable {
+                amount: cmd.amount.into(),
+                timestamp: cmd.logical_ts(),
+            })
+            .map_err(map_balance_error)?;
 
         Ok(DepositQuoteChanges {
             updated_quote_balance: UpdatedEntityPair {
@@ -99,12 +104,14 @@ impl StateDiff for DepositQuoteUseCase {
     }
 }
 
-fn map_balance_error(error: BalanceError) -> DepositQuoteError {
+fn map_balance_error(error: BalanceV2Error) -> DepositQuoteError {
     match error {
-        BalanceError::InvalidAmount => DepositQuoteError::InvalidAmount,
-        BalanceError::ArithmeticOverflow
-        | BalanceError::InsufficientAvailableBalance
-        | BalanceError::InsufficientFrozenBalance => DepositQuoteError::ArithmeticOverflow,
+        BalanceV2Error::InvalidAmount => DepositQuoteError::InvalidAmount,
+        BalanceV2Error::ArithmeticOverflow
+        | BalanceV2Error::InsufficientAvailableBalance
+        | BalanceV2Error::InsufficientFrozenBalance
+        | BalanceV2Error::BalanceClosed
+        | BalanceV2Error::CannotCloseNonZeroBalance => DepositQuoteError::ArithmeticOverflow,
     }
 }
 
@@ -127,16 +134,15 @@ mod tests {
 
     fn sample_state() -> DepositQuoteState {
         DepositQuoteState {
-            quote_balance: Balance {
-                party_id: common_entity::stable_string_entity_id("trader-1"),
-                account_id: common_entity::stable_string_entity_id("trader-1"),
-                asset_id: common_entity::stable_string_entity_id("USDT"),
-                available: 1_000,
-                frozen: 50,
-                entry_notional: None,
-                identifier: None,
-                version: 3,
-            },
+            quote_balance: BalanceV2::new(
+                common_entity::stable_string_entity_id("trader-1"),
+                common_entity::stable_string_entity_id("trader-1"),
+                common_entity::stable_string_entity_id("USDT"),
+                1_000_u64,
+                50_u64,
+                3,
+                0,
+            ),
         }
     }
 
@@ -176,11 +182,13 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());
-        assert_eq!(event_field(&events[0], "account_id"), Some("trader-1"));
-        assert_eq!(event_field(&events[0], "asset_id"), Some("USDT"));
+        let account_id = common_entity::stable_string_entity_id("trader-1").to_string();
+        let coin_idx = common_entity::stable_string_entity_id("USDT").to_string();
+        assert_eq!(event_field(&events[0], "account_id"), Some(account_id.as_str()));
+        assert_eq!(event_field(&events[0], "coin_idx"), Some(coin_idx.as_str()));
         assert_eq!(field_as_u64(&events[0], "available"), Some(1_200));
         assert_eq!(field_as_u64(&events[0], "frozen"), None);
-        assert_eq!(changes.updated_quote_balance.after.available, 1_200);
+        assert_eq!(changes.updated_quote_balance.after.available(), 1_200.into());
 
         Ok(())
     }

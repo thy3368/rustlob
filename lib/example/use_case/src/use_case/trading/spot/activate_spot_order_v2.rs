@@ -4,15 +4,16 @@ use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
     UseCase,
 };
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
-use crate::common_entity::account::balance_ledger_v2::{
-    BalanceLedgerEntryV2Error, BalanceLedgerV2,
+use crate::common_entity::account::balance_ledger_v3::{
+    BalanceLedgerV3, BalanceLedgerV3Error, LedgerOperation,
 };
 use crate::common_entity::{
-    ActivatePendingSpotOrderV2Input, Balance, SpotOrderHoldAsset, SpotOrderHoldRequirement,
+    ActivatePendingSpotOrderV2Input, BalanceV2, SpotOrderHoldAsset, SpotOrderHoldRequirement,
     SpotOrderV2, SpotOrderV2BehaviorError,
 };
 use crate::support::{concat2, concat3};
@@ -27,7 +28,7 @@ pub struct ActivateSpotOrderV2Cmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivateSpotOrderV2State {
     pub pending_order: SpotOrderV2,
-    pub balances: Vec<Balance>,
+    pub balances: Vec<BalanceV2>,
     pub base_asset_id: String,
     pub quote_asset_id: String,
     pub maker_fee_bps: u64,
@@ -37,15 +38,15 @@ pub struct ActivateSpotOrderV2State {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivateSpotOrderV2AfterChanges {
     pub activated_order_after: SpotOrderV2,
-    pub balances_after: Vec<Balance>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+    pub balances_after: Vec<BalanceV2>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerV3>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivateSpotOrderV2Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV2>,
-    pub updated_balances: Vec<UpdatedEntityPair<Balance>>,
-    pub created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+    pub updated_balances: Vec<UpdatedEntityPair<BalanceV2>>,
+    pub created_balance_ledger_entries: Vec<BalanceLedgerV3>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -77,16 +78,19 @@ pub enum ActivateSpotOrderV2Error {
     #[error(transparent)]
     OrderBehavior(#[from] SpotOrderV2BehaviorError),
     #[error(transparent)]
-    BalanceLedger(BalanceLedgerEntryV2Error),
+    BalanceLedger(BalanceLedgerV3Error),
 }
 
-impl From<BalanceLedgerEntryV2Error> for ActivateSpotOrderV2Error {
-    fn from(error: BalanceLedgerEntryV2Error) -> Self {
+impl From<BalanceLedgerV3Error> for ActivateSpotOrderV2Error {
+    fn from(error: BalanceLedgerV3Error) -> Self {
         match error {
-            BalanceLedgerEntryV2Error::InsufficientAvailableBalance => {
-                Self::InsufficientAvailableBalance
-            }
-            BalanceLedgerEntryV2Error::ArithmeticOverflow => Self::ArithmeticOverflow,
+            BalanceLedgerV3Error::BalanceTransition(
+                crate::common_entity::BalanceV2Error::InsufficientAvailableBalance,
+            ) => Self::InsufficientAvailableBalance,
+            BalanceLedgerV3Error::ArithmeticOverflow
+            | BalanceLedgerV3Error::BalanceTransition(
+                crate::common_entity::BalanceV2Error::ArithmeticOverflow,
+            ) => Self::ArithmeticOverflow,
             other => Self::BalanceLedger(other),
         }
     }
@@ -179,6 +183,7 @@ impl UseCase for ActivateSpotOrderV2UseCase {
                 activated_order_after.order_id().to_string().as_str(),
             ),
             &mut balance_book,
+            cmd.logical_ts(),
         )?;
         created_balance_ledger_entries.push(principal_entry);
 
@@ -197,6 +202,7 @@ impl UseCase for ActivateSpotOrderV2UseCase {
                     ":fee",
                 ),
                 &mut balance_book,
+                cmd.logical_ts(),
             )?;
             created_balance_ledger_entries.push(fee_entry);
         }
@@ -278,7 +284,7 @@ fn validate_activation_state(
 }
 
 fn ensure_balance_exists(
-    balances: &[Balance],
+    balances: &[BalanceV2],
     account_id: &str,
     asset_id: &str,
 ) -> Result<(), ActivateSpotOrderV2Error> {
@@ -286,18 +292,18 @@ fn ensure_balance_exists(
         .iter()
         .find(|balance| {
             balance.belongs_to_account(common_entity::stable_string_entity_id(account_id))
-                && balance.is_asset(common_entity::stable_string_entity_id(asset_id))
+                && balance.is_coin(common_entity::stable_string_entity_id(asset_id))
         })
         .map(|_| ())
         .ok_or(ActivateSpotOrderV2Error::BalanceNotFound)
 }
 
 struct BalanceMap {
-    balances: HashMap<String, Balance>,
+    balances: HashMap<String, BalanceV2>,
 }
 
 impl BalanceMap {
-    fn new(balances: &[Balance]) -> Self {
+    fn new(balances: &[BalanceV2]) -> Self {
         Self {
             balances: balances
                 .iter()
@@ -311,7 +317,7 @@ impl BalanceMap {
         &mut self,
         account_id: &str,
         asset_id: &str,
-    ) -> Result<&mut Balance, ActivateSpotOrderV2Error> {
+    ) -> Result<&mut BalanceV2, ActivateSpotOrderV2Error> {
         self.balances
             .get_mut(&concat3(
                 &common_entity::stable_string_entity_id(account_id).to_string(),
@@ -332,11 +338,11 @@ impl BalanceMap {
                 ":",
                 &common_entity::stable_string_entity_id(asset_id).to_string(),
             ))
-            .map(Balance::business_entity_id)
+            .map(BalanceV2::business_entity_id)
             .ok_or(ActivateSpotOrderV2Error::BalanceNotFound)
     }
 
-    fn into_balances(self) -> Vec<Balance> {
+    fn into_balances(self) -> Vec<BalanceV2> {
         let mut balances = self.balances.into_values().collect::<Vec<_>>();
         balances.sort_by_key(|lhs| lhs.entity_id());
         balances
@@ -357,36 +363,37 @@ fn apply_freeze_for_requirement(
     quote_asset_id: &str,
     entry_id: String,
     balance_book: &mut BalanceMap,
-) -> Result<BalanceLedgerV2, ActivateSpotOrderV2Error> {
+    timestamp: u64,
+) -> Result<BalanceLedgerV3, ActivateSpotOrderV2Error> {
     let asset_id = match requirement.asset {
         SpotOrderHoldAsset::Base => base_asset_id,
         SpotOrderHoldAsset::Quote => quote_asset_id,
     };
-    let mut entry = BalanceLedgerV2::freeze(
-        entry_id,
-        order.account_id().to_string(),
-        asset_id.to_string(),
-        common_entity::stable_string_entity_id(order.account_id()),
-        requirement.amount,
+    let balance = balance_book.get_mut(order.account_id(), asset_id)?;
+    let mut entry = BalanceLedgerV3::new(
+        common_entity::stable_string_entity_id(&entry_id),
+        balance,
+        LedgerOperation::Freeze,
+        Decimal::from(requirement.amount),
         BalanceLedgerReason::FreezeForOrder { order_id: order.order_id() },
+        timestamp,
     )
     .map_err(ActivateSpotOrderV2Error::from)?;
-    let balance = balance_book.get_mut(order.account_id(), asset_id)?;
-    entry.apply_to(balance).map_err(ActivateSpotOrderV2Error::from)?;
+    entry.apply_to(balance, timestamp).map_err(ActivateSpotOrderV2Error::from)?;
     Ok(entry)
 }
 
 fn merge_balance_pairs(
-    before: Vec<Balance>,
-    after: Vec<Balance>,
-) -> Result<Vec<UpdatedEntityPair<Balance>>, ActivateSpotOrderV2Error> {
+    before: Vec<BalanceV2>,
+    after: Vec<BalanceV2>,
+) -> Result<Vec<UpdatedEntityPair<BalanceV2>>, ActivateSpotOrderV2Error> {
     let before_map = before
         .into_iter()
         .map(|balance| (balance.business_entity_id(), balance))
         .collect::<HashMap<_, _>>();
     let mut seen = HashSet::new();
     let mut pairs = Vec::with_capacity(after.len());
-    for mut balance in after {
+    for balance in after {
         let balance_id = balance.business_entity_id();
         let before_balance = before_map
             .get(&balance_id)
@@ -395,20 +402,16 @@ fn merge_balance_pairs(
         if !seen.insert(balance_id) {
             return Err(ActivateSpotOrderV2Error::BalanceNotFound);
         }
-        balance.version = before_balance
-            .version
-            .checked_add(1)
-            .ok_or(ActivateSpotOrderV2Error::ArithmeticOverflow)?;
         pairs.push(UpdatedEntityPair { before: before_balance, after: balance });
     }
     Ok(pairs)
 }
 
 fn balance_replay_events_from_ledger_entries(
-    updated_balances: &[UpdatedEntityPair<Balance>],
-    ledger_entries: &[BalanceLedgerV2],
+    updated_balances: &[UpdatedEntityPair<BalanceV2>],
+    ledger_entries: &[BalanceLedgerV3],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-    let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
+    let mut current_balances = HashMap::<String, BalanceV2>::with_capacity(updated_balances.len());
     for balance in updated_balances {
         let balance_id = balance.before.business_entity_id();
         current_balances.insert(balance_id, balance.before.clone());
@@ -416,7 +419,7 @@ fn balance_replay_events_from_ledger_entries(
 
     for entry in ledger_entries {
         let Some(before) = current_balances
-            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
+            .get(&concat3(&entry.account_id.to_string(), ":", &entry.coin_idx.to_string()))
             .cloned()
         else {
             return Err(common_entity::EntityError::Custom(
@@ -439,31 +442,32 @@ fn balance_replay_events_from_ledger_entries(
                 "balance ledger entry has not been applied".to_string(),
             ));
         };
-        if before.available != entry_before_available || before.frozen != entry_before_frozen {
+        if before.available() != entry_before_available || before.frozen() != entry_before_frozen {
             return Err(common_entity::EntityError::Custom(
                 "balance ledger entry breaks balance replay chain".to_string(),
             ));
         }
-        let after = Balance::new(
-            before.party_id,
-            before.account_id,
-            before.asset_id,
+        let after = BalanceV2::new(
+            before.party_id(),
+            before.account_id(),
+            before.coin_idx(),
             entry_after_available,
             entry_after_frozen,
-            before.version,
+            before
+                .version()
+                .checked_add(1)
+                .ok_or(common_entity::EntityError::VersionOverflow { version: before.version() })?,
+            before.created_at(),
         );
         current_balances.insert(
-            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
+            concat3(&entry.account_id.to_string(), ":", &entry.coin_idx.to_string()).clone(),
             after,
         );
     }
 
     for balance in updated_balances {
         let balance_id = balance.after.business_entity_id();
-        if !current_balances
-            .get(&balance_id)
-            .is_some_and(|current| current.matches_business_snapshot(&balance.after))
-        {
+        if !current_balances.get(&balance_id).is_some_and(|current| current == &balance.after) {
             return Err(common_entity::EntityError::Custom(
                 "balance replay chain does not reach case-level balance after state".to_string(),
             ));

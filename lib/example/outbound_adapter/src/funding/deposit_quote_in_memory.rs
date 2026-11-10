@@ -1,5 +1,5 @@
 use common_entity::{EntityReplayableEvent, LogEntry, StateDiff, StateSink, StateSource};
-use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
+use example_core_use_case::{BalanceV2, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
 
 use crate::shared::{
     DepositQuoteOutboundError, InMemoryStore, balance_key, event_identity_field, event_u64_field,
@@ -50,20 +50,27 @@ impl StateSink<DepositQuoteUseCase> for InMemoryDepositQuoteOutbound {
             if event.is_updated() {
                 let account_id = event_identity_field(event, "account_id")
                     .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?;
-                let asset_id = event_identity_field(event, "asset_id")
+                let coin_idx = event_identity_field(event, "coin_idx")
                     .ok_or(DepositQuoteOutboundError::EventDecodeFailed)?;
-                let key = balance_key(account_id, asset_id);
-                let balance = state
-                    .balances
-                    .entry(key)
-                    .or_insert_with(|| Balance::new(account_id, account_id, asset_id, 0, 0, 0));
-                if let Some(available) = event_u64_field(event, "available") {
-                    balance.available = available;
-                }
-                if let Some(frozen) = event_u64_field(event, "frozen") {
-                    balance.frozen = frozen;
-                }
-                balance.version = event.lsn;
+                let key = balance_key(account_id, coin_idx);
+                let balance = state.balances.entry(key).or_insert_with(|| {
+                    BalanceV2::new(account_id, account_id, coin_idx, 0, 0, 0, 0)
+                });
+                let available = event_u64_field(event, "available")
+                    .map(rust_decimal::Decimal::from)
+                    .unwrap_or_else(|| balance.available());
+                let frozen = event_u64_field(event, "frozen")
+                    .map(rust_decimal::Decimal::from)
+                    .unwrap_or_else(|| balance.frozen());
+                *balance = BalanceV2::new(
+                    balance.party_id(),
+                    balance.account_id(),
+                    balance.coin_idx(),
+                    available,
+                    frozen,
+                    event.lsn,
+                    balance.created_at(),
+                );
             }
         }
 

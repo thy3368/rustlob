@@ -45,7 +45,7 @@ mod tests {
     use common_entity::{EntityReplayableEvent, stable_string_entity_id};
     use example_core_entity::common::identifiers::OrderId;
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, Balance, ModifySpotOrderV2OrderType,
+        ActivatePendingSpotOrderV2Input, BalanceV2, ModifySpotOrderV2OrderType,
         ModifySpotOrderV2State, OrderSide, OrderTif, OrderType, SpotOrderV2,
     };
 
@@ -131,7 +131,7 @@ mod tests {
 
             Ok(ModifySpotOrderV2State {
                 order,
-                balances: vec![Balance::new(
+                balances: vec![BalanceV2::new(
                     stable_string_entity_id(&format!(
                         "{}:{}",
                         stable_string_entity_id("buyer"),

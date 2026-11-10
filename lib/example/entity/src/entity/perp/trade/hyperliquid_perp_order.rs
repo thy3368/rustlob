@@ -7,8 +7,6 @@ use lob_repo_v2::lob::LobOrder;
 use thiserror::Error;
 
 use crate::OrderSide;
-use crate::entity::{BalanceLedgerEntryV2Error, BalanceLedgerReason, BalanceLedgerV2};
-use crate::support::concat2;
 
 const HYPERLIQUID_PERP_ORDER_ENTITY_TYPE: u8 = 9;
 
@@ -177,8 +175,6 @@ pub enum PlaceHyperliquidPerpOrderIntent {
 pub struct PlaceHyperliquidPerpOrderOutcome {
     /// 已创建的订单聚合根。
     pub order: HyperliquidPerpOrder,
-    /// 由订单创建直接派生的冻结余额流水。
-    pub freeze_ledger_entry: Option<BalanceLedgerV2>,
 }
 
 /// Hyperliquid perp 订单行为错误。
@@ -193,9 +189,6 @@ pub enum HyperliquidPerpOrderBehaviorError {
     /// 保证金冻结金额必须大于零。
     #[error("perp order margin amount must be greater than zero")]
     InvalidMarginAmount,
-    /// 派生余额流水失败。
-    #[error("failed to derive balance ledger entry: {0}")]
-    BalanceLedger(#[from] BalanceLedgerEntryV2Error),
 }
 
 /// 已接受并可由撮合层读取的 Hyperliquid perp 订单快照。
@@ -283,8 +276,7 @@ impl HyperliquidPerpOrder {
 
     /// 可 BDD 规格化的聚合根行为：按四态仓位意图创建 Hyperliquid perp 订单。
     ///
-    /// 该方法只创建订单聚合和开仓 / 加仓意图直接派生的冻结余额流水单据，
-    /// 不执行余额落账，也不检查仓位开平仓资格。
+    /// 该方法只创建订单聚合；余额冻结与流水由加载权威余额的 use case 编排。
     pub fn place(
         input: PlaceHyperliquidPerpOrderInput,
     ) -> Result<PlaceHyperliquidPerpOrderOutcome, HyperliquidPerpOrderBehaviorError> {
@@ -294,35 +286,16 @@ impl HyperliquidPerpOrder {
         if input.execution.order_price() == 0 {
             return Err(HyperliquidPerpOrderBehaviorError::InvalidPrice);
         }
-        let (reduce_only, freeze_ledger_entry) = match input.intent {
+        let reduce_only = match input.intent {
             PlaceHyperliquidPerpOrderIntent::ReducePosition
-            | PlaceHyperliquidPerpOrderIntent::ClosePosition => (true, None),
-            PlaceHyperliquidPerpOrderIntent::OpenPosition {
-                margin_asset_id,
-                margin_balance_entity_id,
-                margin_amount,
-            }
-            | PlaceHyperliquidPerpOrderIntent::IncreasePosition {
-                margin_asset_id,
-                margin_balance_entity_id,
-                margin_amount,
-            } => {
+            | PlaceHyperliquidPerpOrderIntent::ClosePosition => true,
+            PlaceHyperliquidPerpOrderIntent::OpenPosition { margin_amount, .. }
+            | PlaceHyperliquidPerpOrderIntent::IncreasePosition { margin_amount, .. } => {
                 if margin_amount == 0 {
                     return Err(HyperliquidPerpOrderBehaviorError::InvalidMarginAmount);
                 }
 
-                let freeze_ledger_entry = BalanceLedgerV2::freeze(
-                    common_entity::stable_string_entity_id(&concat2(
-                        "balance-ledger:freeze:",
-                        input.order_id.to_string().as_str(),
-                    )),
-                    input.account_id.clone(),
-                    margin_asset_id,
-                    margin_balance_entity_id,
-                    margin_amount,
-                    BalanceLedgerReason::FreezeForOrder { order_id: input.order_id },
-                )?;
-                (false, Some(freeze_ledger_entry))
+                false
             }
         };
 
@@ -345,7 +318,7 @@ impl HyperliquidPerpOrder {
             order
         };
 
-        Ok(PlaceHyperliquidPerpOrderOutcome { order, freeze_ledger_entry })
+        Ok(PlaceHyperliquidPerpOrderOutcome { order })
     }
 
     /// 返回带强平来源标记的订单快照。

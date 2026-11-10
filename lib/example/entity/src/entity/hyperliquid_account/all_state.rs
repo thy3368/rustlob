@@ -4,7 +4,7 @@ use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 use crate::account::spot_account_v2::SpotAccount;
 use crate::perp::trade::perp_position_v3::PerpPositionV3;
-use crate::{Balance, HyperliquidPerpOrder, SpotOrderV7};
+use crate::{BalanceV2, HyperliquidPerpOrder, SpotOrderV7};
 
 /// 三户模型
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,7 +42,7 @@ pub struct OwnedClearinghouseState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotWallet {
     pub account: SpotAccount,
-    pub balances: BTreeMap<u64, Balance>,
+    pub balances: BTreeMap<u64, BalanceV2>,
 }
 
 // ─── 资金户（充值/提现入口） ───
@@ -50,7 +50,7 @@ pub struct SpotWallet {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FundingWallet {
     pub account: SpotAccount,
-    pub balances: BTreeMap<u64, Balance>,
+    pub balances: BTreeMap<u64, BalanceV2>,
 }
 
 // ─── Perp 合约户 ───
@@ -58,6 +58,6 @@ pub struct FundingWallet {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpWallet {
     ///其实他只需要usdc的balance就行了，他的语义和上面的语义不一样，只有USDC
-    pub cross: Balance, // 全仓余额（通常只有 USDC）
+    pub cross: BalanceV2, // 全仓余额（通常只有 USDC）
     pub isolated: BTreeMap<u64, PerpPositionV3>, // USDC
 }

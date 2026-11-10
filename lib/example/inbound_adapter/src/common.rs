@@ -351,7 +351,7 @@ pub(crate) mod tests {
 
     use common_entity::{EntityReplayableEvent, LogEntry, StateSink, StateSource};
     use example_core_use_case::{
-        Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
+        BalanceV2, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
         PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
         WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteUseCase,
     };
@@ -451,7 +451,7 @@ pub(crate) mod tests {
             _cmd: &LogEntry<PlaceOnlySpotOrderV2Cmd>,
         ) -> Result<PlaceMatchSpotOrderV2State, Self::Error> {
             let settlement_balances = vec![
-                Balance::new(
+                BalanceV2::new(
                     common_entity::stable_string_entity_id("trader-1"),
                     common_entity::stable_string_entity_id("trader-1"),
                     common_entity::stable_string_entity_id("BTC"),
@@ -459,7 +459,7 @@ pub(crate) mod tests {
                     0,
                     5,
                 ),
-                Balance::new(
+                BalanceV2::new(
                     common_entity::stable_string_entity_id("trader-1"),
                     common_entity::stable_string_entity_id("trader-1"),
                     common_entity::stable_string_entity_id("USDT"),
@@ -467,7 +467,7 @@ pub(crate) mod tests {
                     0,
                     5,
                 ),
-                Balance::new(
+                BalanceV2::new(
                     common_entity::stable_string_entity_id("fee"),
                     common_entity::stable_string_entity_id("fee"),
                     common_entity::stable_string_entity_id("USDT"),
@@ -508,13 +508,14 @@ pub(crate) mod tests {
             _cmd: &LogEntry<DepositQuoteCmd>,
         ) -> Result<DepositQuoteState, Self::Error> {
             Ok(DepositQuoteState {
-                quote_balance: Balance::new(
+                quote_balance: BalanceV2::new(
                     common_entity::stable_string_entity_id("trader-1"),
                     common_entity::stable_string_entity_id("trader-1"),
                     common_entity::stable_string_entity_id("USDT"),
                     1_000,
                     0,
                     5,
+                    0,
                 ),
             })
         }
@@ -544,13 +545,14 @@ pub(crate) mod tests {
             _cmd: &LogEntry<WithdrawQuoteCmd>,
         ) -> Result<WithdrawQuoteState, Self::Error> {
             Ok(WithdrawQuoteState {
-                quote_balance: Balance::new(
+                quote_balance: BalanceV2::new(
                     common_entity::stable_string_entity_id("trader-1"),
                     common_entity::stable_string_entity_id("trader-1"),
                     common_entity::stable_string_entity_id("USDT"),
                     1_000,
                     0,
                     5,
+                    0,
                 ),
             })
         }

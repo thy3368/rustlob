@@ -20,12 +20,7 @@ pub mod account;
 
 pub mod market_data;
 
-pub use account::balance::{Balance, BalanceError};
 pub use account::balance_ledger_reason::BalanceLedgerReason;
-pub use account::balance_ledger_v2::{
-    BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2 as BalanceLedgerEntry,
-    BalanceLedgerV2,
-};
 pub use account::balance_ledger_v3::{
     BalanceLedgerV3, BalanceLedgerV3Error, BalanceLedgerV3Event, BalanceLedgerV3Output,
     BalanceLedgerV3State, LedgerOperation,

@@ -140,7 +140,8 @@ mod tests {
         Entity, EntityReplayableEvent, ReplayFieldChange, stable_string_entity_id,
     };
     use example_core_use_case::{
-        Balance, MarketRules, OrderSide, OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderV2,
+        BalanceV2, MarketRules, OrderSide, OrderTriggerRole, OrderType, SpotOrderStatus,
+        SpotOrderV2,
     };
     use example_outbound_adapter::InMemoryPlaceOrderOutbound;
 
@@ -174,23 +175,25 @@ mod tests {
             .seed_market_rules(MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 })
             .expect("market rules should seed");
         outbound
-            .seed_balance(Balance::new(
+            .seed_balance(BalanceV2::new(
                 stable_string_entity_id("buyer"),
                 stable_string_entity_id("buyer"),
                 stable_string_entity_id("BTC"),
                 0,
                 0,
                 1,
+                0,
             ))
             .expect("base balance should seed");
         outbound
-            .seed_balance(Balance::new(
+            .seed_balance(BalanceV2::new(
                 stable_string_entity_id("buyer"),
                 stable_string_entity_id("buyer"),
                 stable_string_entity_id("USDT"),
                 1_000,
                 0,
                 1,
+                0,
             ))
             .expect("quote balance should seed");
         outbound

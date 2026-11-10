@@ -82,7 +82,7 @@ pub enum TriggerScheduledCancelError {
     #[error(transparent)]
     SpotAmount(#[from] SpotAmountConversionError),
     #[error(transparent)]
-    Balance(#[from] BalanceV2Error),
+    BalanceV2(#[from] BalanceV2Error),
     #[error(transparent)]
     PerpOrder(#[from] PerpOrderV3Error),
 }

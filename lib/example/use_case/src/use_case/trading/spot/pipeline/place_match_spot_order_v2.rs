@@ -3,7 +3,7 @@ use common_entity::{
 };
 use thiserror::Error;
 
-use crate::entity::{Balance, SpotOrderV2};
+use crate::entity::{BalanceV2, SpotOrderV2};
 use crate::{
     ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
     ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
@@ -16,7 +16,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceMatchSpotOrderV2State {
     pub maker_orders: Vec<SpotOrderV2>,
-    pub settlement_balances: Vec<Balance>,
+    pub settlement_balances: Vec<BalanceV2>,
     pub fee_account_id: String,
 }
 
@@ -135,8 +135,8 @@ fn final_balance_events(
         };
         let mut after = match_balance.after.clone();
         after.version =
-            activation_balance.before.version.checked_add(1).ok_or(
-                EntityError::VersionOverflow { version: activation_balance.before.version },
+            activation_balance.before.version().checked_add(1).ok_or(
+                EntityError::VersionOverflow { version: activation_balance.before.version() },
             )?;
         events.push(after.track_update_event_from(&activation_balance.before)?);
     }

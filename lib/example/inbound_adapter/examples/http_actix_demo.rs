@@ -67,21 +67,23 @@ struct InMemoryDemoApp {
 impl InMemoryDemoApp {
     fn new() -> Result<Self, StoreError> {
         let store = InMemoryStore::seed_balances(
-            example_core_use_case::Balance::new(
+            example_core_use_case::BalanceV2::new(
                 common_entity::stable_string_entity_id("trader-1"),
                 common_entity::stable_string_entity_id("trader-1"),
                 common_entity::stable_string_entity_id("BTC"),
                 0,
                 0,
                 2,
+                0,
             ),
-            example_core_use_case::Balance::new(
+            example_core_use_case::BalanceV2::new(
                 common_entity::stable_string_entity_id("trader-1"),
                 common_entity::stable_string_entity_id("trader-1"),
                 common_entity::stable_string_entity_id("USDT"),
                 1_000,
                 0,
                 2,
+                0,
             ),
             example_core_use_case::MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
         )?;
@@ -140,11 +142,11 @@ fn snapshot_json(snapshot: StoreSnapshot) -> serde_json::Value {
         "balances": snapshot.balances.into_iter().map(|(balance_id, balance)| (
             balance_id,
             serde_json::json!({
-                "account_id": balance.account_id,
-                "asset_id": balance.asset_id,
-                "available": balance.available,
-                "frozen": balance.frozen,
-                "version": balance.version
+                "account_id": balance.account_id(),
+                "coin_idx": balance.coin_idx(),
+                "available": balance.available(),
+                "frozen": balance.frozen(),
+                "version": balance.version()
             })
         )).collect::<serde_json::Map<String, serde_json::Value>>(),
         "orders": snapshot.orders.into_iter().map(|(order_id, order)| (

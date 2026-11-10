@@ -106,21 +106,25 @@ impl BalanceV2 {
 }
 
 impl BalanceV2 {
-    pub fn new(
+    pub fn new<A, F>(
         party_id: u64,
         account_id: u64,
         coin_idx: u64,
-        available: Decimal,
-        frozen: Decimal,
+        available: A,
+        frozen: F,
         version: u64,
         created_at: u64,
-    ) -> Self {
+    ) -> Self
+    where
+        A: Into<Decimal>,
+        F: Into<Decimal>,
+    {
         Self {
             party_id,
             account_id,
             coin_idx,
-            available,
-            frozen,
+            available: available.into(),
+            frozen: frozen.into(),
             status: BalanceV2Status::Open,
             version,
             created_at,
@@ -219,7 +223,7 @@ impl FieldDiff for BalanceV2 {
         vec![
             change("party_id", "", self.party_id),
             change("account_id", "", self.account_id),
-            change("asset_id", "", self.coin_idx),
+            change("coin_idx", "", self.coin_idx),
             EntityFieldChange::new("available", "", self.available.to_string()),
             EntityFieldChange::new("frozen", "", self.frozen.to_string()),
             EntityFieldChange::new("status", "", self.status.as_str()),
@@ -231,7 +235,7 @@ impl FieldDiff for BalanceV2 {
         let f = [
             ("party_id", self.party_id.to_string(), o.party_id.to_string()),
             ("account_id", self.account_id.to_string(), o.account_id.to_string()),
-            ("asset_id", self.coin_idx.to_string(), o.coin_idx.to_string()),
+            ("coin_idx", self.coin_idx.to_string(), o.coin_idx.to_string()),
             ("available", self.available.to_string(), o.available.to_string()),
             ("frozen", self.frozen.to_string(), o.frozen.to_string()),
             ("status", self.status.as_str().into(), o.status.as_str().into()),

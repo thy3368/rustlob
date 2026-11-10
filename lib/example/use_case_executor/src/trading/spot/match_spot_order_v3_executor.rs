@@ -40,7 +40,7 @@ where
 mod tests {
     use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id};
     use example_core_use_case::{
-        ActivatePendingSpotOrderV2Input, Balance, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
+        ActivatePendingSpotOrderV2Input, BalanceV2, MatchSpotOrderV3Cmd, MatchSpotOrderV3State,
         MatchSpotOrderV3UseCase, OrderSide, OrderTif, OrderType, SpotOrderStatus, SpotOrderV2,
     };
 
@@ -75,7 +75,7 @@ mod tests {
                 taker_order: buy_order(1, "buyer", 100, 2, OrderTif::Ioc)?,
                 maker_orders: vec![sell_order(2, "seller", 100, 1)?],
                 settlement_balances: vec![
-                    Balance::new(
+                    BalanceV2::new(
                         stable_string_entity_id("buyer"),
                         stable_string_entity_id("buyer"),
                         stable_string_entity_id("USDT"),
@@ -83,7 +83,7 @@ mod tests {
                         201,
                         1,
                     ),
-                    Balance::new(
+                    BalanceV2::new(
                         stable_string_entity_id("buyer"),
                         stable_string_entity_id("buyer"),
                         stable_string_entity_id("BTC"),
@@ -91,7 +91,7 @@ mod tests {
                         0,
                         1,
                     ),
-                    Balance::new(
+                    BalanceV2::new(
                         stable_string_entity_id("seller"),
                         stable_string_entity_id("seller"),
                         stable_string_entity_id("BTC"),
@@ -99,7 +99,7 @@ mod tests {
                         1,
                         1,
                     ),
-                    Balance::new(
+                    BalanceV2::new(
                         stable_string_entity_id("seller"),
                         stable_string_entity_id("seller"),
                         stable_string_entity_id("USDT"),
@@ -107,7 +107,7 @@ mod tests {
                         1,
                         1,
                     ),
-                    Balance::new(
+                    BalanceV2::new(
                         stable_string_entity_id("fee"),
                         stable_string_entity_id("fee"),
                         stable_string_entity_id("USDT"),

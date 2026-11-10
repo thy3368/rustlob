@@ -48,7 +48,7 @@ pub enum BalanceLedgerV3Error {
     #[error("decimal arithmetic overflow")]
     ArithmeticOverflow,
     #[error(transparent)]
-    Balance(#[from] BalanceV2Error),
+    BalanceTransition(#[from] BalanceV2Error),
 }
 
 /// 一条 create-only 余额账务事实；余额先完成 FSM 迁移，再由本实体校验并记录快照。
@@ -294,6 +294,9 @@ impl Entity for BalanceLedgerV3 {
     fn entity_type() -> u8 {
         BALANCE_LEDGER_V3_ENTITY_TYPE
     }
+    fn is_derived() -> bool {
+        true
+    }
     fn four_color_archetype() -> FourColorArchetype {
         FourColorArchetype::MomentInterval
     }
@@ -315,5 +318,104 @@ impl Entity for BalanceLedgerV3 {
             | "after_frozen" => 1,
             _ => 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_entity::Fsm;
+    use rust_decimal::Decimal;
+
+    use super::{
+        BalanceLedgerReason, BalanceLedgerV3, BalanceLedgerV3Error, BalanceLedgerV3Event,
+        LedgerOperation,
+    };
+    use crate::entity::BalanceV2;
+
+    fn balance() -> BalanceV2 {
+        BalanceV2::new(7, 11, 42, Decimal::from(100), Decimal::from(20), 3, 5)
+    }
+
+    #[test]
+    fn apply_to_records_decimal_snapshots_and_single_step_balance_version() {
+        let mut balance = balance();
+        let mut ledger = BalanceLedgerV3::new(
+            9,
+            &balance,
+            LedgerOperation::Freeze,
+            Decimal::new(125, 1),
+            BalanceLedgerReason::FreezeForOrder { order_id: 99 },
+            10,
+        )
+        .unwrap();
+
+        let update = ledger.apply_to(&mut balance, 10).unwrap();
+
+        assert_eq!(balance.available(), Decimal::new(875, 1));
+        assert_eq!(balance.frozen(), Decimal::new(325, 1));
+        assert_eq!(balance.version(), 4);
+        assert_eq!(balance.business_entity_id(), "11:42");
+        assert!(ledger.matches_balance_update(&update));
+    }
+
+    #[test]
+    fn rejected_application_preserves_ledger_and_balance() {
+        let mut balance = balance();
+        let mut ledger = BalanceLedgerV3::new(
+            9,
+            &balance,
+            LedgerOperation::DebitAvailable,
+            Decimal::from(101),
+            BalanceLedgerReason::FreezeForOrder { order_id: 99 },
+            10,
+        )
+        .unwrap();
+        let before_balance = balance.clone();
+        let before_ledger = ledger.clone();
+
+        assert_eq!(
+            ledger.apply_to(&mut balance, 10),
+            Err(BalanceLedgerV3Error::BalanceTransition(
+                crate::entity::BalanceV2Error::InsufficientAvailableBalance,
+            ))
+        );
+        assert_eq!(balance, before_balance);
+        assert_eq!(ledger, before_ledger);
+    }
+
+    #[test]
+    fn applying_an_unrelated_balance_update_is_rejected_atomically() {
+        let balance = balance();
+        let mut ledger = BalanceLedgerV3::new(
+            9,
+            &balance,
+            LedgerOperation::CreditAvailable,
+            Decimal::ONE,
+            BalanceLedgerReason::FreezeForOrder { order_id: 99 },
+            10,
+        )
+        .unwrap();
+        let mut other = BalanceV2::new(7, 12, 42, 1_u64, 0_u64, 3, 5);
+        let before_ledger = ledger.clone();
+        let before_other = other.clone();
+
+        let before = other.clone();
+        other
+            .apply(crate::entity::BalanceV2Event::CreditAvailable {
+                amount: Decimal::ONE,
+                timestamp: 10,
+            })
+            .unwrap();
+        let update = common_entity::UpdatedEntityPair { before, after: other.clone() };
+
+        assert_eq!(
+            ledger.apply(BalanceLedgerV3Event::BalanceApplied {
+                balance_update: update,
+                applied_at: 10,
+            }),
+            Err(BalanceLedgerV3Error::BalanceIdentityMismatch)
+        );
+        assert_eq!(ledger, before_ledger);
+        assert_ne!(other, before_other);
     }
 }

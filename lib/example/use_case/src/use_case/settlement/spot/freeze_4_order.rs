@@ -37,7 +37,7 @@ pub enum FreezeSpotOrderV2Error {
     #[error(transparent)]
     FreezeRequirement(#[from] SpotAmountConversionError),
     #[error(transparent)]
-    Balance(#[from] BalanceV2Error),
+    BalanceV2(#[from] BalanceV2Error),
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -234,7 +234,7 @@ mod tests {
 
         assert_eq!(
             Freeze4SpotOrderV2UseCase.compute_state_changed(&command(ORDER_ID), &given),
-            Err(FreezeSpotOrderV2Error::Balance(BalanceV2Error::InsufficientAvailableBalance))
+            Err(FreezeSpotOrderV2Error::BalanceV2(BalanceV2Error::InsufficientAvailableBalance))
         );
     }
 }

@@ -1,7 +1,4 @@
-pub mod balance;
 pub mod balance_ledger_reason;
-pub mod balance_ledger_v2;
-
 pub mod balance_ledger_v3;
 pub mod balance_v2;
 
@@ -11,11 +8,7 @@ pub mod spot_account_v2;
 pub mod symbol;
 pub mod usdc;
 
-pub use balance::BalanceError;
 pub use balance_ledger_reason::BalanceLedgerReason;
-pub use balance_ledger_v2::{
-    BalanceLedgerOperation, BalanceLedgerV2 as BalanceLedgerEntry, BalanceLedgerV2,
-};
 pub use balance_ledger_v3::{
     BalanceLedgerV3, BalanceLedgerV3Error, BalanceLedgerV3Event, BalanceLedgerV3Output,
     BalanceLedgerV3State, LedgerOperation,

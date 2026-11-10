@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use example_core_use_case::{Balance, SpotOrderV7, SpotTrade};
+use example_core_use_case::{BalanceV2, SpotOrderV7, SpotTrade};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoreSnapshot {
-    pub balances: HashMap<String, Balance>,
+    pub balances: HashMap<String, BalanceV2>,
     pub orders: HashMap<u64, SpotOrderV7>,
     pub trades: HashMap<String, SpotTrade>,
     pub persisted_event_count: usize,

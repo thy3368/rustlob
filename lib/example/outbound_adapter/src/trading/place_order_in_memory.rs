@@ -2,7 +2,7 @@ use common_entity::{
     Entity, EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id,
 };
 use example_core_use_case::{
-    Balance, OrderSide, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
+    BalanceV2, OrderSide, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
     PlaceOnlySpotOrderV2Cmd, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
@@ -39,13 +39,14 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         let quote_asset_id = quote_asset_id_for(&market_rules.symbol).to_string();
         let mut settlement_balances = state.balances.values().cloned().collect::<Vec<_>>();
         if !state.balances.contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, &quote_asset_id)) {
-            settlement_balances.push(example_core_use_case::Balance::new(
+            settlement_balances.push(example_core_use_case::BalanceV2::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(quote_asset_id.as_str()),
                 0,
                 0,
                 1,
+                0,
             ));
         }
         if !state.balances.contains_key(&balance_key(&order_cmd.party_id, &base_asset_id))
@@ -165,25 +166,30 @@ pub(crate) fn replay_events(
                 .ok_or(PlaceOrderOutboundError::SequenceOverflow)?;
             continue;
         }
-        if event.is_updated()
-            && (event_u64_field(event, "asset_id").is_some()
-                || event_string_field(event, "asset_id").is_some())
-        {
+        if event.is_updated() && event_u64_field(event, "coin_idx").is_some() {
             let account_id = event_identity_field(event, "account_id")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-            let asset_id = event_identity_field(event, "asset_id")
+            let coin_idx = event_identity_field(event, "coin_idx")
                 .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
             let balance = state
                 .balances
-                .entry(balance_key(account_id, asset_id))
-                .or_insert_with(|| Balance::new(account_id, account_id, asset_id, 0, 0, 0));
-            if let Some(value) = event_u64_field(event, "available") {
-                balance.available = value;
-            }
-            if let Some(value) = event_u64_field(event, "frozen") {
-                balance.frozen = value;
-            }
-            balance.version = event.lsn;
+                .entry(balance_key(account_id, coin_idx))
+                .or_insert_with(|| BalanceV2::new(account_id, account_id, coin_idx, 0, 0, 0, 0));
+            let available = event_u64_field(event, "available")
+                .map(rust_decimal::Decimal::from)
+                .unwrap_or_else(|| balance.available());
+            let frozen = event_u64_field(event, "frozen")
+                .map(rust_decimal::Decimal::from)
+                .unwrap_or_else(|| balance.frozen());
+            *balance = BalanceV2::new(
+                balance.party_id(),
+                balance.account_id(),
+                balance.coin_idx(),
+                available,
+                frozen,
+                event.lsn,
+                balance.created_at(),
+            );
         }
     }
     Ok(())

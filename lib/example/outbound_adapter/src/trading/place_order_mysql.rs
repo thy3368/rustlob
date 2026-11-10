@@ -1,7 +1,7 @@
 use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    Balance, MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource,
+    BalanceV2, MarketRules, ORDER_ENTITY_TYPE, PendingTriggerSpotOrderSource,
     PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd, SpotOrderV2,
 };
 use mysql::prelude::Queryable;
@@ -142,7 +142,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
         let base_asset_id = base_asset_id_for(symbol.as_str()).to_string();
         let quote_asset_id = quote_asset_id_for(symbol.as_str()).to_string();
         let settlement_balances = vec![
-            Balance::new(
+            BalanceV2::new(
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id(base_asset_id.as_str()),
@@ -150,7 +150,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
                 frozen_base,
                 version,
             ),
-            Balance::new(
+            BalanceV2::new(
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id(quote_asset_id.as_str()),
@@ -158,7 +158,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
                 frozen_quote,
                 version,
             ),
-            Balance::new(
+            BalanceV2::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(quote_asset_id.as_str()),
@@ -339,13 +339,14 @@ impl StateSink<PlaceMatchSpotOrderV2UseCase> for MySqlPlaceOrderOutbound {
             }
 
             if event.is_updated() {
-                let asset_id = event_string_field_mysql(event, "asset_id")
+                let coin_idx = event_u64_field_mysql(event, "coin_idx")
                     .ok_or(PlaceOrderOutboundError::EventDecodeFailed)?;
-                let (available_column, frozen_column) = if asset_id == "BTC" {
-                    ("available_base", "frozen_base")
-                } else {
-                    ("available_quote", "frozen_quote")
-                };
+                let (available_column, frozen_column) =
+                    if coin_idx == common_entity::stable_string_entity_id("BTC") {
+                        ("available_base", "frozen_base")
+                    } else {
+                        ("available_quote", "frozen_quote")
+                    };
                 conn.exec_drop(
                     format!(
                         "UPDATE {ACCOUNT_TABLE}

@@ -125,7 +125,7 @@ pub enum UnFreezeSpotOrderV2Error {
     #[error(transparent)]
     SettlementAmounts(#[from] SpotTradeSettlementError),
     #[error(transparent)]
-    Balance(#[from] BalanceV2Error),
+    BalanceV2(#[from] BalanceV2Error),
 }
 
 #[derive(Debug, Clone, Copy, Default)]

@@ -16,21 +16,23 @@ fn main() {
 
 fn run() -> Result<(), example_inbound_adapter::CliInboundError> {
     let store = InMemoryStore::seed_balances(
-        example_core_use_case::Balance::new(
+        example_core_use_case::BalanceV2::new(
             common_entity::stable_string_entity_id("trader-1"),
             common_entity::stable_string_entity_id("trader-1"),
             common_entity::stable_string_entity_id("BTC"),
             0,
             0,
             2,
+            0,
         ),
-        example_core_use_case::Balance::new(
+        example_core_use_case::BalanceV2::new(
             common_entity::stable_string_entity_id("trader-1"),
             common_entity::stable_string_entity_id("trader-1"),
             common_entity::stable_string_entity_id("USDT"),
             1_000,
             0,
             2,
+            0,
         ),
         example_core_use_case::MarketRules { symbol: "BTCUSDT".to_string(), min_qty: 1 },
     )

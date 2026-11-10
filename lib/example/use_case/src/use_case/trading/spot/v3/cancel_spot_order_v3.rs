@@ -55,7 +55,7 @@ pub enum CancelSpotOrderV3Error {
     #[error(transparent)]
     ReleaseRequirement(#[from] SpotAmountConversionError),
     #[error(transparent)]
-    Balance(#[from] BalanceV2Error),
+    BalanceV2(#[from] BalanceV2Error),
     #[error(transparent)]
     Entity(#[from] EntityError),
 }

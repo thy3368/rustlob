@@ -5,7 +5,7 @@ use std::time::Duration;
 use common_entity::{EntityReplayableEvent, LogEntry, StateSink, StateSource};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, Balance, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
+    ActivatePendingSpotOrderV2Input, BalanceV2, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
     OrderSide, OrderTif, OrderType, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
     SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult,
     SpotBlockState, SpotBlockUseCase, SpotOrderHoldAsset, SpotOrderV2,
@@ -297,7 +297,7 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
         Ok(SpotBlockState {
             orders: vec![demo_sell_order(2, "seller", 100, 1)?, cancel_order],
             balances: vec![
-                Balance::new(
+                BalanceV2::new(
                     common_entity::stable_string_entity_id("buyer"),
                     common_entity::stable_string_entity_id("buyer"),
                     common_entity::stable_string_entity_id("USDT"),
@@ -305,7 +305,7 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
                     buyer_frozen,
                     1,
                 ),
-                Balance::new(
+                BalanceV2::new(
                     common_entity::stable_string_entity_id("buyer"),
                     common_entity::stable_string_entity_id("buyer"),
                     common_entity::stable_string_entity_id("BTC"),
@@ -313,7 +313,7 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
                     0,
                     1,
                 ),
-                Balance::new(
+                BalanceV2::new(
                     common_entity::stable_string_entity_id("seller"),
                     common_entity::stable_string_entity_id("seller"),
                     common_entity::stable_string_entity_id("BTC"),
@@ -321,7 +321,7 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
                     1,
                     1,
                 ),
-                Balance::new(
+                BalanceV2::new(
                     common_entity::stable_string_entity_id("seller"),
                     common_entity::stable_string_entity_id("seller"),
                     common_entity::stable_string_entity_id("USDT"),
@@ -329,7 +329,7 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
                     1,
                     1,
                 ),
-                Balance::new(
+                BalanceV2::new(
                     common_entity::stable_string_entity_id("fee"),
                     common_entity::stable_string_entity_id("fee"),
                     common_entity::stable_string_entity_id("USDT"),

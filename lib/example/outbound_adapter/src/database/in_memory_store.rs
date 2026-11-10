@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use common_entity::{Entity, EntityReplayableEvent};
-use example_core_use_case::{Balance, MarketRules, SpotOrderV7, SpotTrade};
+use example_core_use_case::{BalanceV2, MarketRules, SpotOrderV7, SpotTrade};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 use crate::StoreSnapshot;
@@ -10,7 +10,7 @@ use crate::shared::StoreError;
 
 #[derive(Debug, Clone)]
 pub(crate) struct StoreState {
-    pub(crate) balances: HashMap<String, Balance>,
+    pub(crate) balances: HashMap<String, BalanceV2>,
     pub(crate) market_rules_by_symbol: HashMap<String, MarketRules>,
     pub(crate) orders: HashMap<u64, SpotOrderV7>,
     pub(crate) trades: HashMap<String, SpotTrade>,
@@ -52,8 +52,8 @@ impl InMemoryStore {
     }
 
     pub fn seed_balances(
-        base_balance: Balance,
-        quote_balance: Balance,
+        base_balance: BalanceV2,
+        quote_balance: BalanceV2,
         market_rules: MarketRules,
     ) -> Result<Self, StoreError> {
         let store = Self::new(1);
@@ -63,15 +63,18 @@ impl InMemoryStore {
         Ok(store)
     }
 
-    pub fn seed_balance(&self, balance: Balance) -> Result<(), StoreError> {
+    pub fn seed_balance(&self, balance: BalanceV2) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state.balances.insert(balance_key(balance.account_id, balance.asset_id), balance);
+        state.balances.insert(balance_key(balance.account_id(), balance.coin_idx()), balance);
         Ok(())
     }
 
-    pub fn ensure_balance(&self, balance: Balance) -> Result<(), StoreError> {
+    pub fn ensure_balance(&self, balance: BalanceV2) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state.balances.entry(balance_key(balance.account_id, balance.asset_id)).or_insert(balance);
+        state
+            .balances
+            .entry(balance_key(balance.account_id(), balance.coin_idx()))
+            .or_insert(balance);
         Ok(())
     }
 

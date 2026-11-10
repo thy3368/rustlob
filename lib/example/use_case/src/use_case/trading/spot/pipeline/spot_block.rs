@@ -7,7 +7,7 @@ use example_core_entity::common::identifiers::OrderId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{Balance, OrderSide, OrderType, SpotOrderStatus, SpotOrderV2};
+use crate::entity::{BalanceV2, OrderSide, OrderType, SpotOrderStatus, SpotOrderV2};
 use crate::{
     ActivateMatchSpotOrderV2Changes, ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error,
     ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase, ActivateSpotOrderV2Changes,
@@ -38,7 +38,7 @@ pub enum SpotBlockCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotBlockState {
     pub orders: Vec<SpotOrderV2>,
-    pub balances: Vec<Balance>,
+    pub balances: Vec<BalanceV2>,
     pub base_asset_id: String,
     pub quote_asset_id: String,
     pub fee_account_id: String,
@@ -364,7 +364,7 @@ impl StateDiff for SpotBlockUseCase {
 #[derive(Debug, Clone)]
 struct WorkingSpotBlockState {
     orders: Vec<SpotOrderV2>,
-    balances: Vec<Balance>,
+    balances: Vec<BalanceV2>,
     order_by_entity_id: HashMap<u64, usize>,
     order_by_cloid: HashMap<String, usize>,
     balance_by_entity_id: HashMap<String, usize>,
@@ -377,7 +377,7 @@ impl WorkingSpotBlockState {
 
     fn try_from_parts(
         orders: Vec<SpotOrderV2>,
-        balances: Vec<Balance>,
+        balances: Vec<BalanceV2>,
     ) -> Result<Self, SpotBlockError> {
         let mut working = Self {
             orders,
@@ -466,7 +466,7 @@ impl WorkingSpotBlockState {
         self.rebuild_indexes()
     }
 
-    fn replace_balances(&mut self, balances: &[Balance]) -> Result<(), SpotBlockError> {
+    fn replace_balances(&mut self, balances: &[BalanceV2]) -> Result<(), SpotBlockError> {
         for balance in balances {
             let balance_id = balance.business_entity_id();
             let index = *self

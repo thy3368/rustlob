@@ -1,7 +1,7 @@
 use common_entity::{
     EntityReplayableEvent, LogEntry, StateDiff, StateSink, StateSource, stable_string_entity_id,
 };
-use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
+use example_core_use_case::{BalanceV2, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
 use mysql::prelude::Queryable;
 
 use crate::shared::{
@@ -44,16 +44,15 @@ impl StateSource<DepositQuoteUseCase> for MySqlDepositQuoteOutbound {
             account_row.ok_or(DepositQuoteOutboundError::BalanceNotFound)?;
 
         Ok(DepositQuoteState {
-            quote_balance: Balance {
-                party_id: stable_string_entity_id(account_id.as_str()),
-                account_id: stable_string_entity_id(account_id.as_str()),
-                asset_id: stable_string_entity_id("USDT"),
-                available: available_quote,
-                frozen: 0,
-                entry_notional: None,
-                identifier: None,
+            quote_balance: BalanceV2::new(
+                stable_string_entity_id(account_id.as_str()),
+                stable_string_entity_id(account_id.as_str()),
+                stable_string_entity_id("USDT"),
+                available_quote,
+                0,
                 version,
-            },
+                0,
+            ),
         })
     }
 }

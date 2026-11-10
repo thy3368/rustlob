@@ -90,7 +90,9 @@ mod tests {
         assert_eq!(changes.updated_order.before.status(), SpotOrderStatus::Open);
         assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
         assert!(!changes.updated_balances.is_empty());
-        assert!(changes.updated_balances.iter().all(|pair| pair.after.frozen < pair.before.frozen));
+        assert!(
+            changes.updated_balances.iter().all(|pair| pair.after.frozen() < pair.before.frozen())
+        );
         assert!(!changes.created_balance_ledger_entries.is_empty());
 
         assert!(!result.events.is_empty());

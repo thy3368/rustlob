@@ -1,7 +1,7 @@
 use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id};
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
-    Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,
+    BalanceV2, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,
     PendingTriggerSpotOrderSource, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
@@ -34,8 +34,8 @@ impl InMemoryPlaceOrderOutbound {
     }
 
     pub fn seeded(
-        base_balance: Balance,
-        quote_balance: Balance,
+        base_balance: BalanceV2,
+        quote_balance: BalanceV2,
         market_rules: MarketRules,
     ) -> Result<Self, crate::StoreError> {
         Ok(Self::from_store(InMemoryStore::seed_balances(
@@ -45,11 +45,11 @@ impl InMemoryPlaceOrderOutbound {
         )?))
     }
 
-    pub fn seed_balance(&self, balance: Balance) -> Result<(), crate::StoreError> {
+    pub fn seed_balance(&self, balance: BalanceV2) -> Result<(), crate::StoreError> {
         self.store.seed_balance(balance)
     }
 
-    pub fn ensure_balance(&self, balance: Balance) -> Result<(), crate::StoreError> {
+    pub fn ensure_balance(&self, balance: BalanceV2) -> Result<(), crate::StoreError> {
         self.store.ensure_balance(balance)
     }
 
@@ -119,13 +119,14 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound
             .balances
             .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
         {
-            settlement_balances.push(Balance::new(
+            settlement_balances.push(BalanceV2::new(
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(DEFAULT_FEE_ACCOUNT_ID),
                 stable_string_entity_id(quote_asset_id.as_str()),
                 0,
                 0,
                 1,
+                0,
             ));
         }
 
@@ -197,7 +198,7 @@ impl StateSink<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
             .balances
             .contains_key(&balance_key(DEFAULT_FEE_ACCOUNT_ID, quote_asset_id.as_str()))
         {
-            settlement_balances.push(Balance::new(
+            settlement_balances.push(BalanceV2::new(
                 DEFAULT_FEE_ACCOUNT_ID.to_string(),
                 quote_asset_id.clone(),
                 0,

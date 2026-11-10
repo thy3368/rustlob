@@ -5,15 +5,16 @@ use common_entity::{
     UseCase,
 };
 use example_core_entity::{SpotOrderHoldAsset, SpotTradeFeeRole};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;
 
 use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
-use crate::common_entity::account::balance_ledger_v2::{
-    BalanceLedgerEntryV2Error, BalanceLedgerOperation, BalanceLedgerV2,
+use crate::common_entity::account::balance_ledger_v3::{
+    BalanceLedgerV3, BalanceLedgerV3Error, LedgerOperation,
 };
-use crate::common_entity::{Balance, OrderSide, OrderTif, SpotOrderStatus, spot as spot_entity};
+use crate::common_entity::{BalanceV2, OrderSide, OrderTif, SpotOrderStatus, spot as spot_entity};
 use crate::entity::transfer::settlement_transfer_purpose::SettlementTransferPurpose;
 use crate::support::{concat2, concat3, concat4};
 use crate::{MatchSpotOrderV2Input, SpotTrade};
@@ -34,31 +35,31 @@ pub enum MatchSpotOrderV3AfterChanges {
     PartiallyFilled {
         taker_order_after: SpotOrderV2,
         maker_orders_after: Vec<SpotOrderV2>,
-        balances_after: Vec<Balance>,
+        balances_after: Vec<BalanceV2>,
         created_trades: Vec<SpotTrade>,
-        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     },
     /// 成交数量达到订单总数量，订单终止为 Filled。
     Filled {
         filled_taker_order_after: SpotOrderV2,
         maker_orders_after: Vec<SpotOrderV2>,
-        balances_after: Vec<Balance>,
+        balances_after: Vec<BalanceV2>,
         created_trades: Vec<SpotTrade>,
-        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     },
     /// IOC 部分成交后，剩余数量被取消并释放冻结。
     CanceledAfterPartialFill {
         canceled_taker_order_after: SpotOrderV2,
         maker_orders_after: Vec<SpotOrderV2>,
-        balances_after: Vec<Balance>,
+        balances_after: Vec<BalanceV2>,
         created_trades: Vec<SpotTrade>,
-        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     },
     /// ALO crossing maker 或 IOC 无流动性导致拒单。
     Rejected {
         rejected_taker_order_after: SpotOrderV2,
-        balances_after: Vec<Balance>,
-        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+        balances_after: Vec<BalanceV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     },
 }
 
@@ -84,28 +85,28 @@ pub enum MatchSpotOrderV3Changes {
     PartiallyFilled {
         updated_taker_order: UpdatedEntityPair<SpotOrderV2>,
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
-        updated_balances: Vec<UpdatedEntityPair<Balance>>,
+        updated_balances: Vec<UpdatedEntityPair<BalanceV2>>,
         created_trades: Vec<SpotTrade>,
-        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     },
     Filled {
         filled_taker_order: UpdatedEntityPair<SpotOrderV2>,
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
-        updated_balances: Vec<UpdatedEntityPair<Balance>>,
+        updated_balances: Vec<UpdatedEntityPair<BalanceV2>>,
         created_trades: Vec<SpotTrade>,
-        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     },
     CanceledAfterPartialFill {
         canceled_taker_order: UpdatedEntityPair<SpotOrderV2>,
         updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV2>>,
-        updated_balances: Vec<UpdatedEntityPair<Balance>>,
+        updated_balances: Vec<UpdatedEntityPair<BalanceV2>>,
         created_trades: Vec<SpotTrade>,
-        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     },
     Rejected {
         rejected_taker_order: UpdatedEntityPair<SpotOrderV2>,
-        updated_balances: Vec<UpdatedEntityPair<Balance>>,
-        created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+        updated_balances: Vec<UpdatedEntityPair<BalanceV2>>,
+        created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     },
 }
 
@@ -138,7 +139,7 @@ pub enum MatchSpotOrderV3Error {
     #[error(transparent)]
     OrderBehavior(#[from] SpotOrderV2BehaviorError),
     #[error(transparent)]
-    BalanceLedger(#[from] BalanceLedgerEntryV2Error),
+    BalanceLedger(#[from] BalanceLedgerV3Error),
 }
 
 impl MatchSpotOrderV3Changes {
@@ -317,9 +318,9 @@ impl ReplayableChanges for MatchSpotOrderV3Changes {
 fn replay_events_without_taker_order(
     _updated_taker_order: &UpdatedEntityPair<SpotOrderV2>,
     updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
-    updated_balances: &[UpdatedEntityPair<Balance>],
+    updated_balances: &[UpdatedEntityPair<BalanceV2>],
     created_trades: &[SpotTrade],
-    created_balance_ledger_entries: &[BalanceLedgerV2],
+    created_balance_ledger_entries: &[BalanceLedgerV3],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let events = replay_events(
         None,
@@ -334,9 +335,9 @@ fn replay_events_without_taker_order(
 fn replay_events(
     updated_taker_order: Option<&UpdatedEntityPair<SpotOrderV2>>,
     updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
-    updated_balances: &[UpdatedEntityPair<Balance>],
+    updated_balances: &[UpdatedEntityPair<BalanceV2>],
     created_trades: &[SpotTrade],
-    created_balance_ledger_entries: &[BalanceLedgerV2],
+    created_balance_ledger_entries: &[BalanceLedgerV3],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let event_capacity = 1_usize
         .saturating_add(created_trades.len())
@@ -367,7 +368,7 @@ pub(crate) fn replay_events_without_balances(
     updated_taker_order: Option<&UpdatedEntityPair<SpotOrderV2>>,
     updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
     created_trades: &[SpotTrade],
-    created_balance_ledger_entries: &[BalanceLedgerV2],
+    created_balance_ledger_entries: &[BalanceLedgerV3],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
     let mut events = Vec::with_capacity(
         updated_taker_order.is_some() as usize
@@ -392,7 +393,7 @@ pub(crate) fn replay_events_without_balances(
 
 struct MatchedTradeEffects {
     created_trades: Vec<SpotTrade>,
-    created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+    created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     total_taker_fill: u64,
 }
 
@@ -403,7 +404,8 @@ struct MatchedTradeSettlementContext<'a> {
     maker_fee_bps: u64,
     taker_fee_bps: u64,
     balance_book: &'a mut BalanceMap,
-    ledger_entries: &'a mut Vec<BalanceLedgerV2>,
+    ledger_entries: &'a mut Vec<BalanceLedgerV3>,
+    timestamp: u64,
 }
 
 fn settle_matched_trades(
@@ -420,6 +422,7 @@ fn settle_matched_trades(
         taker_fee_bps,
         balance_book,
         ledger_entries,
+        timestamp,
     } = context;
     let mut created_trades = Vec::new();
     let mut total_taker_fill = 0_u64;
@@ -463,6 +466,7 @@ fn settle_matched_trades(
                 fee_account_id,
                 balance_book,
                 ledger_entries,
+                timestamp,
             },
         )?;
         created_trades.push(trade);
@@ -536,6 +540,7 @@ fn compute_match_after(
                 state.taker_fee_bps,
                 &state.base_asset_id,
                 &state.quote_asset_id,
+                timestamp,
             )?;
             Ok(MatchSpotOrderV3AfterChanges::Rejected {
                 rejected_taker_order_after: taker_after,
@@ -552,7 +557,7 @@ fn finish_matched_after(
     mut taker_after: SpotOrderV2,
     mut maker_orders_after: Vec<SpotOrderV2>,
     mut balance_book: BalanceMap,
-    mut created_balance_ledger_entries: Vec<BalanceLedgerV2>,
+    mut created_balance_ledger_entries: Vec<BalanceLedgerV3>,
     trades: Vec<SpotTrade>,
     timestamp: u64,
     version: u64,
@@ -573,6 +578,7 @@ fn finish_matched_after(
             taker_fee_bps: state.taker_fee_bps,
             balance_book: &mut balance_book,
             ledger_entries: &mut created_balance_ledger_entries,
+            timestamp,
         },
     )?;
     created_balance_ledger_entries = settled_balance_ledger_entries;
@@ -587,6 +593,7 @@ fn finish_matched_after(
         state.taker_fee_bps,
         &state.base_asset_id,
         &state.quote_asset_id,
+        timestamp,
     )?;
 
     let balances_after = balance_book.into_balances();
@@ -626,11 +633,12 @@ fn finish_matched_after(
 fn release_remaining_for_terminal(
     order_after: &mut SpotOrderV2,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV3>,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
     base_asset_id: &str,
     quote_asset_id: &str,
+    timestamp: u64,
 ) -> Result<(), MatchSpotOrderV3Error> {
     let (principal_requirement, fee_requirement) =
         order_after.terminal_release_requirements(maker_fee_bps, taker_fee_bps);
@@ -645,6 +653,7 @@ fn release_remaining_for_terminal(
             requirement.amount,
             balance_book,
             ledger_entries,
+            timestamp,
         )?;
     }
     Ok(())
@@ -655,7 +664,8 @@ fn release_to_balance(
     asset_id: &str,
     amount: u64,
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV3>,
+    timestamp: u64,
 ) -> Result<(), MatchSpotOrderV3Error> {
     let reason = match order.side() {
         OrderSide::Buy => {
@@ -669,7 +679,7 @@ fn release_to_balance(
     let next_release_index =
         ledger_entries.len().checked_add(1).ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
     let entry = apply_balance_ledger_entry(
-        BalanceLedgerOperation::Unfreeze,
+        LedgerOperation::Unfreeze,
         common_entity::stable_string_entity_id(&concat4(
             "balance-ledger:",
             order.order_id().to_string().as_str(),
@@ -679,51 +689,45 @@ fn release_to_balance(
         balance,
         amount,
         reason,
+        timestamp,
     )?;
     ledger_entries.push(entry);
     Ok(())
 }
 
 fn apply_balance_ledger_entry(
-    operation: BalanceLedgerOperation,
+    operation: LedgerOperation,
     entry_id: u64,
-    balance: &mut Balance,
+    balance: &mut BalanceV2,
     amount: u64,
     reason: BalanceLedgerReason,
-) -> Result<BalanceLedgerV2, BalanceLedgerEntryV2Error> {
-    let account_id = balance.account_id;
-    let asset_id = balance.asset_id;
-    let party_id = balance.party_id;
-    let mut entry = match operation {
-        BalanceLedgerOperation::Unfreeze => {
-            BalanceLedgerV2::unfreeze(entry_id, account_id, asset_id, party_id, amount, reason)
-        }
-        BalanceLedgerOperation::CreditAvailable => BalanceLedgerV2::credit_available(
-            entry_id, account_id, asset_id, party_id, amount, reason,
-        ),
-        BalanceLedgerOperation::DebitFrozen => {
-            BalanceLedgerV2::debit_frozen(entry_id, account_id, asset_id, party_id, amount, reason)
-        }
-        BalanceLedgerOperation::Freeze | BalanceLedgerOperation::DebitAvailable => {
-            return Err(BalanceLedgerEntryV2Error::InvalidAmount);
-        }
-    }?;
-    entry.apply_to(balance)?;
+    timestamp: u64,
+) -> Result<BalanceLedgerV3, BalanceLedgerV3Error> {
+    let mut entry = BalanceLedgerV3::new(
+        entry_id,
+        balance,
+        operation,
+        Decimal::from(amount),
+        reason,
+        timestamp,
+    )?;
+    entry.apply_to(balance, timestamp)?;
     Ok(entry)
 }
 
 struct BalanceLedgerDraft {
-    operation: BalanceLedgerOperation,
+    operation: LedgerOperation,
     entry_id: u64,
     account_id: String,
     asset_id: String,
     amount: u64,
     reason: BalanceLedgerReason,
+    timestamp: u64,
 }
 
 fn push_applied_balance_ledger_entry(
     balance_book: &mut BalanceMap,
-    ledger_entries: &mut Vec<BalanceLedgerV2>,
+    ledger_entries: &mut Vec<BalanceLedgerV3>,
     draft: BalanceLedgerDraft,
 ) -> Result<(), MatchSpotOrderV3Error> {
     let balance = balance_book.get_mut(&draft.account_id, &draft.asset_id)?;
@@ -733,6 +737,7 @@ fn push_applied_balance_ledger_entry(
         balance,
         draft.amount,
         draft.reason,
+        draft.timestamp,
     )?;
     ledger_entries.push(entry);
     Ok(())
@@ -744,7 +749,8 @@ struct TradeBalanceEffectsContext<'a> {
     quote_asset_id: &'a str,
     fee_account_id: &'a str,
     balance_book: &'a mut BalanceMap,
-    ledger_entries: &'a mut Vec<BalanceLedgerV2>,
+    ledger_entries: &'a mut Vec<BalanceLedgerV3>,
+    timestamp: u64,
 }
 
 fn apply_trade_balance_effects(
@@ -777,7 +783,7 @@ fn apply_trade_balance_effects(
         context.balance_book,
         context.ledger_entries,
         BalanceLedgerDraft {
-            operation: BalanceLedgerOperation::CreditAvailable,
+            operation: LedgerOperation::CreditAvailable,
             entry_id: common_entity::stable_string_entity_id(&concat3(
                 "balance-ledger:",
                 context.settlement_id,
@@ -786,6 +792,7 @@ fn apply_trade_balance_effects(
             account_id: buyer_account_id.clone(),
             asset_id: context.base_asset_id.to_string(),
             amount: trade.size,
+            timestamp: context.timestamp,
             reason: buyer_receive_base_reason,
         },
     )?;
@@ -793,7 +800,7 @@ fn apply_trade_balance_effects(
         context.balance_book,
         context.ledger_entries,
         BalanceLedgerDraft {
-            operation: BalanceLedgerOperation::DebitFrozen,
+            operation: LedgerOperation::DebitFrozen,
             entry_id: common_entity::stable_string_entity_id(&concat3(
                 "balance-ledger:",
                 context.settlement_id,
@@ -802,6 +809,7 @@ fn apply_trade_balance_effects(
             account_id: buyer_account_id,
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
+            timestamp: context.timestamp,
             reason: buyer_release_quote_reason,
         },
     )?;
@@ -809,7 +817,7 @@ fn apply_trade_balance_effects(
         context.balance_book,
         context.ledger_entries,
         BalanceLedgerDraft {
-            operation: BalanceLedgerOperation::CreditAvailable,
+            operation: LedgerOperation::CreditAvailable,
             entry_id: common_entity::stable_string_entity_id(&concat3(
                 "balance-ledger:",
                 context.settlement_id,
@@ -818,6 +826,7 @@ fn apply_trade_balance_effects(
             account_id: seller_account_id.clone(),
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
+            timestamp: context.timestamp,
             reason: seller_receive_quote_reason,
         },
     )?;
@@ -825,7 +834,7 @@ fn apply_trade_balance_effects(
         context.balance_book,
         context.ledger_entries,
         BalanceLedgerDraft {
-            operation: BalanceLedgerOperation::DebitFrozen,
+            operation: LedgerOperation::DebitFrozen,
             entry_id: common_entity::stable_string_entity_id(&concat3(
                 "balance-ledger:",
                 context.settlement_id,
@@ -834,6 +843,7 @@ fn apply_trade_balance_effects(
             account_id: seller_account_id,
             asset_id: context.base_asset_id.to_string(),
             amount: trade.size,
+            timestamp: context.timestamp,
             reason: seller_release_base_reason,
         },
     )?;
@@ -848,7 +858,7 @@ fn apply_trade_balance_effects(
             context.balance_book,
             context.ledger_entries,
             BalanceLedgerDraft {
-                operation: BalanceLedgerOperation::DebitFrozen,
+                operation: LedgerOperation::DebitFrozen,
                 entry_id: common_entity::stable_string_entity_id(&concat3(
                     "balance-ledger:",
                     context.settlement_id,
@@ -857,6 +867,7 @@ fn apply_trade_balance_effects(
                 account_id: buyer_fee_account_id,
                 asset_id: context.quote_asset_id.to_string(),
                 amount: buyer_fee_amount,
+                timestamp: context.timestamp,
                 reason: reason.clone(),
             },
         )?;
@@ -864,7 +875,7 @@ fn apply_trade_balance_effects(
             context.balance_book,
             context.ledger_entries,
             BalanceLedgerDraft {
-                operation: BalanceLedgerOperation::CreditAvailable,
+                operation: LedgerOperation::CreditAvailable,
                 entry_id: common_entity::stable_string_entity_id(&concat3(
                     "balance-ledger:",
                     context.settlement_id,
@@ -873,6 +884,7 @@ fn apply_trade_balance_effects(
                 account_id: context.fee_account_id.to_string(),
                 asset_id: context.quote_asset_id.to_string(),
                 amount: buyer_fee_amount,
+                timestamp: context.timestamp,
                 reason,
             },
         )?;
@@ -888,7 +900,7 @@ fn apply_trade_balance_effects(
             context.balance_book,
             context.ledger_entries,
             BalanceLedgerDraft {
-                operation: BalanceLedgerOperation::DebitFrozen,
+                operation: LedgerOperation::DebitFrozen,
                 entry_id: common_entity::stable_string_entity_id(&concat3(
                     "balance-ledger:",
                     context.settlement_id,
@@ -897,6 +909,7 @@ fn apply_trade_balance_effects(
                 account_id: seller_fee_account_id,
                 asset_id: context.quote_asset_id.to_string(),
                 amount: seller_fee_amount,
+                timestamp: context.timestamp,
                 reason: reason.clone(),
             },
         )?;
@@ -904,7 +917,7 @@ fn apply_trade_balance_effects(
             context.balance_book,
             context.ledger_entries,
             BalanceLedgerDraft {
-                operation: BalanceLedgerOperation::CreditAvailable,
+                operation: LedgerOperation::CreditAvailable,
                 entry_id: common_entity::stable_string_entity_id(&concat3(
                     "balance-ledger:",
                     context.settlement_id,
@@ -913,6 +926,7 @@ fn apply_trade_balance_effects(
                 account_id: context.fee_account_id.to_string(),
                 asset_id: context.quote_asset_id.to_string(),
                 amount: seller_fee_amount,
+                timestamp: context.timestamp,
                 reason,
             },
         )?;
@@ -947,9 +961,9 @@ fn zip_pairs<T: PartialEq>(
 }
 
 pub(super) fn merge_balance_pairs(
-    before: Vec<Balance>,
-    after: Vec<Balance>,
-) -> Result<Vec<UpdatedEntityPair<Balance>>, MatchSpotOrderV3Error> {
+    before: Vec<BalanceV2>,
+    after: Vec<BalanceV2>,
+) -> Result<Vec<UpdatedEntityPair<BalanceV2>>, MatchSpotOrderV3Error> {
     let before_map = before
         .into_iter()
         .map(|balance| (balance.business_entity_id(), balance))
@@ -971,18 +985,19 @@ pub(super) fn merge_balance_pairs(
 }
 
 pub(super) fn balance_replay_events_from_ledger_entries(
-    updated_balances: &[UpdatedEntityPair<Balance>],
-    ledger_entries: &[BalanceLedgerV2],
+    updated_balances: &[UpdatedEntityPair<BalanceV2>],
+    ledger_entries: &[BalanceLedgerV3],
 ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-    let mut current_balances = HashMap::<String, Balance>::with_capacity(updated_balances.len());
+    let mut current_balances = HashMap::<String, BalanceV2>::with_capacity(updated_balances.len());
     for balance in updated_balances {
         let balance_id = balance.before.business_entity_id();
         current_balances.insert(balance_id, balance.before.clone());
     }
+    let mut events = Vec::with_capacity(ledger_entries.len());
 
     for entry in ledger_entries {
         let Some(before) = current_balances
-            .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
+            .get(&concat3(&entry.account_id.to_string(), ":", &entry.coin_idx.to_string()))
             .cloned()
         else {
             return Err(common_entity::EntityError::Custom(
@@ -1005,42 +1020,29 @@ pub(super) fn balance_replay_events_from_ledger_entries(
                 "balance ledger entry has not been applied".to_string(),
             ));
         };
-        if before.available != entry_before_available || before.frozen != entry_before_frozen {
+        if before.available() != entry_before_available || before.frozen() != entry_before_frozen {
             return Err(common_entity::EntityError::Custom(
                 "balance ledger entry breaks balance replay chain".to_string(),
             ));
         }
         let next_version = before
-            .version
+            .version()
             .checked_add(1)
-            .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
-        let after = Balance::new(
-            before.party_id,
-            before.account_id,
-            before.asset_id,
+            .ok_or(common_entity::EntityError::VersionOverflow { version: before.version() })?;
+        let after = BalanceV2::new(
+            before.party_id(),
+            before.account_id(),
+            before.coin_idx(),
             entry_after_available,
             entry_after_frozen,
             next_version,
+            before.created_at(),
         );
+        events.push(after.track_update_event_from(&before)?);
         current_balances.insert(
-            concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
+            concat3(&entry.account_id.to_string(), ":", &entry.coin_idx.to_string()).clone(),
             after,
         );
-    }
-
-    // 一个撮合事务可能对同一余额产生多条流水；余额实体只发布一次从事务前到事务后的更新，
-    // 避免同一逻辑时钟下生成重复的实体事件键。
-    let mut events = Vec::with_capacity(updated_balances.len());
-    for balance in updated_balances {
-        let balance_id = balance.before.business_entity_id();
-        let after = current_balances.get(&balance_id).ok_or_else(|| {
-            common_entity::EntityError::Custom("balance replay state missing".to_string())
-        })?;
-        let mut replay_after = after.clone();
-        replay_after.version = balance.before.version.checked_add(1).ok_or_else(|| {
-            common_entity::EntityError::Custom("balance replay version overflow".to_string())
-        })?;
-        events.push(replay_after.track_update_event_from(&balance.before)?);
     }
 
     for balance in updated_balances {
@@ -1058,7 +1060,7 @@ pub(super) fn balance_replay_events_from_ledger_entries(
 pub struct MatchSpotOrderV3State {
     pub taker_order: SpotOrderV2,
     pub maker_orders: Vec<SpotOrderV2>,
-    pub settlement_balances: Vec<Balance>,
+    pub settlement_balances: Vec<BalanceV2>,
     pub base_asset_id: String,
     pub quote_asset_id: String,
     pub fee_account_id: String,
@@ -1239,12 +1241,12 @@ fn build_matched_pairs(
     state: MatchSpotOrderV3State,
     taker_order_after: SpotOrderV2,
     maker_orders_after: Vec<SpotOrderV2>,
-    balances_after: Vec<Balance>,
+    balances_after: Vec<BalanceV2>,
 ) -> Result<
     (
         UpdatedEntityPair<SpotOrderV2>,
         Vec<UpdatedEntityPair<SpotOrderV2>>,
-        Vec<UpdatedEntityPair<Balance>>,
+        Vec<UpdatedEntityPair<BalanceV2>>,
     ),
     MatchSpotOrderV3Error,
 > {
@@ -1283,7 +1285,7 @@ impl MatchSpotOrderV3Changes {
         }
     }
 
-    pub fn updated_balances(&self) -> &[UpdatedEntityPair<Balance>] {
+    pub fn updated_balances(&self) -> &[UpdatedEntityPair<BalanceV2>] {
         match self {
             Self::Resting => &[],
             Self::PartiallyFilled { updated_balances, .. }
@@ -1302,7 +1304,7 @@ impl MatchSpotOrderV3Changes {
         }
     }
 
-    pub fn created_balance_ledger_entries(&self) -> &[BalanceLedgerV2] {
+    pub fn created_balance_ledger_entries(&self) -> &[BalanceLedgerV3] {
         match self {
             Self::Resting => &[],
             Self::PartiallyFilled { created_balance_ledger_entries, .. }
@@ -1316,11 +1318,11 @@ impl MatchSpotOrderV3Changes {
 }
 
 pub(super) struct BalanceMap {
-    balances: HashMap<String, Balance>,
+    balances: HashMap<String, BalanceV2>,
 }
 
 impl BalanceMap {
-    pub(super) fn new(balances: &[Balance]) -> Self {
+    pub(super) fn new(balances: &[BalanceV2]) -> Self {
         Self {
             balances: balances
                 .iter()
@@ -1334,7 +1336,7 @@ impl BalanceMap {
         &mut self,
         account_id: &str,
         asset_id: &str,
-    ) -> Result<&mut Balance, MatchSpotOrderV3Error> {
+    ) -> Result<&mut BalanceV2, MatchSpotOrderV3Error> {
         self.balances
             .get_mut(&concat3(
                 &common_entity::stable_string_entity_id(account_id).to_string(),
@@ -1344,7 +1346,7 @@ impl BalanceMap {
             .ok_or(MatchSpotOrderV3Error::BalanceNotFound)
     }
 
-    pub(super) fn into_balances(self) -> Vec<Balance> {
+    pub(super) fn into_balances(self) -> Vec<BalanceV2> {
         let mut balances = self.balances.into_values().collect::<Vec<_>>();
         balances.sort_by_key(|lhs| lhs.entity_id());
         balances

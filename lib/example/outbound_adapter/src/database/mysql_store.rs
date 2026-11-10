@@ -7,14 +7,13 @@ use example_core_use_case::entity::common::common_order::{
     CommonOrderExecution, CommonOrderTrigger, OrderBase,
 };
 use example_core_use_case::{
-    Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
+    BalanceV2, MarketRules, OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
     UserId,
 };
 use mysql::prelude::Queryable;
 use rust_decimal::Decimal;
 
-use crate::shared::{StoreSnapshot, balance_key};
-use crate::shared::{StoreError, named_params};
+use crate::shared::{StoreError, StoreSnapshot, balance_key, named_params};
 
 pub(crate) const ACCOUNT_TABLE: &str = "example_place_order_accounts";
 pub(crate) const MARKET_RULES_TABLE: &str = "example_place_order_market_rules";
@@ -187,24 +186,26 @@ impl MySqlStore {
         {
             balances.insert(
                 balance_key(account_numeric_id, stable_string_entity_id("BTC")),
-                Balance::new(
+                BalanceV2::new(
                     account_numeric_id,
                     account_numeric_id,
                     stable_string_entity_id("BTC"),
                     available_base,
                     frozen_base,
                     version,
+                    0,
                 ),
             );
             balances.insert(
                 balance_key(account_numeric_id, stable_string_entity_id("USDT")),
-                Balance::new(
+                BalanceV2::new(
                     account_numeric_id,
                     account_numeric_id,
                     stable_string_entity_id("USDT"),
                     available_quote,
                     frozen_quote,
                     version,
+                    0,
                 ),
             );
         }
