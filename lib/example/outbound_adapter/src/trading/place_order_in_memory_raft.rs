@@ -7,8 +7,7 @@ use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,
     PendingTriggerSpotOrderSource, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
-    PlaceOnlySpotOrderV2Cmd, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2,
-    SpotTrade,
+    PlaceOnlySpotOrderV2Cmd, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
 
@@ -754,7 +753,6 @@ fn decode_order_from_event(
     order.updated_at = updated_at;
     Ok(order)
 }
-
 
 fn decode_status_value(value: &str) -> Result<SpotOrderStatus, PlaceOrderOutboundError> {
     match value {

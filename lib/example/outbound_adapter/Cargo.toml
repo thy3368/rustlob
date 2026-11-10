@@ -18,6 +18,7 @@ thiserror = "1"
 openraft = { version = "0.9.21", default-features = false, features = ["serde", "storage-v2"] }
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
+rust_decimal = "1.41"
 
 [lints]
 workspace = true

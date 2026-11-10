@@ -2,8 +2,7 @@ use common_entity::{EntityReplayableEvent, StateSink, StateSource, stable_string
 use example_core_use_case::{
     ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2State, ActivateMatchSpotOrderV2UseCase,
     Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, OrderType,
-    PendingTriggerSpotOrderSource, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2,
-    SpotTrade,
+    PendingTriggerSpotOrderSource, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
 
@@ -50,8 +49,16 @@ impl InMemoryPlaceOrderOutbound {
         self.store.seed_balance(balance)
     }
 
+    pub fn ensure_balance(&self, balance: Balance) -> Result<(), crate::StoreError> {
+        self.store.ensure_balance(balance)
+    }
+
     pub fn seed_market_rules(&self, market_rules: MarketRules) -> Result<(), crate::StoreError> {
         self.store.seed_market_rules(market_rules)
+    }
+
+    pub fn ensure_market_rules(&self, market_rules: MarketRules) -> Result<(), crate::StoreError> {
+        self.store.ensure_market_rules(market_rules)
     }
 
     pub fn seed_order(&self, order: SpotOrderV2) -> Result<(), crate::StoreError> {
@@ -414,7 +421,6 @@ fn decode_status_reason(
     };
     Ok(Some(reason))
 }
-
 
 pub fn base_asset_id_for(symbol: &str) -> &str {
     match symbol {

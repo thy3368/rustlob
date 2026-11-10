@@ -1,6 +1,5 @@
 use common_entity::{
-    EntityReplayableEvent, LogEntry, StateDiff, StateSink, StateSource,
-    stable_string_entity_id,
+    EntityReplayableEvent, LogEntry, StateDiff, StateSink, StateSource, stable_string_entity_id,
 };
 use example_core_use_case::{Balance, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
 use mysql::prelude::Queryable;

@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use common_entity::EntityReplayableEvent;
-use example_core_use_case::{Balance, MarketRules, SpotOrderV2, SpotTrade};
+use common_entity::{Entity, EntityReplayableEvent};
+use example_core_use_case::{Balance, MarketRules, SpotOrderV7, SpotTrade};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
-use super::StoreSnapshot;
+use crate::StoreSnapshot;
 use crate::shared::StoreError;
 
 #[derive(Debug, Clone)]
 pub(crate) struct StoreState {
     pub(crate) balances: HashMap<String, Balance>,
     pub(crate) market_rules_by_symbol: HashMap<String, MarketRules>,
-    pub(crate) orders: HashMap<u64, SpotOrderV2>,
+    pub(crate) orders: HashMap<u64, SpotOrderV7>,
     pub(crate) trades: HashMap<String, SpotTrade>,
     pub(crate) persisted_events: Vec<EntityReplayableEvent>,
     pub(crate) published_events: Vec<EntityReplayableEvent>,
     pub(crate) next_order_sequence: u64,
-    pub(crate) lob: LocalLobBtree<SpotOrderV2>,
+    pub(crate) lob: LocalLobBtree<SpotOrderV7>,
 }
 
 impl StoreState {
@@ -69,14 +69,26 @@ impl InMemoryStore {
         Ok(())
     }
 
+    pub fn ensure_balance(&self, balance: Balance) -> Result<(), StoreError> {
+        let mut state = self.lock_state()?;
+        state.balances.entry(balance_key(balance.account_id, balance.asset_id)).or_insert(balance);
+        Ok(())
+    }
+
     pub fn seed_market_rules(&self, market_rules: MarketRules) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
         state.market_rules_by_symbol.insert(market_rules.symbol.clone(), market_rules);
         Ok(())
     }
 
-    pub fn seed_order(&self, order: SpotOrderV2) -> Result<(), StoreError> {
-        let order_id = order.order_id;
+    pub fn ensure_market_rules(&self, market_rules: MarketRules) -> Result<(), StoreError> {
+        let mut state = self.lock_state()?;
+        state.market_rules_by_symbol.entry(market_rules.symbol.clone()).or_insert(market_rules);
+        Ok(())
+    }
+
+    pub fn seed_order(&self, order: SpotOrderV7) -> Result<(), StoreError> {
+        let order_id = order.entity_id();
         let mut state = self.lock_state()?;
         state.lob.insert_order(order.clone()).map_err(|_| StoreError::StoreUnavailable)?;
         state.orders.insert(order_id, order);

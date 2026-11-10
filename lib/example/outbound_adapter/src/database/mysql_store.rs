@@ -1,10 +1,19 @@
 use std::collections::HashMap;
 
 use common_entity::stable_string_entity_id;
-use example_core_use_case::{Balance, MarketRules, OrderSide, OrderTif, OrderType, SpotOrderV2};
+use example_core_use_case::entity::account::coin::Coin;
+use example_core_use_case::entity::account::symbol::Symbol;
+use example_core_use_case::entity::common::common_order::{
+    CommonOrderExecution, CommonOrderTrigger, OrderBase,
+};
+use example_core_use_case::{
+    Balance, MarketRules, OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
+    UserId,
+};
 use mysql::prelude::Queryable;
+use rust_decimal::Decimal;
 
-use super::{StoreSnapshot, balance_key};
+use crate::shared::{StoreSnapshot, balance_key};
 use crate::shared::{StoreError, named_params};
 
 pub(crate) const ACCOUNT_TABLE: &str = "example_place_order_accounts";
@@ -221,22 +230,36 @@ impl MySqlStore {
                     price,
                 )| {
                     let side = decode_side_mysql(side.as_str())?;
-                    let order_type =
-                        decode_order_type_mysql(execution.as_str(), time_in_force.as_str())?;
+                    let (execution, tif) =
+                        decode_execution_mysql(execution.as_str(), time_in_force.as_str())?;
                     let order_id = order_id.parse().ok()?;
-                    let mut order = SpotOrderV2::new_pending_limit(
-                        order_id, asset, account_id, symbol, side, qty, price, order_type, None, 0,
-                        1,
-                    );
-                    order
-                        .activate_pending(example_core_use_case::ActivatePendingSpotOrderV2Input {
-                            base_asset_id: "BTC".to_string(),
-                            quote_asset_id: "USDT".to_string(),
-                            maker_fee_bps: 1,
-                            taker_fee_bps: 1,
-                            timestamp: 1,
-                        })
-                        .ok()?;
+                    if symbol != "BTCUSDT" && symbol != "BTC/USDT" {
+                        return None;
+                    }
+                    let order = SpotOrderV7::from_record(OrderBase {
+                        owner: UserId(stable_string_entity_id(&account_id)),
+                        order_id,
+                        symbol: Symbol::new(asset, Coin::BTC, Coin::USDT),
+                        side,
+                        limit_px: Decimal::from(price),
+                        size: Decimal::from(qty),
+                        orig_size: Decimal::from(qty),
+                        execution,
+                        tif,
+                        trigger: CommonOrderTrigger::None,
+                        trigger_px: None,
+                        group_relation: OrderGroupRelation::Standalone,
+                        is_position_tpsl: false,
+                        reduce_only: false,
+                        status: SpotOrderStatus::Open,
+                        buy_quote_fee_reserve_limit: Decimal::ZERO,
+                        buy_quote_fee_reserve_consumed: Decimal::ZERO,
+                        cloid: None,
+                        created_at: 0,
+                        updated_at: 1,
+                        version: 1,
+                    })
+                    .ok()?;
                     Some((order_id, order))
                 },
             )
@@ -283,17 +306,22 @@ fn decode_side_mysql(value: &str) -> Option<OrderSide> {
     }
 }
 
-fn decode_order_type_mysql(execution: &str, time_in_force: &str) -> Option<OrderType> {
+fn decode_execution_mysql(
+    execution: &str,
+    time_in_force: &str,
+) -> Option<(CommonOrderExecution, OrderTif)> {
     let tif = match time_in_force {
         "gtc" => OrderTif::Gtc,
         "ioc" => OrderTif::Ioc,
         "alo" => OrderTif::Alo,
         _ => return None,
     };
-    match execution {
-        "limit" | "market" => Some(OrderType::Limit { tif }),
+    let execution = match execution {
+        "limit" => Some(CommonOrderExecution::Limit),
+        "market" => Some(CommonOrderExecution::Market),
         _ => None,
-    }
+    }?;
+    Some((execution, tif))
 }
 
 pub(crate) fn event_string_field_mysql(

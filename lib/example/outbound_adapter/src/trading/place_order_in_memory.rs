@@ -1,5 +1,5 @@
 use common_entity::{
-    stable_string_entity_id, Entity, EntityReplayableEvent, StateSink, StateSource,
+    Entity, EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id,
 };
 use example_core_use_case::{
     Balance, OrderSide, PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
@@ -8,14 +8,14 @@ use example_core_use_case::{
 use lob_repo_v2::lob::AssetLobV2;
 
 use super::in_memory_place_order::{
-    apply_order_update_event, decode_created_trade, decode_order_from_event, DEFAULT_FEE_ACCOUNT_ID,
+    DEFAULT_FEE_ACCOUNT_ID, apply_order_update_event, decode_created_trade, decode_order_from_event,
 };
 pub use super::in_memory_place_order::{
-    base_asset_id_for, quote_asset_id_for, symbol_for_asset, InMemoryPlaceOrderOutbound,
+    InMemoryPlaceOrderOutbound, base_asset_id_for, quote_asset_id_for, symbol_for_asset,
 };
 use crate::shared::{
-    balance_key, event_identity_field, event_string_field, event_u64_field,
     PlaceOrderOutboundError, SpotOrderPlacedMessage, SpotPipelineBroker, SpotPipelineMessage,
+    balance_key, event_identity_field, event_string_field, event_u64_field,
 };
 
 impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
@@ -132,11 +132,10 @@ pub(crate) fn replay_events(
         }
         if event.entity_type == SpotOrderV2::entity_type() && event.is_created() {
             let order = decode_order_from_event(event)?;
-            state.orders.insert(order.order_id, order);
-            let lob_event = event.clone();
+            state.orders.insert(order.order_id, order.clone());
             state
                 .lob
-                .replay_events(&[lob_event])
+                .insert_order(order)
                 .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
             state.next_order_sequence = state
                 .next_order_sequence
@@ -151,10 +150,14 @@ pub(crate) fn replay_events(
         }
         if event.entity_type == SpotOrderV2::entity_type() && event.is_updated() {
             apply_order_update_event(&mut state.orders, event)?;
-            let lob_event = event.clone();
+            let order = state
+                .orders
+                .get(&event.entity_id)
+                .cloned()
+                .ok_or(PlaceOrderOutboundError::OrderNotFound)?;
             state
                 .lob
-                .replay_events(&[lob_event])
+                .insert_order(order)
                 .map_err(|_| PlaceOrderOutboundError::EventDecodeFailed)?;
             state.next_order_sequence = state
                 .next_order_sequence
