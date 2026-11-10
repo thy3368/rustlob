@@ -39,7 +39,7 @@ pub fn query_contract_cases() -> Vec<QueryContractCase> {
         QueryContractCase {
             query_type: "openOrders",
             request: json!({ "type": "openOrders", "user": addr1(), "dex": "main" }),
-            expected_response: serde_json::to_value(queries::open_orders::stub_response()).unwrap(),
+            expected_response: json!([]),
         },
         QueryContractCase {
             query_type: "frontendOpenOrders",
