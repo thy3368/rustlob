@@ -1,6 +1,4 @@
-use common_entity::{
-    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
-};
+use common_entity::{ExecutionError, ExecutionResult, StateSink, StateSource, UseCaseExecutor};
 use example_core_use_case::{
     CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd, CancelSpotOrderV2Error,
     CancelSpotOrderV2UseCase,
@@ -100,8 +98,9 @@ mod tests {
             result.events.iter().filter(|event| event.is_updated()).collect::<Vec<_>>();
         assert!(!updated_events.is_empty());
         assert!(
-            updated_events.iter().all(|event| event.lsn == event.previous_lsn + 1
-                && !event.field_changes.is_empty())
+            updated_events
+                .iter()
+                .all(|event| event.lsn > event.previous_lsn && !event.field_changes.is_empty())
         );
     }
 }

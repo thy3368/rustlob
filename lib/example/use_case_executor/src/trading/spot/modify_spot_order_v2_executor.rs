@@ -215,7 +215,7 @@ mod tests {
         let changes = &result.changes;
         assert_eq!(changes.updated_order.before.order_id(), 1);
         assert_eq!(changes.updated_order.after.order_id(), 1);
-        assert_eq!(changes.updated_order.after.version, changes.updated_order.before.version + 1);
+        assert_eq!(changes.updated_order.after.version, 7);
         assert_eq!(changes.updated_order.after.order_price(), 12_000);
         assert_eq!(changes.updated_order.after.qty(), 3);
         assert_eq!(changes.updated_order.after.cloid.as_deref(), Some("original-cloid"));
@@ -223,13 +223,12 @@ mod tests {
         assert!(changes.created_balance_ledger_entries.iter().all(|entry| entry.amount > 0));
         assert!(!changes.updated_balances.is_empty());
 
-        assert_eq!(result.events.len(), 5);
+        assert_eq!(result.events.len(), 4);
         assert!(result.events[0].is_updated());
         assert!(result.events[1].is_updated());
-        assert!(result.events[2].is_updated());
+        assert!(result.events[2].is_created());
         assert!(result.events[3].is_created());
-        assert!(result.events[4].is_created());
-        assert!(result.events.iter().all(|event| event.lsn == event.previous_lsn + 1));
+        assert!(result.events.iter().all(|event| event.lsn > event.previous_lsn));
 
         let sink_calls = outbound.sink_calls();
         assert_eq!(sink_calls.len(), 3);

@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, ExecutionResult, LogEntry, ReplayableChanges,
-    UseCaseExecutor, StateDiff, StateSink, StateSource,
+    EntityReplayableEvent, ExecutionError, ExecutionResult, LogEntry, ReplayableChanges, StateDiff,
+    StateSink, StateSource, UseCaseExecutor,
 };
 use example_core_use_case::{
     PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2Error,

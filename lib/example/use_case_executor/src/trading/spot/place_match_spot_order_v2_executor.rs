@@ -1,6 +1,4 @@
-use common_entity::{
-    ExecutionError, ExecutionResult, UseCaseExecutor, StateSink, StateSource,
-};
+use common_entity::{ExecutionError, ExecutionResult, StateSink, StateSource, UseCaseExecutor};
 use example_core_use_case::{
     PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase,
     PlaceOnlySpotOrderV2Cmd,

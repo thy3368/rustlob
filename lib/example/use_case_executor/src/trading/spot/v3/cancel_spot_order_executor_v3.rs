@@ -32,13 +32,12 @@ mod tests {
     use std::sync::Mutex;
 
     use common_entity::{EntityReplayableEvent, LogEntrySequencer, StateSink, StateSource};
-    use example_core_entity::BalanceV2;
+    use example_core_entity::{BalanceV2, OrderGroupRelation};
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::identifiers::OrderId;
     use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
     use example_core_entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
-    use example_core_entity::spot::spot_order_v2::OrderGroupRelation;
     use example_core_entity::spot::spot_order_v7::SpotOrderV7;
     use example_core_use_case::{
         CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
