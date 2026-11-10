@@ -1,10 +1,10 @@
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{App, HttpResponse, HttpServer, Responder, web};
 use example_inbound_adapter::{
-    build_deposit_actix_scope, build_orders_actix_scope, build_withdraw_actix_scope,
     DepositQuoteOutboundAccess, PlaceOrderOutboundAccess, WithdrawQuoteOutboundAccess,
+    build_deposit_actix_scope, build_orders_actix_scope, build_withdraw_actix_scope,
 };
 use example_outbound_adapter::{
     DepositQuoteOutboundError, InMemoryDepositQuoteOutbound, InMemoryPlaceOrderOutbound,

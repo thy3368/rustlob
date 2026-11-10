@@ -1,22 +1,22 @@
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use axum::Json;
 use example_core_use_case::Balance;
 use example_inbound_adapter::{
-    build_deposit_http_router, build_orders_http_router, build_withdraw_http_router,
     DepositQuoteOutboundAccess, PlaceOrderOutboundAccess, WithdrawQuoteOutboundAccess,
+    build_deposit_http_router, build_orders_http_router, build_withdraw_http_router,
 };
 use example_outbound_adapter::{
     DepositQuoteOutboundError, InMemoryDepositQuoteOutbound, InMemoryPlaceOrderOutbound,
     InMemoryStore, InMemoryWithdrawQuoteOutbound, PlaceOrderOutboundError, StoreError,
     StoreSnapshot, WithdrawQuoteOutboundError,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[tokio::main]
 async fn main() {

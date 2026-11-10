@@ -5,7 +5,7 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, LogEntry, UseCaseExecutor, StateSink, StateSource,
+    EntityReplayableEvent, ExecutionError, LogEntry, StateSink, StateSource, UseCaseExecutor,
 };
 use example_core_use_case::{
     PlaceMatchSpotOrderV2Error, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,

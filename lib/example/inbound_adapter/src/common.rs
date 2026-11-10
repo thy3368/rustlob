@@ -3,8 +3,8 @@ use anyhow::Error as AnyError;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, LogEntry, UseCaseExecutor, StateDiff,
-    StateSink, StateSource,
+    EntityReplayableEvent, ExecutionError, LogEntry, StateDiff, StateSink, StateSource,
+    UseCaseExecutor,
 };
 use example_core_use_case::{
     DepositQuoteCmd, DepositQuoteError, DepositQuoteUseCase, WithdrawQuoteCmd, WithdrawQuoteError,
