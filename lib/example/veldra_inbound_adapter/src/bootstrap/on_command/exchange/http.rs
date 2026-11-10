@@ -6,7 +6,7 @@ use crate::bootstrap::on_command::exchange::error::ExchangeHttpError;
 use crate::common::parse::parse_json_request;
 
 pub fn build_exchange_scope() -> Scope {
-    web::scope("").route("/exchange", web::post().to(post_exchange))
+    web::scope("/exchange").route("", web::post().to(post_exchange))
 }
 
 async fn post_exchange(body: web::Bytes) -> Result<HttpResponse, ExchangeHttpError> {
@@ -79,10 +79,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], "ok");
         assert_eq!(body["response"]["type"], "order");
-        assert_eq!(
-            body["response"]["data"]["statuses"][0]["error"],
-            "load_state failed: spot order v2 place state is not wired for default HTTP path"
-        );
+        assert_eq!(body["response"]["data"]["statuses"][0]["resting"]["oid"], 1710000000000u64);
     }
 
     #[actix_web::test]
@@ -128,7 +125,7 @@ mod tests {
         assert_eq!(body["response"]["type"], "cancel");
         assert_eq!(
             body["response"]["data"]["statuses"][0]["error"],
-            "load_state failed: spot order v2 cancel state is not wired for default HTTP path"
+            "load_state failed: spot order not found"
         );
     }
 
@@ -179,6 +176,7 @@ mod tests {
                 "time": 1710000006000u64
             },
             "nonce": 1710000000000u64,
+            "vaultAddress": "0x4444444444444444444444444444444444444444",
             "signature": {
                 "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
                 "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
@@ -188,6 +186,106 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body, json!({ "status": "ok", "response": { "type": "default" } }));
+    }
+
+    // competitor: hyperliquid; feature: order -> cancel; state: GREEN; target: adapter.inbound
+    #[actix_web::test]
+    async fn resting_order_can_be_cancelled_through_the_default_http_path() {
+        let vault_address = "0x5555555555555555555555555555555555555555";
+        let (place_status, place_body) = post_exchange_status_and_json(json!({
+            "action": {
+                "type": "order",
+                "orders": [{
+                    "a": 10000,
+                    "b": true,
+                    "p": "100",
+                    "s": "1",
+                    "r": false,
+                    "t": { "limit": { "tif": "Gtc" } }
+                }],
+                "grouping": "na"
+            },
+            "nonce": 1710000010000u64,
+            "vaultAddress": vault_address,
+            "signature": {
+                "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "v": 27
+            }
+        }))
+        .await;
+
+        assert_eq!(place_status, StatusCode::OK);
+        let oid = place_body["response"]["data"]["statuses"][0]["resting"]["oid"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("合法 GTC 订单应返回 resting oid: {place_body}"));
+
+        let (cancel_status, cancel_body) = post_exchange_status_and_json(json!({
+            "action": {
+                "type": "cancel",
+                "cancels": [{ "a": 10000, "o": oid }]
+            },
+            "nonce": 1710000010001u64,
+            "vaultAddress": vault_address,
+            "signature": {
+                "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "v": 27
+            }
+        }))
+        .await;
+
+        assert_eq!(cancel_status, StatusCode::OK);
+        assert_eq!(cancel_body["response"]["data"]["statuses"][0], json!("success"));
+    }
+
+    // competitor: hyperliquid; feature: order -> cancelByCloid; state: GREEN; target: adapter.inbound
+    #[actix_web::test]
+    async fn resting_order_can_be_cancelled_by_cloid_through_the_default_http_path() {
+        let vault_address = "0x6666666666666666666666666666666666666666";
+        let cloid = "0xabcdefabcdefabcdefabcdefabcdefab";
+        let (place_status, place_body) = post_exchange_status_and_json(json!({
+            "action": {
+                "type": "order",
+                "orders": [{
+                    "a": 10000,
+                    "b": true,
+                    "p": "101",
+                    "s": "1",
+                    "r": false,
+                    "t": { "limit": { "tif": "Gtc" } },
+                    "c": cloid
+                }],
+                "grouping": "na"
+            },
+            "nonce": 1710000020000u64,
+            "vaultAddress": vault_address,
+            "signature": {
+                "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "v": 27
+            }
+        }))
+        .await;
+        assert_eq!(place_status, StatusCode::OK);
+        assert!(place_body["response"]["data"]["statuses"][0]["resting"]["oid"].is_u64());
+
+        let (cancel_status, cancel_body) = post_exchange_status_and_json(json!({
+            "action": {
+                "type": "cancelByCloid",
+                "cancels": [{ "asset": 10000, "cloid": cloid }]
+            },
+            "nonce": 1710000020001u64,
+            "vaultAddress": vault_address,
+            "signature": {
+                "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "v": 27
+            }
+        }))
+        .await;
+        assert_eq!(cancel_status, StatusCode::OK);
+        assert_eq!(cancel_body["response"]["data"]["statuses"][0], json!("success"));
     }
 
     #[actix_web::test]
@@ -212,7 +310,69 @@ mod tests {
         assert_eq!(body["response"]["type"], "cancel");
         assert_eq!(
             body["response"]["data"]["statuses"][0]["error"],
-            "load_state failed: spot order v2 cancel state is not wired for default HTTP path"
+            "load_state failed: spot order not found"
+        );
+    }
+
+    // competitor: hyperliquid; feature: order -> modify; state: GREEN; target: adapter.inbound
+    #[actix_web::test]
+    async fn resting_order_can_be_modified_through_the_default_http_path() {
+        let vault_address = "0x7777777777777777777777777777777777777777";
+        let (place_status, place_body) = post_exchange_status_and_json(json!({
+            "action": {
+                "type": "order",
+                "orders": [{
+                    "a": 10000,
+                    "b": true,
+                    "p": "100",
+                    "s": "2",
+                    "r": false,
+                    "t": { "limit": { "tif": "Gtc" } }
+                }],
+                "grouping": "na"
+            },
+            "nonce": 1710000030000u64,
+            "vaultAddress": vault_address,
+            "signature": {
+                "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "v": 27
+            }
+        }))
+        .await;
+        assert_eq!(place_status, StatusCode::OK);
+        let oid = place_body["response"]["data"]["statuses"][0]["resting"]["oid"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("合法 GTC 订单应返回 resting oid: {place_body}"));
+
+        let (modify_status, modify_body) = post_exchange_status_and_json(json!({
+            "action": {
+                "type": "modify",
+                "oid": oid,
+                "order": {
+                    "a": 10000,
+                    "b": true,
+                    "p": "110",
+                    "s": "3",
+                    "r": false,
+                    "t": { "limit": { "tif": "Gtc" } }
+                }
+            },
+            "nonce": 1710000030001u64,
+            "vaultAddress": vault_address,
+            "signature": {
+                "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "v": 27
+            }
+        }))
+        .await;
+        assert_eq!(modify_status, StatusCode::OK);
+        assert_eq!(
+            modify_body["response"]["data"]["statuses"][0]["resting"]["oid"]
+                .as_u64()
+                .unwrap_or_else(|| panic!("合法改单应返回 resting oid: {modify_body}")),
+            oid
         );
     }
 
@@ -243,7 +403,7 @@ mod tests {
         assert_eq!(body["response"]["type"], "order");
         assert_eq!(
             body["response"]["data"]["statuses"][0]["error"],
-            "load_state failed: spot order v2 modify state is not wired for default HTTP path"
+            "load_state failed: spot order not found"
         );
     }
 
@@ -289,11 +449,11 @@ mod tests {
         assert_eq!(body["response"]["type"], "order");
         assert_eq!(
             body["response"]["data"]["statuses"][0]["error"],
-            "load_state failed: spot order v2 modify state is not wired for default HTTP path"
+            "load_state failed: spot order not found"
         );
         assert_eq!(
             body["response"]["data"]["statuses"][1]["error"],
-            "load_state failed: spot order v2 modify state is not wired for default HTTP path"
+            "load_state failed: spot order not found"
         );
     }
 

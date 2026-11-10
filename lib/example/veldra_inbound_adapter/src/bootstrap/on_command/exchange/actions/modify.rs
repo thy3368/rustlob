@@ -1,11 +1,12 @@
-use common_entity::{ExecutionCommandSpec, ExecutionError, LogEntry};
+use common_entity::{ExecutionError, LogEntry, Request2Command};
+use example_core_use_case::common::identifiers::OrderId;
 use example_core_use_case::{
     ModifySpotOrderV2Cmd, ModifySpotOrderV2OrderType, ModifySpotOrderV2UseCase,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use example_core_use_case::common::identifiers::OrderId;
 pub use use_case_executor::trading::spot::modify_spot_order_v2_executor::execute_modify_spot_order_v2;
+use use_case_executor::trading::spot::modify_spot_order_v2_executor::execute_modify_spot_order_v2_with_outbound;
 
 use crate::bootstrap::on_command::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
 use crate::bootstrap::on_command::exchange::actions::order::reply::{
@@ -137,7 +138,7 @@ impl ModifySpotOrderV2Request {
 
 pub struct SpotOrderV2ModifyExecutionSpec;
 
-impl ExecutionCommandSpec<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecutionSpec {
+impl Request2Command<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecutionSpec {
     type Request = ModifySpotOrderV2Request;
 
     fn command(
@@ -297,7 +298,10 @@ async fn execute(request: RequestWire) -> Result<reply::ModifyResponseWire, Exch
         .map_err(ExchangeHttpError::contract)?;
     let nonce = request.common.nonce;
     let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request, nonce, nonce, 0, nonce);
-    let status = match execute_modify_spot_order_v2(&command) {
+    let status = match execute_modify_spot_order_v2_with_outbound(
+        &command,
+        crate::bootstrap::runtime::spot_order_outbound(),
+    ) {
         Ok(result) => OrderStatusWire::Resting {
             resting: RestingOrderStatusWire { oid: result.changes.updated_order.after.order_id() },
         },
@@ -452,7 +456,7 @@ mod tests {
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,
-            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order v2 modify state is not wired for default HTTP path\"\n        }\n      ]\n    }\n  }\n}"
+            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order not found\"\n        }\n      ]\n    }\n  }\n}"
         );
     }
 
