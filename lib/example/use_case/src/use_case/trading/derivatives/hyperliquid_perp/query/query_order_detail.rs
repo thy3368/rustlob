@@ -1,23 +1,5 @@
+use common_entity::{DomainReadModel, QueryUseCase};
 use thiserror::Error;
-
-trait LocalQueryUseCase {
-    type Query;
-    type ReadModel;
-    type View;
-    type Error;
-    fn role(&self) -> &'static str;
-    fn pre_check_query(&self, query: &Self::Query) -> Result<(), Self::Error>;
-    fn validate_against_read_model(
-        &self,
-        query: &Self::Query,
-        read_model: &Self::ReadModel,
-    ) -> Result<(), Self::Error>;
-    fn compute_view(
-        &self,
-        query: &Self::Query,
-        read_model: Self::ReadModel,
-    ) -> Result<Self::View, Self::Error>;
-}
 
 use crate::{
     HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
@@ -35,14 +17,12 @@ pub struct QueryHyperliquidPerpOrderDetail {
 
 /// 查询单张 Hyperliquid perp 委托单详情时需要的已加载读模型。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct QueryHyperliquidPerpOrderDetailReadModel {
-    /// 订单主键是否存在。
-    pub order_exists: bool,
-    /// 该订单是否属于当前查询账户。
-    pub owned_by_party: bool,
-    /// 已加载的订单本体；不存在时允许为空。
-    pub order: Option<HyperliquidPerpOrder>,
+pub enum QueryHyperliquidPerpOrderDetailReadModel {
+    NotFound,
+    Found(HyperliquidPerpOrder),
 }
+
+impl DomainReadModel for QueryHyperliquidPerpOrderDetailReadModel {}
 
 /// Hyperliquid perp 委托单详情查询的业务返回视图。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,18 +67,14 @@ pub enum QueryHyperliquidPerpOrderDetailError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct QueryHyperliquidPerpOrderDetailUseCase;
 
-impl LocalQueryUseCase for QueryHyperliquidPerpOrderDetailUseCase {
-    type Query = QueryHyperliquidPerpOrderDetail;
-    type ReadModel = QueryHyperliquidPerpOrderDetailReadModel;
-    type View = HyperliquidPerpOrderDetailView;
+impl QueryUseCase<QueryHyperliquidPerpOrderDetail, QueryHyperliquidPerpOrderDetailReadModel>
+    for QueryHyperliquidPerpOrderDetailUseCase
+{
+    type Output = HyperliquidPerpOrderDetailView;
     type Error = QueryHyperliquidPerpOrderDetailError;
 
-    fn role(&self) -> &'static str {
-        "Trader"
-    }
-
-    fn pre_check_query(&self, query: &Self::Query) -> Result<(), Self::Error> {
-        if query.party_id.is_empty() {
+    fn validate_query(&self, query: &QueryHyperliquidPerpOrderDetail) -> Result<(), Self::Error> {
+        if query.party_id.trim().is_empty() {
             return Err(QueryHyperliquidPerpOrderDetailError::InvalidPartyId);
         }
         if query.order_id == 0 {
@@ -107,40 +83,21 @@ impl LocalQueryUseCase for QueryHyperliquidPerpOrderDetailUseCase {
         Ok(())
     }
 
-    fn validate_against_read_model(
+    fn compute_query(
         &self,
-        query: &Self::Query,
-        read_model: &Self::ReadModel,
-    ) -> Result<(), Self::Error> {
-        if !read_model.order_exists {
+        query: &QueryHyperliquidPerpOrderDetail,
+        read_model: QueryHyperliquidPerpOrderDetailReadModel,
+    ) -> Result<Self::Output, Self::Error> {
+        let QueryHyperliquidPerpOrderDetailReadModel::Found(order) = read_model else {
             return Err(QueryHyperliquidPerpOrderDetailError::OrderNotFound);
-        }
-        if !read_model.owned_by_party {
+        };
+
+        if !order.belongs_to_account(query.party_id.as_str()) {
             return Err(QueryHyperliquidPerpOrderDetailError::NotOrderOwner);
         }
-
-        let Some(order) = read_model.order.as_ref() else {
-            return Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState);
-        };
-
-        if order.order_id != query.order_id
-            || !order.belongs_to_account(query.party_id.as_str())
-            || !order.has_consistent_execution_state()
-        {
+        if order.order_id != query.order_id || !order.has_consistent_execution_state() {
             return Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState);
         }
-
-        Ok(())
-    }
-
-    fn compute_view(
-        &self,
-        _query: &Self::Query,
-        read_model: Self::ReadModel,
-    ) -> Result<Self::View, Self::Error> {
-        let Some(order) = read_model.order else {
-            return Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState);
-        };
 
         Ok(HyperliquidPerpOrderDetailView {
             order_id: order.order_id,
@@ -162,11 +119,33 @@ impl LocalQueryUseCase for QueryHyperliquidPerpOrderDetailUseCase {
 }
 
 #[cfg(test)]
-mod tests {
+mod compute_query_tests {
+    use std::convert::Infallible;
+
+    use common_entity::{QueryExecutionError, QueryExecutor, ReadModelSource};
+
     use super::*;
 
+    struct NotFoundSource;
+
+    impl ReadModelSource<QueryHyperliquidPerpOrderDetail> for NotFoundSource {
+        type ReadModel = QueryHyperliquidPerpOrderDetailReadModel;
+        type Error = Infallible;
+
+        fn load_read_model(
+            &self,
+            _query: &QueryHyperliquidPerpOrderDetail,
+        ) -> Result<Self::ReadModel, Self::Error> {
+            Ok(QueryHyperliquidPerpOrderDetailReadModel::NotFound)
+        }
+    }
+
+    fn query() -> QueryHyperliquidPerpOrderDetail {
+        QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 }
+    }
+
     fn sample_order() -> HyperliquidPerpOrder {
-        let mut order = HyperliquidPerpOrder::new(
+        HyperliquidPerpOrder::new(
             1,
             Some(42),
             7,
@@ -177,125 +156,75 @@ mod tests {
             HyperliquidPerpOrderTimeInForce::Gtc,
             5,
             true,
-            Some("client-1".to_string()),
+            None,
         )
-        .with_execution_state(HyperliquidPerpOrderStatus::PartiallyFilled, 2);
-        order.version = 3;
-        order
     }
 
     #[test]
-    fn role_returns_trader() {
-        assert_eq!(QueryHyperliquidPerpOrderDetailUseCase.role(), "Trader");
-    }
-
-    #[test]
-    fn pre_check_rejects_blank_party_id() {
-        let result = QueryHyperliquidPerpOrderDetailUseCase.pre_check_query(
-            &QueryHyperliquidPerpOrderDetail { party_id: String::with_capacity(0), order_id: 1 },
+    fn validate_query_rejects_empty_or_whitespace_party_and_zero_order_id() {
+        for party_id in ["", "   ", "\t\n"] {
+            assert_eq!(
+                QueryHyperliquidPerpOrderDetailUseCase.validate_query(
+                    &QueryHyperliquidPerpOrderDetail {
+                        party_id: party_id.to_string(),
+                        order_id: 1
+                    },
+                ),
+                Err(QueryHyperliquidPerpOrderDetailError::InvalidPartyId)
+            );
+        }
+        assert_eq!(
+            QueryHyperliquidPerpOrderDetailUseCase.validate_query(
+                &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 0 },
+            ),
+            Err(QueryHyperliquidPerpOrderDetailError::InvalidOrderId)
         );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InvalidPartyId));
+        assert_eq!(QueryHyperliquidPerpOrderDetailUseCase.validate_query(&query()), Ok(()));
     }
 
     #[test]
-    fn pre_check_rejects_blank_order_id() {
-        let result = QueryHyperliquidPerpOrderDetailUseCase.pre_check_query(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 0 },
+    fn not_found_is_a_business_rejection() {
+        assert_eq!(
+            QueryExecutor.execute(
+                &query(),
+                &NotFoundSource,
+                &QueryHyperliquidPerpOrderDetailUseCase,
+            ),
+            Err(QueryExecutionError::Business(QueryHyperliquidPerpOrderDetailError::OrderNotFound))
         );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InvalidOrderId));
     }
 
     #[test]
-    fn validate_rejects_order_not_found() {
-        let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
-            &QueryHyperliquidPerpOrderDetailReadModel {
-                order_exists: false,
-                owned_by_party: false,
-                order: None,
-            },
-        );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::OrderNotFound));
-    }
-
-    #[test]
-    fn validate_rejects_non_owner() {
-        let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
-            &QueryHyperliquidPerpOrderDetailReadModel {
-                order_exists: true,
-                owned_by_party: false,
-                order: Some(sample_order()),
-            },
-        );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::NotOrderOwner));
-    }
-
-    #[test]
-    fn validate_rejects_missing_order_when_order_exists() {
-        let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
-            &QueryHyperliquidPerpOrderDetailReadModel {
-                order_exists: true,
-                owned_by_party: true,
-                order: None,
-            },
-        );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState));
-    }
-
-    #[test]
-    fn validate_rejects_inconsistent_order_state() {
+    fn ownership_is_decided_by_the_use_case() {
         let mut order = sample_order();
-        order.status = HyperliquidPerpOrderStatus::Filled;
-        order.filled_sz = 1;
-
-        let result = QueryHyperliquidPerpOrderDetailUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
-            &QueryHyperliquidPerpOrderDetailReadModel {
-                order_exists: true,
-                owned_by_party: true,
-                order: Some(order),
-            },
-        );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState));
-    }
-
-    #[test]
-    fn compute_view_returns_order_body_fields() {
-        let result = QueryHyperliquidPerpOrderDetailUseCase.compute_view(
-            &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 },
-            QueryHyperliquidPerpOrderDetailReadModel {
-                order_exists: true,
-                owned_by_party: true,
-                order: Some(sample_order()),
-            },
-        );
+        order.account_id = "trader-2".to_string();
 
         assert_eq!(
-            result,
-            Ok(HyperliquidPerpOrderDetailView {
-                order_id: 1,
-                exchange_oid: Some(42),
-                asset: 7,
-                account_id: "trader-1".to_string(),
-                symbol: "BTC-PERP".to_string(),
-                side: HyperliquidPerpOrderSide::Buy,
-                execution: HyperliquidPerpOrderExecution::Limit { price: 100_000 },
-                time_in_force: HyperliquidPerpOrderTimeInForce::Gtc,
-                qty: 5,
-                filled_qty: 2,
-                status: HyperliquidPerpOrderStatus::PartiallyFilled,
-                reduce_only: true,
-                client_order_id: Some("client-1".to_string()),
-                version: 3,
-            })
+            QueryHyperliquidPerpOrderDetailUseCase
+                .compute_query(&query(), QueryHyperliquidPerpOrderDetailReadModel::Found(order),),
+            Err(QueryHyperliquidPerpOrderDetailError::NotOrderOwner)
         );
+    }
+
+    #[test]
+    fn mismatched_order_id_is_rejected() {
+        let mut order = sample_order();
+        order.order_id = 2;
+
+        assert_eq!(
+            QueryHyperliquidPerpOrderDetailUseCase
+                .compute_query(&query(), QueryHyperliquidPerpOrderDetailReadModel::Found(order),),
+            Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState)
+        );
+    }
+
+    #[test]
+    fn found_order_is_mapped_to_view() {
+        let result = QueryHyperliquidPerpOrderDetailUseCase.compute_query(
+            &query(),
+            QueryHyperliquidPerpOrderDetailReadModel::Found(sample_order()),
+        );
+
+        assert_eq!(result.map(|view| view.order_id), Ok(1));
     }
 }

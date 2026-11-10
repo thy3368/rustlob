@@ -96,6 +96,11 @@ impl From<BalanceLedgerEntryV2Error> for ActivateSpotOrderV2Error {
 pub struct ActivateSpotOrderV2UseCase;
 
 impl ActivateSpotOrderV2Changes {
+    pub(crate) fn to_replayable_ledger_events(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        self.created_balance_ledger_entries.iter().map(|entry| entry.track_create_event()).collect()
+    }
     pub(crate) fn to_replayable_balance_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
@@ -381,7 +386,7 @@ fn merge_balance_pairs(
         .collect::<HashMap<_, _>>();
     let mut seen = HashSet::new();
     let mut pairs = Vec::with_capacity(after.len());
-    for balance in after {
+    for mut balance in after {
         let balance_id = balance.business_entity_id();
         let before_balance = before_map
             .get(&balance_id)
@@ -390,6 +395,10 @@ fn merge_balance_pairs(
         if !seen.insert(balance_id) {
             return Err(ActivateSpotOrderV2Error::BalanceNotFound);
         }
+        balance.version = before_balance
+            .version
+            .checked_add(1)
+            .ok_or(ActivateSpotOrderV2Error::ArithmeticOverflow)?;
         pairs.push(UpdatedEntityPair { before: before_balance, after: balance });
     }
     Ok(pairs)
@@ -405,7 +414,6 @@ fn balance_replay_events_from_ledger_entries(
         current_balances.insert(balance_id, balance.before.clone());
     }
 
-    let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
         let Some(before) = current_balances
             .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
@@ -436,19 +444,14 @@ fn balance_replay_events_from_ledger_entries(
                 "balance ledger entry breaks balance replay chain".to_string(),
             ));
         }
-        let next_version = before
-            .version
-            .checked_add(1)
-            .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
         let after = Balance::new(
             before.party_id,
             before.account_id,
             before.asset_id,
             entry_after_available,
             entry_after_frozen,
-            next_version,
+            before.version,
         );
-        events.push(after.track_update_event_from(&before)?);
         current_balances.insert(
             concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
             after,
@@ -457,11 +460,17 @@ fn balance_replay_events_from_ledger_entries(
 
     for balance in updated_balances {
         let balance_id = balance.after.business_entity_id();
-        if current_balances.get(&balance_id) != Some(&balance.after) {
+        if !current_balances
+            .get(&balance_id)
+            .is_some_and(|current| current.matches_business_snapshot(&balance.after))
+        {
             return Err(common_entity::EntityError::Custom(
                 "balance replay chain does not reach case-level balance after state".to_string(),
             ));
         }
     }
-    Ok(events)
+    updated_balances
+        .iter()
+        .map(|balance| balance.after.track_update_event_from(&balance.before))
+        .collect()
 }

@@ -181,9 +181,14 @@ impl BalanceMap {
         account_id: &str,
         asset_id: &str,
     ) -> Result<&mut Balance, CancelSpotOrderV2Error> {
-        self.balances
-            .get_mut(&concat3(account_id, ":", asset_id))
-            .ok_or(CancelSpotOrderV2Error::BalanceNotFound)
+        let direct_key = concat3(account_id, ":", asset_id);
+        let hashed_key = concat3(
+            &common_entity::stable_string_entity_id(account_id).to_string(),
+            ":",
+            &common_entity::stable_string_entity_id(asset_id).to_string(),
+        );
+        let key = if self.balances.contains_key(&direct_key) { direct_key } else { hashed_key };
+        self.balances.get_mut(&key).ok_or(CancelSpotOrderV2Error::BalanceNotFound)
     }
 
     fn get_by_entity_id_mut(
@@ -289,32 +294,17 @@ fn apply_balance_ledger_entry(
 ) -> Result<BalanceLedgerV2, BalanceLedgerEntryV2Error> {
     let account_id = balance.account_id;
     let asset_id = balance.asset_id;
-    let balance_entity_id = balance.business_entity_id();
+    let party_id = balance.party_id;
     let mut entry = match operation {
-        BalanceLedgerOperation::Unfreeze => BalanceLedgerV2::unfreeze(
-            entry_id,
-            account_id,
-            asset_id,
-            balance_entity_id,
-            amount,
-            reason,
-        ),
+        BalanceLedgerOperation::Unfreeze => {
+            BalanceLedgerV2::unfreeze(entry_id, account_id, asset_id, party_id, amount, reason)
+        }
         BalanceLedgerOperation::CreditAvailable => BalanceLedgerV2::credit_available(
-            entry_id,
-            account_id,
-            asset_id,
-            balance_entity_id,
-            amount,
-            reason,
+            entry_id, account_id, asset_id, party_id, amount, reason,
         ),
-        BalanceLedgerOperation::DebitFrozen => BalanceLedgerV2::debit_frozen(
-            entry_id,
-            account_id,
-            asset_id,
-            balance_entity_id,
-            amount,
-            reason,
-        ),
+        BalanceLedgerOperation::DebitFrozen => {
+            BalanceLedgerV2::debit_frozen(entry_id, account_id, asset_id, party_id, amount, reason)
+        }
         BalanceLedgerOperation::Freeze | BalanceLedgerOperation::DebitAvailable => {
             return Err(BalanceLedgerEntryV2Error::InvalidAmount);
         }
@@ -346,13 +336,17 @@ fn merge_balance_pairs(
         .collect::<HashMap<_, _>>();
     let mut seen = HashSet::new();
     let mut pairs = Vec::with_capacity(after.len());
-    for balance in after {
+    for mut balance in after {
         let balance_id = balance.business_entity_id();
         let before_balance =
             before_map.get(&balance_id).cloned().ok_or(CancelSpotOrderV2Error::BalanceNotFound)?;
         if !seen.insert(balance_id) {
             return Err(CancelSpotOrderV2Error::BalanceNotFound);
         }
+        balance.version = before_balance
+            .version
+            .checked_add(1)
+            .ok_or(CancelSpotOrderV2Error::ArithmeticOverflow)?;
         pairs.push(UpdatedEntityPair { before: before_balance, after: balance });
     }
     Ok(pairs)
@@ -368,7 +362,6 @@ fn balance_replay_events_from_ledger_entries(
         current_balances.insert(balance_id, balance.before.clone());
     }
 
-    let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
         let Some(before) = current_balances
             .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
@@ -399,19 +392,14 @@ fn balance_replay_events_from_ledger_entries(
                 "balance ledger entry breaks balance replay chain".to_string(),
             ));
         }
-        let next_version = before
-            .version
-            .checked_add(1)
-            .ok_or(common_entity::EntityError::VersionOverflow { version: before.version })?;
         let after = Balance::new(
             before.party_id,
             before.account_id,
             before.asset_id,
             entry_after_available,
             entry_after_frozen,
-            next_version,
+            before.version,
         );
-        events.push(after.track_update_event_from(&before)?);
         current_balances.insert(
             concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
             after,
@@ -420,11 +408,17 @@ fn balance_replay_events_from_ledger_entries(
 
     for balance in updated_balances {
         let balance_id = balance.after.business_entity_id();
-        if current_balances.get(&balance_id) != Some(&balance.after) {
+        if !current_balances
+            .get(&balance_id)
+            .is_some_and(|current| current.matches_business_snapshot(&balance.after))
+        {
             return Err(common_entity::EntityError::Custom(
                 "balance replay chain does not reach case-level balance after state".to_string(),
             ));
         }
     }
-    Ok(events)
+    updated_balances
+        .iter()
+        .map(|balance| balance.after.track_update_event_from(&balance.before))
+        .collect()
 }

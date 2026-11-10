@@ -86,8 +86,10 @@ impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
                     .taker_order_after()
                     .unwrap_or(&activation_changes.updated_order.after);
                 let mut events = vec![final_taker_order.track_create_event()?];
-                events.extend(activation_changes.to_replayable_balance_events()?);
-                events.extend(match_changes.to_replayable_events_without_taker_order()?);
+                events.extend(activation_changes.to_replayable_ledger_events()?);
+                events
+                    .extend(match_changes.to_replayable_events_without_taker_order_or_balances()?);
+                events.extend(final_balance_events(activation_changes, match_changes)?);
                 Ok(events)
             }
             Self::NormalTpslPlacedAndMatched {
@@ -103,12 +105,42 @@ impl ReplayableChanges for PlaceMatchSpotOrderV2Changes {
                 for child in created_child_orders {
                     events.push(child.track_create_event()?);
                 }
-                events.extend(activation_changes.to_replayable_balance_events()?);
-                events.extend(match_changes.to_replayable_events_without_taker_order()?);
+                events.extend(activation_changes.to_replayable_ledger_events()?);
+                events
+                    .extend(match_changes.to_replayable_events_without_taker_order_or_balances()?);
+                events.extend(final_balance_events(activation_changes, match_changes)?);
                 Ok(events)
             }
         }
     }
+}
+
+fn final_balance_events(
+    activation: &ActivateSpotOrderV2Changes,
+    matching: &MatchSpotOrderV3Changes,
+) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    let match_balances = match matching {
+        MatchSpotOrderV3Changes::PartiallyFilled { updated_balances, .. }
+        | MatchSpotOrderV3Changes::Filled { updated_balances, .. }
+        | MatchSpotOrderV3Changes::CanceledAfterPartialFill { updated_balances, .. }
+        | MatchSpotOrderV3Changes::Rejected { updated_balances, .. } => updated_balances,
+        MatchSpotOrderV3Changes::Resting => return Ok(Vec::new()),
+    };
+    let mut events = Vec::with_capacity(match_balances.len());
+    for match_balance in match_balances {
+        let Some(activation_balance) = activation.updated_balances.iter().find(|candidate| {
+            candidate.before.business_entity_id() == match_balance.before.business_entity_id()
+        }) else {
+            continue;
+        };
+        let mut after = match_balance.after.clone();
+        after.version =
+            activation_balance.before.version.checked_add(1).ok_or(
+                EntityError::VersionOverflow { version: activation_balance.before.version },
+            )?;
+        events.push(after.track_update_event_from(&activation_balance.before)?);
+    }
+    Ok(events)
 }
 
 impl UseCase for PlaceMatchSpotOrderV2UseCase {

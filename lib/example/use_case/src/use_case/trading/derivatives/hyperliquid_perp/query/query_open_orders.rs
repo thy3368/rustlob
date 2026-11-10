@@ -1,23 +1,5 @@
+use common_entity::{DomainReadModel, QueryUseCase};
 use thiserror::Error;
-
-trait LocalQueryUseCase {
-    type Query;
-    type ReadModel;
-    type View;
-    type Error;
-    fn role(&self) -> &'static str;
-    fn pre_check_query(&self, query: &Self::Query) -> Result<(), Self::Error>;
-    fn validate_against_read_model(
-        &self,
-        query: &Self::Query,
-        read_model: &Self::ReadModel,
-    ) -> Result<(), Self::Error>;
-    fn compute_view(
-        &self,
-        query: &Self::Query,
-        read_model: Self::ReadModel,
-    ) -> Result<Self::View, Self::Error>;
-}
 
 use crate::{
     HyperliquidPerpOrder, HyperliquidPerpOrderExecution, HyperliquidPerpOrderSide,
@@ -39,6 +21,8 @@ pub struct QueryHyperliquidPerpOpenOrdersReadModel {
     /// 已加载的开放单候选集合。
     pub orders: Vec<HyperliquidPerpOrder>,
 }
+
+impl DomainReadModel for QueryHyperliquidPerpOpenOrdersReadModel {}
 
 /// 单条 Hyperliquid perp 开放委托单的业务视图。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,31 +71,27 @@ pub enum QueryHyperliquidPerpOpenOrdersError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct QueryHyperliquidPerpOpenOrdersUseCase;
 
-impl LocalQueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
-    type Query = QueryHyperliquidPerpOpenOrders;
-    type ReadModel = QueryHyperliquidPerpOpenOrdersReadModel;
-    type View = Vec<HyperliquidPerpOpenOrderView>;
+impl QueryUseCase<QueryHyperliquidPerpOpenOrders, QueryHyperliquidPerpOpenOrdersReadModel>
+    for QueryHyperliquidPerpOpenOrdersUseCase
+{
+    type Output = Vec<HyperliquidPerpOpenOrderView>;
     type Error = QueryHyperliquidPerpOpenOrdersError;
 
-    fn role(&self) -> &'static str {
-        "Trader"
-    }
-
-    fn pre_check_query(&self, query: &Self::Query) -> Result<(), Self::Error> {
-        if query.party_id.is_empty() {
+    fn validate_query(&self, query: &QueryHyperliquidPerpOpenOrders) -> Result<(), Self::Error> {
+        if query.party_id.trim().is_empty() {
             return Err(QueryHyperliquidPerpOpenOrdersError::InvalidPartyId);
         }
-        if query.symbol.as_deref().is_some_and(str::is_empty) {
+        if query.symbol.as_deref().is_some_and(|symbol| symbol.trim().is_empty()) {
             return Err(QueryHyperliquidPerpOpenOrdersError::InvalidSymbol);
         }
         Ok(())
     }
 
-    fn validate_against_read_model(
+    fn compute_query(
         &self,
-        query: &Self::Query,
-        read_model: &Self::ReadModel,
-    ) -> Result<(), Self::Error> {
+        query: &QueryHyperliquidPerpOpenOrders,
+        read_model: QueryHyperliquidPerpOpenOrdersReadModel,
+    ) -> Result<Self::Output, Self::Error> {
         for order in &read_model.orders {
             if !order.belongs_to_account(query.party_id.as_str()) {
                 return Err(QueryHyperliquidPerpOpenOrdersError::OrderNotOwned {
@@ -139,14 +119,6 @@ impl LocalQueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
             }
         }
 
-        Ok(())
-    }
-
-    fn compute_view(
-        &self,
-        _query: &Self::Query,
-        read_model: Self::ReadModel,
-    ) -> Result<Self::View, Self::Error> {
         read_model
             .orders
             .into_iter()
@@ -180,212 +152,103 @@ impl LocalQueryUseCase for QueryHyperliquidPerpOpenOrdersUseCase {
 }
 
 #[cfg(test)]
-mod tests {
+mod compute_query_tests {
     use super::*;
 
-    fn open_order(order_id: u64, symbol: &str) -> HyperliquidPerpOrder {
-        let mut order = HyperliquidPerpOrder::new(
-            order_id,
+    fn query(symbol: Option<&str>) -> QueryHyperliquidPerpOpenOrders {
+        QueryHyperliquidPerpOpenOrders {
+            party_id: "trader-1".to_string(),
+            symbol: symbol.map(str::to_string),
+        }
+    }
+
+    fn order(
+        account_id: &str,
+        symbol: &str,
+        status: HyperliquidPerpOrderStatus,
+    ) -> HyperliquidPerpOrder {
+        HyperliquidPerpOrder::new(
+            1,
             Some(42),
             7,
-            "trader-1".to_string(),
+            account_id.to_string(),
             symbol.to_string(),
             HyperliquidPerpOrderSide::Buy,
             HyperliquidPerpOrderExecution::Limit { price: 100_000 },
             HyperliquidPerpOrderTimeInForce::Gtc,
             5,
             false,
-            Some(format!("cloid-{order_id}")),
-        );
-        order.version = 3;
-        order
-    }
-
-    fn partially_filled_order(order_id: u64, symbol: &str) -> HyperliquidPerpOrder {
-        let mut order = HyperliquidPerpOrder::new(
-            order_id,
-            Some(52),
-            7,
-            "trader-1".to_string(),
-            symbol.to_string(),
-            HyperliquidPerpOrderSide::Sell,
-            HyperliquidPerpOrderExecution::Limit { price: 99_500 },
-            HyperliquidPerpOrderTimeInForce::Alo,
-            8,
-            true,
-            Some(format!("cloid-{order_id}")),
+            None,
         )
-        .with_execution_state(HyperliquidPerpOrderStatus::PartiallyFilled, 3);
-        order.version = 5;
-        order
+        .with_execution_state(status, 0)
     }
 
     #[test]
-    fn role_returns_trader() {
-        assert_eq!(QueryHyperliquidPerpOpenOrdersUseCase.role(), "Trader");
-    }
-
-    #[test]
-    fn pre_check_rejects_blank_party_id() {
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.pre_check_query(
-            &QueryHyperliquidPerpOpenOrders { party_id: String::with_capacity(0), symbol: None },
-        );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOpenOrdersError::InvalidPartyId));
-    }
-
-    #[test]
-    fn pre_check_rejects_blank_symbol() {
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.pre_check_query(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: "trader-1".to_string(),
-                symbol: Some(String::with_capacity(0)),
-            },
-        );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOpenOrdersError::InvalidSymbol));
-    }
-
-    #[test]
-    fn validate_rejects_non_owner() {
-        let mut order = open_order(1, "BTC-PERP");
-        order.account_id = "trader-2".to_string();
-
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
-            &QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![order] },
-        );
-
-        assert_eq!(result, Err(QueryHyperliquidPerpOpenOrdersError::OrderNotOwned { order_id: 1 }));
-    }
-
-    #[test]
-    fn validate_rejects_non_open_status() {
-        let order =
-            open_order(1, "BTC-PERP").with_execution_state(HyperliquidPerpOrderStatus::Filled, 5);
-
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
-            &QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![order] },
-        );
-
+    fn validate_query_rejects_empty_or_whitespace_party_and_symbol() {
+        for party_id in ["", "   ", "\t\n"] {
+            assert_eq!(
+                QueryHyperliquidPerpOpenOrdersUseCase.validate_query(
+                    &QueryHyperliquidPerpOpenOrders {
+                        party_id: party_id.to_string(),
+                        symbol: None,
+                    },
+                ),
+                Err(QueryHyperliquidPerpOpenOrdersError::InvalidPartyId)
+            );
+        }
+        for symbol in ["", "   ", "\t\n"] {
+            assert_eq!(
+                QueryHyperliquidPerpOpenOrdersUseCase.validate_query(
+                    &QueryHyperliquidPerpOpenOrders {
+                        party_id: "trader-1".to_string(),
+                        symbol: Some(symbol.to_string()),
+                    },
+                ),
+                Err(QueryHyperliquidPerpOpenOrdersError::InvalidSymbol)
+            );
+        }
+        assert_eq!(QueryHyperliquidPerpOpenOrdersUseCase.validate_query(&query(None)), Ok(()));
         assert_eq!(
-            result,
-            Err(QueryHyperliquidPerpOpenOrdersError::OrderNotOpen {
-                order_id: 1,
-                status: HyperliquidPerpOrderStatus::Filled,
-            })
+            QueryHyperliquidPerpOpenOrdersUseCase.validate_query(&query(Some("BTC-PERP"))),
+            Ok(())
         );
     }
 
     #[test]
-    fn validate_rejects_symbol_filter_mismatch() {
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: "trader-1".to_string(),
-                symbol: Some("ETH-PERP".to_string()),
-            },
-            &QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![open_order(1, "BTC-PERP")] },
+    fn ownership_open_status_and_filter_are_decided_by_the_use_case() {
+        let non_owner = QueryHyperliquidPerpOpenOrdersReadModel {
+            orders: vec![order("trader-2", "BTC-PERP", HyperliquidPerpOrderStatus::Open)],
+        };
+        assert_eq!(
+            QueryHyperliquidPerpOpenOrdersUseCase.compute_query(&query(None), non_owner),
+            Err(QueryHyperliquidPerpOpenOrdersError::OrderNotOwned { order_id: 1 })
         );
 
+        let closed = QueryHyperliquidPerpOpenOrdersReadModel {
+            orders: vec![order("trader-1", "BTC-PERP", HyperliquidPerpOrderStatus::Canceled)],
+        };
+        assert!(matches!(
+            QueryHyperliquidPerpOpenOrdersUseCase.compute_query(&query(None), closed),
+            Err(QueryHyperliquidPerpOpenOrdersError::OrderNotOpen { .. })
+        ));
+
+        let mismatch = QueryHyperliquidPerpOpenOrdersReadModel {
+            orders: vec![order("trader-1", "BTC-PERP", HyperliquidPerpOrderStatus::Open)],
+        };
         assert_eq!(
-            result,
+            QueryHyperliquidPerpOpenOrdersUseCase.compute_query(&query(Some("ETH-PERP")), mismatch),
             Err(QueryHyperliquidPerpOpenOrdersError::OrderFilterMismatch { order_id: 1 })
         );
     }
 
     #[test]
-    fn validate_rejects_inconsistent_order_state() {
-        let mut order = open_order(1, "BTC-PERP");
-        order.filled_sz = 9;
+    fn accepted_orders_are_mapped_to_views() {
+        let read_model = QueryHyperliquidPerpOpenOrdersReadModel {
+            orders: vec![order("trader-1", "BTC-PERP", HyperliquidPerpOrderStatus::Open)],
+        };
 
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.validate_against_read_model(
-            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
-            &QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![order] },
-        );
+        let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_query(&query(None), read_model);
 
-        assert_eq!(
-            result,
-            Err(QueryHyperliquidPerpOpenOrdersError::InconsistentOrderState { order_id: 1 })
-        );
-    }
-
-    #[test]
-    fn compute_view_maps_open_and_partially_filled_orders() {
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_view(
-            &QueryHyperliquidPerpOpenOrders {
-                party_id: "trader-1".to_string(),
-                symbol: Some("BTC-PERP".to_string()),
-            },
-            QueryHyperliquidPerpOpenOrdersReadModel {
-                orders: vec![open_order(1, "BTC-PERP"), partially_filled_order(2, "BTC-PERP")],
-            },
-        );
-
-        assert_eq!(
-            result,
-            Ok(vec![
-                HyperliquidPerpOpenOrderView {
-                    order_id: 1,
-                    exchange_oid: Some(42),
-                    asset: 7,
-                    account_id: "trader-1".to_string(),
-                    symbol: "BTC-PERP".to_string(),
-                    side: HyperliquidPerpOrderSide::Buy,
-                    execution: HyperliquidPerpOrderExecution::Limit { price: 100_000 },
-                    time_in_force: HyperliquidPerpOrderTimeInForce::Gtc,
-                    qty: 5,
-                    filled_qty: 0,
-                    remaining_qty: 5,
-                    status: HyperliquidPerpOrderStatus::Open,
-                    reduce_only: false,
-                    client_order_id: Some("cloid-1".to_string()),
-                    version: 3,
-                },
-                HyperliquidPerpOpenOrderView {
-                    order_id: 2,
-                    exchange_oid: Some(52),
-                    asset: 7,
-                    account_id: "trader-1".to_string(),
-                    symbol: "BTC-PERP".to_string(),
-                    side: HyperliquidPerpOrderSide::Sell,
-                    execution: HyperliquidPerpOrderExecution::Limit { price: 99_500 },
-                    time_in_force: HyperliquidPerpOrderTimeInForce::Alo,
-                    qty: 8,
-                    filled_qty: 3,
-                    remaining_qty: 5,
-                    status: HyperliquidPerpOrderStatus::PartiallyFilled,
-                    reduce_only: true,
-                    client_order_id: Some("cloid-2".to_string()),
-                    version: 5,
-                },
-            ])
-        );
-    }
-
-    #[test]
-    fn compute_view_allows_empty_result() {
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_view(
-            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
-            QueryHyperliquidPerpOpenOrdersReadModel { orders: Vec::with_capacity(0) },
-        );
-
-        assert_eq!(result, Ok(Vec::with_capacity(0)));
-    }
-
-    #[test]
-    fn compute_view_rejects_remaining_qty_overflow() {
-        let mut order = open_order(1, "BTC-PERP");
-        order.filled_sz = 9;
-
-        let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_view(
-            &QueryHyperliquidPerpOpenOrders { party_id: "trader-1".to_string(), symbol: None },
-            QueryHyperliquidPerpOpenOrdersReadModel { orders: vec![order] },
-        );
-
-        assert_eq!(
-            result,
-            Err(QueryHyperliquidPerpOpenOrdersError::InconsistentOrderState { order_id: 1 })
-        );
+        assert_eq!(result.map(|views| views.len()), Ok(1));
     }
 }

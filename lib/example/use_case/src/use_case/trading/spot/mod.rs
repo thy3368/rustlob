@@ -1,60 +1,14 @@
-pub mod activate_spot_order_v2;
-pub mod cancel_spot_order_v2;
-pub mod match_spot_order_v3;
-pub mod place_only_spot_order_v2;
-
+pub mod generate_spot_klines_from_historical_trades;
 pub mod modify_spot_order_v2;
-pub mod pending_trigger_spot_order_source;
-
-pub mod pipeline;
-
+pub mod query;
 pub mod v3;
 
-pub mod generate_spot_klines_from_historical_trades;
-
-pub use activate_spot_order_v2::{
-    ActivateSpotOrderV2AfterChanges, ActivateSpotOrderV2Changes, ActivateSpotOrderV2Cmd,
-    ActivateSpotOrderV2Error, ActivateSpotOrderV2State, ActivateSpotOrderV2UseCase,
-};
-pub use cancel_spot_order_v2::{
-    CancelSpotOrderV2AfterChanges, CancelSpotOrderV2Changes, CancelSpotOrderV2Cmd,
-    CancelSpotOrderV2Error, CancelSpotOrderV2Lookup, CancelSpotOrderV2State,
-    CancelSpotOrderV2UseCase,
-};
 pub use generate_spot_klines_from_historical_trades::{
     GenerateSpotKlinesFromHistoricalTradesChanges, GenerateSpotKlinesFromHistoricalTradesCmd,
     GenerateSpotKlinesFromHistoricalTradesError, GenerateSpotKlinesFromHistoricalTradesState,
     GenerateSpotKlinesFromHistoricalTradesUseCase,
 };
-pub use match_spot_order_v3::{
-    MatchSpotOrderV3AfterChanges, MatchSpotOrderV3Changes, MatchSpotOrderV3Cmd,
-    MatchSpotOrderV3Error, MatchSpotOrderV3State, MatchSpotOrderV3UseCase,
+pub use query::{
+    OpenSpotOrdersError, OpenSpotOrdersQuery, OpenSpotOrdersQueryUseCase, SpotOrderV7ReadModel,
 };
-pub use modify_spot_order_v2::{
-    ModifySpotOrderV2AfterChanges, ModifySpotOrderV2Changes, ModifySpotOrderV2Cmd,
-    ModifySpotOrderV2Error, ModifySpotOrderV2OrderType, ModifySpotOrderV2State,
-    ModifySpotOrderV2UseCase,
-};
-pub use pending_trigger_spot_order_source::PendingTriggerSpotOrderSource;
-pub use pipeline::activate_match_spot_order_v2::{
-    ActivateMatchSpotOrderV2AfterChanges, ActivateMatchSpotOrderV2Changes,
-    ActivateMatchSpotOrderV2Cmd, ActivateMatchSpotOrderV2Error, ActivateMatchSpotOrderV2State,
-    ActivateMatchSpotOrderV2UseCase,
-};
-pub use pipeline::place_match_spot_order_v2::{
-    PlaceMatchSpotOrderV2AfterChanges, PlaceMatchSpotOrderV2Changes, PlaceMatchSpotOrderV2Error,
-    PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase,
-};
-pub use pipeline::{
-    SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockError,
-    SpotBlockItemError, SpotBlockItemResult, SpotBlockState, SpotBlockUseCase,
-};
-pub use place_only_spot_order_v2::{
-    PlaceOnlySpotOrderV2AfterChanges, PlaceOnlySpotOrderV2Changes, PlaceOnlySpotOrderV2Cmd,
-    PlaceOnlySpotOrderV2Error, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
-    PlaceOnlySpotOrderV2State, PlaceOnlySpotOrderV2UseCase,
-};
-pub use v3::{
-    CancelSpotOrderV3AfterChanges, CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd,
-    CancelSpotOrderV3Error, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
-};
+pub use v3::*;

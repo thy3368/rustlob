@@ -142,6 +142,83 @@ pub enum MatchSpotOrderV3Error {
 }
 
 impl MatchSpotOrderV3Changes {
+    pub(crate) fn to_replayable_events_without_taker_order_or_balances(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        match self {
+            Self::Resting => Ok(Vec::new()),
+            Self::PartiallyFilled {
+                updated_maker_orders,
+                created_trades,
+                created_balance_ledger_entries,
+                ..
+            }
+            | Self::Filled {
+                updated_maker_orders,
+                created_trades,
+                created_balance_ledger_entries,
+                ..
+            }
+            | Self::CanceledAfterPartialFill {
+                updated_maker_orders,
+                created_trades,
+                created_balance_ledger_entries,
+                ..
+            } => replay_events_without_balances(
+                None,
+                updated_maker_orders,
+                created_trades,
+                created_balance_ledger_entries,
+            ),
+            Self::Rejected { created_balance_ledger_entries, .. } => {
+                replay_events_without_balances(None, &[], &[], created_balance_ledger_entries)
+            }
+        }
+    }
+
+    pub(crate) fn to_replayable_events_without_balances(
+        &self,
+    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+        match self {
+            Self::Resting => Ok(Vec::new()),
+            Self::PartiallyFilled {
+                updated_taker_order,
+                updated_maker_orders,
+                created_trades,
+                created_balance_ledger_entries,
+                ..
+            }
+            | Self::Filled {
+                filled_taker_order: updated_taker_order,
+                updated_maker_orders,
+                created_trades,
+                created_balance_ledger_entries,
+                ..
+            }
+            | Self::CanceledAfterPartialFill {
+                canceled_taker_order: updated_taker_order,
+                updated_maker_orders,
+                created_trades,
+                created_balance_ledger_entries,
+                ..
+            } => replay_events_without_balances(
+                Some(updated_taker_order),
+                updated_maker_orders,
+                created_trades,
+                created_balance_ledger_entries,
+            ),
+            Self::Rejected {
+                rejected_taker_order: updated_taker_order,
+                created_balance_ledger_entries,
+                ..
+            } => replay_events_without_balances(
+                Some(updated_taker_order),
+                &[],
+                &[],
+                created_balance_ledger_entries,
+            ),
+        }
+    }
     pub(crate) fn to_replayable_events_without_taker_order(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
@@ -280,6 +357,33 @@ fn replay_events(
         updated_balances,
         created_balance_ledger_entries,
     )?);
+    for entry in created_balance_ledger_entries {
+        events.push(entry.track_create_event()?);
+    }
+    Ok(events)
+}
+
+pub(crate) fn replay_events_without_balances(
+    updated_taker_order: Option<&UpdatedEntityPair<SpotOrderV2>>,
+    updated_maker_orders: &[UpdatedEntityPair<SpotOrderV2>],
+    created_trades: &[SpotTrade],
+    created_balance_ledger_entries: &[BalanceLedgerV2],
+) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+    let mut events = Vec::with_capacity(
+        updated_taker_order.is_some() as usize
+            + updated_maker_orders.len()
+            + created_trades.len()
+            + created_balance_ledger_entries.len(),
+    );
+    if let Some(taker) = updated_taker_order {
+        events.push(taker.after.track_update_event_from(&taker.before)?);
+    }
+    for trade in created_trades {
+        events.push(trade.track_create_event()?);
+    }
+    for maker in updated_maker_orders {
+        events.push(maker.after.track_update_event_from(&maker.before)?);
+    }
     for entry in created_balance_ledger_entries {
         events.push(entry.track_create_event()?);
     }
@@ -589,32 +693,17 @@ fn apply_balance_ledger_entry(
 ) -> Result<BalanceLedgerV2, BalanceLedgerEntryV2Error> {
     let account_id = balance.account_id;
     let asset_id = balance.asset_id;
-    let balance_entity_id = balance.business_entity_id();
+    let party_id = balance.party_id;
     let mut entry = match operation {
-        BalanceLedgerOperation::Unfreeze => BalanceLedgerV2::unfreeze(
-            entry_id,
-            account_id,
-            asset_id,
-            balance_entity_id,
-            amount,
-            reason,
-        ),
+        BalanceLedgerOperation::Unfreeze => {
+            BalanceLedgerV2::unfreeze(entry_id, account_id, asset_id, party_id, amount, reason)
+        }
         BalanceLedgerOperation::CreditAvailable => BalanceLedgerV2::credit_available(
-            entry_id,
-            account_id,
-            asset_id,
-            balance_entity_id,
-            amount,
-            reason,
+            entry_id, account_id, asset_id, party_id, amount, reason,
         ),
-        BalanceLedgerOperation::DebitFrozen => BalanceLedgerV2::debit_frozen(
-            entry_id,
-            account_id,
-            asset_id,
-            balance_entity_id,
-            amount,
-            reason,
-        ),
+        BalanceLedgerOperation::DebitFrozen => {
+            BalanceLedgerV2::debit_frozen(entry_id, account_id, asset_id, party_id, amount, reason)
+        }
         BalanceLedgerOperation::Freeze | BalanceLedgerOperation::DebitAvailable => {
             return Err(BalanceLedgerEntryV2Error::InvalidAmount);
         }
@@ -891,7 +980,6 @@ pub(super) fn balance_replay_events_from_ledger_entries(
         current_balances.insert(balance_id, balance.before.clone());
     }
 
-    let mut events = Vec::with_capacity(ledger_entries.len());
     for entry in ledger_entries {
         let Some(before) = current_balances
             .get(&concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()))
@@ -934,11 +1022,25 @@ pub(super) fn balance_replay_events_from_ledger_entries(
             entry_after_frozen,
             next_version,
         );
-        events.push(after.track_update_event_from(&before)?);
         current_balances.insert(
             concat3(&entry.account_id.to_string(), ":", &entry.asset_id.to_string()).clone(),
             after,
         );
+    }
+
+    // 一个撮合事务可能对同一余额产生多条流水；余额实体只发布一次从事务前到事务后的更新，
+    // 避免同一逻辑时钟下生成重复的实体事件键。
+    let mut events = Vec::with_capacity(updated_balances.len());
+    for balance in updated_balances {
+        let balance_id = balance.before.business_entity_id();
+        let after = current_balances.get(&balance_id).ok_or_else(|| {
+            common_entity::EntityError::Custom("balance replay state missing".to_string())
+        })?;
+        let mut replay_after = after.clone();
+        replay_after.version = balance.before.version.checked_add(1).ok_or_else(|| {
+            common_entity::EntityError::Custom("balance replay version overflow".to_string())
+        })?;
+        events.push(replay_after.track_update_event_from(&balance.before)?);
     }
 
     for balance in updated_balances {
@@ -1234,7 +1336,11 @@ impl BalanceMap {
         asset_id: &str,
     ) -> Result<&mut Balance, MatchSpotOrderV3Error> {
         self.balances
-            .get_mut(&concat3(account_id, ":", asset_id))
+            .get_mut(&concat3(
+                &common_entity::stable_string_entity_id(account_id).to_string(),
+                ":",
+                &common_entity::stable_string_entity_id(asset_id).to_string(),
+            ))
             .ok_or(MatchSpotOrderV3Error::BalanceNotFound)
     }
 
