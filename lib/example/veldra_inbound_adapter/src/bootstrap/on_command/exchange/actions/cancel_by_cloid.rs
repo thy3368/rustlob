@@ -1,11 +1,10 @@
-use common_entity::ExecutionCommandSpec;
+use common_entity::Request2Command;
 use serde::{Deserialize, Serialize};
-#[cfg(test)]
 use use_case_executor::trading::spot::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2_with_outbound;
 
 use crate::bootstrap::on_command::exchange::actions::cancel::{
     CancelSpotOrderV2Request, DEFAULT_EXCHANGE_PARTY_ID, SpotOrderV2CancelExecutionSpec,
-    cancel_execution_error_message, execute_cancel_spot_order_v2,
+    cancel_execution_error_message,
 };
 use crate::bootstrap::on_command::exchange::common::runner::{
     ExchangeActionFuture, ExchangeActionHandler,
@@ -105,7 +104,10 @@ async fn execute(
             let nonce = request.common.nonce;
             let command =
                 SpotOrderV2CancelExecutionSpec::command(&cancel_request, nonce, nonce, 0, nonce);
-            match execute_cancel_spot_order_v2(&command) {
+            match execute_cancel_spot_order_v2_with_outbound(
+                &command,
+                crate::bootstrap::runtime::spot_order_outbound(),
+            ) {
                 Ok(_) => reply::CancelByCloidStatusWire::Success("success"),
                 Err(error) => reply::CancelByCloidStatusWire::Error {
                     error: cancel_execution_error_message(error),
@@ -164,7 +166,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn default_path_returns_item_error_when_state_is_unavailable() {
+    async fn default_path_returns_item_error_when_order_is_unknown() {
         let response = execute(
             parse_json_request::<RequestWire, ExchangeHttpError>(valid_request_json())
                 .expect("request parses"),
@@ -174,7 +176,7 @@ mod tests {
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,
-            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"cancel\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order v2 cancel state is not wired for default HTTP path\"\n        }\n      ]\n    }\n  }\n}"
+            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"cancel\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order not found\"\n        }\n      ]\n    }\n  }\n}"
         );
     }
 

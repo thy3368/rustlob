@@ -1,11 +1,13 @@
-use common_entity::{ExecutionCommandSpec, ExecutionError};
-use example_core_use_case::{ModifySpotOrderV2OrderType};
+use common_entity::{ExecutionError, Request2Command};
+use example_core_use_case::ModifySpotOrderV2OrderType;
+use example_core_use_case::common::identifiers::OrderId;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use example_core_use_case::common::identifiers::OrderId;
+use use_case_executor::trading::spot::modify_spot_order_v2_executor::execute_modify_spot_order_v2_with_outbound;
+
 use crate::bootstrap::on_command::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
 use crate::bootstrap::on_command::exchange::actions::modify::{
-    ModifySpotOrderV2Request, SpotOrderV2ModifyExecutionSpec, execute_modify_spot_order_v2,
+    ModifySpotOrderV2Request, SpotOrderV2ModifyExecutionSpec,
 };
 use crate::bootstrap::on_command::exchange::actions::order::reply::{
     OrderResponseDataWire, OrderResponseEnvelopeWire, OrderResponseWire, OrderStatusWire,
@@ -240,7 +242,10 @@ fn execute_single_modify(party_id: &str, nonce: u64, modify: &ModifyWire) -> Ord
     };
     let command = SpotOrderV2ModifyExecutionSpec::command(&modify_request, nonce, nonce, 0, nonce);
 
-    match execute_modify_spot_order_v2(&command) {
+    match execute_modify_spot_order_v2_with_outbound(
+        &command,
+        crate::bootstrap::runtime::spot_order_outbound(),
+    ) {
         Ok(result) => OrderStatusWire::Resting {
             resting: RestingOrderStatusWire { oid: result.changes.updated_order.after.order_id() },
         },
@@ -459,7 +464,7 @@ mod tests {
         let actual = serde_json::to_string_pretty(&response).expect("response serializes");
         assert_eq!(
             actual,
-            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order v2 modify state is not wired for default HTTP path\"\n        },\n        {\n          \"error\": \"load_state failed: spot order v2 modify state is not wired for default HTTP path\"\n        }\n      ]\n    }\n  }\n}"
+            "{\n  \"status\": \"ok\",\n  \"response\": {\n    \"type\": \"order\",\n    \"data\": {\n      \"statuses\": [\n        {\n          \"error\": \"load_state failed: spot order not found\"\n        },\n        {\n          \"error\": \"load_state failed: spot order not found\"\n        }\n      ]\n    }\n  }\n}"
         );
     }
 

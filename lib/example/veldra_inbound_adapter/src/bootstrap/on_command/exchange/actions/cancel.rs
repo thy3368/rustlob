@@ -1,8 +1,9 @@
-use common_entity::{ExecutionCommandSpec, ExecutionError, LogEntry};
+use common_entity::{ExecutionError, LogEntry, Request2Command};
 pub use example_core_use_case::CancelSpotOrderV2Lookup;
 use example_core_use_case::{CancelSpotOrderV2Cmd, CancelSpotOrderV2UseCase};
 use serde::{Deserialize, Serialize};
 pub use use_case_executor::trading::spot::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2;
+use use_case_executor::trading::spot::cancel_spot_order_v2_executor::execute_cancel_spot_order_v2_with_outbound;
 
 use crate::bootstrap::on_command::exchange::common::runner::{
     ExchangeActionFuture, ExchangeActionHandler, run_exchange_action,
@@ -81,7 +82,7 @@ impl CancelSpotOrderV2Request {
 
 pub struct SpotOrderV2CancelExecutionSpec;
 
-impl ExecutionCommandSpec<CancelSpotOrderV2UseCase> for SpotOrderV2CancelExecutionSpec {
+impl Request2Command<CancelSpotOrderV2UseCase> for SpotOrderV2CancelExecutionSpec {
     type Request = CancelSpotOrderV2Request;
 
     fn command(
@@ -155,7 +156,10 @@ async fn execute(request: RequestWire) -> Result<reply::CancelResponseWire, Exch
             let nonce = request.common.nonce;
             let command =
                 SpotOrderV2CancelExecutionSpec::command(&cancel_request, nonce, nonce, 0, nonce);
-            match execute_cancel_spot_order_v2(&command) {
+            match execute_cancel_spot_order_v2_with_outbound(
+                &command,
+                crate::bootstrap::runtime::spot_order_outbound(),
+            ) {
                 Ok(_) => reply::CancelStatusWire::Success("success"),
                 Err(error) => {
                     reply::CancelStatusWire::Error { error: cancel_execution_error_message(error) }
