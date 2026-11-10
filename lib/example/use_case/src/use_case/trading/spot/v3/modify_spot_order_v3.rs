@@ -131,6 +131,8 @@ impl UseCase for ModifySpotOrderV3UseCase {
         modified.transition(SpotOrderV7Event::Modify {
             price: cmd.payload().price,
             size: cmd.payload().size,
+            tif: None,
+            cloid: None,
             timestamp: cmd.logical_ts(),
         })?;
         let mut base = modified.order_base().clone();

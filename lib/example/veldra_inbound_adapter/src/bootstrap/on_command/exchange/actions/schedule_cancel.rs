@@ -8,7 +8,7 @@ use example_outbound_adapter::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::bootstrap::on_command::exchange::actions::cancel::DEFAULT_EXCHANGE_PARTY_ID;
+use crate::bootstrap::on_command::exchange::actions::DEFAULT_EXCHANGE_PARTY_ID;
 use crate::bootstrap::on_command::exchange::common::runner::{
     ExchangeActionFuture, ExchangeActionHandler,
 };

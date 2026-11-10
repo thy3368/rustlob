@@ -1,31 +1,31 @@
 use std::time::Duration;
 
+use example_core_use_case::account::coin::Coin;
+use example_core_use_case::account::symbol::Symbol;
 use example_core_use_case::{
-    PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
-    SpotBlockCommand,
+    OrderTif, PlaceOnlySpotOrderV3Cmd, PlaceOnlySpotOrderV3OrderCmd, PlaceOnlySpotOrderV3OrderType,
+    UserId,
 };
+use rust_decimal::Decimal;
 
 const DEFAULT_HOTSTUFF_URL: &str = "http://127.0.0.1:39001/spot-block/commands";
 const REQUEST_TIMEOUT: Duration = Duration::from_millis(800);
 const REQUEST_INTERVAL: Duration = Duration::from_secs(1);
 
-pub fn build_request(sequence: u64) -> SpotBlockCommand {
-    SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
-        party_id: "buyer".to_string(),
-        asset: 10_001,
+pub fn build_request(sequence: u64) -> PlaceOnlySpotOrderV3Cmd {
+    PlaceOnlySpotOrderV3Cmd::Single(PlaceOnlySpotOrderV3OrderCmd {
+        symbol: Symbol::new(10_001, Coin::BTC, Coin::USDT),
+        owner: UserId(1),
+        taker_max_fee: Decimal::new(10, 4),
         order_id: sequence.saturating_add(1),
-        symbol: "BTCUSDT".to_string(),
         is_buy: true,
         price: "100".to_string(),
         size: "1".to_string(),
-        order_type: PlaceOnlySpotOrderV2OrderType::Limit { tif: "ioc".to_string() },
+        order_type: PlaceOnlySpotOrderV3OrderType::None,
         reduce_only: false,
+        tif: OrderTif::Ioc,
         cloid: Some(format!("0x{sequence:032x}")),
-        base_asset_id: "BTC".to_string(),
-        quote_asset_id: "USDT".to_string(),
-        maker_fee_bps: 5,
-        taker_fee_bps: 10,
-    }))
+    })
 }
 
 pub fn run_request_per_second() -> Result<(), reqwest::Error> {
@@ -59,9 +59,9 @@ pub fn run_request_per_second() -> Result<(), reqwest::Error> {
 mod tests {
     use super::*;
 
-    fn order_fields(command: &SpotBlockCommand) -> (u64, &str) {
-        let SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(order)) = command else {
-            panic!("expected a single PlaceMatch on_command");
+    fn order_fields(command: &PlaceOnlySpotOrderV3Cmd) -> (u64, &str) {
+        let PlaceOnlySpotOrderV3Cmd::Single(order) = command else {
+            panic!("expected a single place command");
         };
         (order.order_id, order.cloid.as_deref().unwrap_or_default())
     }
@@ -83,7 +83,7 @@ mod tests {
     fn build_request_is_place_match_and_serializable() {
         let command = build_request(1);
 
-        assert!(matches!(command, SpotBlockCommand::PlaceMatch(_)));
+        assert!(matches!(command, PlaceOnlySpotOrderV3Cmd::Single(_)));
         let payload = serde_json::to_vec(&command);
         assert!(payload.map(|bytes| !bytes.is_empty()).unwrap_or(false));
     }
