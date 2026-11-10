@@ -63,6 +63,19 @@ pub struct BalanceV2 {
     updated_at: u64,
 }
 impl BalanceV2 {
+    /// 返回账户与币种组成的稳定业务身份。
+    pub fn business_entity_id(&self) -> String {
+        concat3(&self.account_id.to_string(), ":", &self.coin_idx.to_string())
+    }
+    pub fn belongs_to_account(&self, account_id: u64) -> bool {
+        self.account_id == account_id
+    }
+    pub fn is_coin(&self, coin_idx: u64) -> bool {
+        self.coin_idx == coin_idx
+    }
+    pub fn total(&self) -> Option<Decimal> {
+        self.available.checked_add(self.frozen)
+    }
     pub fn party_id(&self) -> u64 {
         self.party_id
     }
@@ -241,11 +254,7 @@ impl common_entity::Shard for BalanceV2 {
 }
 impl Entity for BalanceV2 {
     fn entity_id(&self) -> u64 {
-        common_entity::stable_string_entity_id(&concat3(
-            &self.account_id.to_string(),
-            ":",
-            &self.coin_idx.to_string(),
-        ))
+        common_entity::stable_string_entity_id(&self.business_entity_id())
     }
     fn is_derived() -> bool {
         true
