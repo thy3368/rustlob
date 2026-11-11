@@ -49,19 +49,6 @@ macro_rules! decimal_newtype {
 decimal_newtype!(FundingRate, 10);
 decimal_newtype!(FundingRate2, 9);
 
-// impl FundingRate {
-//     pub fn from_bps(bps: i128) -> Self {
-//         Self::from_scaled_i128(bps * 1_000_000)
-//     }
-//     pub fn from_percent(pct: i128) -> Self {
-//         Self::from_scaled_i128(pct * 100_000_000)
-//     }
-//     pub fn parse_str(s: &str) -> Result<Self, rust_decimal::Error> {
-//         let value = s.parse::<Decimal>()?;
-//         Self::new(value).map_err(|_| rust_decimal::Error::ExceedsMaximumPossibleValue)
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;

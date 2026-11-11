@@ -43,6 +43,7 @@ impl BalanceV2Status {
 pub enum BalanceV2Event {
     Freeze { amount: Decimal, timestamp: u64 },
     UnfreezeAndPay { unfreeze_amount: Decimal, payment_amount: Decimal, timestamp: u64 },
+    ///todo DebitFrozen应该没有用
     DebitFrozen { amount: Decimal, timestamp: u64 },
     CreditAvailable { amount: Decimal, timestamp: u64 },
     DebitAvailable { amount: Decimal, timestamp: u64 },
