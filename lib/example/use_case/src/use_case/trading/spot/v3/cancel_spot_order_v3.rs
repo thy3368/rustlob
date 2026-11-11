@@ -3,7 +3,9 @@ use common_entity::{
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
-use example_core_entity::spot::spot_order_v7::{SpotOrderV7, SpotOrderV7Event};
+use example_core_entity::spot::spot_order_v7::{
+    CancelSpotOrderV7Output, SpotOrderV7, SpotOrderV7Event, SpotOrderV7Output,
+};
 use example_core_entity::{
     BalanceV2, BalanceV2Error, BalanceV2Event, SpotAmountConversionError, SpotOrderStatus,
 };
@@ -110,8 +112,17 @@ impl UseCase for CancelSpotOrderV3UseCase {
             return Err(CancelSpotOrderV3Error::PartyMismatch);
         }
         let mut canceled = given_state.order.clone();
-        canceled.transition(SpotOrderV7Event::Cancel { timestamp: cmd.logical_ts() })?;
-        let requirement = canceled.release_requirement()?;
+        let (_, output) =
+            canceled.transition(SpotOrderV7Event::Cancel { timestamp: cmd.logical_ts() })?;
+        let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
+            release_requirement: requirement,
+            ..
+        }) = output
+        else {
+            return Err(
+                EntityError::Custom("cancel event produced mismatched output".into()).into()
+            );
+        };
         if given_state.balance.coin_idx() != u64::from(requirement.currency().index()) {
             return Err(CancelSpotOrderV3Error::AssetMismatch);
         }
@@ -124,8 +135,17 @@ impl UseCase for CancelSpotOrderV3UseCase {
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut canceled_order = given_state.order.clone();
-        canceled_order.transition(SpotOrderV7Event::Cancel { timestamp: cmd.logical_ts() })?;
-        let requirement = canceled_order.release_requirement()?;
+        let (_, output) =
+            canceled_order.transition(SpotOrderV7Event::Cancel { timestamp: cmd.logical_ts() })?;
+        let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
+            order_after,
+            release_requirement: requirement,
+        }) = output
+        else {
+            return Err(
+                EntityError::Custom("cancel event produced mismatched output".into()).into()
+            );
+        };
         if given_state.balance.coin_idx() != u64::from(requirement.currency().index()) {
             return Err(CancelSpotOrderV3Error::AssetMismatch);
         }
@@ -138,7 +158,7 @@ impl UseCase for CancelSpotOrderV3UseCase {
                 timestamp: cmd.logical_ts(),
             },
         )?;
-        Ok(CancelSpotOrderV3AfterChanges { canceled_order, balance })
+        Ok(CancelSpotOrderV3AfterChanges { canceled_order: order_after, balance })
     }
 }
 

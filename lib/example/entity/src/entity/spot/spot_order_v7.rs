@@ -1,12 +1,12 @@
 use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff, Fsm, Shard};
 use lob_repo_v2::lob::LobOrder;
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 
 use crate::account::coin::{CoinAmount, CoinAmountError};
 use crate::entity::common::common_order::{OrderBase, SpotAmountConversionError};
 use crate::entity::common::common_trade::TradeBase;
-use crate::entity::spot::spot_order_primitives::{
+use crate::entity::common::order_primitives::{
     OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus,
 };
 use crate::spot::spot_trade_v3::{SpotTradeSettlementStatus, SpotTradeV3};
@@ -28,7 +28,7 @@ pub enum SpotOrderV7Event {
     Modify {
         price: Decimal,
         size: Decimal,
-        tif: Option<crate::entity::spot::spot_order_primitives::OrderTif>,
+        tif: Option<crate::entity::common::order_primitives::OrderTif>,
         cloid: Option<String>,
         timestamp: u64,
     },
@@ -59,18 +59,52 @@ pub enum MatchSpotOrderV7Outcome {
         filled_taker_order_after: SpotOrderV7,
         maker_orders_after: Vec<SpotOrderV7>,
         created_trades: Vec<SpotTradeV3>,
+        release_requirement: CoinAmount,
     },
     CanceledAfterPartialFill {
         canceled_taker_order_after: SpotOrderV7,
         maker_orders_after: Vec<SpotOrderV7>,
         created_trades: Vec<SpotTradeV3>,
+        release_requirement: CoinAmount,
     },
     Rejected {
         rejected_taker_order_after: SpotOrderV7,
+        release_requirement: CoinAmount,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchSpotOrderV7Output {
+    pub outcome: MatchSpotOrderV7Outcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplaceOrFillSpotOrderV7Output {
+    pub outcome: MatchSpotOrderV7Outcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModifySpotOrderV7Output {
+    pub order_after: SpotOrderV7,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancelSpotOrderV7Output {
+    pub order_after: SpotOrderV7,
+    pub release_requirement: CoinAmount,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotOrderV7Output {
+    Matched(MatchSpotOrderV7Output),
+    ReplacedOrFilled(ReplaceOrFillSpotOrderV7Output),
+    Modified(ModifySpotOrderV7Output),
+    Canceled(CancelSpotOrderV7Output),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+
+///todo 增加累计 冻结金额，解冻金额，支付金额（fill,fee);增加增量资金变化 1，创建冻结，2，fill, 3,cancel, 4.modify 用以创建balance的event
 pub struct SpotOrderV7 {
     order_base: OrderBase,
 }
@@ -130,9 +164,12 @@ impl SpotOrderV7 {
         &mut self,
         makers: Vec<SpotOrderV7>,
         input: MatchSpotOrderV7Input,
-    ) -> Result<Option<MatchSpotOrderV7Outcome>, EntityError> {
+    ) -> Result<MatchSpotOrderV7Outcome, EntityError> {
         self.transition(SpotOrderV7Event::Match { makers, timestamp: input.timestamp, input })
-            .map(|(_, output)| output)
+            .and_then(|(_, output)| match output {
+                SpotOrderV7Output::Matched(output) => Ok(output.outcome),
+                _ => Err(err("match event produced mismatched output")),
+            })
     }
 
     ///todo 可以remove
@@ -154,16 +191,19 @@ impl SpotOrderV7 {
         makers: Vec<SpotOrderV7>,
         input: MatchSpotOrderV7Input,
         timestamp: u64,
-    ) -> Result<Option<MatchSpotOrderV7Outcome>, EntityError> {
+    ) -> Result<MatchSpotOrderV7Outcome, EntityError> {
         self.transition(SpotOrderV7Event::ReplaceOrFill { price, size, makers, input, timestamp })
-            .map(|(_, output)| output)
+            .and_then(|(_, output)| match output {
+                SpotOrderV7Output::ReplacedOrFilled(output) => Ok(output.outcome),
+                _ => Err(err("replace-or-fill event produced mismatched output")),
+            })
     }
 }
 
 impl Fsm for SpotOrderV7 {
     type State = SpotOrderStatus;
     type Event = SpotOrderV7Event;
-    type Output = Option<MatchSpotOrderV7Outcome>;
+    type Output = SpotOrderV7Output;
     type Error = EntityError;
 
     fn transition(
@@ -181,7 +221,7 @@ impl Fsm for SpotOrderV7 {
                 let mut adjusted_input = input;
                 adjusted_input.timestamp = timestamp;
                 let (next, outcome) = compute_match(&self.order_base, makers, adjusted_input)?;
-                (next, Some(outcome))
+                (next, SpotOrderV7Output::Matched(MatchSpotOrderV7Output { outcome }))
             }
             SpotOrderV7Event::ReplaceOrFill { price, size, makers, input, timestamp } => {
                 let replaced =
@@ -190,7 +230,10 @@ impl Fsm for SpotOrderV7 {
                 let mut adjusted_input = input;
                 adjusted_input.timestamp = timestamp;
                 let (next, outcome) = compute_match(&replaced, makers, adjusted_input)?;
-                (next, Some(outcome))
+                (
+                    next,
+                    SpotOrderV7Output::ReplacedOrFilled(ReplaceOrFillSpotOrderV7Output { outcome }),
+                )
             }
             SpotOrderV7Event::Modify { price, size, tif, cloid, timestamp } => {
                 let mut next = modified_order(&self.order_base, price, size, timestamp)?;
@@ -200,10 +243,20 @@ impl Fsm for SpotOrderV7 {
                 if let Some(cloid) = cloid {
                     next.cloid = Some(cloid);
                 }
-                (next, None)
+                let order_after = SpotOrderV7 { order_base: next.clone() };
+                (next, SpotOrderV7Output::Modified(ModifySpotOrderV7Output { order_after }))
             }
             SpotOrderV7Event::Cancel { timestamp } => {
-                (canceled_order(&self.order_base, timestamp)?, None)
+                let next = canceled_order(&self.order_base, timestamp)?;
+                let order_after = SpotOrderV7 { order_base: next.clone() };
+                let release_requirement = entity_release_requirement(&order_after)?;
+                (
+                    next,
+                    SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
+                        order_after,
+                        release_requirement,
+                    }),
+                )
             }
         };
         self.order_base = next;
@@ -437,6 +490,9 @@ fn release_requirement(
     CoinAmount::new(if o.side == OrderSide::Buy { o.symbol.quote } else { o.symbol.base }, amount)
         .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
 }
+fn entity_release_requirement(order: &SpotOrderV7) -> Result<CoinAmount, EntityError> {
+    order.release_requirement().map_err(|error| err(&error.to_string()))
+}
 fn fee(n: Decimal, b: u64, scale: u32) -> Result<Decimal, EntityError> {
     Ok(n.checked_mul(Decimal::from(b))
         .and_then(|x| x.checked_div(Decimal::from(10_000u64)))
@@ -464,11 +520,11 @@ fn compute_match(
         taker.version =
             t.version.checked_add(1).ok_or(EntityError::VersionOverflow { version: t.version })?;
         taker.updated_at = i.timestamp;
+        let rejected_taker_order_after = SpotOrderV7 { order_base: taker.clone() };
+        let release_requirement = entity_release_requirement(&rejected_taker_order_after)?;
         return Ok((
-            taker.clone(),
-            MatchSpotOrderV7Outcome::Rejected {
-                rejected_taker_order_after: SpotOrderV7 { order_base: taker },
-            },
+            taker,
+            MatchSpotOrderV7Outcome::Rejected { rejected_taker_order_after, release_requirement },
         ));
     }
     for maker in &mut makers {
@@ -556,22 +612,30 @@ fn compute_match(
     let after = SpotOrderV7 { order_base: taker };
     let next = after.order_base.clone();
     let outcome = if after.status() == SpotOrderStatus::Filled {
+        let release_requirement = entity_release_requirement(&after)?;
         MatchSpotOrderV7Outcome::Filled {
             filled_taker_order_after: after,
             maker_orders_after: makers,
             created_trades: trades,
+            release_requirement,
         }
     } else if trades.is_empty() {
         if after.status() == SpotOrderStatus::Rejected {
-            MatchSpotOrderV7Outcome::Rejected { rejected_taker_order_after: after }
+            let release_requirement = entity_release_requirement(&after)?;
+            MatchSpotOrderV7Outcome::Rejected {
+                rejected_taker_order_after: after,
+                release_requirement,
+            }
         } else {
             MatchSpotOrderV7Outcome::Resting { taker_order_after: after }
         }
     } else if after.status() == SpotOrderStatus::Canceled {
+        let release_requirement = entity_release_requirement(&after)?;
         MatchSpotOrderV7Outcome::CanceledAfterPartialFill {
             canceled_taker_order_after: after,
             maker_orders_after: makers,
             created_trades: trades,
+            release_requirement,
         }
     } else {
         MatchSpotOrderV7Outcome::PartiallyFilled {

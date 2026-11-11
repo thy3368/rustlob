@@ -1,5 +1,5 @@
 use common_entity::{Fsm, LogEntry, UseCase};
-use example_core_entity::spot::spot_order_primitives::OrderSide;
+use example_core_entity::entity::common::order_primitives::OrderSide;
 use example_core_entity::spot::spot_trade_v3::{
     SpotTradeEvent, SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3,
 };

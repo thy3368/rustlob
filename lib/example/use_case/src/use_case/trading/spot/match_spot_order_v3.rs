@@ -4,7 +4,7 @@ use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
     UseCase,
 };
-use example_core_entity::{SpotOrderHoldAsset, SpotTradeFeeRole};
+use example_core_entity::{SpotOrderHoldAsset, TradeFeeRole};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
@@ -438,14 +438,14 @@ fn settle_matched_trades(
         let taker_fee = taker_order.fee_consume_requirement_for_trade(
             trade.size,
             trade.price,
-            SpotTradeFeeRole::Taker,
+            TradeFeeRole::Taker,
             maker_fee_bps,
             taker_fee_bps,
         )?;
         let maker_fee = maker_order.fee_consume_requirement_for_trade(
             trade.size,
             trade.price,
-            SpotTradeFeeRole::Maker,
+            TradeFeeRole::Maker,
             maker_fee_bps,
             taker_fee_bps,
         )?;

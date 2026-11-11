@@ -1,5 +1,5 @@
-use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 
 use crate::account::coin::Coin;
 use crate::entity::account::usdc::Usdc;

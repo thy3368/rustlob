@@ -27,6 +27,10 @@ pub use account::balance_ledger_v3::{
 pub use account::balance_v2::{BalanceV2, BalanceV2Error, BalanceV2Event, BalanceV2Status};
 pub use common::common_order::SpotAmountConversionError;
 pub use common::common_trade::TradeBase;
+pub use common::order_primitives::{
+    OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus,
+    TradeFeeRole,
+};
 pub use market_rules::MarketRules;
 pub use option::cex::cex_option::{
     CexOptionFeeHoldRequirement, CexOptionInstrument, CexOptionInstrumentStatus, CexOptionOrder,
@@ -56,11 +60,9 @@ pub use perp::trade::perp_trade_v3::{
 };
 use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
-pub use spot_entity::spot_order_primitives::{
-    OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus,
-    SpotOrderStatusReason, SpotTradeFeeRole,
-};
 pub use spot_entity::spot_order_v7::{
-    MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7, SpotOrderV7Event,
+    CancelSpotOrderV7Output, MatchSpotOrderV7Input, MatchSpotOrderV7Outcome,
+    MatchSpotOrderV7Output, ModifySpotOrderV7Output, ReplaceOrFillSpotOrderV7Output, SpotOrderV7,
+    SpotOrderV7Event, SpotOrderV7Output,
 };
 pub use transfer::settlement_transfer_purpose::SettlementTransferPurpose;

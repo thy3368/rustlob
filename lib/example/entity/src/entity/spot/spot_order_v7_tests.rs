@@ -2,7 +2,10 @@ use common_entity::Fsm;
 use rstest::rstest;
 use rust_decimal::Decimal;
 
-use super::{MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7, SpotOrderV7Event};
+use super::{
+    MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7, SpotOrderV7Event,
+    SpotOrderV7Output,
+};
 use crate::entity::common::common_order::OrderBase;
 use crate::{OrderSide, OrderTif, SpotOrderStatus};
 
@@ -133,15 +136,28 @@ fn active_state_event_matrix_accepts_every_event(
                 initial_status
             };
             assert_eq!(state, expected);
-            assert!(matches!(output, Some(MatchSpotOrderV7Outcome::Resting { .. })));
+            assert!(matches!(
+                (event_kind, output),
+                (
+                    EventKind::Match,
+                    SpotOrderV7Output::Matched(super::MatchSpotOrderV7Output {
+                        outcome: MatchSpotOrderV7Outcome::Resting { .. },
+                    })
+                ) | (
+                    EventKind::ReplaceOrFill,
+                    SpotOrderV7Output::ReplacedOrFilled(super::ReplaceOrFillSpotOrderV7Output {
+                        outcome: MatchSpotOrderV7Outcome::Resting { .. },
+                    })
+                )
+            ));
         }
         EventKind::Modify => {
             assert_eq!(state, initial_status);
-            assert!(output.is_none());
+            assert!(matches!(output, SpotOrderV7Output::Modified(_)));
         }
         EventKind::Cancel => {
             assert_eq!(state, SpotOrderStatus::Canceled);
-            assert!(output.is_none());
+            assert!(matches!(output, SpotOrderV7Output::Canceled(_)));
         }
     }
 }
@@ -188,7 +204,8 @@ fn modify_preserves_status_and_updates_order_facts(#[case] status: SpotOrderStat
         .unwrap();
 
     assert_eq!(next_status, status);
-    assert!(output.is_none());
+    let SpotOrderV7Output::Modified(output) = output else { panic!("unexpected output") };
+    assert_eq!(output.order_after, subject);
     assert_eq!(subject.order_base().limit_px, Decimal::from(105));
     assert_eq!(subject.order_base().orig_size, Decimal::from(4));
     let expected_remaining = if status == SpotOrderStatus::PartiallyFilled {
@@ -212,7 +229,9 @@ fn cancel_enters_canceled_and_updates_metadata(#[case] status: SpotOrderStatus) 
         subject.transition(SpotOrderV7Event::Cancel { timestamp: EVENT_TIMESTAMP }).unwrap();
 
     assert_eq!(next_status, SpotOrderStatus::Canceled);
-    assert!(output.is_none());
+    let SpotOrderV7Output::Canceled(output) = output else { panic!("unexpected output") };
+    assert_eq!(output.order_after, subject);
+    assert_eq!(output.release_requirement, subject.release_requirement().unwrap());
     assert_eq!(subject.order_base().version, 8);
     assert_eq!(subject.order_base().updated_at, EVENT_TIMESTAMP);
 }
@@ -233,8 +252,17 @@ fn gtc_and_ioc_match_matrix(
     let mut subject = sized_taker(tif, taker_size);
     let makers =
         maker_sizes.into_iter().enumerate().map(|(i, size)| maker(2 + i as u64, size)).collect();
-    let output = subject.match_with_input(makers, input()).unwrap().unwrap();
+    let output = subject.match_with_input(makers, input()).unwrap();
     assert_eq!(subject.status(), expected_status);
+    match &output {
+        MatchSpotOrderV7Outcome::Filled { release_requirement, .. }
+        | MatchSpotOrderV7Outcome::CanceledAfterPartialFill { release_requirement, .. }
+        | MatchSpotOrderV7Outcome::Rejected { release_requirement, .. } => {
+            assert_eq!(*release_requirement, subject.release_requirement().unwrap());
+        }
+        MatchSpotOrderV7Outcome::Resting { .. }
+        | MatchSpotOrderV7Outcome::PartiallyFilled { .. } => {}
+    }
     assert!(matches!(
         (expected_status, output),
         (SpotOrderStatus::Open, MatchSpotOrderV7Outcome::Resting { .. })
@@ -258,7 +286,7 @@ fn alo_match_matrix(#[case] maker_sizes: Vec<i64>, #[case] expected_status: Spot
         .map(|(i, size)| maker(2 + i as u64, size))
         .collect::<Vec<_>>();
     let makers_before = makers.clone();
-    let output = subject.match_with_input(makers, input()).unwrap().unwrap();
+    let output = subject.match_with_input(makers, input()).unwrap();
     assert_eq!(subject.status(), expected_status);
     assert!(matches!(
         output,
@@ -284,7 +312,6 @@ fn replace_or_fill_replaces_and_matches_in_one_version() {
             input(),
             EVENT_TIMESTAMP,
         )
-        .unwrap()
         .unwrap();
 
     let MatchSpotOrderV7Outcome::PartiallyFilled { taker_order_after, created_trades, .. } = output

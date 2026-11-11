@@ -5,6 +5,7 @@ use example_core_entity::SpotOrderStatus;
 use example_core_entity::common::CommonOrderExecution;
 use example_core_entity::spot::spot_order_v7::{
     MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7, SpotOrderV7Event,
+    SpotOrderV7Output,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -109,10 +110,11 @@ impl UseCase for MatchSpotOrderV3UseCase {
             },
             timestamp: c.logical_ts(),
         })?;
-        o.ok_or_else(|| {
-            MatchSpotOrderV3Error::Entity(EntityError::Custom(
-                "V7 match produced no outcome".into(),
-            ))
-        })
+        match o {
+            SpotOrderV7Output::Matched(output) => Ok(output.outcome),
+            _ => Err(MatchSpotOrderV3Error::Entity(EntityError::Custom(
+                "V7 match produced mismatched output".into(),
+            ))),
+        }
     }
 }

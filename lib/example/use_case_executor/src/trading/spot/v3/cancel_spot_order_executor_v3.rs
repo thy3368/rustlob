@@ -37,7 +37,7 @@ mod tests {
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::identifiers::OrderId;
     use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
-    use example_core_entity::spot::spot_order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
+    use example_core_entity::entity::common::order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
     use example_core_entity::spot::spot_order_v7::SpotOrderV7;
     use example_core_use_case::{
         CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,

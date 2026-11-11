@@ -41,13 +41,31 @@ impl BalanceV2Status {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BalanceV2Event {
-    Freeze { amount: Decimal, timestamp: u64 },
-    UnfreezeAndPay { unfreeze_amount: Decimal, payment_amount: Decimal, timestamp: u64 },
+    Freeze {
+        amount: Decimal,
+        timestamp: u64,
+    },
+    UnfreezeAndPay {
+        unfreeze_amount: Decimal,
+        payment_amount: Decimal,
+        timestamp: u64,
+    },
     ///todo DebitFrozen应该没有用
-    DebitFrozen { amount: Decimal, timestamp: u64 },
-    CreditAvailable { amount: Decimal, timestamp: u64 },
-    DebitAvailable { amount: Decimal, timestamp: u64 },
-    Close { timestamp: u64 },
+    DebitFrozen {
+        amount: Decimal,
+        timestamp: u64,
+    },
+    CreditAvailable {
+        amount: Decimal,
+        timestamp: u64,
+    },
+    DebitAvailable {
+        amount: Decimal,
+        timestamp: u64,
+    },
+    Close {
+        timestamp: u64,
+    },
 }
 
 /// 可变余额实体，同时承载稳定身份、生命周期和 replay 字段。
