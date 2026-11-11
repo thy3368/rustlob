@@ -35,7 +35,7 @@ impl<O: LobOrder + serde::Serialize + for<'de> serde::Deserialize<'de>> LobRepo
             .symbol();
         let mut lob = LocalLobBtree::new(symbol);
         for order in orders {
-            lob.insert_order(order.clone())?;
+            lob.insert_order(order)?;
         }
         Ok(lob)
     }
