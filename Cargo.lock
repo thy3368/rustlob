@@ -2591,6 +2591,7 @@ version = "0.1.0"
 dependencies = [
  "example_core_use_case",
  "reqwest 0.12.28",
+ "rust_decimal",
  "serde_json",
 ]
 
@@ -9910,7 +9911,6 @@ dependencies = [
 name = "use_case_executor"
 version = "0.1.0"
 dependencies = [
- "criterion",
  "entity",
  "example_core_entity",
  "example_core_use_case",

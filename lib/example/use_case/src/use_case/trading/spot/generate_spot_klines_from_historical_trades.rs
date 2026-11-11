@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 use common_entity::{
     Entity, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UseCase,
 };
+use example_core_entity::spot::SpotTradeV3;
 use thiserror::Error;
 
-use crate::entity::{SpotKline, SpotTrade};
+use crate::entity::SpotKline;
 
 /// 从历史现货成交批量生成固定毫秒周期 K 线的命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,7 +29,7 @@ pub struct GenerateSpotKlinesFromHistoricalTradesCmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenerateSpotKlinesFromHistoricalTradesState {
     /// 已按业务权限和查询范围加载的候选成交集合。
-    pub trades: Vec<SpotTrade>,
+    pub trades: Vec<SpotTradeV3>,
 }
 
 /// 历史现货 K 线生成的业务拒绝原因。
@@ -210,7 +211,7 @@ struct KlineAccumulator {
 }
 
 impl KlineAccumulator {
-    fn first(trade: &SpotTrade, notional_quote: u64) -> Self {
+    fn first(trade: &SpotTradeV3, notional_quote: u64) -> Self {
         Self {
             open_price: trade.price,
             high_price: trade.price,
@@ -226,7 +227,7 @@ impl KlineAccumulator {
 
     fn add(
         &mut self,
-        trade: &SpotTrade,
+        trade: &SpotTradeV3,
         notional_quote: u64,
     ) -> Result<(), GenerateSpotKlinesFromHistoricalTradesError> {
         self.high_price = self.high_price.max(trade.price);
