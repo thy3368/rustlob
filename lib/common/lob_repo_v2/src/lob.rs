@@ -12,8 +12,8 @@ pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
     fn side(&self) -> Self::Side;
     fn is_buy_side(side: Self::Side) -> bool;
     fn price(&self) -> Decimal;
-    fn qty(&self) -> u64;
-    fn filled_qty(&self) -> u64;
+    fn qty(&self) -> Decimal;
+    fn filled_qty(&self) -> Decimal;
     fn created_at(&self) -> u64;
     fn entity_ver(&self) -> u64;
     fn is_active(&self) -> bool;
@@ -30,9 +30,9 @@ pub trait AssetLobV2 {
     fn match_orders(
         &self,
         price: Decimal,
-        quantity: u64,
+        quantity: Decimal,
         taker_side: <Self::Order as LobOrder>::Side,
-    ) -> (Option<Vec<&Self::Order>>, u64);
+    ) -> (Option<Vec<&Self::Order>>, Decimal);
     fn best_bid(&self) -> Option<Decimal>;
     fn best_ask(&self) -> Option<Decimal>;
 

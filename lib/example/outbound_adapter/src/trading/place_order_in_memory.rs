@@ -58,7 +58,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         let side = if order_cmd.is_buy { OrderSide::Buy } else { OrderSide::Sell };
         let maker_orders = state
             .lob
-            .match_orders(Decimal::MAX, u64::MAX, side)
+            .match_orders(Decimal::MAX, Decimal::MAX, side)
             .0
             .unwrap_or_default()
             .into_iter()

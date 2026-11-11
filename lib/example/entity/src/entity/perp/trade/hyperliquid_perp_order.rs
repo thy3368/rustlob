@@ -598,11 +598,11 @@ impl LobOrder for HyperliquidPerpOrder {
         todo!()
     }
 
-    fn qty(&self) -> u64 {
+    fn qty(&self) -> Decimal {
         todo!()
     }
 
-    fn filled_qty(&self) -> u64 {
+    fn filled_qty(&self) -> Decimal {
         todo!()
     }
 

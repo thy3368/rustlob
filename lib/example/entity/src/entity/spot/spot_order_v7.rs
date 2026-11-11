@@ -1,7 +1,6 @@
 use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff, Fsm, Shard};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
-use rust_decimal::prelude::ToPrimitive;
 
 use crate::account::coin::{CoinAmount, CoinAmountError};
 use crate::entity::common::common_order::{OrderBase, SpotAmountConversionError};
@@ -468,11 +467,11 @@ impl LobOrder for SpotOrderV7 {
     fn price(&self) -> Decimal {
         self.order_base.limit_px
     }
-    fn qty(&self) -> u64 {
-        self.order_base.orig_size.to_u64().unwrap_or(0)
+    fn qty(&self) -> Decimal {
+        self.order_base.orig_size
     }
-    fn filled_qty(&self) -> u64 {
-        (self.order_base.orig_size - self.order_base.size).to_u64().unwrap_or(0)
+    fn filled_qty(&self) -> Decimal {
+        self.order_base.orig_size - self.order_base.size
     }
     fn created_at(&self) -> u64 {
         self.order_base.created_at

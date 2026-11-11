@@ -133,7 +133,7 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound
 
         let maker_orders = state
             .lob
-            .match_orders(Decimal::MAX, u64::MAX, pending_order.side())
+            .match_orders(Decimal::MAX, Decimal::MAX, pending_order.side())
             .0
             .unwrap_or_default()
             .into_iter()
@@ -220,7 +220,7 @@ impl StateSink<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         let taker_side = if order_cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
         let maker_orders = state
             .lob
-            .match_orders(Decimal::MAX, u64::MAX, taker_side)
+            .match_orders(Decimal::MAX, Decimal::MAX, taker_side)
             .0
             .unwrap_or_default()
             .into_iter()
