@@ -1,4 +1,5 @@
 use common_entity::EntityReplayableEvent;
+use rust_decimal::Decimal;
 
 use crate::LobError;
 pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
@@ -9,7 +10,7 @@ pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
     fn asset(&self) -> u32;
     fn side(&self) -> Self::Side;
     fn is_buy_side(side: Self::Side) -> bool;
-    fn price(&self) -> u64;
+    fn price(&self) -> Decimal;
     fn qty(&self) -> u64;
     fn filled_qty(&self) -> u64;
     fn created_at(&self) -> u64;
@@ -27,12 +28,12 @@ pub trait AssetLobV2 {
 
     fn match_orders(
         &self,
-        price: u64,
+        price: Decimal,
         quantity: u64,
         taker_side: <Self::Order as LobOrder>::Side,
     ) -> (Option<Vec<&Self::Order>>, u64);
-    fn best_bid(&self) -> Option<u64>;
-    fn best_ask(&self) -> Option<u64>;
+    fn best_bid(&self) -> Option<Decimal>;
+    fn best_ask(&self) -> Option<Decimal>;
 
     fn asset(&self) -> u32;
 

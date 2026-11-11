@@ -6,6 +6,7 @@ use example_core_use_case::{
     PlaceOnlySpotOrderV2Cmd, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
+use rust_decimal::Decimal;
 
 use super::in_memory_place_order::{
     DEFAULT_FEE_ACCOUNT_ID, apply_order_update_event, decode_created_trade, decode_order_from_event,
@@ -57,7 +58,7 @@ impl StateSource<PlaceMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         let side = if order_cmd.is_buy { OrderSide::Buy } else { OrderSide::Sell };
         let maker_orders = state
             .lob
-            .match_orders(u64::MAX, u64::MAX, side)
+            .match_orders(Decimal::MAX, u64::MAX, side)
             .0
             .unwrap_or_default()
             .into_iter()

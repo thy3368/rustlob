@@ -5,6 +5,7 @@ use example_core_use_case::{
     PendingTriggerSpotOrderSource, SpotOrderStatus, SpotOrderStatusReason, SpotOrderV2, SpotTrade,
 };
 use lob_repo_v2::lob::AssetLobV2;
+use rust_decimal::Decimal;
 
 use crate::shared::{
     InMemorySpotPipelineBroker, InMemoryStore, PlaceOrderOutboundError, balance_key,
@@ -132,7 +133,7 @@ impl StateSource<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound
 
         let maker_orders = state
             .lob
-            .match_orders(u64::MAX, u64::MAX, pending_order.side())
+            .match_orders(Decimal::MAX, u64::MAX, pending_order.side())
             .0
             .unwrap_or_default()
             .into_iter()
@@ -219,7 +220,7 @@ impl StateSink<ActivateMatchSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         let taker_side = if order_cmd.is_buy { SpotOrderSide::Buy } else { SpotOrderSide::Sell };
         let maker_orders = state
             .lob
-            .match_orders(u64::MAX, u64::MAX, taker_side)
+            .match_orders(Decimal::MAX, u64::MAX, taker_side)
             .0
             .unwrap_or_default()
             .into_iter()

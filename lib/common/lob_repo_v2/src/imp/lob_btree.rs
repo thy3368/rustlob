@@ -1,25 +1,42 @@
 use std::collections::{BTreeMap, HashMap};
 
 use common_entity::{EntityChangeType, EntityReplayableEvent};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::LobError;
 use crate::lob::{AssetLobV2, LobOrder};
 
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+struct Px(Decimal);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+struct SlotIndex(usize);
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(bound(serialize = "O: Serialize", deserialize = "O: Deserialize<'de>"))]
 pub struct LocalLobBtree<O: LobOrder> {
-    asset: u32,
+    /// 当前本地订单簿对应的交易标的，用于拒绝跨订单簿订单。
+    symbol: u32,
+    /// 订单主存储；索引保持稳定，删除订单后留下 `None` 空洞。
     slots: Vec<Option<O>>,
-    ids: HashMap<u64, usize>,
-    bids: BTreeMap<u64, Vec<usize>>,
-    asks: BTreeMap<u64, Vec<usize>>,
+    /// 订单 ID 到 `SlotIndex` 的映射，用于快速定位仍存在的订单。
+    ids: HashMap<u64, SlotIndex>,
+    /// 活跃买单的价格索引；`PriceKey` 映射到该价位订单的 `SlotIndex` 列表。
+    bids: BTreeMap<Px, Vec<SlotIndex>>,
+    /// 活跃卖单的价格索引；`PriceKey` 映射到该价位订单的 `SlotIndex` 列表。
+    asks: BTreeMap<Px, Vec<SlotIndex>>,
+    /// 最后成功回放的事件 LSN，用于拒绝旧事件或重复事件。
     sequence: u64,
 }
 impl<O: LobOrder> LocalLobBtree<O> {
     pub fn new(asset: u32) -> Self {
         Self {
-            asset,
+            symbol: asset,
             slots: vec![],
             ids: HashMap::new(),
             bids: BTreeMap::new(),
@@ -31,41 +48,42 @@ impl<O: LobOrder> LocalLobBtree<O> {
         self.sequence
     }
     pub fn order(&self, id: u64) -> Option<&O> {
-        self.ids.get(&id).and_then(|&i| self.slots[i].as_ref())
+        self.ids.get(&id).and_then(|&i| self.slots[i.0].as_ref())
     }
     pub fn insert_order(&mut self, order: O) -> Result<(), LobError> {
-        if order.asset() != self.asset {
+        if order.asset() != self.symbol {
             return Err(LobError::Event("wrong order book".into()));
         }
         self.put(order);
         Ok(())
     }
-    fn remove_idx(&mut self, o: &O, i: usize) {
+    fn remove_idx(&mut self, o: &O, i: SlotIndex) {
         let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
-        if let Some(v) = map.get_mut(&o.price()) {
+        let price = Px(o.price());
+        if let Some(v) = map.get_mut(&price) {
             v.retain(|&x| x != i);
             if v.is_empty() {
-                map.remove(&o.price());
+                map.remove(&price);
             }
         }
     }
-    fn add_idx(&mut self, o: &O, i: usize) {
+    fn add_idx(&mut self, o: &O, i: SlotIndex) {
         if !o.is_active() {
             return;
         }
         let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
-        map.entry(o.price()).or_default().push(i);
+        map.entry(Px(o.price())).or_default().push(i);
     }
     fn put(&mut self, o: O) {
         let id = o.entity_id();
         if let Some(i) = self.ids.get(&id).copied() {
-            if let Some(old) = self.slots[i].take() {
+            if let Some(old) = self.slots[i.0].take() {
                 self.remove_idx(&old, i);
             }
-            self.slots[i] = Some(o.clone());
+            self.slots[i.0] = Some(o.clone());
             self.add_idx(&o, i);
         } else {
-            let i = self.slots.len();
+            let i = SlotIndex(self.slots.len());
             self.slots.push(Some(o.clone()));
             self.ids.insert(id, i);
             self.add_idx(&o, i);
@@ -73,7 +91,7 @@ impl<O: LobOrder> LocalLobBtree<O> {
     }
     fn delete(&mut self, id: u64) {
         if let Some(i) = self.ids.remove(&id) {
-            if let Some(o) = self.slots[i].take() {
+            if let Some(o) = self.slots[i.0].take() {
                 self.remove_idx(&o, i);
             }
         }
@@ -81,29 +99,34 @@ impl<O: LobOrder> LocalLobBtree<O> {
 }
 impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
     type Order = O;
-    fn match_orders(&self, p: u64, q: u64, s: O::Side) -> (Option<Vec<&Self::Order>>, u64) {
-        if q == 0 {
+    fn match_orders(
+        &self,
+        price: Decimal,
+        qty: u64,
+        side: O::Side,
+    ) -> (Option<Vec<&Self::Order>>, u64) {
+        if qty == 0 {
             return (Some(vec![]), 0);
         }
-        let buy = O::is_buy_side(s);
+        let buy = O::is_buy_side(side);
         let map = if buy { &self.asks } else { &self.bids };
-        let mut remaining = q;
+        let mut remaining = qty;
         let mut out = vec![];
-        let iter: Box<dyn Iterator<Item = (&u64, &Vec<usize>)>> =
+        let iter: Box<dyn Iterator<Item = (&Px, &Vec<SlotIndex>)>> =
             if buy { Box::new(map.iter()) } else { Box::new(map.iter().rev()) };
-        for (&px, indices) in iter {
-            if (buy && px > p) || (!buy && px < p) {
+        for (&Px(px), indices) in iter {
+            if (buy && px > price) || (!buy && px < price) {
                 break;
             }
             let mut sorted = indices.clone();
             sorted.sort_by_key(|&i| {
-                self.slots[i]
+                self.slots[i.0]
                     .as_ref()
                     .map(|o| (o.created_at(), o.entity_id()))
                     .unwrap_or((u64::MAX, u64::MAX))
             });
             for i in sorted {
-                if let Some(o) = self.slots[i].as_ref() {
+                if let Some(o) = self.slots[i.0].as_ref() {
                     remaining = remaining.saturating_sub(o.qty().saturating_sub(o.filled_qty()));
                     out.push(o);
                 }
@@ -114,14 +137,14 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
         }
         (if out.is_empty() { None } else { Some(out) }, remaining)
     }
-    fn best_bid(&self) -> Option<u64> {
-        self.bids.keys().next_back().copied()
+    fn best_bid(&self) -> Option<Decimal> {
+        self.bids.keys().next_back().map(|price| price.0)
     }
-    fn best_ask(&self) -> Option<u64> {
-        self.asks.keys().next().copied()
+    fn best_ask(&self) -> Option<Decimal> {
+        self.asks.keys().next().map(|price| price.0)
     }
     fn asset(&self) -> u32 {
-        self.asset
+        self.symbol
     }
     fn replay_events(&mut self, events: &[EntityReplayableEvent]) -> Result<(), LobError> {
         let mut next = self.clone();
@@ -145,7 +168,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
                     return Err(LobError::Event("invalid create".into()));
                 }
                 let order = O::from_replay_event(event, id)?;
-                if order.asset() != self.asset {
+                if order.asset() != self.symbol {
                     return Err(LobError::Event("wrong order book".into()));
                 }
                 self.put(order);
@@ -159,7 +182,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
                     return Err(LobError::Event("invalid update".into()));
                 }
                 let order = old.apply_replay_event(event)?;
-                if order.asset() != self.asset {
+                if order.asset() != self.symbol {
                     return Err(LobError::Event("cross-book update".into()));
                 }
                 self.put(order);
@@ -176,5 +199,170 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
         }
         self.sequence = event.lsn;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_entity::EntityReplayableEvent;
+    use rust_decimal::Decimal;
+    use serde::{Deserialize, Serialize};
+
+    use super::{LocalLobBtree, Px, SlotIndex};
+    use crate::LobError;
+    use crate::lob::{AssetLobV2, LobOrder};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    enum Side {
+        Buy,
+        Sell,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct TestOrder {
+        id: u64,
+        price: Decimal,
+        qty: u64,
+        side: Side,
+        created_at: u64,
+    }
+
+    impl TestOrder {
+        fn new(id: u64, price: Decimal, qty: u64, side: Side, created_at: u64) -> Self {
+            Self { id, price, qty, side, created_at }
+        }
+    }
+
+    impl LobOrder for TestOrder {
+        type Side = Side;
+
+        fn entity_type() -> u8 {
+            1
+        }
+        fn entity_id(&self) -> u64 {
+            self.id
+        }
+        fn asset(&self) -> u32 {
+            7
+        }
+        fn side(&self) -> Self::Side {
+            self.side
+        }
+        fn is_buy_side(side: Self::Side) -> bool {
+            side == Side::Buy
+        }
+        fn price(&self) -> Decimal {
+            self.price
+        }
+        fn qty(&self) -> u64 {
+            self.qty
+        }
+        fn filled_qty(&self) -> u64 {
+            0
+        }
+        fn created_at(&self) -> u64 {
+            self.created_at
+        }
+        fn entity_ver(&self) -> u64 {
+            0
+        }
+        fn is_active(&self) -> bool {
+            true
+        }
+        fn from_replay_event(_: &EntityReplayableEvent, _: u64) -> Result<Self, LobError> {
+            unreachable!("test orders are inserted directly")
+        }
+        fn apply_replay_event(self, _: &EntityReplayableEvent) -> Result<Self, LobError> {
+            unreachable!("test orders are inserted directly")
+        }
+    }
+
+    #[test]
+    fn price_key_bincode_matches_decimal() {
+        let value = Decimal::new(4_212_345, 5);
+
+        assert_eq!(
+            bincode::serialize(&Px(value)).unwrap(),
+            bincode::serialize(&value).unwrap()
+        );
+    }
+
+    #[test]
+    fn decimal_prices_determine_best_bid_and_ask() {
+        let mut lob = LocalLobBtree::new(7);
+        for order in [
+            TestOrder::new(1, Decimal::new(10001, 2), 1, Side::Buy, 1),
+            TestOrder::new(2, Decimal::new(100001, 3), 1, Side::Buy, 2),
+            TestOrder::new(3, Decimal::new(10002, 2), 1, Side::Buy, 3),
+            TestOrder::new(4, Decimal::new(10003, 2), 1, Side::Sell, 4),
+            TestOrder::new(5, Decimal::new(100025, 3), 1, Side::Sell, 5),
+            TestOrder::new(6, Decimal::new(101, 0), 1, Side::Sell, 6),
+        ] {
+            lob.insert_order(order).unwrap();
+        }
+
+        assert_eq!(lob.best_bid(), Some(Decimal::new(10002, 2)));
+        assert_eq!(lob.best_ask(), Some(Decimal::new(100025, 3)));
+    }
+
+    #[test]
+    fn decimal_limit_respects_price_then_time_priority() {
+        let mut lob = LocalLobBtree::new(7);
+        for order in [
+            TestOrder::new(3, Decimal::new(10002, 2), 2, Side::Sell, 30),
+            TestOrder::new(2, Decimal::new(10001, 2), 2, Side::Sell, 20),
+            TestOrder::new(1, Decimal::new(10001, 2), 2, Side::Sell, 10),
+            TestOrder::new(4, Decimal::new(10003, 2), 2, Side::Sell, 40),
+        ] {
+            lob.insert_order(order).unwrap();
+        }
+
+        let (orders, remaining) = lob.match_orders(Decimal::new(10002, 2), 5, Side::Buy);
+        let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
+        assert_eq!(ids, vec![1, 2, 3]);
+        assert_eq!(remaining, 0);
+
+        let (orders, remaining) = lob.match_orders(Decimal::new(100005, 3), 1, Side::Buy);
+        assert!(orders.is_none());
+        assert_eq!(remaining, 1);
+
+        let mut bids = LocalLobBtree::new(7);
+        for order in [
+            TestOrder::new(5, Decimal::new(9999, 2), 1, Side::Buy, 50),
+            TestOrder::new(6, Decimal::new(9998, 2), 1, Side::Buy, 60),
+        ] {
+            bids.insert_order(order).unwrap();
+        }
+
+        let (orders, remaining) = bids.match_orders(Decimal::new(99985, 3), 1, Side::Sell);
+        let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
+        assert_eq!(ids, vec![5]);
+        assert_eq!(remaining, 0);
+
+        let (orders, remaining) = bids.match_orders(Decimal::new(99995, 3), 1, Side::Sell);
+        assert!(orders.is_none());
+        assert_eq!(remaining, 1);
+    }
+
+    #[test]
+    fn decimal_price_order_book_round_trips_through_bincode() {
+        let mut lob = LocalLobBtree::new(7);
+        lob.insert_order(TestOrder::new(1, Decimal::new(1234567, 4), 9, Side::Buy, 1)).unwrap();
+
+        let encoded = bincode::serialize(&lob).unwrap();
+        let restored: LocalLobBtree<TestOrder> = bincode::deserialize(&encoded).unwrap();
+
+        assert_eq!(restored, lob);
+        assert_eq!(restored.best_bid(), Some(Decimal::new(1234567, 4)));
+    }
+
+    #[test]
+    fn slot_index_bincode_matches_usize() {
+        let value = 42_usize;
+
+        assert_eq!(
+            bincode::serialize(&SlotIndex(value)).unwrap(),
+            bincode::serialize(&value).unwrap()
+        );
     }
 }

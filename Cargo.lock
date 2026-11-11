@@ -5273,6 +5273,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "entity",
+ "rust_decimal",
  "serde",
  "serde_json",
  "tempfile",

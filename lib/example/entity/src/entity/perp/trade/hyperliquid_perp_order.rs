@@ -4,6 +4,7 @@ use common_entity::{
 };
 use lob_repo_v2::LobError;
 use lob_repo_v2::lob::LobOrder;
+use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::OrderSide;
@@ -593,7 +594,7 @@ impl LobOrder for HyperliquidPerpOrder {
         todo!()
     }
 
-    fn price(&self) -> u64 {
+    fn price(&self) -> Decimal {
         todo!()
     }
 
