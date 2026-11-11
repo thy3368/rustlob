@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use common_entity::{EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase};
-use example_core_entity::hyperliquid_account::perp_clearinghouse_state_v3::PerpClearinghouseStateV3;
+use example_core_entity::clearinghouse::perp_clearinghouse_state_v3::PerpClearinghouseStateV3;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

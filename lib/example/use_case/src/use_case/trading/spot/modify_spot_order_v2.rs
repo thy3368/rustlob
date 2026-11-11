@@ -9,7 +9,6 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::common_entity::account::balance_ledger_v3::{
     BalanceLedgerV3, BalanceLedgerV3Error, LedgerOperation,
 };
@@ -389,14 +388,13 @@ fn apply_hold_requirement_delta(
         SpotOrderHoldAsset::Quote => quote_asset_id,
     };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
-    let (operation, amount, action, reason) = if after_amount > before_amount {
+    let (operation, amount, action) = if after_amount > before_amount {
         (
             LedgerOperation::Freeze,
             after_amount
                 .checked_sub(before_amount)
                 .ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?,
             "freeze",
-            BalanceLedgerReason::ModifySpotOrderFreeze { order_id: order.order_id() },
         )
     } else {
         (
@@ -405,12 +403,10 @@ fn apply_hold_requirement_delta(
                 .checked_sub(after_amount)
                 .ok_or(ModifySpotOrderV2Error::ArithmeticOverflow)?,
             "unfreeze",
-            BalanceLedgerReason::ModifySpotOrderUnfreeze { order_id: order.order_id() },
         )
     };
     let entry_id = format!("balance-ledger:{}:modify:{label}:{action}", order.order_id());
-    let entry =
-        apply_balance_ledger_entry(operation, entry_id, balance, amount, reason, timestamp)?;
+    let entry = apply_balance_ledger_entry(operation, entry_id, balance, amount, timestamp)?;
     ledger_entries.push(entry);
     Ok(())
 }
@@ -420,7 +416,6 @@ fn apply_balance_ledger_entry(
     entry_id: String,
     balance: &mut BalanceV2,
     amount: u64,
-    reason: BalanceLedgerReason,
     timestamp: u64,
 ) -> Result<BalanceLedgerV3, ModifySpotOrderV2Error> {
     let mut entry = BalanceLedgerV3::new(
@@ -428,7 +423,6 @@ fn apply_balance_ledger_entry(
         balance,
         operation,
         Decimal::from(amount),
-        reason,
         timestamp,
     )?;
     entry.apply_to(balance, timestamp).map_err(map_balance_ledger_error)?;

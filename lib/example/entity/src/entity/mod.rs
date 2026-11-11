@@ -6,8 +6,8 @@ pub mod transfer;
 pub mod common;
 pub use common::{DecimalValueError, FundingRate, FundingRate2};
 
-pub mod hyperliquid_account;
-pub use hyperliquid_account::{ScheduledCancel, ScheduledCancelError};
+pub mod clearinghouse;
+pub use clearinghouse::{ScheduledCancel, ScheduledCancelError};
 pub use market_data::{
     KlineAggregationError, KlineCandle, KlineInterval, KlineUpdate, SpotKlineAggregator,
     SpotKlineTradeInput,
@@ -20,7 +20,6 @@ pub mod account;
 
 pub mod market_data;
 
-pub use account::balance_ledger_reason::BalanceLedgerReason;
 pub use account::balance_ledger_v3::{
     BalanceLedgerV3, BalanceLedgerV3Error, BalanceLedgerV3Event, BalanceLedgerV3Output,
     BalanceLedgerV3State,

@@ -2,9 +2,8 @@ use std::collections::BTreeMap;
 
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
-use crate::account::spot_account_v2::SpotAccount;
-use crate::perp::trade::perp_position_v3::PerpPositionV3;
-use crate::{BalanceV2, HyperliquidPerpOrder, SpotOrderV7};
+use example_core_use_case::account::spot_account_v2::SpotAccount;
+use example_core_use_case::{BalanceV2, HyperliquidPerpOrder, PerpPositionV3, SpotOrderV7};
 
 /// 三户模型
 #[derive(Debug, Clone, PartialEq, Eq)]

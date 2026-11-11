@@ -6,7 +6,6 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::balance_ledger_reason::BalanceLedgerReason;
 use super::balance_v2::BalanceV2;
 
 const BALANCE_LEDGER_V3_ENTITY_TYPE: u8 = 8;
@@ -219,7 +218,7 @@ mod tests {
     use common_entity::Fsm;
     use rust_decimal::Decimal;
 
-    use super::{BalanceLedgerReason, BalanceLedgerV3, BalanceLedgerV3Error, BalanceLedgerV3Event};
+    use super::{BalanceLedgerV3, BalanceLedgerV3Error, BalanceLedgerV3Event};
     use crate::entity::{BalanceV2, BalanceV2Event};
 
     fn balance() -> BalanceV2 {
@@ -234,13 +233,7 @@ mod tests {
     }
 
     fn ledger(balance: &BalanceV2) -> BalanceLedgerV3 {
-        BalanceLedgerV3::new(
-            9,
-            balance,
-            Decimal::TEN,
-            10,
-        )
-        .unwrap()
+        BalanceLedgerV3::new(9, balance, Decimal::TEN, 10).unwrap()
     }
 
     fn event(

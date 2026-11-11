@@ -5,4 +5,6 @@ pub mod common_order;
 pub use common_order::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
 pub mod common_trade;
 pub mod decimal_value;
+pub mod scheduled_cancel;
+
 pub use decimal_value::{DecimalValueError, FundingRate, FundingRate2};

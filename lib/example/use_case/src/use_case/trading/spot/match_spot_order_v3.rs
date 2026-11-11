@@ -10,12 +10,10 @@ use serde::{Deserialize, Serialize};
 use spot_entity::spot_order_v2::{SpotOrderV2, SpotOrderV2BehaviorError, SpotOrderV2MatchError};
 use thiserror::Error;
 
-use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::common_entity::account::balance_ledger_v3::{
     BalanceLedgerV3, BalanceLedgerV3Error, LedgerOperation,
 };
 use crate::common_entity::{BalanceV2, OrderSide, OrderTif, SpotOrderStatus, spot as spot_entity};
-use crate::entity::transfer::settlement_transfer_purpose::SettlementTransferPurpose;
 use crate::support::{concat2, concat3, concat4};
 use crate::{MatchSpotOrderV2Input, SpotTrade};
 
@@ -667,14 +665,6 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerV3>,
     timestamp: u64,
 ) -> Result<(), MatchSpotOrderV3Error> {
-    let reason = match order.side() {
-        OrderSide::Buy => {
-            BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order.order_id() }
-        }
-        OrderSide::Sell => {
-            BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order.order_id() }
-        }
-    };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
     let next_release_index =
         ledger_entries.len().checked_add(1).ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
@@ -688,7 +678,6 @@ fn release_to_balance(
         )),
         balance,
         amount,
-        reason,
         timestamp,
     )?;
     ledger_entries.push(entry);
@@ -700,17 +689,10 @@ fn apply_balance_ledger_entry(
     entry_id: u64,
     balance: &mut BalanceV2,
     amount: u64,
-    reason: BalanceLedgerReason,
     timestamp: u64,
 ) -> Result<BalanceLedgerV3, BalanceLedgerV3Error> {
-    let mut entry = BalanceLedgerV3::new(
-        entry_id,
-        balance,
-        operation,
-        Decimal::from(amount),
-        reason,
-        timestamp,
-    )?;
+    let mut entry =
+        BalanceLedgerV3::new(entry_id, balance, operation, Decimal::from(amount), timestamp)?;
     entry.apply_to(balance, timestamp)?;
     Ok(entry)
 }
@@ -721,7 +703,6 @@ struct BalanceLedgerDraft {
     account_id: String,
     asset_id: String,
     amount: u64,
-    reason: BalanceLedgerReason,
     timestamp: u64,
 }
 
@@ -736,7 +717,6 @@ fn push_applied_balance_ledger_entry(
         draft.entry_id,
         balance,
         draft.amount,
-        draft.reason,
         draft.timestamp,
     )?;
     ledger_entries.push(entry);
@@ -757,24 +737,6 @@ fn apply_trade_balance_effects(
     trade: &SpotTrade,
     context: TradeBalanceEffectsContext<'_>,
 ) -> Result<(), MatchSpotOrderV3Error> {
-    let trade_ids = vec![trade.trade_id.clone()];
-    let settlement_ids = vec![context.settlement_id.to_string()];
-
-    let buyer_receive_base_reason = BalanceLedgerReason::SettleSpotTradeBuyerReceiveBase {
-        trade_ids: trade_ids.clone(),
-        settlement_ids: settlement_ids.clone(),
-    };
-    let buyer_release_quote_reason = BalanceLedgerReason::SettleSpotTradeBuyerReleaseFrozenQuote {
-        trade_ids: trade_ids.clone(),
-        settlement_ids: settlement_ids.clone(),
-    };
-    let seller_receive_quote_reason = BalanceLedgerReason::SettleSpotTradeSellerReceiveQuote {
-        trade_ids: trade_ids.clone(),
-        settlement_ids: settlement_ids.clone(),
-    };
-    let seller_release_base_reason =
-        BalanceLedgerReason::SettleSpotTradeSellerReleaseFrozenBase { trade_ids, settlement_ids };
-
     let quote_notional = trade.notional_quote().ok_or(MatchSpotOrderV3Error::ArithmeticOverflow)?;
     let buyer_account_id = trade.buyer_account_id().to_string();
     let seller_account_id = trade.seller_account_id().to_string();
@@ -793,7 +755,6 @@ fn apply_trade_balance_effects(
             asset_id: context.base_asset_id.to_string(),
             amount: trade.size,
             timestamp: context.timestamp,
-            reason: buyer_receive_base_reason,
         },
     )?;
     push_applied_balance_ledger_entry(
@@ -810,7 +771,6 @@ fn apply_trade_balance_effects(
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
             timestamp: context.timestamp,
-            reason: buyer_release_quote_reason,
         },
     )?;
     push_applied_balance_ledger_entry(
@@ -827,7 +787,6 @@ fn apply_trade_balance_effects(
             asset_id: context.quote_asset_id.to_string(),
             amount: quote_notional,
             timestamp: context.timestamp,
-            reason: seller_receive_quote_reason,
         },
     )?;
     push_applied_balance_ledger_entry(
@@ -844,16 +803,9 @@ fn apply_trade_balance_effects(
             asset_id: context.base_asset_id.to_string(),
             amount: trade.size,
             timestamp: context.timestamp,
-            reason: seller_release_base_reason,
         },
     )?;
     if let Some((buyer_fee_account_id, buyer_fee_amount)) = fee_payer_for_buyer(trade) {
-        let reason = BalanceLedgerReason::SettleSpotTrade {
-            trade_id: trade.trade_id.clone(),
-            match_id: trade.match_id.clone(),
-            settlement_batch_id: context.settlement_id.to_string(),
-            purpose: SettlementTransferPurpose::TradingFee,
-        };
         push_applied_balance_ledger_entry(
             context.balance_book,
             context.ledger_entries,
@@ -868,7 +820,6 @@ fn apply_trade_balance_effects(
                 asset_id: context.quote_asset_id.to_string(),
                 amount: buyer_fee_amount,
                 timestamp: context.timestamp,
-                reason: reason.clone(),
             },
         )?;
         push_applied_balance_ledger_entry(
@@ -885,17 +836,10 @@ fn apply_trade_balance_effects(
                 asset_id: context.quote_asset_id.to_string(),
                 amount: buyer_fee_amount,
                 timestamp: context.timestamp,
-                reason,
             },
         )?;
     }
     if let Some((seller_fee_account_id, seller_fee_amount)) = fee_payer_for_seller(trade) {
-        let reason = BalanceLedgerReason::SettleSpotTrade {
-            trade_id: trade.trade_id.clone(),
-            match_id: trade.match_id.clone(),
-            settlement_batch_id: context.settlement_id.to_string(),
-            purpose: SettlementTransferPurpose::TradingFee,
-        };
         push_applied_balance_ledger_entry(
             context.balance_book,
             context.ledger_entries,
@@ -910,7 +854,6 @@ fn apply_trade_balance_effects(
                 asset_id: context.quote_asset_id.to_string(),
                 amount: seller_fee_amount,
                 timestamp: context.timestamp,
-                reason: reason.clone(),
             },
         )?;
         push_applied_balance_ledger_entry(
@@ -927,7 +870,6 @@ fn apply_trade_balance_effects(
                 asset_id: context.quote_asset_id.to_string(),
                 amount: seller_fee_amount,
                 timestamp: context.timestamp,
-                reason,
             },
         )?;
     }

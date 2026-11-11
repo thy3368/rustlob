@@ -8,7 +8,6 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::common_entity::account::balance_ledger_reason::BalanceLedgerReason;
 use crate::common_entity::account::balance_ledger_v3::{
     BalanceLedgerV3, BalanceLedgerV3Error, LedgerOperation,
 };
@@ -269,14 +268,6 @@ fn release_to_balance(
     ledger_entries: &mut Vec<BalanceLedgerV3>,
     timestamp: u64,
 ) -> Result<(), CancelSpotOrderV2Error> {
-    let reason = match order.side() {
-        OrderSide::Buy => {
-            BalanceLedgerReason::CancelSpotOrderReleaseQuote { order_id: order.order_id() }
-        }
-        OrderSide::Sell => {
-            BalanceLedgerReason::CancelSpotOrderReleaseBase { order_id: order.order_id() }
-        }
-    };
     let balance = balance_book.get_mut(order.account_id(), asset_id)?;
     let next_release_index =
         ledger_entries.len().checked_add(1).ok_or(CancelSpotOrderV2Error::ArithmeticOverflow)?;
@@ -290,7 +281,6 @@ fn release_to_balance(
         ),
         balance,
         amount,
-        reason,
         timestamp,
     )?;
     ledger_entries.push(entry);
@@ -302,7 +292,6 @@ fn apply_balance_ledger_entry(
     entry_id: String,
     balance: &mut BalanceV2,
     amount: u64,
-    reason: BalanceLedgerReason,
     timestamp: u64,
 ) -> Result<BalanceLedgerV3, BalanceLedgerV3Error> {
     let mut entry = BalanceLedgerV3::new(
@@ -310,7 +299,6 @@ fn apply_balance_ledger_entry(
         balance,
         operation,
         Decimal::from(amount),
-        reason,
         timestamp,
     )?;
     entry.apply_to(balance, timestamp)?;
