@@ -4,7 +4,7 @@ use rust_decimal::Decimal;
 
 use super::{
     MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7, SpotOrderV7Event,
-    SpotOrderV7Output,
+    SpotOrderV7FreezeRequirement, SpotOrderV7Output,
 };
 use crate::entity::common::common_order::OrderBase;
 use crate::{OrderSide, OrderTif, SpotOrderStatus};
@@ -13,6 +13,7 @@ const EVENT_TIMESTAMP: u64 = 42;
 
 #[derive(Clone, Copy, Debug)]
 enum EventKind {
+    Activate,
     Match,
     ReplaceOrFill,
     Modify,
@@ -84,6 +85,7 @@ fn input() -> MatchSpotOrderV7Input {
 
 fn event(kind: EventKind) -> SpotOrderV7Event {
     match kind {
+        EventKind::Activate => SpotOrderV7Event::Activate { timestamp: EVENT_TIMESTAMP },
         EventKind::Match => SpotOrderV7Event::Match {
             makers: Vec::new(),
             input: input(),
@@ -108,8 +110,6 @@ fn event(kind: EventKind) -> SpotOrderV7Event {
 }
 
 #[rstest]
-#[case(SpotOrderStatus::Pending, EventKind::Match)]
-#[case(SpotOrderStatus::Pending, EventKind::ReplaceOrFill)]
 #[case(SpotOrderStatus::Pending, EventKind::Modify)]
 #[case(SpotOrderStatus::Pending, EventKind::Cancel)]
 #[case(SpotOrderStatus::Open, EventKind::Match)]
@@ -129,13 +129,9 @@ fn active_state_event_matrix_accepts_every_event(
     let (state, output) = subject.transition(event(event_kind)).unwrap();
 
     match event_kind {
+        EventKind::Activate => unreachable!(),
         EventKind::Match | EventKind::ReplaceOrFill => {
-            let expected = if initial_status == SpotOrderStatus::Pending {
-                SpotOrderStatus::Open
-            } else {
-                initial_status
-            };
-            assert_eq!(state, expected);
+            assert_eq!(state, initial_status);
             assert!(matches!(
                 (event_kind, output),
                 (
@@ -175,6 +171,9 @@ fn active_state_event_matrix_accepts_every_event(
 #[case(SpotOrderStatus::Rejected, EventKind::ReplaceOrFill)]
 #[case(SpotOrderStatus::Rejected, EventKind::Modify)]
 #[case(SpotOrderStatus::Rejected, EventKind::Cancel)]
+#[case(SpotOrderStatus::Filled, EventKind::Activate)]
+#[case(SpotOrderStatus::Canceled, EventKind::Activate)]
+#[case(SpotOrderStatus::Rejected, EventKind::Activate)]
 fn terminal_state_event_matrix_rejects_without_mutation(
     #[case] terminal_status: SpotOrderStatus,
     #[case] event_kind: EventKind,
@@ -231,7 +230,11 @@ fn cancel_enters_canceled_and_updates_metadata(#[case] status: SpotOrderStatus) 
     assert_eq!(next_status, SpotOrderStatus::Canceled);
     let SpotOrderV7Output::Canceled(output) = output else { panic!("unexpected output") };
     assert_eq!(output.order_after, subject);
-    assert_eq!(output.release_requirement, subject.release_requirement().unwrap());
+    if status == SpotOrderStatus::Pending {
+        assert_eq!(output.release_requirement.amount(), Decimal::ZERO);
+    } else {
+        assert_eq!(output.release_requirement, subject.release_requirement().unwrap());
+    }
     assert_eq!(subject.order_base().version, 8);
     assert_eq!(subject.order_base().updated_at, EVENT_TIMESTAMP);
 }
@@ -250,6 +253,7 @@ fn gtc_and_ioc_match_matrix(
     #[case] expected_status: SpotOrderStatus,
 ) {
     let mut subject = sized_taker(tif, taker_size);
+    subject.transition(SpotOrderV7Event::Activate { timestamp: EVENT_TIMESTAMP - 1 }).unwrap();
     let makers =
         maker_sizes.into_iter().enumerate().map(|(i, size)| maker(2 + i as u64, size)).collect();
     let output = subject.match_with_input(makers, input()).unwrap();
@@ -273,12 +277,59 @@ fn gtc_and_ioc_match_matrix(
     ));
 }
 
+#[test]
+fn buy_activation_preserves_freeze_breakdown() {
+    let mut record = order_record(1, OrderSide::Buy, 2, 2, SpotOrderStatus::Pending, 7);
+    record.buy_quote_fee_reserve_limit = Decimal::from(3);
+    let mut subject = SpotOrderV7::from_record(record).unwrap();
+
+    let (status, output) =
+        subject.transition(SpotOrderV7Event::Activate { timestamp: EVENT_TIMESTAMP }).unwrap();
+
+    assert_eq!(status, SpotOrderStatus::Open);
+    let SpotOrderV7Output::Activated(output) = output else { panic!("unexpected output") };
+    let SpotOrderV7FreezeRequirement::Buy { quote_principal, quote_fee_reserve, total_quote } =
+        output.freeze_requirement
+    else {
+        panic!("expected buy requirement")
+    };
+    assert_eq!(quote_principal.amount(), Decimal::from(200));
+    assert_eq!(quote_fee_reserve.amount(), Decimal::from(3));
+    assert_eq!(total_quote.amount(), Decimal::from(203));
+}
+
+#[test]
+fn sell_activation_freezes_only_base_quantity() {
+    let mut subject = order(1, OrderSide::Sell, 2, 2, SpotOrderStatus::Pending, 7);
+    let (_, output) =
+        subject.transition(SpotOrderV7Event::Activate { timestamp: EVENT_TIMESTAMP }).unwrap();
+    let SpotOrderV7Output::Activated(output) = output else { panic!("unexpected output") };
+    let SpotOrderV7FreezeRequirement::Sell { base_quantity } = output.freeze_requirement else {
+        panic!("expected sell requirement")
+    };
+    assert_eq!(base_quantity.amount(), Decimal::from(2));
+}
+
+#[test]
+fn pending_cannot_match_and_cancel_releases_zero() {
+    let mut subject = taker(SpotOrderStatus::Pending);
+    let before = subject.clone();
+    assert!(subject.transition(event(EventKind::Match)).is_err());
+    assert_eq!(subject, before);
+
+    let (_, output) =
+        subject.transition(SpotOrderV7Event::Cancel { timestamp: EVENT_TIMESTAMP }).unwrap();
+    let SpotOrderV7Output::Canceled(output) = output else { panic!("unexpected output") };
+    assert_eq!(output.release_requirement.amount(), Decimal::ZERO);
+}
+
 #[rstest]
 #[case(Vec::new(), SpotOrderStatus::Open)]
 #[case(vec![1], SpotOrderStatus::Rejected)]
 #[case(vec![2], SpotOrderStatus::Rejected)]
 fn alo_match_matrix(#[case] maker_sizes: Vec<i64>, #[case] expected_status: SpotOrderStatus) {
     let mut subject = sized_taker(OrderTif::Alo, 2);
+    subject.transition(SpotOrderV7Event::Activate { timestamp: EVENT_TIMESTAMP - 1 }).unwrap();
     let expected_maker_sizes = maker_sizes.clone();
     let makers = maker_sizes
         .into_iter()

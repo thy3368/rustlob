@@ -150,14 +150,16 @@ impl UseCase for CancelSpotOrderV3UseCase {
             return Err(CancelSpotOrderV3Error::AssetMismatch);
         }
         let mut balance = given_state.balance.clone();
-        common_entity::Fsm::apply(
-            &mut balance,
-            BalanceV2Event::UnfreezeAndPay {
-                unfreeze_amount: requirement.amount(),
-                payment_amount: Decimal::ZERO,
-                timestamp: cmd.logical_ts(),
-            },
-        )?;
+        if requirement.amount() > Decimal::ZERO {
+            common_entity::Fsm::apply(
+                &mut balance,
+                BalanceV2Event::UnfreezeAndPay {
+                    unfreeze_amount: requirement.amount(),
+                    payment_amount: Decimal::ZERO,
+                    timestamp: cmd.logical_ts(),
+                },
+            )?;
+        }
         Ok(CancelSpotOrderV3AfterChanges { canceled_order: order_after, balance })
     }
 }

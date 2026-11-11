@@ -1,3 +1,4 @@
+pub mod activate_spot_order_v7;
 pub mod cancel_spot_order_v3;
 pub mod match_spot_order_v3;
 pub mod modify_spot_order_v3;
@@ -22,3 +23,7 @@ pub use place_only_spot_order_v3::{
 };
 
 pub mod pipeline;
+pub use activate_spot_order_v7::{
+    ActivateSpotOrderV7AfterChanges, ActivateSpotOrderV7Changes, ActivateSpotOrderV7Cmd,
+    ActivateSpotOrderV7Error, ActivateSpotOrderV7State, ActivateSpotOrderV7UseCase,
+};
