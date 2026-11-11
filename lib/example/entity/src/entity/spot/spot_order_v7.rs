@@ -64,7 +64,6 @@ impl SpotOrderV7FreezeRequirement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivateSpotOrderV7Output {
-    pub order_after: SpotOrderV7,
     pub freeze_requirement: SpotOrderV7FreezeRequirement,
 }
 
@@ -264,13 +263,9 @@ impl Fsm for SpotOrderV7 {
                     .version
                     .checked_add(1)
                     .ok_or(EntityError::VersionOverflow { version: next.version })?;
-                let order_after = SpotOrderV7 { order_base: next.clone() };
                 (
                     next,
-                    SpotOrderV7Output::Activated(ActivateSpotOrderV7Output {
-                        order_after,
-                        freeze_requirement,
-                    }),
+                    SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
                 )
             }
             SpotOrderV7Event::Match { makers, input, timestamp } => {
