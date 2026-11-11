@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
-use lob_repo_v2::imp::lob_btree::LocalLobBtree;
-
 use example_core_use_case::account::spot_account_v2::SpotAccount;
-use example_core_use_case::{BalanceV2, HyperliquidPerpOrder, PerpPositionV3, SpotOrderV7};
+use example_core_use_case::{
+    BalanceV2, PerpOrderV3, PerpPositionV3, SpotOrderV7,
+};
+use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 /// 三户模型
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,10 +16,10 @@ pub struct AllMatchState {
     pub spot_con_orders: BTreeMap<u64, SpotOrderV7>,
 
     /// 每owner一个state 三户模型
-    pub perp_lob: BTreeMap<u64, LocalLobBtree<HyperliquidPerpOrder>>,
+    pub perp_lob: BTreeMap<u64, LocalLobBtree<PerpOrderV3>>,
 
     ///条件单
-    pub perp_con_orders: BTreeMap<u64, HyperliquidPerpOrder>,
+    pub perp_con_orders: BTreeMap<u64, PerpOrderV3>,
 }
 
 /// 三户模型

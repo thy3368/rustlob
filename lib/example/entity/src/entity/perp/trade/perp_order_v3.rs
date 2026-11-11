@@ -47,7 +47,7 @@ pub struct MatchPerpOrderV3Input {
 
 /// 永续订单撮合后的订单与成交事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MatchPerpOrderV3Outcome {
+pub enum MatchPerpOrderV3Output {
     Resting {
         taker_order_after: PerpOrderV3,
     },
@@ -71,7 +71,7 @@ pub enum MatchPerpOrderV3Outcome {
     },
 }
 
-impl MatchPerpOrderV3Outcome {
+impl MatchPerpOrderV3Output {
     pub fn into_parts(self) -> (PerpOrderV3, Vec<PerpOrderV3>, Vec<PerpTradeV3>) {
         match self {
             Self::Resting { taker_order_after } => (taker_order_after, Vec::new(), Vec::new()),
@@ -124,7 +124,7 @@ pub struct PerpOrderV3 {
 impl Fsm for PerpOrderV3 {
     type State = SpotOrderStatus;
     type Event = PerpOrderV3Event;
-    type Output = Option<MatchPerpOrderV3Outcome>;
+    type Output = Option<MatchPerpOrderV3Output>;
     type Error = PerpOrderV3Error;
 
     fn transition(
@@ -166,7 +166,7 @@ fn compute_match(
     current: &PerpOrderV3,
     mut makers: Vec<PerpOrderV3>,
     input: MatchPerpOrderV3Input,
-) -> Result<(PerpOrderV3, MatchPerpOrderV3Outcome), PerpOrderV3Error> {
+) -> Result<(PerpOrderV3, MatchPerpOrderV3Output), PerpOrderV3Error> {
     validate_order(current)?;
     validate_timestamp(&current.comon_order, input.timestamp)?;
     if input.match_id == 0
@@ -188,7 +188,7 @@ fn compute_match(
         advance(&mut taker.comon_order, input.timestamp)?;
         return Ok((
             taker.clone(),
-            MatchPerpOrderV3Outcome::Rejected { rejected_taker_order_after: taker },
+            MatchPerpOrderV3Output::Rejected { rejected_taker_order_after: taker },
         ));
     }
 
@@ -281,26 +281,26 @@ fn compute_match(
     advance(&mut taker.comon_order, input.timestamp)?;
 
     let outcome = match taker.comon_order.status {
-        SpotOrderStatus::Filled => MatchPerpOrderV3Outcome::Filled {
+        SpotOrderStatus::Filled => MatchPerpOrderV3Output::Filled {
             filled_taker_order_after: taker.clone(),
             maker_orders_after: makers,
             created_trades: trades,
         },
         SpotOrderStatus::Rejected => {
-            MatchPerpOrderV3Outcome::Rejected { rejected_taker_order_after: taker.clone() }
+            MatchPerpOrderV3Output::Rejected { rejected_taker_order_after: taker.clone() }
         }
-        SpotOrderStatus::Canceled => MatchPerpOrderV3Outcome::CanceledAfterPartialFill {
+        SpotOrderStatus::Canceled => MatchPerpOrderV3Output::CanceledAfterPartialFill {
             canceled_taker_order_after: taker.clone(),
             maker_orders_after: makers,
             created_trades: trades,
         },
-        SpotOrderStatus::PartiallyFilled => MatchPerpOrderV3Outcome::PartiallyFilled {
+        SpotOrderStatus::PartiallyFilled => MatchPerpOrderV3Output::PartiallyFilled {
             taker_order_after: taker.clone(),
             maker_orders_after: makers,
             created_trades: trades,
         },
         SpotOrderStatus::Pending | SpotOrderStatus::Open => {
-            MatchPerpOrderV3Outcome::Resting { taker_order_after: taker.clone() }
+            MatchPerpOrderV3Output::Resting { taker_order_after: taker.clone() }
         }
     };
     Ok((taker, outcome))

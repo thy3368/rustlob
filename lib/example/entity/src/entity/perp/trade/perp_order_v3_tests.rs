@@ -3,7 +3,7 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 
 use super::{
-    MatchPerpOrderV3Input, MatchPerpOrderV3Outcome, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
+    MatchPerpOrderV3Input, MatchPerpOrderV3Output, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
 };
 use crate::entity::common::UserId;
 use crate::entity::{OrderSide, OrderTif, PerpTradeKind, SpotOrderStatus};
@@ -95,7 +95,7 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
             timestamp: NOW,
         })
         .unwrap();
-    let MatchPerpOrderV3Outcome::Filled {
+    let MatchPerpOrderV3Output::Filled {
         filled_taker_order_after,
         maker_orders_after,
         created_trades,
@@ -125,7 +125,7 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
         .transition(PerpOrderV3Event::Match { makers: vec![], input: input(), timestamp: NOW })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Open);
-    assert!(matches!(outcome, Some(MatchPerpOrderV3Outcome::Resting { .. })));
+    assert!(matches!(outcome, Some(MatchPerpOrderV3Output::Resting { .. })));
 
     let mut ioc = taker(SpotOrderStatus::Pending);
     ioc.comon_order.tif = OrderTif::Ioc;
@@ -133,7 +133,7 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
         .transition(PerpOrderV3Event::Match { makers: vec![], input: input(), timestamp: NOW })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Rejected);
-    assert!(matches!(outcome, Some(MatchPerpOrderV3Outcome::Rejected { .. })));
+    assert!(matches!(outcome, Some(MatchPerpOrderV3Output::Rejected { .. })));
 
     let crossing_maker = maker(2, dec!(3));
     let maker_before = crossing_maker.clone();
@@ -147,7 +147,7 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
         })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Rejected);
-    let MatchPerpOrderV3Outcome::Rejected { .. } = outcome.unwrap() else {
+    let MatchPerpOrderV3Output::Rejected { .. } = outcome.unwrap() else {
         panic!("expected rejected outcome")
     };
     assert_eq!(maker_before.comon_order.version, 0);
@@ -165,7 +165,7 @@ fn ioc_partial_fill_cancels_remainder() {
         })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Canceled);
-    assert!(matches!(outcome, Some(MatchPerpOrderV3Outcome::CanceledAfterPartialFill { .. })));
+    assert!(matches!(outcome, Some(MatchPerpOrderV3Output::CanceledAfterPartialFill { .. })));
     assert_eq!(subject.comon_order.size, dec!(6));
 }
 
@@ -186,7 +186,7 @@ fn incompatible_makers_are_skipped() {
         })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Open);
-    assert!(matches!(outcome, Some(MatchPerpOrderV3Outcome::Resting { .. })));
+    assert!(matches!(outcome, Some(MatchPerpOrderV3Output::Resting { .. })));
 }
 
 #[test]

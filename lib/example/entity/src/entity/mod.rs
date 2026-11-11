@@ -44,7 +44,7 @@ pub use perp::trade::hyperliquid_perp_trade::{
     HyperliquidPerpTrade, HyperliquidPerpTradePositionSettlement,
 };
 pub use perp::trade::perp_order_v3::{
-    MatchPerpOrderV3Input, MatchPerpOrderV3Outcome, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
+    MatchPerpOrderV3Input, MatchPerpOrderV3Output, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
 };
 pub use perp::trade::perp_position_v3::{
     FundingAccumulatorV3, MarginModeV3, PerpPositionV3, PerpPositionV3Error, PerpPositionV3Event,
