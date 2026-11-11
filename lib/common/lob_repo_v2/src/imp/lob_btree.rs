@@ -72,9 +72,28 @@ impl<O: LobOrder> LocalLobBtree<O> {
         if !o.is_active() {
             return;
         }
+        let price = Px(o.px());
+        let priority = (o.created_at(), o.entity_id());
+        let position = {
+            let map = if O::is_buy_side(o.side()) { &self.bids } else { &self.asks };
+            map.get(&price)
+                .map(|indices| {
+                    indices
+                        .binary_search_by_key(&priority, |&index| {
+                            self.slots[index.0]
+                                .as_ref()
+                                .map(|order| (order.created_at(), order.entity_id()))
+                                .unwrap_or((u64::MAX, u64::MAX))
+                        })
+                        .unwrap_or_else(|position| position)
+                })
+                .unwrap_or(0)
+        };
         let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
-        map.entry(Px(o.px())).or_default().push(i);
+        map.entry(price).or_default().insert(position, i);
     }
+    // 按订单 ID 插入或更新主存储，并同步维护对应的买卖盘价格索引。
+    // 已有订单复用稳定的 `SlotIndex` 并先移除旧索引；新订单追加到 `slots`，同时写入 `ids`。
     fn put(&mut self, o: O) {
         let id = o.entity_id();
         if let Some(i) = self.ids.get(&id).copied() {
@@ -97,48 +116,53 @@ impl<O: LobOrder> LocalLobBtree<O> {
             }
         }
     }
+
+    fn collect_maker_orders<'a>(
+        &'a self,
+        levels: impl Iterator<Item = &'a Vec<SlotIndex>>,
+        quantity: Decimal,
+    ) -> (Option<Vec<&'a O>>, Decimal) {
+        let mut remaining = quantity;
+        let mut orders = vec![];
+
+        for indices in levels {
+            for &index in indices {
+                if let Some(order) = self.slots[index.0].as_ref() {
+                    remaining = (remaining - order.size().max(Decimal::ZERO)).max(Decimal::ZERO);
+                    orders.push(order);
+                }
+                if remaining == Decimal::ZERO {
+                    return (Some(orders), Decimal::ZERO);
+                }
+            }
+        }
+
+        (if orders.is_empty() { None } else { Some(orders) }, remaining)
+    }
 }
 impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
     type Order = O;
-    fn match_orders(
+    fn maker_orders(
         &self,
         price: Decimal,
-        qty: Decimal,
-        side: O::Side,
+        quantity: Decimal,
+        taker_side: O::Side,
     ) -> (Option<Vec<&Self::Order>>, Decimal) {
-        if qty <= Decimal::ZERO {
+        if quantity <= Decimal::ZERO {
             return (Some(vec![]), Decimal::ZERO);
         }
-        let buy = O::is_buy_side(side);
-        let map = if buy { &self.asks } else { &self.bids };
-        let mut remaining = qty;
-        let mut out = vec![];
-        let iter: Box<dyn Iterator<Item = (&Px, &Vec<SlotIndex>)>> =
-            if buy { Box::new(map.iter()) } else { Box::new(map.iter().rev()) };
-        for (&Px(px), indices) in iter {
-            if (buy && px > price) || (!buy && px < price) {
-                break;
-            }
-            let mut sorted = indices.clone();
-            sorted.sort_by_key(|&i| {
-                self.slots[i.0]
-                    .as_ref()
-                    .map(|o| (o.created_at(), o.entity_id()))
-                    .unwrap_or((u64::MAX, u64::MAX))
-            });
-            for i in sorted {
-                if let Some(o) = self.slots[i.0].as_ref() {
-                    let available = if o.size() > Decimal::ZERO { o.size() } else { Decimal::ZERO };
-                    remaining =
-                        if remaining > available { remaining - available } else { Decimal::ZERO };
-                    out.push(o);
-                }
-                if remaining == Decimal::ZERO {
-                    return (Some(out), Decimal::ZERO);
-                }
-            }
+
+        if O::is_buy_side(taker_side) {
+            self.collect_maker_orders(
+                self.asks.range(..=Px(price)).map(|(_, orders)| orders),
+                quantity,
+            )
+        } else {
+            self.collect_maker_orders(
+                self.bids.range(Px(price)..).rev().map(|(_, orders)| orders),
+                quantity,
+            )
         }
-        (if out.is_empty() { None } else { Some(out) }, remaining)
     }
     fn best_bid(&self) -> Option<Decimal> {
         self.bids.keys().next_back().map(|price| price.0)
@@ -335,13 +359,13 @@ mod tests {
         }
 
         let (orders, remaining) =
-            lob.match_orders(Decimal::new(10002, 2), Decimal::new(5, 0), Side::Buy);
+            lob.maker_orders(Decimal::new(10002, 2), Decimal::new(5, 0), Side::Buy);
         let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
         assert_eq!(ids, vec![1, 2, 3]);
         assert_eq!(remaining, Decimal::ZERO);
 
         let (orders, remaining) =
-            lob.match_orders(Decimal::new(100005, 3), Decimal::ONE, Side::Buy);
+            lob.maker_orders(Decimal::new(100005, 3), Decimal::ONE, Side::Buy);
         assert!(orders.is_none());
         assert_eq!(remaining, Decimal::ONE);
 
@@ -354,15 +378,79 @@ mod tests {
         }
 
         let (orders, remaining) =
-            bids.match_orders(Decimal::new(99985, 3), Decimal::ONE, Side::Sell);
+            bids.maker_orders(Decimal::new(99985, 3), Decimal::ONE, Side::Sell);
         let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
         assert_eq!(ids, vec![5]);
         assert_eq!(remaining, Decimal::ZERO);
 
         let (orders, remaining) =
-            bids.match_orders(Decimal::new(99995, 3), Decimal::ONE, Side::Sell);
+            bids.maker_orders(Decimal::new(99995, 3), Decimal::ONE, Side::Sell);
         assert!(orders.is_none());
         assert_eq!(remaining, Decimal::ONE);
+    }
+
+    #[test]
+    fn buy_query_uses_ask_price_time_and_id_priority_at_the_limit() {
+        let mut lob = LocalLobBtree::new(test_symbol());
+        for order in [
+            TestOrder::new(5, Decimal::new(99, 0), Decimal::ONE, Side::Sell, 5),
+            TestOrder::new(3, Decimal::new(100, 0), Decimal::ONE, Side::Sell, 10),
+            TestOrder::new(2, Decimal::new(100, 0), Decimal::ONE, Side::Sell, 10),
+            TestOrder::new(4, Decimal::new(101, 0), Decimal::ONE, Side::Sell, 1),
+        ] {
+            lob.insert_order(order).unwrap();
+        }
+
+        let (orders, remaining) =
+            lob.maker_orders(Decimal::new(100, 0), Decimal::new(4, 0), Side::Buy);
+        let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
+
+        assert_eq!(ids, vec![5, 2, 3]);
+        assert_eq!(remaining, Decimal::ONE);
+    }
+
+    #[test]
+    fn sell_query_uses_bid_price_time_and_id_priority_at_the_limit() {
+        let mut lob = LocalLobBtree::new(test_symbol());
+        for order in [
+            TestOrder::new(5, Decimal::new(101, 0), Decimal::ONE, Side::Buy, 5),
+            TestOrder::new(3, Decimal::new(100, 0), Decimal::ONE, Side::Buy, 10),
+            TestOrder::new(2, Decimal::new(100, 0), Decimal::ONE, Side::Buy, 10),
+            TestOrder::new(4, Decimal::new(99, 0), Decimal::ONE, Side::Buy, 1),
+        ] {
+            lob.insert_order(order).unwrap();
+        }
+
+        let (orders, remaining) =
+            lob.maker_orders(Decimal::new(100, 0), Decimal::new(4, 0), Side::Sell);
+        let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
+
+        assert_eq!(ids, vec![5, 2, 3]);
+        assert_eq!(remaining, Decimal::ONE);
+    }
+
+    #[test]
+    fn updating_an_order_repositions_it_by_time_and_price() {
+        let mut lob = LocalLobBtree::new(test_symbol());
+        for order in [
+            TestOrder::new(1, Decimal::new(100, 0), Decimal::ONE, Side::Sell, 10),
+            TestOrder::new(2, Decimal::new(100, 0), Decimal::ONE, Side::Sell, 20),
+            TestOrder::new(3, Decimal::new(100, 0), Decimal::ONE, Side::Sell, 30),
+        ] {
+            lob.insert_order(order).unwrap();
+        }
+
+        lob.insert_order(TestOrder::new(1, Decimal::new(100, 0), Decimal::ONE, Side::Sell, 40))
+            .unwrap();
+        let (orders, _) = lob.maker_orders(Decimal::new(100, 0), Decimal::new(3, 0), Side::Buy);
+        let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
+        assert_eq!(ids, vec![2, 3, 1]);
+
+        lob.insert_order(TestOrder::new(3, Decimal::new(99, 0), Decimal::ONE, Side::Sell, 50))
+            .unwrap();
+        let (orders, _) = lob.maker_orders(Decimal::new(100, 0), Decimal::new(3, 0), Side::Buy);
+        let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
+        assert_eq!(ids, vec![3, 2, 1]);
     }
 
     #[test]
@@ -423,11 +511,11 @@ mod tests {
         lob.insert_order(TestOrder::new(2, Decimal::ONE, Decimal::new(225, 2), Side::Sell, 2))
             .unwrap();
 
-        let (orders, remaining) = lob.match_orders(Decimal::ONE, Decimal::new(375, 2), Side::Buy);
+        let (orders, remaining) = lob.maker_orders(Decimal::ONE, Decimal::new(375, 2), Side::Buy);
         assert_eq!(orders.unwrap().len(), 2);
         assert_eq!(remaining, Decimal::ZERO);
 
-        let (_, remaining) = lob.match_orders(Decimal::ONE, Decimal::new(4, 0), Side::Buy);
+        let (_, remaining) = lob.maker_orders(Decimal::ONE, Decimal::new(4, 0), Side::Buy);
         assert_eq!(remaining, Decimal::new(25, 2));
     }
 
@@ -445,12 +533,12 @@ mod tests {
         )
         .unwrap();
 
-        let (orders, remaining) = lob.match_orders(Decimal::ONE, Decimal::ONE, Side::Buy);
+        let (orders, remaining) = lob.maker_orders(Decimal::ONE, Decimal::ONE, Side::Buy);
         let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
         assert_eq!(ids, vec![1, 2]);
         assert_eq!(remaining, Decimal::ZERO);
 
-        let (orders, remaining) = lob.match_orders(Decimal::ONE, Decimal::new(3, 0), Side::Buy);
+        let (orders, remaining) = lob.maker_orders(Decimal::ONE, Decimal::new(3, 0), Side::Buy);
         let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
         assert_eq!(ids, vec![1, 2]);
         assert_eq!(remaining, Decimal::ONE);
@@ -466,12 +554,12 @@ mod tests {
         .unwrap();
 
         for quantity in [Decimal::ZERO, Decimal::NEGATIVE_ONE] {
-            let (orders, remaining) = lob.match_orders(Decimal::ONE, quantity, Side::Buy);
+            let (orders, remaining) = lob.maker_orders(Decimal::ONE, quantity, Side::Buy);
             assert_eq!(orders, Some(vec![]));
             assert_eq!(remaining, Decimal::ZERO);
         }
 
-        let (orders, remaining) = lob.match_orders(Decimal::ONE, Decimal::ONE, Side::Buy);
+        let (orders, remaining) = lob.maker_orders(Decimal::ONE, Decimal::ONE, Side::Buy);
         assert_eq!(orders.unwrap().len(), 1);
         assert_eq!(remaining, Decimal::ONE);
     }

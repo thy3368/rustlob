@@ -1,9 +1,18 @@
-use base_types_v2::Symbol;
+use std::path::PathBuf;
 
+use crate::lob::LobOrder;
 use crate::LobError;
 
 pub trait LobRepo {
     type Lob;
-    fn load_from_snapshot(&self, symbol: Symbol) -> Result<Self::Lob, LobError>;
-    fn save_to_snapshot(&self, lob: &Self::Lob) -> Result<(), LobError>;
+    type Order: LobOrder;
+
+    ///从path加载lob 从快照恢复
+    fn load_from_snapshot(path: PathBuf) -> Result<Self::Lob, LobError>;
+
+    ///lob持久化 保存快照
+    fn save_to_snapshot(path: PathBuf, lob: Self::Lob) -> Result<(), LobError>;
+
+    ///直接从active order重建lob，orders可能是无序
+    fn load_from_orders(orders: Vec<Self::Order>) -> Result<Self::Lob, LobError>;
 }

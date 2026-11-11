@@ -24,10 +24,10 @@ pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
 pub trait AssetLobV2 {
     type Order: LobOrder;
 
-    // price_tick_size: Decimal, // 价格最小步长
-    // size_tick_size: Decimal,  // 数量最小步长
+    // price_tick_size: Decimal, // 价格最小步长 取决于coin
+    // size_tick_size: Decimal,  // 数量最小步长 取决于coin
 
-    fn match_orders(
+    fn maker_orders(
         &self,
         price: Decimal,
         quantity: Decimal,
