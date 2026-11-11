@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use base_types_v2::{Coin, Symbol};
 use common_entity::{
     Entity, EntityReplayableEvent, StateSink, StateSource, stable_string_entity_id,
 };
@@ -26,17 +27,17 @@ pub struct InMemoryRaftCluster {
 }
 
 impl InMemoryRaftCluster {
-    pub fn new(nodes: usize, asset: u32) -> Self {
+    pub fn new(nodes: usize, symbol: Symbol) -> Self {
         let count = nodes.max(1);
         Self {
-            stores: Arc::new((0..count).map(|_| InMemoryStore::new(asset)).collect()),
+            stores: Arc::new((0..count).map(|_| InMemoryStore::new(symbol)).collect()),
             leader: Arc::new(Mutex::new(0)),
             committed: Arc::new(Mutex::new(0)),
         }
     }
 
-    pub fn three_node(asset: u32) -> Self {
-        Self::new(3, asset)
+    pub fn three_node(symbol: Symbol) -> Self {
+        Self::new(3, symbol)
     }
     pub fn node_count(&self) -> usize {
         self.stores.len()
@@ -104,7 +105,7 @@ impl InMemoryRaftCluster {
 
 impl Default for InMemoryRaftCluster {
     fn default() -> Self {
-        Self::three_node(1)
+        Self::three_node(Symbol::new(1, Coin::BTC, Coin::USDT))
     }
 }
 
@@ -126,7 +127,7 @@ impl InMemoryPlaceOrderRaftOutbound {
     }
 
     pub fn from_store(store: InMemoryStore) -> Self {
-        let cluster = InMemoryRaftCluster::new(1, 1);
+        let cluster = InMemoryRaftCluster::new(1, Symbol::new(1, Coin::BTC, Coin::USDT));
         Self { store, broker: None, cluster, node_id: 0 }
     }
 
@@ -134,7 +135,7 @@ impl InMemoryPlaceOrderRaftOutbound {
         store: InMemoryStore,
         broker: InMemorySpotPipelineBroker,
     ) -> Self {
-        let cluster = InMemoryRaftCluster::new(1, 1);
+        let cluster = InMemoryRaftCluster::new(1, Symbol::new(1, Coin::BTC, Coin::USDT));
         Self { store, broker: Some(broker), cluster, node_id: 0 }
     }
 

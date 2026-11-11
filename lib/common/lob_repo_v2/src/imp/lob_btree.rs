@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
+use base_types_v2::Symbol;
 use common_entity::{EntityChangeType, EntityReplayableEvent};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -21,7 +22,7 @@ struct SlotIndex(usize);
 #[serde(bound(serialize = "O: Serialize", deserialize = "O: Deserialize<'de>"))]
 pub struct LocalLobBtree<O: LobOrder> {
     /// 当前本地订单簿对应的交易标的，用于拒绝跨订单簿订单。
-    symbol: u32,
+    symbol: Symbol,
     /// 订单主存储；索引保持稳定，删除订单后留下 `None` 空洞。
     slots: Vec<Option<O>>,
     /// 订单 ID 到 `SlotIndex` 的映射，用于快速定位仍存在的订单。
@@ -34,9 +35,9 @@ pub struct LocalLobBtree<O: LobOrder> {
     sequence: u64,
 }
 impl<O: LobOrder> LocalLobBtree<O> {
-    pub fn new(asset: u32) -> Self {
+    pub fn new(symbol: Symbol) -> Self {
         Self {
-            symbol: asset,
+            symbol,
             slots: vec![],
             ids: HashMap::new(),
             bids: BTreeMap::new(),
@@ -51,7 +52,7 @@ impl<O: LobOrder> LocalLobBtree<O> {
         self.ids.get(&id).and_then(|&i| self.slots[i.0].as_ref())
     }
     pub fn insert_order(&mut self, order: O) -> Result<(), LobError> {
-        if order.asset() != self.symbol {
+        if order.symbol() != self.symbol {
             return Err(LobError::Event("wrong order book".into()));
         }
         self.put(order);
@@ -143,7 +144,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
     fn best_ask(&self) -> Option<Decimal> {
         self.asks.keys().next().map(|price| price.0)
     }
-    fn asset(&self) -> u32 {
+    fn symbol(&self) -> Symbol {
         self.symbol
     }
     fn replay_events(&mut self, events: &[EntityReplayableEvent]) -> Result<(), LobError> {
@@ -168,7 +169,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
                     return Err(LobError::Event("invalid create".into()));
                 }
                 let order = O::from_replay_event(event, id)?;
-                if order.asset() != self.symbol {
+                if order.symbol() != self.symbol {
                     return Err(LobError::Event("wrong order book".into()));
                 }
                 self.put(order);
@@ -182,7 +183,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
                     return Err(LobError::Event("invalid update".into()));
                 }
                 let order = old.apply_replay_event(event)?;
-                if order.asset() != self.symbol {
+                if order.symbol() != self.symbol {
                     return Err(LobError::Event("cross-book update".into()));
                 }
                 self.put(order);
@@ -204,6 +205,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
 
 #[cfg(test)]
 mod tests {
+    use base_types_v2::{Coin, Symbol};
     use common_entity::EntityReplayableEvent;
     use rust_decimal::Decimal;
     use serde::{Deserialize, Serialize};
@@ -225,11 +227,17 @@ mod tests {
         qty: u64,
         side: Side,
         created_at: u64,
+        symbol: Symbol,
     }
 
     impl TestOrder {
         fn new(id: u64, price: Decimal, qty: u64, side: Side, created_at: u64) -> Self {
-            Self { id, price, qty, side, created_at }
+            Self { id, price, qty, side, created_at, symbol: test_symbol() }
+        }
+
+        fn with_symbol(mut self, symbol: Symbol) -> Self {
+            self.symbol = symbol;
+            self
         }
     }
 
@@ -242,8 +250,8 @@ mod tests {
         fn entity_id(&self) -> u64 {
             self.id
         }
-        fn asset(&self) -> u32 {
-            7
+        fn symbol(&self) -> Symbol {
+            self.symbol
         }
         fn side(&self) -> Self::Side {
             self.side
@@ -277,19 +285,20 @@ mod tests {
         }
     }
 
+    fn test_symbol() -> Symbol {
+        Symbol::new(7, Coin::BTC, Coin::USDT)
+    }
+
     #[test]
     fn price_key_bincode_matches_decimal() {
         let value = Decimal::new(4_212_345, 5);
 
-        assert_eq!(
-            bincode::serialize(&Px(value)).unwrap(),
-            bincode::serialize(&value).unwrap()
-        );
+        assert_eq!(bincode::serialize(&Px(value)).unwrap(), bincode::serialize(&value).unwrap());
     }
 
     #[test]
     fn decimal_prices_determine_best_bid_and_ask() {
-        let mut lob = LocalLobBtree::new(7);
+        let mut lob = LocalLobBtree::new(test_symbol());
         for order in [
             TestOrder::new(1, Decimal::new(10001, 2), 1, Side::Buy, 1),
             TestOrder::new(2, Decimal::new(100001, 3), 1, Side::Buy, 2),
@@ -307,7 +316,7 @@ mod tests {
 
     #[test]
     fn decimal_limit_respects_price_then_time_priority() {
-        let mut lob = LocalLobBtree::new(7);
+        let mut lob = LocalLobBtree::new(test_symbol());
         for order in [
             TestOrder::new(3, Decimal::new(10002, 2), 2, Side::Sell, 30),
             TestOrder::new(2, Decimal::new(10001, 2), 2, Side::Sell, 20),
@@ -326,7 +335,7 @@ mod tests {
         assert!(orders.is_none());
         assert_eq!(remaining, 1);
 
-        let mut bids = LocalLobBtree::new(7);
+        let mut bids = LocalLobBtree::new(test_symbol());
         for order in [
             TestOrder::new(5, Decimal::new(9999, 2), 1, Side::Buy, 50),
             TestOrder::new(6, Decimal::new(9998, 2), 1, Side::Buy, 60),
@@ -346,7 +355,7 @@ mod tests {
 
     #[test]
     fn decimal_price_order_book_round_trips_through_bincode() {
-        let mut lob = LocalLobBtree::new(7);
+        let mut lob = LocalLobBtree::new(test_symbol());
         lob.insert_order(TestOrder::new(1, Decimal::new(1234567, 4), 9, Side::Buy, 1)).unwrap();
 
         let encoded = bincode::serialize(&lob).unwrap();
@@ -364,5 +373,23 @@ mod tests {
             bincode::serialize(&SlotIndex(value)).unwrap(),
             bincode::serialize(&value).unwrap()
         );
+    }
+
+    #[test]
+    fn rejects_orders_from_a_different_symbol() {
+        let mut lob = LocalLobBtree::new(test_symbol());
+        let order = TestOrder::new(1, Decimal::ONE, 1, Side::Buy, 1);
+
+        lob.insert_order(order.clone()).unwrap();
+        for symbol in [
+            Symbol::new(8, Coin::BTC, Coin::USDT),
+            Symbol::new(7, Coin::ETH, Coin::USDT),
+            Symbol::new(7, Coin::BTC, Coin::USDC),
+        ] {
+            assert!(matches!(
+                lob.insert_order(order.clone().with_symbol(symbol)),
+                Err(LobError::Event(message)) if message == "wrong order book"
+            ));
+        }
     }
 }

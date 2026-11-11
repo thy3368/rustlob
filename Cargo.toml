@@ -4,6 +4,7 @@ cargo-features = ["profile-rustflags"]
 members = [
     # lib/common
     "lib/common/base_types",
+    "lib/common/base_types_v2",
     "lib/common/db_repo",
     "lib/common/diff",
     "lib/common/entity",

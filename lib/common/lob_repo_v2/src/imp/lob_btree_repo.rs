@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
 
+use base_types_v2::Symbol;
+
 use super::lob_btree::LocalLobBtree;
 use crate::LobError;
 use crate::lob::LobOrder;
@@ -22,11 +24,11 @@ impl<O: LobOrder + serde::Serialize + for<'de> serde::Deserialize<'de>> LobRepo
 {
     type Lob = LocalLobBtree<O>;
 
-    fn load_from_snapshot(&self, asset: u32) -> Result<Self::Lob, LobError> {
+    fn load_from_snapshot(&self, symbol: Symbol) -> Result<Self::Lob, LobError> {
         match fs::read(&self.path) {
             Ok(bytes) => bincode::deserialize(&bytes).map_err(|e| LobError::Codec(e.to_string())),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                Ok(LocalLobBtree::new(asset))
+                Ok(LocalLobBtree::new(symbol))
             }
             Err(error) => Err(error.into()),
         }

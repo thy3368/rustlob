@@ -1,3 +1,4 @@
+use base_types_v2::Symbol;
 use common_entity::EntityReplayableEvent;
 use rust_decimal::Decimal;
 
@@ -7,7 +8,7 @@ pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
 
     fn entity_type() -> u8;
     fn entity_id(&self) -> u64;
-    fn asset(&self) -> u32;
+    fn symbol(&self) -> Symbol;
     fn side(&self) -> Self::Side;
     fn is_buy_side(side: Self::Side) -> bool;
     fn price(&self) -> Decimal;
@@ -35,7 +36,7 @@ pub trait AssetLobV2 {
     fn best_bid(&self) -> Option<Decimal>;
     fn best_ask(&self) -> Option<Decimal>;
 
-    fn asset(&self) -> u32;
+    fn symbol(&self) -> Symbol;
 
     fn replay_events(&mut self, events: &[EntityReplayableEvent]) -> Result<(), LobError>;
     fn replay_event(&mut self, event: &EntityReplayableEvent) -> Result<(), LobError>;

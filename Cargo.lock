@@ -1228,6 +1228,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "base_types_v2"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "rust_decimal",
+ "serde",
+]
+
+[[package]]
 name = "bigdecimal"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2950,6 +2959,7 @@ dependencies = [
 name = "example_core_entity"
 version = "0.1.0"
 dependencies = [
+ "base_types_v2",
  "entity",
  "lob_repo_v2",
  "proptest",
@@ -2996,6 +3006,7 @@ dependencies = [
 name = "example_outbound_adapter"
 version = "0.1.0"
 dependencies = [
+ "base_types_v2",
  "bincode",
  "entity",
  "example_core_use_case",
@@ -3013,6 +3024,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "aeron-rs",
+ "base_types_v2",
  "entity",
  "example_core_use_case",
  "example_outbound_adapter",
@@ -5271,6 +5283,7 @@ dependencies = [
 name = "lob_repo_v2"
 version = "0.1.0"
 dependencies = [
+ "base_types_v2",
  "bincode",
  "entity",
  "rust_decimal",

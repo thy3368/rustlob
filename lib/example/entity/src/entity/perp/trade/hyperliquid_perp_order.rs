@@ -582,7 +582,7 @@ impl LobOrder for HyperliquidPerpOrder {
         todo!()
     }
 
-    fn asset(&self) -> u32 {
+    fn symbol(&self) -> crate::account::symbol::Symbol {
         todo!()
     }
 

@@ -456,8 +456,8 @@ impl LobOrder for SpotOrderV7 {
     fn entity_id(&self) -> u64 {
         self.order_base.order_id
     }
-    fn asset(&self) -> u32 {
-        self.order_base.symbol.id()
+    fn symbol(&self) -> crate::account::symbol::Symbol {
+        self.order_base.symbol
     }
     fn side(&self) -> Self::Side {
         self.order_base.side

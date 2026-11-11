@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use base_types_v2::{Coin, Symbol};
 use common_entity::{Entity, EntityReplayableEvent};
 use example_core_use_case::{BalanceV2, MarketRules, SpotOrderV7, SpotTrade};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
@@ -21,7 +22,7 @@ pub(crate) struct StoreState {
 }
 
 impl StoreState {
-    fn new(asset: u32) -> Self {
+    fn new(symbol: Symbol) -> Self {
         Self {
             balances: HashMap::new(),
             market_rules_by_symbol: HashMap::new(),
@@ -30,7 +31,7 @@ impl StoreState {
             persisted_events: Vec::new(),
             published_events: Vec::new(),
             next_order_sequence: 1,
-            lob: LocalLobBtree::new(asset),
+            lob: LocalLobBtree::new(symbol),
         }
     }
 }
@@ -42,13 +43,13 @@ pub struct InMemoryStore {
 
 impl Default for InMemoryStore {
     fn default() -> Self {
-        Self::new(1)
+        Self::new(Symbol::new(1, Coin::BTC, Coin::USDT))
     }
 }
 
 impl InMemoryStore {
-    pub fn new(asset: u32) -> Self {
-        Self { state: Arc::new(Mutex::new(StoreState::new(asset))) }
+    pub fn new(symbol: Symbol) -> Self {
+        Self { state: Arc::new(Mutex::new(StoreState::new(symbol))) }
     }
 
     pub fn seed_balances(
@@ -56,7 +57,7 @@ impl InMemoryStore {
         quote_balance: BalanceV2,
         market_rules: MarketRules,
     ) -> Result<Self, StoreError> {
-        let store = Self::new(1);
+        let store = Self::default();
         store.seed_balance(base_balance)?;
         store.seed_balance(quote_balance)?;
         store.seed_market_rules(market_rules)?;
