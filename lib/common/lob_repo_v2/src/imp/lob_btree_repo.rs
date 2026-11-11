@@ -1,6 +1,9 @@
 use std::fs;
+use std::io::Write;
 use std::marker::PhantomData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use tempfile::NamedTempFile;
 
 use super::lob_btree::LocalLobBtree;
 use crate::LobError;
@@ -22,7 +25,14 @@ impl<O: LobOrder + serde::Serialize + for<'de> serde::Deserialize<'de>> LobRepo
 
     fn save_to_snapshot(path: PathBuf, lob: Self::Lob) -> Result<(), LobError> {
         let bytes = bincode::serialize(&lob).map_err(|error| LobError::Codec(error.to_string()))?;
-        fs::write(path, bytes)?;
+        let parent = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let mut temporary = NamedTempFile::new_in(parent)?;
+        temporary.write_all(&bytes)?;
+        temporary.as_file().sync_all()?;
+        temporary.persist(path).map_err(|error| LobError::Io(error.error))?;
         Ok(())
     }
 
@@ -151,6 +161,30 @@ mod tests {
         assert_eq!(loaded.order(1).map(|order| order.id), Some(1));
         assert_eq!(loaded.order(4).map(|order| order.id), Some(4));
         assert_eq!(loaded.sequence(), 0);
+    }
+
+    #[test]
+    fn saving_to_existing_snapshot_atomically_replaces_complete_state() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("lob.bin");
+        let book_symbol = symbol(7);
+        let old_lob = Repository::load_from_orders(vec![TestOrder::new(
+            99,
+            book_symbol,
+            Side::Buy,
+            Decimal::new(100, 0),
+        )])
+        .unwrap();
+        Repository::save_to_snapshot(path.clone(), old_lob).unwrap();
+
+        let new_lob = Repository::load_from_orders(orders(book_symbol)).unwrap();
+        Repository::save_to_snapshot(path.clone(), new_lob).unwrap();
+        let loaded = Repository::load_from_snapshot(path).unwrap();
+
+        assert_eq!(loaded.best_bid(), Some(Decimal::new(101, 0)));
+        assert_eq!(loaded.best_ask(), Some(Decimal::new(102, 0)));
+        assert!(loaded.order(99).is_none());
+        assert_eq!(loaded.order(4).map(|order| order.id), Some(4));
     }
 
     #[test]
