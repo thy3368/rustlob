@@ -594,7 +594,7 @@ impl LobOrder for HyperliquidPerpOrder {
         todo!()
     }
 
-    fn price(&self) -> Decimal {
+    fn px(&self) -> Decimal {
         todo!()
     }
 

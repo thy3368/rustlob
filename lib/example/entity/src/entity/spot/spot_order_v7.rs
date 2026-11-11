@@ -464,7 +464,7 @@ impl LobOrder for SpotOrderV7 {
     fn is_buy_side(side: Self::Side) -> bool {
         side == OrderSide::Buy
     }
-    fn price(&self) -> Decimal {
+    fn px(&self) -> Decimal {
         self.order_base.limit_px
     }
     fn qty(&self) -> Decimal {

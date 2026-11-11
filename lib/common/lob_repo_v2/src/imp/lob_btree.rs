@@ -60,7 +60,7 @@ impl<O: LobOrder> LocalLobBtree<O> {
     }
     fn remove_idx(&mut self, o: &O, i: SlotIndex) {
         let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
-        let price = Px(o.price());
+        let price = Px(o.px());
         if let Some(v) = map.get_mut(&price) {
             v.retain(|&x| x != i);
             if v.is_empty() {
@@ -73,7 +73,7 @@ impl<O: LobOrder> LocalLobBtree<O> {
             return;
         }
         let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
-        map.entry(Px(o.price())).or_default().push(i);
+        map.entry(Px(o.px())).or_default().push(i);
     }
     fn put(&mut self, o: O) {
         let id = o.entity_id();
@@ -279,7 +279,7 @@ mod tests {
         fn is_buy_side(side: Self::Side) -> bool {
             side == Side::Buy
         }
-        fn price(&self) -> Decimal {
+        fn px(&self) -> Decimal {
             self.price
         }
         fn qty(&self) -> Decimal {
