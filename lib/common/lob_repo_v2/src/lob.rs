@@ -12,8 +12,8 @@ pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
     fn side(&self) -> Self::Side;
     fn is_buy_side(side: Self::Side) -> bool;
     fn px(&self) -> Decimal;
-    fn qty(&self) -> Decimal;
-    fn filled_qty(&self) -> Decimal;
+    fn orig_size(&self) -> Decimal;
+    fn size(&self) -> Decimal;
     fn created_at(&self) -> u64;
     fn entity_ver(&self) -> u64;
     fn is_active(&self) -> bool;

@@ -128,11 +128,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
             });
             for i in sorted {
                 if let Some(o) = self.slots[i.0].as_ref() {
-                    let available = if o.qty() > o.filled_qty() {
-                        o.qty() - o.filled_qty()
-                    } else {
-                        Decimal::ZERO
-                    };
+                    let available = if o.size() > Decimal::ZERO { o.size() } else { Decimal::ZERO };
                     remaining =
                         if remaining > available { remaining - available } else { Decimal::ZERO };
                     out.push(o);
@@ -231,7 +227,7 @@ mod tests {
         id: u64,
         price: Decimal,
         qty: Decimal,
-        filled_qty: Decimal,
+        size: Decimal,
         side: Side,
         created_at: u64,
         symbol: Symbol,
@@ -239,15 +235,7 @@ mod tests {
 
     impl TestOrder {
         fn new(id: u64, price: Decimal, qty: Decimal, side: Side, created_at: u64) -> Self {
-            Self {
-                id,
-                price,
-                qty,
-                filled_qty: Decimal::ZERO,
-                side,
-                created_at,
-                symbol: test_symbol(),
-            }
+            Self { id, price, qty, size: qty, side, created_at, symbol: test_symbol() }
         }
 
         fn with_symbol(mut self, symbol: Symbol) -> Self {
@@ -255,8 +243,8 @@ mod tests {
             self
         }
 
-        fn with_filled_qty(mut self, filled_qty: Decimal) -> Self {
-            self.filled_qty = filled_qty;
+        fn with_size(mut self, size: Decimal) -> Self {
+            self.size = size;
             self
         }
     }
@@ -282,11 +270,11 @@ mod tests {
         fn px(&self) -> Decimal {
             self.price
         }
-        fn qty(&self) -> Decimal {
+        fn orig_size(&self) -> Decimal {
             self.qty
         }
-        fn filled_qty(&self) -> Decimal {
-            self.filled_qty
+        fn size(&self) -> Decimal {
+            self.size
         }
         fn created_at(&self) -> u64 {
             self.created_at
@@ -429,13 +417,13 @@ mod tests {
         let mut lob = LocalLobBtree::new(test_symbol());
         lob.insert_order(
             TestOrder::new(1, Decimal::ONE, Decimal::new(175, 2), Side::Sell, 1)
-                .with_filled_qty(Decimal::new(25, 2)),
+                .with_size(Decimal::new(150, 2)),
         )
         .unwrap();
         lob.insert_order(TestOrder::new(2, Decimal::ONE, Decimal::new(225, 2), Side::Sell, 2))
             .unwrap();
 
-        let (orders, remaining) = lob.match_orders(Decimal::ONE, Decimal::new(325, 2), Side::Buy);
+        let (orders, remaining) = lob.match_orders(Decimal::ONE, Decimal::new(375, 2), Side::Buy);
         assert_eq!(orders.unwrap().len(), 2);
         assert_eq!(remaining, Decimal::ZERO);
 
@@ -444,11 +432,36 @@ mod tests {
     }
 
     #[test]
-    fn non_positive_and_overfilled_quantities_preserve_saturation_semantics() {
+    fn fully_and_partially_filled_orders_use_remaining_size() {
+        let mut lob = LocalLobBtree::new(test_symbol());
+        lob.insert_order(
+            TestOrder::new(1, Decimal::ONE, Decimal::new(3, 0), Side::Sell, 1)
+                .with_size(Decimal::ZERO),
+        )
+        .unwrap();
+        lob.insert_order(
+            TestOrder::new(2, Decimal::ONE, Decimal::new(4, 0), Side::Sell, 2)
+                .with_size(Decimal::new(2, 0)),
+        )
+        .unwrap();
+
+        let (orders, remaining) = lob.match_orders(Decimal::ONE, Decimal::ONE, Side::Buy);
+        let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
+        assert_eq!(ids, vec![1, 2]);
+        assert_eq!(remaining, Decimal::ZERO);
+
+        let (orders, remaining) = lob.match_orders(Decimal::ONE, Decimal::new(3, 0), Side::Buy);
+        let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
+        assert_eq!(ids, vec![1, 2]);
+        assert_eq!(remaining, Decimal::ONE);
+    }
+
+    #[test]
+    fn non_positive_taker_and_order_sizes_preserve_saturation_semantics() {
         let mut lob = LocalLobBtree::new(test_symbol());
         lob.insert_order(
             TestOrder::new(1, Decimal::ONE, Decimal::ONE, Side::Sell, 1)
-                .with_filled_qty(Decimal::TWO),
+                .with_size(Decimal::NEGATIVE_ONE),
         )
         .unwrap();
 

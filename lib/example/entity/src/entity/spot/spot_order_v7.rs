@@ -467,11 +467,11 @@ impl LobOrder for SpotOrderV7 {
     fn px(&self) -> Decimal {
         self.order_base.limit_px
     }
-    fn qty(&self) -> Decimal {
+    fn orig_size(&self) -> Decimal {
         self.order_base.orig_size
     }
-    fn filled_qty(&self) -> Decimal {
-        self.order_base.orig_size - self.order_base.size
+    fn size(&self) -> Decimal {
+        self.order_base.size
     }
     fn created_at(&self) -> u64 {
         self.order_base.created_at
