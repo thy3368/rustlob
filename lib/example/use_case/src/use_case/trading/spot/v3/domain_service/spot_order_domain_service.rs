@@ -116,11 +116,10 @@ impl SpotOrderDomainService {
             OrderSide::Sell => t.limit_px <= maker.order_base().limit_px,
         };
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
-            let (_, output) =
-                taker.apply(SpotOrderV7Event::RejectedAsTaker {
-                    lsn: input.lsn,
-                    timestamp: input.timestamp,
-                })?;
+            let (_, output) = taker.apply(SpotOrderV7Event::RejectedAsTaker {
+                lsn: input.lsn,
+                timestamp: input.timestamp,
+            })?;
             let SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
                 order_after,
                 release_requirement: Some(release_requirement),
@@ -769,14 +768,14 @@ mod tests {
         else {
             panic!("expected filled outcome")
         };
-        assert_eq!(filled_taker_order_after.order_base().lsn, 8);
+        assert_eq!(filled_taker_order_after.order_base().lsn, 20);
         assert_eq!(
             filled_taker_order_after.order_base().buy_quote_fee_reserve_consumed,
             Decimal::from(6)
         );
         assert_eq!(maker_orders_after[0], skipped);
-        assert_eq!(maker_orders_after[1].order_base().lsn, 6);
-        assert_eq!(maker_orders_after[2].order_base().lsn, 7);
+        assert_eq!(maker_orders_after[1].order_base().lsn, 20);
+        assert_eq!(maker_orders_after[2].order_base().lsn, 20);
         assert_eq!(created_trades.len(), 2);
         assert_eq!(created_trades[0].comon_trade.trade_id, 900);
         assert_eq!(created_trades[1].comon_trade.trade_id, 901);
@@ -819,7 +818,7 @@ mod tests {
         else {
             panic!("expected IOC rejection")
         };
-        assert_eq!(rejected_taker_order_after.order_base().lsn, 10);
+        assert_eq!(rejected_taker_order_after.order_base().lsn, 20);
     }
 
     #[test]

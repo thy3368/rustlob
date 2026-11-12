@@ -9,10 +9,11 @@ use crate::entity::common::order_primitives::{
     OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus,
 };
 
+/// 现货订单生命周期事件。
+///
+/// 每个事件显式携带 command 的全局 LSN。LSN 可以相对实体当前版本跳号；同一 command
+/// 内的连续迁移可以复用同一 LSN，但不能使用小于实体当前 LSN 的值。
 #[derive(Debug, Clone, PartialEq, Eq)]
-
-///todo 创建(冻结)，撮合(fill,balance)，修改(金额变化)，取消(金额变化)
-///todo 可以在根聚合上加领域服务，因为不少动作确实涉及多个聚合的变化。
 pub enum SpotOrderV7Event {
     Activate {
         lsn: u64,
@@ -219,7 +220,7 @@ impl SpotOrderV7 {
         Ok(())
     }
 
-    ///todo 可以remove
+    /// 兼容入口；版本由 command 的全局 `lsn` 决定，并委托统一 FSM 迁移。
     pub fn modify(
         &mut self,
         price: Decimal,

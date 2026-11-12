@@ -269,7 +269,7 @@ mod tests {
                 .expect("cancel must succeed");
 
             assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
-            assert_eq!(changes.updated_order.after.order_base().lsn, 5);
+            assert_eq!(changes.updated_order.after.order_base().lsn, 9);
             assert_eq!(changes.updated_order.after.order_base().updated_at, LOGICAL_TS);
             let balance = changes.updated_balance.expect("open order must release its hold");
             assert_eq!(balance.after.available(), Decimal::from(30));
@@ -392,5 +392,20 @@ mod tests {
             Err(CancelSpotOrderV3Error::InsufficientFrozenBalance)
         );
         assert_eq!(given, before);
+    }
+
+    #[test]
+    fn rejects_loaded_order_at_or_after_command_lsn() {
+        let mut record = order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7"))
+            .order_base()
+            .clone();
+        record.lsn = 9;
+        let given =
+            state(SpotOrderV7::from_record(record).unwrap(), balance(Coin::USDT, OWNER, 0, 20));
+
+        assert_eq!(
+            CancelSpotOrderV3UseCase.validate_state_given(&command(OrderId::Oid(OID)), &given),
+            Err(CancelSpotOrderV3Error::StaleOrder)
+        );
     }
 }

@@ -105,11 +105,11 @@ fn stale_lsn_keeps_order_unchanged() {
     assert!(
         subject
             .apply(SpotOrderV7Event::MatchedAsTaker {
-            lsn: 3,
-            filled_size: Decimal::ONE,
-            quote_fee: Decimal::ZERO,
-            timestamp: TIMESTAMP,
-        })
+                lsn: 3,
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::ZERO,
+                timestamp: TIMESTAMP,
+            })
             .is_err()
     );
     assert_eq!(subject, before);

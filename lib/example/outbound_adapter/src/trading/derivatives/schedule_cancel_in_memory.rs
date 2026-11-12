@@ -245,12 +245,14 @@ fn replay_events(
                 .get_mut(&event.entity_id)
                 .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
             check_version(event, order.order_base().lsn)?;
-            order.transition(SpotOrderV7Event::Cancel {
-                lsn: event.lsn,
-                timestamp: event.logical_ts,
-            }).map_err(
-                |error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()),
-            )?;
+            order
+                .transition(SpotOrderV7Event::Cancel {
+                    lsn: event.lsn,
+                    timestamp: event.logical_ts,
+                })
+                .map_err(|error| {
+                    HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
+                })?;
         } else if event.entity_type == PerpOrderV3::entity_type() {
             let order = state
                 .perp_orders
@@ -389,7 +391,7 @@ mod tests {
         let release = {
             let mut canceled = spot.clone();
             canceled
-                .transition(SpotOrderV7Event::Cancel { timestamp: DUE_MS })
+                .transition(SpotOrderV7Event::Cancel { lsn: 9, timestamp: DUE_MS })
                 .expect("fixture should cancel");
             canceled.release_requirement().expect("fixture should release")
         };
