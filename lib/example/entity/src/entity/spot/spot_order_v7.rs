@@ -4,9 +4,9 @@ use rust_decimal::Decimal;
 
 use crate::account::coin::{CoinAmount, CoinAmountError};
 use crate::common::PriceType;
-use crate::entity::common::common_order::{OrderBase, SpotAmountConversionError};
+use crate::entity::common::common_order::{OrderBase, OrderTrigger, SpotAmountConversionError};
 use crate::entity::common::order_primitives::{
-    OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus,
+    OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus,
 };
 
 /// 现货订单生命周期事件。
@@ -155,6 +155,55 @@ pub struct SpotOrderV7 {
 }
 
 impl SpotOrderV7 {
+    pub fn pending(
+        mut order: OrderBase,
+        order_type: OrderType,
+        relation: OrderGroupRelation,
+        fee_bps: u64,
+        timestamp: u64,
+        lsn: u64,
+    ) -> Result<Self, EntityError> {
+        let (execution, tif, trigger, trigger_px) = match order_type {
+            OrderType::Limit { tif } => (PriceType::Limit, tif, OrderTrigger::None, None),
+            OrderType::Trigger { is_market, trigger_price, tpsl } => (
+                if is_market { PriceType::Market } else { PriceType::Limit },
+                if is_market { OrderTif::Ioc } else { OrderTif::Gtc },
+                match tpsl {
+                    OrderTriggerRole::TakeProfit => OrderTrigger::TakeProfit,
+                    OrderTriggerRole::StopLoss => OrderTrigger::StopLoss,
+                },
+                Some(Decimal::from(trigger_price)),
+            ),
+        };
+        order.execution = execution;
+        order.tif = tif;
+        order.trigger = trigger;
+        order.trigger_px = trigger_px;
+        order.status = SpotOrderStatus::Pending;
+        order.group_relation = relation;
+        order.created_at = timestamp;
+        order.updated_at = timestamp;
+        order.lsn = lsn;
+        order.buy_quote_fee_reserve_limit = if order.side == OrderSide::Buy {
+            order
+                .limit_px
+                .checked_mul(order.size)
+                .and_then(|v| v.checked_mul(Decimal::from(fee_bps)))
+                .and_then(|v| v.checked_div(Decimal::from(10_000u64)))
+                .map(|v| {
+                    v.round_dp_with_strategy(
+                        order.symbol.quote.scale(),
+                        rust_decimal::RoundingStrategy::ToPositiveInfinity,
+                    )
+                })
+                .ok_or_else(|| err("invalid fee reserve"))?
+        } else {
+            Decimal::ZERO
+        };
+        order.buy_quote_fee_reserve_consumed = Decimal::ZERO;
+        Self::from_record(order)
+    }
+
     pub fn single(mut order: OrderBase) -> Self {
         order.status = SpotOrderStatus::Pending;
         order.group_relation = OrderGroupRelation::Standalone;
@@ -190,6 +239,25 @@ impl SpotOrderV7 {
         &self,
     ) -> Result<SpotOrderV7FreezeRequirement, SpotAmountConversionError> {
         freeze_requirement(&self.order_base)
+    }
+    pub fn hold_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
+        let o = self.order_base();
+        if !matches!(o.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
+            return coin_amount(
+                if o.side == OrderSide::Buy { o.symbol.quote } else { o.symbol.base },
+                Decimal::ZERO,
+            );
+        }
+        let amount = match o.side {
+            OrderSide::Buy => o
+                .limit_px
+                .checked_mul(o.size)
+                .and_then(|v| v.checked_add(o.buy_quote_fee_reserve_limit))
+                .and_then(|v| v.checked_sub(o.buy_quote_fee_reserve_consumed))
+                .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
+            OrderSide::Sell => o.size,
+        };
+        coin_amount(if o.side == OrderSide::Buy { o.symbol.quote } else { o.symbol.base }, amount)
     }
     pub fn release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
         if !matches!(

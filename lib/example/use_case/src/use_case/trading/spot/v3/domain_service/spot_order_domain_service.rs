@@ -52,6 +52,20 @@ pub enum ModifySpotOrderV7Error {
     Entity(#[from] EntityError),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ReconcileSpotOrderHoldError {
+    #[error("balance owner does not match order owner")]
+    OwnerMismatch,
+    #[error("balance coin does not match order hold asset")]
+    CoinMismatch,
+    #[error("arithmetic overflow while reconciling order hold")]
+    ArithmeticOverflow,
+    #[error(transparent)]
+    Balance(#[from] BalanceV2Error),
+    #[error(transparent)]
+    Entity(#[from] EntityError),
+}
+
 pub struct SpotOrderDomainService;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +106,38 @@ pub enum MatchSpotOrderV3Outcome {
 }
 
 impl SpotOrderDomainService {
+    pub fn reconcile_taker_hold(
+        order_after: &SpotOrderV7,
+        mut settled_balance: BalanceV2,
+        frozen_before_command: Decimal,
+        timestamp: u64,
+    ) -> Result<BalanceV2, ReconcileSpotOrderHoldError> {
+        let required = order_after
+            .hold_requirement()
+            .map_err(|error| EntityError::Custom(error.to_string()))?;
+        if settled_balance.party_id() != order_after.order_base().owner.0 {
+            return Err(ReconcileSpotOrderHoldError::OwnerMismatch);
+        }
+        if settled_balance.coin_idx() != u64::from(required.currency().index()) {
+            return Err(ReconcileSpotOrderHoldError::CoinMismatch);
+        }
+        let target = frozen_before_command
+            .checked_add(required.amount())
+            .ok_or(ReconcileSpotOrderHoldError::ArithmeticOverflow)?;
+        let current = settled_balance.frozen();
+        if current > target {
+            settled_balance.apply(BalanceV2Event::UnfreezeAndPay {
+                unfreeze_amount: current - target,
+                payment_amount: Decimal::ZERO,
+                timestamp,
+            })?;
+        } else if current < target {
+            settled_balance
+                .apply(BalanceV2Event::Freeze { amount: target - current, timestamp })?;
+        }
+        Ok(settled_balance)
+    }
+
     /// 只读规划全部成交，验证成功后分别推进 taker 与 maker 聚合。
     pub fn match_order(
         mut taker: SpotOrderV7,

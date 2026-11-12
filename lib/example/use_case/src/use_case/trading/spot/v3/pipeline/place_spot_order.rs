@@ -1,22 +1,22 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::account::symbol::Symbol;
-use example_core_entity::common::{OrderBase, OrderTrigger, PriceType, UserId};
+use example_core_entity::common::{OrderBase, PriceType, UserId};
 use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, OrderGroupRelation, OrderSide, OrderTif,
-    OrderTriggerRole, OrderType, SpotOrderStatus, SpotOrderV7,
+    BalanceV2, BalanceV2Error, OrderGroupRelation, OrderSide, OrderTif, OrderType, SpotOrderStatus,
+    SpotOrderV7,
 };
-use rust_decimal::{Decimal, RoundingStrategy};
+use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::use_case::trading::spot::v3::domain_service::spot_order_domain_service::{
     ActivateSpotOrderV7Error, MatchSpotOrderV3Input, MatchSpotOrderV3Outcome,
-    SpotOrderDomainService,
+    ReconcileSpotOrderHoldError, SpotOrderDomainService,
 };
 use crate::use_case::trading::spot::v3::{SpotTradeDomainService, SpotTradeDomainServiceError};
 
@@ -124,6 +124,8 @@ pub enum PlaceSpotOrderV3Error {
     Settlement(#[from] SpotTradeDomainServiceError),
     #[error(transparent)]
     Balance(#[from] BalanceV2Error),
+    #[error(transparent)]
+    Hold(#[from] ReconcileSpotOrderHoldError),
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -279,9 +281,9 @@ impl UseCase for PlaceSpotOrderV3UseCase {
             balance_workspace.working[isq] = settled.seller_quote_balance_after;
             settled_trades.push(settled.trade_after);
         }
-        normalize_hold(
+        balance_workspace.working[taker_balance] = SpotOrderDomainService::reconcile_taker_hold(
             &created_orders[0],
-            &mut balance_workspace.working[taker_balance],
+            balance_workspace.working[taker_balance].clone(),
             frozen_before_command,
             timestamp,
         )?;
@@ -466,56 +468,36 @@ fn build_order(
     lsn: u64,
     timestamp: u64,
 ) -> Result<SpotOrderV7, PlaceSpotOrderV3Error> {
-    let (execution, tif, trigger, trigger_px) = match cmd.order_type {
-        OrderType::Limit { tif } => (PriceType::Limit, tif, OrderTrigger::None, None),
-        OrderType::Trigger { is_market, trigger_price, tpsl } => (
-            if is_market { PriceType::Market } else { PriceType::Limit },
-            if is_market { OrderTif::Ioc } else { OrderTif::Gtc },
-            match tpsl {
-                OrderTriggerRole::TakeProfit => OrderTrigger::TakeProfit,
-                OrderTriggerRole::StopLoss => OrderTrigger::StopLoss,
-            },
-            Some(Decimal::from(trigger_price)),
-        ),
-    };
-    let fee = if cmd.side == OrderSide::Buy {
-        cmd.price
-            .checked_mul(cmd.size)
-            .and_then(|v| v.checked_mul(Decimal::from(fee_bps)))
-            .and_then(|v| v.checked_div(Decimal::from(10_000u64)))
-            .map(|v| {
-                v.round_dp_with_strategy(
-                    cmd.symbol.quote.scale(),
-                    RoundingStrategy::ToPositiveInfinity,
-                )
-            })
-            .ok_or(PlaceSpotOrderV3Error::InvalidAmount)?
-    } else {
-        Decimal::ZERO
-    };
-    Ok(SpotOrderV7::from_record(OrderBase {
-        owner: UserId(cmd.party_id),
-        order_id: cmd.order_id,
-        symbol: cmd.symbol,
-        side: cmd.side,
-        limit_px: cmd.price,
-        size: cmd.size,
-        orig_size: cmd.size,
-        execution,
-        tif,
-        trigger,
-        trigger_px,
-        group_relation: relation,
-        is_position_tpsl: false,
-        reduce_only: false,
-        status: SpotOrderStatus::Pending,
-        buy_quote_fee_reserve_limit: fee,
-        buy_quote_fee_reserve_consumed: Decimal::ZERO,
-        cloid: cmd.cloid.clone(),
-        created_at: timestamp,
-        updated_at: timestamp,
+    Ok(SpotOrderV7::pending(
+        OrderBase {
+            owner: UserId(cmd.party_id),
+            order_id: cmd.order_id,
+            symbol: cmd.symbol,
+            side: cmd.side,
+            limit_px: cmd.price,
+            size: cmd.size,
+            orig_size: cmd.size,
+            execution: PriceType::Limit,
+            tif: OrderTif::Gtc,
+            trigger: Default::default(),
+            trigger_px: None,
+            group_relation: OrderGroupRelation::Standalone,
+            is_position_tpsl: false,
+            reduce_only: false,
+            status: SpotOrderStatus::Pending,
+            buy_quote_fee_reserve_limit: Decimal::ZERO,
+            buy_quote_fee_reserve_consumed: Decimal::ZERO,
+            cloid: cmd.cloid.clone(),
+            created_at: timestamp,
+            updated_at: timestamp,
+            lsn,
+        },
+        cmd.order_type,
+        relation,
+        fee_bps,
+        timestamp,
         lsn,
-    })?)
+    )?)
 }
 
 fn unpack_outcome(
@@ -563,45 +545,10 @@ fn unpack_outcome(
     }
 }
 
-fn normalize_hold(
-    order: &SpotOrderV7,
-    balance: &mut BalanceV2,
-    frozen_before_command: Decimal,
-    timestamp: u64,
-) -> Result<(), PlaceSpotOrderV3Error> {
-    let base = order.order_base();
-    let required =
-        if matches!(base.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
-            match base.side {
-                OrderSide::Buy => base
-                    .limit_px
-                    .checked_mul(base.size)
-                    .and_then(|v| v.checked_add(base.buy_quote_fee_reserve_limit))
-                    .and_then(|v| v.checked_sub(base.buy_quote_fee_reserve_consumed))
-                    .ok_or(PlaceSpotOrderV3Error::InvalidAmount)?,
-                OrderSide::Sell => base.size,
-            }
-        } else {
-            Decimal::ZERO
-        };
-    let target =
-        frozen_before_command.checked_add(required).ok_or(PlaceSpotOrderV3Error::InvalidAmount)?;
-    let current = balance.frozen();
-    if current > target {
-        balance.apply(BalanceV2Event::UnfreezeAndPay {
-            unfreeze_amount: current - target,
-            payment_amount: Decimal::ZERO,
-            timestamp,
-        })?;
-    } else if current < target {
-        balance.apply(BalanceV2Event::Freeze { amount: target - current, timestamp })?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use common_entity::LogEntrySequencer;
+    use example_core_entity::OrderTriggerRole;
     use example_core_entity::account::coin::Coin;
 
     use super::*;
