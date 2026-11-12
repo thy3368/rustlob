@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use base_types_v2::{Coin, Symbol};
 use common_entity::{Entity, EntityReplayableEvent};
-use example_core_use_case::{BalanceV2, MarketRules, SpotOrderV7, SpotTrade};
+use example_core_use_case::{BalanceV2, MarketRules, SpotOrderV7, SpotTradeV3};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 use crate::StoreSnapshot;
@@ -14,7 +14,7 @@ pub(crate) struct StoreState {
     pub(crate) balances: HashMap<String, BalanceV2>,
     pub(crate) market_rules_by_symbol: HashMap<String, MarketRules>,
     pub(crate) orders: HashMap<u64, SpotOrderV7>,
-    pub(crate) trades: HashMap<String, SpotTrade>,
+    pub(crate) trades: HashMap<String, SpotTradeV3>,
     pub(crate) persisted_events: Vec<EntityReplayableEvent>,
     pub(crate) published_events: Vec<EntityReplayableEvent>,
     pub(crate) next_order_sequence: u64,
