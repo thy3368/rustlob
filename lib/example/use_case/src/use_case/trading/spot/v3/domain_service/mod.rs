@@ -1,2 +1,3 @@
+pub mod place_order_domain_service;
 pub mod spot_order_domain_service;
 pub mod spot_trade_domain_service;
