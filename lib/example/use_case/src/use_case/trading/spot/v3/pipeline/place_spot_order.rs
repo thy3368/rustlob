@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff,
-    UpdatedEntityPair, UseCase,
+    Entity, EntityError, EntityReplayableEvent, LogEntry, LogEntrySequencer, ReplayableChanges,
+    StateDiff, UpdatedEntityPair, UseCase,
 };
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::common::{OrderBase, PriceType, UserId};
@@ -72,6 +72,39 @@ pub struct PlaceSpotOrderV3AfterChanges {
     pub result: PlaceSpotOrderV3Result,
 }
 
+/// 普通现货订单完成一次下单业务目标后的五种互斥结论。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlaceNormalSpotOrderV3AfterChanges {
+    Resting {
+        taker_order_after: SpotOrderV7,
+        maker_orders_after: Vec<SpotOrderV7>,
+        balances_after: Vec<BalanceV2>,
+    },
+    PartiallyFilled {
+        taker_order_after: SpotOrderV7,
+        maker_orders_after: Vec<SpotOrderV7>,
+        settled_trades: Vec<SpotTradeV3>,
+        balances_after: Vec<BalanceV2>,
+    },
+    Filled {
+        filled_taker_order_after: SpotOrderV7,
+        maker_orders_after: Vec<SpotOrderV7>,
+        settled_trades: Vec<SpotTradeV3>,
+        balances_after: Vec<BalanceV2>,
+    },
+    CanceledAfterPartialFill {
+        canceled_taker_order_after: SpotOrderV7,
+        maker_orders_after: Vec<SpotOrderV7>,
+        settled_trades: Vec<SpotTradeV3>,
+        balances_after: Vec<BalanceV2>,
+    },
+    Rejected {
+        rejected_taker_order_after: SpotOrderV7,
+        maker_orders_after: Vec<SpotOrderV7>,
+        balances_after: Vec<BalanceV2>,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceSpotOrderV3Changes {
     pub created_orders: Vec<SpotOrderV7>,
@@ -108,6 +141,8 @@ pub enum PlaceSpotOrderV3Error {
     InvalidOrderId,
     #[error("normal TP/SL group is invalid")]
     InvalidGroup,
+    #[error("normal order must not be a trigger order")]
+    InvalidNormalOrder,
     #[error("maker state does not match the command")]
     InvalidMaker,
     #[error("command LSN must be newer than every loaded maker order")]
@@ -130,6 +165,80 @@ pub enum PlaceSpotOrderV3Error {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceSpotOrderV3UseCase;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PlaceNormalSpotOrderV3UseCase;
+
+impl UseCase for PlaceNormalSpotOrderV3UseCase {
+    type Command = LogEntry<PlaceSpotOrderV3OrderCmd>;
+    type StateGiven = PlaceSpotOrderV3State;
+    type Error = PlaceSpotOrderV3Error;
+    type StateChanged = PlaceNormalSpotOrderV3AfterChanges;
+
+    fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
+        if cmd.order_type.is_trigger() {
+            return Err(Self::Error::InvalidNormalOrder);
+        }
+        PlaceSpotOrderV3UseCase.check_command(&normal_command(cmd))
+    }
+
+    fn validate_state_given(
+        &self,
+        cmd: &Self::Command,
+        state: &Self::StateGiven,
+    ) -> Result<(), Self::Error> {
+        PlaceSpotOrderV3UseCase.validate_state_given(&normal_command(cmd), state)
+    }
+
+    fn compute_state_changed_only(
+        &self,
+        cmd: &Self::Command,
+        state: &Self::StateGiven,
+    ) -> Result<Self::StateChanged, Self::Error> {
+        let changed = PlaceSpotOrderV3UseCase.compute_state_changed(&normal_command(cmd), state)?;
+        let mut created_orders = changed.created_orders;
+        let taker_order_after = created_orders.pop().ok_or(Self::Error::InvalidNormalOrder)?;
+        match changed.result {
+            PlaceSpotOrderV3Result::Resting => Ok(PlaceNormalSpotOrderV3AfterChanges::Resting {
+                taker_order_after,
+                maker_orders_after: changed.maker_orders_after,
+                balances_after: changed.balances_after,
+            }),
+            PlaceSpotOrderV3Result::PartiallyFilled => {
+                Ok(PlaceNormalSpotOrderV3AfterChanges::PartiallyFilled {
+                    taker_order_after,
+                    maker_orders_after: changed.maker_orders_after,
+                    settled_trades: changed.settled_trades,
+                    balances_after: changed.balances_after,
+                })
+            }
+            PlaceSpotOrderV3Result::Filled => Ok(PlaceNormalSpotOrderV3AfterChanges::Filled {
+                filled_taker_order_after: taker_order_after,
+                maker_orders_after: changed.maker_orders_after,
+                settled_trades: changed.settled_trades,
+                balances_after: changed.balances_after,
+            }),
+            PlaceSpotOrderV3Result::Canceled => {
+                Ok(PlaceNormalSpotOrderV3AfterChanges::CanceledAfterPartialFill {
+                    canceled_taker_order_after: taker_order_after,
+                    maker_orders_after: changed.maker_orders_after,
+                    settled_trades: changed.settled_trades,
+                    balances_after: changed.balances_after,
+                })
+            }
+            PlaceSpotOrderV3Result::Rejected => Ok(PlaceNormalSpotOrderV3AfterChanges::Rejected {
+                rejected_taker_order_after: taker_order_after,
+                maker_orders_after: changed.maker_orders_after,
+                balances_after: changed.balances_after,
+            }),
+            PlaceSpotOrderV3Result::Pending => Err(Self::Error::InvalidNormalOrder),
+        }
+    }
+}
+
+fn normal_command(cmd: &LogEntry<PlaceSpotOrderV3OrderCmd>) -> LogEntry<PlaceSpotOrderV3Cmd> {
+    LogEntrySequencer::derive(cmd, PlaceSpotOrderV3Cmd::Single(cmd.payload().clone()))
+}
 
 impl UseCase for PlaceSpotOrderV3UseCase {
     type Command = LogEntry<PlaceSpotOrderV3Cmd>;
@@ -706,5 +815,55 @@ mod tests {
             BalanceWorkspace::new(&cmd, &state([(1, binding(PARTY_ID, 22)), (2, conflicting)]),),
             Err(PlaceSpotOrderV3Error::InvalidBalances)
         ));
+    }
+
+    #[test]
+    fn normal_use_case_rejects_trigger_order() {
+        let cmd = LogEntrySequencer::from_metadata(
+            1,
+            100,
+            1,
+            1,
+            order(
+                1,
+                OrderSide::Buy,
+                OrderType::Trigger {
+                    is_market: true,
+                    trigger_price: 11,
+                    tpsl: OrderTriggerRole::TakeProfit,
+                },
+            ),
+        );
+        assert_eq!(
+            PlaceNormalSpotOrderV3UseCase.check_command(&cmd),
+            Err(PlaceSpotOrderV3Error::InvalidNormalOrder)
+        );
+    }
+
+    #[test]
+    fn normal_gtc_without_makers_rests_with_stable_deduplicated_balances() {
+        let cmd = LogEntrySequencer::from_metadata(
+            1,
+            100,
+            1,
+            1,
+            order(1, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }),
+        );
+        let changed = PlaceNormalSpotOrderV3UseCase
+            .compute_state_changed(&cmd, &state([(1, binding(PARTY_ID, ACCOUNT_ID))]))
+            .unwrap();
+        let PlaceNormalSpotOrderV3AfterChanges::Resting {
+            taker_order_after,
+            maker_orders_after,
+            balances_after,
+        } = changed
+        else {
+            panic!("expected resting result")
+        };
+        assert_eq!(taker_order_after.order_base().status, SpotOrderStatus::Open);
+        assert!(maker_orders_after.is_empty());
+        assert_eq!(balances_after.len(), 2);
+        assert_eq!(balances_after[0].coin_idx(), u64::from(Coin::BTC.index()));
+        assert_eq!(balances_after[1].coin_idx(), u64::from(Coin::USDT.index()));
     }
 }
