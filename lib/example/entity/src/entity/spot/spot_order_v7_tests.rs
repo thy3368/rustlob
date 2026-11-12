@@ -1,4 +1,4 @@
-use common_entity::{EntityError, Fsm};
+use common_entity::Fsm;
 use rust_decimal::Decimal;
 
 use super::{SpotOrderV7, SpotOrderV7Event, SpotOrderV7Output, SpotOrderV7ReleaseRequirement};
@@ -99,21 +99,36 @@ fn match_failure_keeps_order_unchanged() {
 }
 
 #[test]
-fn version_overflow_keeps_order_unchanged() {
-    let mut record = order(OrderSide::Buy, SpotOrderStatus::Open).order_base().clone();
-    record.lsn = u64::MAX;
-    let mut subject = SpotOrderV7::from_record(record).unwrap();
+fn stale_lsn_keeps_order_unchanged() {
+    let mut subject = order(OrderSide::Buy, SpotOrderStatus::Open);
     let before = subject.clone();
-    assert_eq!(
-        subject.apply(SpotOrderV7Event::MatchedAsTaker {
-            lsn: u64::MAX,
+    assert!(
+        subject
+            .apply(SpotOrderV7Event::MatchedAsTaker {
+            lsn: 3,
             filled_size: Decimal::ONE,
             quote_fee: Decimal::ZERO,
             timestamp: TIMESTAMP,
-        }),
-        Err(EntityError::VersionOverflow { version: u64::MAX })
+        })
+            .is_err()
     );
     assert_eq!(subject, before);
+}
+
+#[test]
+fn command_lsn_can_jump_and_be_reused_within_one_command() {
+    let mut subject = order(OrderSide::Buy, SpotOrderStatus::Pending);
+    subject.apply(SpotOrderV7Event::Activate { lsn: 20, timestamp: TIMESTAMP }).unwrap();
+    subject
+        .apply(SpotOrderV7Event::MatchedAsTaker {
+            lsn: 20,
+            filled_size: Decimal::ONE,
+            quote_fee: Decimal::ZERO,
+            timestamp: TIMESTAMP + 1,
+        })
+        .unwrap();
+    assert_eq!(subject.order_base().lsn, 20);
+    assert_eq!(subject.status(), SpotOrderStatus::PartiallyFilled);
 }
 
 #[test]

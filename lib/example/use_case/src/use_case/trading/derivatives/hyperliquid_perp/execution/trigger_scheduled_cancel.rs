@@ -252,7 +252,7 @@ mod tests {
         let release = {
             let mut canceled = spot.clone();
             canceled
-                .transition(SpotOrderV7Event::Cancel { timestamp: LOGICAL_TS })
+                .transition(SpotOrderV7Event::Cancel { lsn: 9, timestamp: LOGICAL_TS })
                 .expect("fixture should cancel");
             canceled.release_requirement().expect("fixture should release")
         };

@@ -420,6 +420,7 @@ mod tests {
             Decimal::from(4),
             Some(OrderTif::Alo),
             Some("replacement".to_owned()),
+            10,
             TIMESTAMP,
         )
         .unwrap();
@@ -429,7 +430,7 @@ mod tests {
         assert_eq!(order_after.order_base().orig_size, Decimal::from(4));
         assert_eq!(order_after.order_base().tif, OrderTif::Alo);
         assert_eq!(order_after.order_base().cloid.as_deref(), Some("replacement"));
-        assert_eq!(order_after.order_base().lsn, 5);
+        assert_eq!(order_after.order_base().lsn, 10);
         assert_eq!(order_after.order_base().updated_at, TIMESTAMP);
         assert_eq!(balance_after, balance_before);
     }
@@ -616,9 +617,9 @@ mod tests {
                 price,
                 size,
                 None,
-            None,
-            10,
-            TIMESTAMP,
+                None,
+                10,
+                TIMESTAMP,
             );
             assert!(matches!(result, Err(ModifySpotOrderV7Error::Entity(_))));
         }
@@ -631,10 +632,10 @@ mod tests {
         let balance_before = balance.clone();
 
         let (order_after, balance_after) =
-            SpotOrderDomainService::cancel(order, balance, TIMESTAMP).unwrap();
+            SpotOrderDomainService::cancel(order, balance, 10, TIMESTAMP).unwrap();
 
         assert_eq!(order_after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(order_after.order_base().lsn, 5);
+        assert_eq!(order_after.order_base().lsn, 10);
         assert_eq!(order_after.order_base().updated_at, TIMESTAMP);
         assert_eq!(balance_after, balance_before);
     }
@@ -645,10 +646,10 @@ mod tests {
         let balance = balance(Coin::USDT, 7, 23);
 
         let (order_after, balance_after) =
-            SpotOrderDomainService::cancel(order, balance, TIMESTAMP).unwrap();
+            SpotOrderDomainService::cancel(order, balance, 10, TIMESTAMP).unwrap();
 
         assert_eq!(order_after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(order_after.order_base().lsn, 5);
+        assert_eq!(order_after.order_base().lsn, 10);
         assert_eq!(order_after.order_base().updated_at, TIMESTAMP);
         assert_eq!(balance_after.available(), Decimal::from(30));
         assert_eq!(balance_after.frozen(), Decimal::ZERO);
@@ -661,7 +662,8 @@ mod tests {
         let order = order(OrderSide::Sell, SpotOrderStatus::PartiallyFilled, 1, 0, 0);
         let balance = balance(Coin::BTC, 4, 1);
 
-        let (_, balance_after) = SpotOrderDomainService::cancel(order, balance, TIMESTAMP).unwrap();
+        let (_, balance_after) =
+            SpotOrderDomainService::cancel(order, balance, 10, TIMESTAMP).unwrap();
 
         assert_eq!(balance_after.available(), Decimal::from(5));
         assert_eq!(balance_after.frozen(), Decimal::ZERO);
@@ -674,6 +676,7 @@ mod tests {
         let result = SpotOrderDomainService::cancel(
             order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0),
             balance(Coin::BTC, 0, 20),
+            10,
             TIMESTAMP,
         );
 
@@ -685,6 +688,7 @@ mod tests {
         let result = SpotOrderDomainService::cancel(
             order(OrderSide::Buy, SpotOrderStatus::Open, 2, 5, 2),
             balance(Coin::USDT, 7, 22),
+            10,
             TIMESTAMP,
         );
 
@@ -699,6 +703,7 @@ mod tests {
         let result = SpotOrderDomainService::cancel(
             order(OrderSide::Sell, SpotOrderStatus::Canceled, 1, 0, 0),
             balance(Coin::BTC, 0, 1),
+            10,
             TIMESTAMP,
         );
 
@@ -734,6 +739,7 @@ mod tests {
 
     fn match_input() -> MatchSpotOrderV3Input {
         MatchSpotOrderV3Input {
+            lsn: 20,
             trade_id_start: 900,
             maker_fee_bps: 100,
             taker_fee_bps: 200,
