@@ -74,7 +74,7 @@ pub struct LocalLobBtree<O: LobOrder> {
     sequence: Option<u64>,
 }
 
-impl<O: LobOrder> AssetLobV2 for crate::imp::lob_btree::LocalLobBtree<O> {
+impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
     type Order = O;
 
     fn maker_orders(
