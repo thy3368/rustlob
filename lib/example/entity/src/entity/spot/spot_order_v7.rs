@@ -76,6 +76,8 @@ pub struct ActivateSpotOrderV7Output {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplySpotOrderV7MatchOutput {
     pub order_after: SpotOrderV7,
+    /// taker 进入终态后应释放的冻结额；maker 或非终态 taker 为 `None`。
+    pub release_requirement: Option<CoinAmount>,
 }
 
 /// 改单后订单对持仓冻结额的调整要求。
@@ -250,9 +252,18 @@ impl Fsm for SpotOrderV7 {
                     MatchRole::Taker,
                 )?;
                 let order_after = SpotOrderV7 { order_base: next.clone() };
+                let release_requirement = match order_after.status() {
+                    SpotOrderStatus::Filled
+                    | SpotOrderStatus::Canceled
+                    | SpotOrderStatus::Rejected => Some(entity_release_requirement(&order_after)?),
+                    _ => None,
+                };
                 (
                     next,
-                    SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput { order_after }),
+                    SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput {
+                        order_after,
+                        release_requirement,
+                    }),
                 )
             }
             SpotOrderV7Event::MatchedAsMaker { filled_size, quote_fee, timestamp } => {
@@ -267,7 +278,10 @@ impl Fsm for SpotOrderV7 {
                 let order_after = SpotOrderV7 { order_base: next.clone() };
                 (
                     next,
-                    SpotOrderV7Output::MatchedAsMaker(ApplySpotOrderV7MatchOutput { order_after }),
+                    SpotOrderV7Output::MatchedAsMaker(ApplySpotOrderV7MatchOutput {
+                        order_after,
+                        release_requirement: None,
+                    }),
                 )
             }
             SpotOrderV7Event::RejectedAsTaker { timestamp } => {
@@ -283,9 +297,13 @@ impl Fsm for SpotOrderV7 {
                     .checked_add(1)
                     .ok_or(EntityError::VersionOverflow { version: next.version })?;
                 let order_after = SpotOrderV7 { order_base: next.clone() };
+                let release_requirement = Some(entity_release_requirement(&order_after)?);
                 (
                     next,
-                    SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput { order_after }),
+                    SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
+                        order_after,
+                        release_requirement,
+                    }),
                 )
             }
             SpotOrderV7Event::Modify { price, size, tif, cloid, timestamp } => {

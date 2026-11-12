@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use common_entity::{EntityError, Fsm};
 use example_core_entity::entity::common::common_trade::TradeBase;
 use example_core_entity::spot::spot_order_v7::{
-    ActivateSpotOrderV7Output, CancelSpotOrderV7Output, ModifySpotOrderV7Output, SpotOrderV7Output,
+    ActivateSpotOrderV7Output, ApplySpotOrderV7MatchOutput, CancelSpotOrderV7Output,
+    ModifySpotOrderV7Output, SpotOrderV7Output,
 };
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3};
 use example_core_entity::{
@@ -97,13 +98,10 @@ impl SpotOrderDomainService {
         input: MatchSpotOrderV3Input,
     ) -> Result<MatchSpotOrderV3Outcome, EntityError> {
         let t = taker.order_base().clone();
-        taker.validate_matchable_as_taker()?;
-
         let mut ids = HashSet::with_capacity(makers.len() + 1);
         ids.insert(t.order_id);
         for maker in &makers {
             let m = maker.order_base();
-            maker.validate_matchable_as_maker()?;
             if !ids.insert(m.order_id) {
                 return Err(match_error("order ids must be unique"));
             }
@@ -117,10 +115,17 @@ impl SpotOrderDomainService {
             OrderSide::Sell => t.limit_px <= maker.order_base().limit_px,
         };
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
-            taker.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: input.timestamp })?;
-            let release_requirement = taker.release_requirement().map_err(conversion_error)?;
+            let (_, output) =
+                taker.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: input.timestamp })?;
+            let SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
+                order_after,
+                release_requirement: Some(release_requirement),
+            }) = output
+            else {
+                return Err(match_error("rejected taker event produced mismatched output"));
+            };
             return Ok(MatchSpotOrderV3Outcome::Rejected {
-                rejected_taker_order_after: taker,
+                rejected_taker_order_after: order_after,
                 release_requirement,
             });
         }
@@ -200,43 +205,49 @@ impl SpotOrderDomainService {
                 settlement_status: SpotTradeSettlementStatus::Unsettled,
             });
         }
-        taker.apply(SpotOrderV7Event::MatchedAsTaker {
+        let (_, output) = taker.apply(SpotOrderV7Event::MatchedAsTaker {
             filled_size,
             quote_fee: taker_fee_total,
             timestamp: input.timestamp,
         })?;
+        let SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput {
+            order_after: taker_order_after,
+            release_requirement,
+        }) = output
+        else {
+            return Err(match_error("matched taker event produced mismatched output"));
+        };
 
-        match taker.status() {
-            SpotOrderStatus::Filled => {
-                let release_requirement = taker.release_requirement().map_err(conversion_error)?;
+        match (taker_order_after.status(), release_requirement) {
+            (SpotOrderStatus::Filled, Some(release_requirement)) => {
                 Ok(MatchSpotOrderV3Outcome::Filled {
-                    filled_taker_order_after: taker,
+                    filled_taker_order_after: taker_order_after,
                     maker_orders_after: makers,
                     created_trades: trades,
                     release_requirement,
                 })
             }
-            SpotOrderStatus::Canceled => {
-                let release_requirement = taker.release_requirement().map_err(conversion_error)?;
+            (SpotOrderStatus::Canceled, Some(release_requirement)) => {
                 Ok(MatchSpotOrderV3Outcome::CanceledAfterPartialFill {
-                    canceled_taker_order_after: taker,
+                    canceled_taker_order_after: taker_order_after,
                     maker_orders_after: makers,
                     created_trades: trades,
                     release_requirement,
                 })
             }
-            SpotOrderStatus::Rejected => {
-                let release_requirement = taker.release_requirement().map_err(conversion_error)?;
+            (SpotOrderStatus::Rejected, Some(release_requirement)) => {
                 Ok(MatchSpotOrderV3Outcome::Rejected {
-                    rejected_taker_order_after: taker,
+                    rejected_taker_order_after: taker_order_after,
                     release_requirement,
                 })
             }
-            SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderV3Outcome::PartiallyFilled {
-                taker_order_after: taker,
-                maker_orders_after: makers,
-                created_trades: trades,
-            }),
+            (SpotOrderStatus::PartiallyFilled, None) => {
+                Ok(MatchSpotOrderV3Outcome::PartiallyFilled {
+                    taker_order_after,
+                    maker_orders_after: makers,
+                    created_trades: trades,
+                })
+            }
             _ => Err(match_error("unexpected taker state after matching")),
         }
     }
@@ -342,10 +353,6 @@ fn match_fee(notional: Decimal, bps: u64, scale: u32) -> Result<Decimal, EntityE
 
 fn match_error(message: &str) -> EntityError {
     EntityError::Custom(message.to_owned())
-}
-
-fn conversion_error(error: impl std::fmt::Display) -> EntityError {
-    match_error(&error.to_string())
 }
 
 #[cfg(test)]
