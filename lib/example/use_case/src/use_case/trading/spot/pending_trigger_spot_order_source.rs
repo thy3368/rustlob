@@ -1,4 +1,4 @@
-use crate::SpotOrderV2;
+use example_core_entity::SpotOrderV7;
 
 /// 按成交资产和成交价格读取当前应被触发的条件单。
 ///
@@ -11,5 +11,5 @@ pub trait PendingTriggerSpotOrderSource: Send + Sync {
         &self,
         asset: u32,
         market_price: u64,
-    ) -> Result<Vec<SpotOrderV2>, Self::Error>;
+    ) -> Result<Vec<SpotOrderV7>, Self::Error>;
 }
