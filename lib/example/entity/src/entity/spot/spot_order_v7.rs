@@ -23,6 +23,22 @@ pub enum SpotOrderV7Event {
         input: MatchSpotOrderV7Input,
         timestamp: u64,
     },
+    /// 将已规划的全部 taker 成交一次性提交到订单聚合。
+    MatchedAsTaker {
+        filled_size: Decimal,
+        quote_fee: Decimal,
+        timestamp: u64,
+    },
+    /// 将一笔已规划的 maker 成交提交到订单聚合。
+    MatchedAsMaker {
+        filled_size: Decimal,
+        quote_fee: Decimal,
+        timestamp: u64,
+    },
+    /// ALO 遇到可成交对手盘时拒绝 taker。
+    RejectedAsTaker {
+        timestamp: u64,
+    },
     ReplaceOrFill {
         price: Decimal,
         size: Decimal,
@@ -110,6 +126,12 @@ pub struct MatchSpotOrderV7Output {
     pub outcome: MatchSpotOrderV7Outcome,
 }
 
+/// 撮合角色事件提交后的订单事实。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplySpotOrderV7MatchOutput {
+    pub order_after: SpotOrderV7,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplaceOrFillSpotOrderV7Output {
     pub outcome: MatchSpotOrderV7Outcome,
@@ -151,6 +173,9 @@ pub struct CancelSpotOrderV7Output {
 pub enum SpotOrderV7Output {
     Activated(ActivateSpotOrderV7Output),
     Matched(MatchSpotOrderV7Output),
+    MatchedAsTaker(ApplySpotOrderV7MatchOutput),
+    MatchedAsMaker(ApplySpotOrderV7MatchOutput),
+    RejectedAsTaker(ApplySpotOrderV7MatchOutput),
     ReplacedOrFilled(ReplaceOrFillSpotOrderV7Output),
     Modified(ModifySpotOrderV7Output),
     Canceled(CancelSpotOrderV7Output),
@@ -297,6 +322,55 @@ impl Fsm for SpotOrderV7 {
                 let (next, outcome) = compute_match(&self.order_base, makers, adjusted_input)?;
                 (next, SpotOrderV7Output::Matched(MatchSpotOrderV7Output { outcome }))
             }
+            SpotOrderV7Event::MatchedAsTaker { filled_size, quote_fee, timestamp } => {
+                let next = matched_order(
+                    &self.order_base,
+                    filled_size,
+                    quote_fee,
+                    timestamp,
+                    MatchRole::Taker,
+                )?;
+                let order_after = SpotOrderV7 { order_base: next.clone() };
+                (
+                    next,
+                    SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput { order_after }),
+                )
+            }
+            SpotOrderV7Event::MatchedAsMaker { filled_size, quote_fee, timestamp } => {
+                let next = matched_order(
+                    &self.order_base,
+                    filled_size,
+                    quote_fee,
+                    timestamp,
+                    MatchRole::Maker,
+                )?;
+                let order_after = SpotOrderV7 { order_base: next.clone() };
+                (
+                    next,
+                    SpotOrderV7Output::MatchedAsMaker(ApplySpotOrderV7MatchOutput { order_after }),
+                )
+            }
+            SpotOrderV7Event::RejectedAsTaker { timestamp } => {
+                if !matches!(
+                    self.status(),
+                    SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+                ) || self.order_base.effective_tif() != OrderTif::Alo
+                {
+                    return Err(err("order cannot be rejected as ALO taker"));
+                }
+                let mut next = self.order_base.clone();
+                next.status = SpotOrderStatus::Rejected;
+                next.updated_at = timestamp;
+                next.version = next
+                    .version
+                    .checked_add(1)
+                    .ok_or(EntityError::VersionOverflow { version: next.version })?;
+                let order_after = SpotOrderV7 { order_base: next.clone() };
+                (
+                    next,
+                    SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput { order_after }),
+                )
+            }
             SpotOrderV7Event::ReplaceOrFill { price, size, makers, input, timestamp } => {
                 let replaced =
                     modified_order_without_version(&self.order_base, price, size, timestamp)?;
@@ -350,6 +424,67 @@ impl Fsm for SpotOrderV7 {
         self.order_base = next;
         Ok((self.order_base.status, output))
     }
+}
+
+#[derive(Clone, Copy)]
+enum MatchRole {
+    Taker,
+    Maker,
+}
+
+fn matched_order(
+    current: &OrderBase,
+    filled_size: Decimal,
+    quote_fee: Decimal,
+    timestamp: u64,
+    role: MatchRole,
+) -> Result<OrderBase, EntityError> {
+    validate_record(current)?;
+    if !matches!(current.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
+        return Err(err("order is not matchable"));
+    }
+    if filled_size < Decimal::ZERO || filled_size > current.size || quote_fee < Decimal::ZERO {
+        return Err(err("invalid match facts"));
+    }
+    if matches!(role, MatchRole::Maker) && filled_size == Decimal::ZERO {
+        return Err(err("maker fill must be greater than zero"));
+    }
+
+    let mut next = current.clone();
+    next.size = next.size.checked_sub(filled_size).ok_or_else(|| err("size underflow"))?;
+    if next.side == OrderSide::Buy {
+        next.buy_quote_fee_reserve_consumed = next
+            .buy_quote_fee_reserve_consumed
+            .checked_add(quote_fee)
+            .ok_or_else(|| err("fee overflow"))?;
+        if next.buy_quote_fee_reserve_consumed > next.buy_quote_fee_reserve_limit {
+            return Err(err("fee exceeds reserve"));
+        }
+    }
+    next.status = if next.size == Decimal::ZERO {
+        SpotOrderStatus::Filled
+    } else {
+        match role {
+            MatchRole::Maker => SpotOrderStatus::PartiallyFilled,
+            MatchRole::Taker if filled_size == Decimal::ZERO => {
+                if current.effective_tif() == OrderTif::Ioc {
+                    SpotOrderStatus::Rejected
+                } else {
+                    current.status
+                }
+            }
+            MatchRole::Taker if current.effective_tif() == OrderTif::Ioc => {
+                SpotOrderStatus::Canceled
+            }
+            MatchRole::Taker => SpotOrderStatus::PartiallyFilled,
+        }
+    };
+    next.updated_at = timestamp;
+    next.version = next
+        .version
+        .checked_add(1)
+        .ok_or(EntityError::VersionOverflow { version: next.version })?;
+    Ok(next)
 }
 
 fn modified_order(

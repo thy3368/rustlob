@@ -565,3 +565,97 @@ fn insufficient_fee_reserve_preserves_complete_order() {
     assert!(subject.match_with_input(vec![maker(2, 1)], costly_input).is_err());
     assert_eq!(subject, before);
 }
+
+#[test]
+fn role_match_events_update_only_the_receiving_order_once() {
+    let mut taker_record = order_record(1, OrderSide::Buy, 3, 3, SpotOrderStatus::Open, 7);
+    taker_record.buy_quote_fee_reserve_limit = Decimal::from(5);
+    let mut taker = SpotOrderV7::from_record(taker_record).unwrap();
+    let (_, output) = taker
+        .transition(SpotOrderV7Event::MatchedAsTaker {
+            filled_size: Decimal::from(2),
+            quote_fee: Decimal::from(2),
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+    assert_eq!(taker.status(), SpotOrderStatus::PartiallyFilled);
+    assert_eq!(taker.order_base().size, Decimal::ONE);
+    assert_eq!(taker.order_base().buy_quote_fee_reserve_consumed, Decimal::from(2));
+    assert_eq!(taker.order_base().version, 8);
+    let SpotOrderV7Output::MatchedAsTaker(output) = output else {
+        panic!("expected taker match output")
+    };
+    assert_eq!(output.order_after, taker);
+
+    let mut maker_record = order_record(2, OrderSide::Buy, 2, 2, SpotOrderStatus::Open, 11);
+    maker_record.buy_quote_fee_reserve_limit = Decimal::from(3);
+    let mut maker = SpotOrderV7::from_record(maker_record).unwrap();
+    maker
+        .apply(SpotOrderV7Event::MatchedAsMaker {
+            filled_size: Decimal::from(2),
+            quote_fee: Decimal::ONE,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+    assert_eq!(maker.status(), SpotOrderStatus::Filled);
+    assert_eq!(maker.order_base().buy_quote_fee_reserve_consumed, Decimal::ONE);
+    assert_eq!(maker.order_base().version, 12);
+}
+
+#[test]
+fn sell_match_does_not_consume_buy_fee_reserve_and_errors_are_atomic() {
+    let mut seller = order(2, OrderSide::Sell, 2, 2, SpotOrderStatus::Open, 4);
+    seller
+        .apply(SpotOrderV7Event::MatchedAsMaker {
+            filled_size: Decimal::ONE,
+            quote_fee: Decimal::MAX,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+    assert_eq!(seller.order_base().buy_quote_fee_reserve_consumed, Decimal::ZERO);
+
+    let mut buyer_record = order_record(1, OrderSide::Buy, 2, 2, SpotOrderStatus::Open, 7);
+    buyer_record.buy_quote_fee_reserve_limit = Decimal::ONE;
+    let mut buyer = SpotOrderV7::from_record(buyer_record).unwrap();
+    let before = buyer.clone();
+    assert!(
+        buyer
+            .transition(SpotOrderV7Event::MatchedAsTaker {
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::from(2),
+                timestamp: EVENT_TIMESTAMP,
+            })
+            .is_err()
+    );
+    assert_eq!(buyer, before);
+}
+
+#[test]
+fn taker_tif_controls_zero_and_partial_fill_terminal_state() {
+    let mut ioc_zero = sized_taker(OrderTif::Ioc, 2);
+    ioc_zero.apply(SpotOrderV7Event::Activate { timestamp: 1 }).unwrap();
+    ioc_zero
+        .apply(SpotOrderV7Event::MatchedAsTaker {
+            filled_size: Decimal::ZERO,
+            quote_fee: Decimal::ZERO,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+    assert_eq!(ioc_zero.status(), SpotOrderStatus::Rejected);
+
+    let mut ioc_partial = sized_taker(OrderTif::Ioc, 2);
+    ioc_partial.apply(SpotOrderV7Event::Activate { timestamp: 1 }).unwrap();
+    ioc_partial
+        .apply(SpotOrderV7Event::MatchedAsTaker {
+            filled_size: Decimal::ONE,
+            quote_fee: Decimal::ZERO,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+    assert_eq!(ioc_partial.status(), SpotOrderStatus::Canceled);
+
+    let mut alo = sized_taker(OrderTif::Alo, 2);
+    alo.apply(SpotOrderV7Event::Activate { timestamp: 1 }).unwrap();
+    alo.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: EVENT_TIMESTAMP }).unwrap();
+    assert_eq!(alo.status(), SpotOrderStatus::Rejected);
+}

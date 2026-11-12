@@ -1,15 +1,16 @@
 use std::collections::HashSet;
 
-use common_entity::{EntityError, Fsm, LogEntry, UseCase};
+use common_entity::{EntityError, LogEntry, UseCase};
 use example_core_entity::SpotOrderStatus;
 use example_core_entity::common::CommonOrderExecution;
 use example_core_entity::spot::spot_order_v7::{
-    MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7, SpotOrderV7Event,
-    SpotOrderV7Output,
+    MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use super::spot_order_v7_domain_service::SpotOrderV7DomainService;
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct MatchSpotOrderV3Cmd {
     pub order_id: u64,
@@ -66,7 +67,7 @@ impl UseCase for MatchSpotOrderV3UseCase {
             || t.size > t.orig_size
             || t.limit_px <= Decimal::ZERO
             || !t.has_consistent_execution_facts()
-            || t.status != SpotOrderStatus::Pending
+            || !matches!(t.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
         {
             return Err(MatchSpotOrderV3Error::TakerOrderNotMatchable);
         }
@@ -99,22 +100,79 @@ impl UseCase for MatchSpotOrderV3UseCase {
         c: &Self::Command,
         s: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let mut t = s.taker_order.clone();
-        let (_, o) = t.transition(SpotOrderV7Event::Match {
-            makers: s.maker_orders.clone(),
-            input: MatchSpotOrderV7Input {
+        SpotOrderV7DomainService::match_order(
+            s.taker_order.clone(),
+            s.maker_orders.clone(),
+            MatchSpotOrderV7Input {
                 trade_id_start: s.trade_id_start,
                 maker_fee_bps: s.maker_fee_bps,
                 taker_fee_bps: s.taker_fee_bps,
                 timestamp: c.logical_ts(),
             },
-            timestamp: c.logical_ts(),
-        })?;
-        match o {
-            SpotOrderV7Output::Matched(output) => Ok(output.outcome),
-            _ => Err(MatchSpotOrderV3Error::Entity(EntityError::Custom(
-                "V7 match produced mismatched output".into(),
-            ))),
+        )
+        .map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_entity::{LogEntry, LogEntrySequencer, UseCase};
+    use example_core_entity::account::coin::Coin;
+    use example_core_entity::account::symbol::Symbol;
+    use example_core_entity::common::{OrderBase, UserId};
+    use example_core_entity::{OrderSide, OrderTif, SpotOrderStatus};
+
+    use super::*;
+
+    fn order(id: u64, side: OrderSide, status: SpotOrderStatus, size: i64) -> SpotOrderV7 {
+        SpotOrderV7::from_record(OrderBase {
+            owner: UserId(id + 10),
+            order_id: id,
+            symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+            side,
+            limit_px: Decimal::from(100),
+            size: Decimal::from(size),
+            orig_size: Decimal::from(size),
+            tif: OrderTif::Gtc,
+            status,
+            version: 3,
+            ..OrderBase::default()
+        })
+        .unwrap()
+    }
+
+    fn command() -> LogEntry<MatchSpotOrderV3Cmd> {
+        LogEntrySequencer::from_metadata(1, 500, 77, 1, MatchSpotOrderV3Cmd { order_id: 1 })
+    }
+
+    #[test]
+    fn open_and_partially_filled_takers_use_domain_service_outcome() {
+        for status in [SpotOrderStatus::Open, SpotOrderStatus::PartiallyFilled] {
+            let state = MatchSpotOrderV3State {
+                taker_order: order(1, OrderSide::Buy, status, 2),
+                maker_orders: vec![order(2, OrderSide::Sell, SpotOrderStatus::Open, 1)],
+                trade_id_start: 900,
+                maker_fee_bps: 0,
+                taker_fee_bps: 0,
+            };
+            let outcome =
+                MatchSpotOrderV3UseCase.compute_state_changed(&command(), &state).unwrap();
+            assert!(matches!(outcome, MatchSpotOrderV7Outcome::PartiallyFilled { .. }));
         }
+    }
+
+    #[test]
+    fn pending_taker_is_rejected_by_state_validation() {
+        let state = MatchSpotOrderV3State {
+            taker_order: order(1, OrderSide::Buy, SpotOrderStatus::Pending, 2),
+            maker_orders: vec![],
+            trade_id_start: 900,
+            maker_fee_bps: 0,
+            taker_fee_bps: 0,
+        };
+        assert_eq!(
+            MatchSpotOrderV3UseCase.validate_state_given(&command(), &state),
+            Err(MatchSpotOrderV3Error::TakerOrderNotMatchable)
+        );
     }
 }

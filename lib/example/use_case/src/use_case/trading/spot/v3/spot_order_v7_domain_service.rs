@@ -1,10 +1,16 @@
+use std::collections::HashSet;
+
 use common_entity::{EntityError, Fsm};
+use example_core_entity::common::CommonOrderExecution;
+use example_core_entity::entity::common::common_trade::TradeBase;
 use example_core_entity::spot::spot_order_v7::{
-    ActivateSpotOrderV7Output, CancelSpotOrderV7Output, ModifySpotOrderV7Output, SpotOrderV7Output,
+    ActivateSpotOrderV7Output, CancelSpotOrderV7Output, MatchSpotOrderV7Input,
+    MatchSpotOrderV7Outcome, ModifySpotOrderV7Output, SpotOrderV7Output,
 };
+use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3};
 use example_core_entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, OrderTif, SpotOrderV7, SpotOrderV7Event,
-    SpotOrderV7HoldAdjustment,
+    BalanceV2, BalanceV2Error, BalanceV2Event, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
+    SpotOrderV7Event, SpotOrderV7HoldAdjustment,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -50,6 +56,194 @@ pub enum ModifySpotOrderV7Error {
 pub struct SpotOrderV7DomainService;
 
 impl SpotOrderV7DomainService {
+    /// 只读规划全部成交，验证成功后分别推进 taker 与 maker 聚合。
+    pub fn match_order(
+        mut taker: SpotOrderV7,
+        mut makers: Vec<SpotOrderV7>,
+        input: MatchSpotOrderV7Input,
+    ) -> Result<MatchSpotOrderV7Outcome, EntityError> {
+        let t = taker.order_base().clone();
+        validate_matchable(taker.status(), t.size, t.orig_size, t.limit_px)?;
+        if !t.has_consistent_execution_facts() {
+            return Err(match_error("inconsistent taker execution facts"));
+        }
+
+        let mut ids = HashSet::with_capacity(makers.len() + 1);
+        ids.insert(t.order_id);
+        for maker in &makers {
+            let m = maker.order_base();
+            validate_matchable(maker.status(), m.size, m.orig_size, m.limit_px)?;
+            if m.execution != CommonOrderExecution::Limit || !m.has_consistent_execution_facts() {
+                return Err(match_error("maker execution facts are not matchable"));
+            }
+            if !ids.insert(m.order_id) {
+                return Err(match_error("order ids must be unique"));
+            }
+            if m.symbol != t.symbol || m.side == t.side {
+                return Err(match_error("maker market or side mismatch"));
+            }
+        }
+
+        let crosses = |maker: &SpotOrderV7| match t.side {
+            OrderSide::Buy => t.limit_px >= maker.order_base().limit_px,
+            OrderSide::Sell => t.limit_px <= maker.order_base().limit_px,
+        };
+        if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
+            taker.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: input.timestamp })?;
+            let release_requirement = taker.release_requirement().map_err(conversion_error)?;
+            return Ok(MatchSpotOrderV7Outcome::Rejected {
+                rejected_taker_order_after: taker,
+                release_requirement,
+            });
+        }
+
+        #[derive(Clone, Copy)]
+        struct PlannedFill {
+            maker_index: usize,
+            size: Decimal,
+            taker_fee: Decimal,
+            maker_fee: Decimal,
+            trade_id: u64,
+        }
+
+        let mut remaining = t.size;
+        let mut taker_fee_total = Decimal::ZERO;
+        let mut fills = Vec::new();
+        for (maker_index, maker) in makers.iter().enumerate() {
+            if remaining == Decimal::ZERO {
+                break;
+            }
+            if !crosses(maker) {
+                continue;
+            }
+            let size = remaining.min(maker.order_base().size);
+            let notional = maker
+                .order_base()
+                .limit_px
+                .checked_mul(size)
+                .ok_or_else(|| match_error("notional overflow"))?;
+            let taker_fee = match_fee(notional, input.taker_fee_bps, t.symbol.quote.scale())?;
+            let maker_fee = match_fee(notional, input.maker_fee_bps, t.symbol.quote.scale())?;
+            taker_fee_total = taker_fee_total
+                .checked_add(taker_fee)
+                .ok_or_else(|| match_error("fee overflow"))?;
+            let trade_id = input
+                .trade_id_start
+                .checked_add(fills.len() as u64)
+                .ok_or_else(|| match_error("trade id overflow"))?;
+            remaining = remaining.checked_sub(size).ok_or_else(|| match_error("size underflow"))?;
+            fills.push(PlannedFill { maker_index, size, taker_fee, maker_fee, trade_id });
+        }
+
+        let filled_size =
+            t.size.checked_sub(remaining).ok_or_else(|| match_error("size underflow"))?;
+        let taker_buy_fee_after = t
+            .buy_quote_fee_reserve_consumed
+            .checked_add(if t.side == OrderSide::Buy { taker_fee_total } else { Decimal::ZERO })
+            .ok_or_else(|| match_error("fee overflow"))?;
+        if taker_buy_fee_after > t.buy_quote_fee_reserve_limit {
+            return Err(match_error("fee exceeds reserve"));
+        }
+        for fill in &fills {
+            let m = makers
+                .get(fill.maker_index)
+                .ok_or_else(|| match_error("planned maker index is missing"))?
+                .order_base();
+            if m.version == u64::MAX {
+                return Err(EntityError::VersionOverflow { version: m.version });
+            }
+            if m.side == OrderSide::Buy {
+                let consumed = m
+                    .buy_quote_fee_reserve_consumed
+                    .checked_add(fill.maker_fee)
+                    .ok_or_else(|| match_error("fee overflow"))?;
+                if consumed > m.buy_quote_fee_reserve_limit {
+                    return Err(match_error("fee exceeds reserve"));
+                }
+            }
+        }
+        if (filled_size > Decimal::ZERO || t.effective_tif() == OrderTif::Ioc)
+            && t.version == u64::MAX
+        {
+            return Err(EntityError::VersionOverflow { version: t.version });
+        }
+
+        if filled_size == Decimal::ZERO && t.effective_tif() != OrderTif::Ioc {
+            return Ok(MatchSpotOrderV7Outcome::Resting { taker_order_after: taker });
+        }
+
+        let mut trades = Vec::with_capacity(fills.len());
+        for fill in fills {
+            let maker = makers
+                .get_mut(fill.maker_index)
+                .ok_or_else(|| match_error("planned maker index is missing"))?;
+            let maker_before = maker.order_base().clone();
+            maker.apply(SpotOrderV7Event::MatchedAsMaker {
+                filled_size: fill.size,
+                quote_fee: fill.maker_fee,
+                timestamp: input.timestamp,
+            })?;
+            trades.push(SpotTradeV3 {
+                comon_trade: TradeBase {
+                    trade_id: fill.trade_id,
+                    symbol: t.symbol,
+                    taker_user: t.owner,
+                    maker_user: maker_before.owner,
+                    taker_order_id: t.order_id,
+                    maker_order_id: maker_before.order_id,
+                    taker_side: t.side,
+                    price: maker_before.limit_px,
+                    size: fill.size,
+                    taker_fee: fill.taker_fee,
+                    maker_fee: fill.maker_fee,
+                    created_at: input.timestamp,
+                    updated_at: input.timestamp,
+                    version: 0,
+                },
+                settlement_status: SpotTradeSettlementStatus::Unsettled,
+            });
+        }
+        taker.apply(SpotOrderV7Event::MatchedAsTaker {
+            filled_size,
+            quote_fee: taker_fee_total,
+            timestamp: input.timestamp,
+        })?;
+
+        match taker.status() {
+            SpotOrderStatus::Filled => {
+                let release_requirement = taker.release_requirement().map_err(conversion_error)?;
+                Ok(MatchSpotOrderV7Outcome::Filled {
+                    filled_taker_order_after: taker,
+                    maker_orders_after: makers,
+                    created_trades: trades,
+                    release_requirement,
+                })
+            }
+            SpotOrderStatus::Canceled => {
+                let release_requirement = taker.release_requirement().map_err(conversion_error)?;
+                Ok(MatchSpotOrderV7Outcome::CanceledAfterPartialFill {
+                    canceled_taker_order_after: taker,
+                    maker_orders_after: makers,
+                    created_trades: trades,
+                    release_requirement,
+                })
+            }
+            SpotOrderStatus::Rejected => {
+                let release_requirement = taker.release_requirement().map_err(conversion_error)?;
+                Ok(MatchSpotOrderV7Outcome::Rejected {
+                    rejected_taker_order_after: taker,
+                    release_requirement,
+                })
+            }
+            SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderV7Outcome::PartiallyFilled {
+                taker_order_after: taker,
+                maker_orders_after: makers,
+                created_trades: trades,
+            }),
+            _ => Err(match_error("unexpected taker state after matching")),
+        }
+    }
+
     pub fn modify(
         mut order: SpotOrderV7,
         mut balance: BalanceV2,
@@ -137,6 +331,40 @@ impl SpotOrderV7DomainService {
 
         Ok((order, balance))
     }
+}
+
+fn validate_matchable(
+    status: SpotOrderStatus,
+    size: Decimal,
+    orig_size: Decimal,
+    price: Decimal,
+) -> Result<(), EntityError> {
+    if !matches!(status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
+        || size <= Decimal::ZERO
+        || size > orig_size
+        || price <= Decimal::ZERO
+    {
+        return Err(match_error("order is not matchable"));
+    }
+    Ok(())
+}
+
+fn match_fee(notional: Decimal, bps: u64, scale: u32) -> Result<Decimal, EntityError> {
+    notional
+        .checked_mul(Decimal::from(bps))
+        .and_then(|value| value.checked_div(Decimal::from(10_000u64)))
+        .map(|value| {
+            value.round_dp_with_strategy(scale, rust_decimal::RoundingStrategy::ToPositiveInfinity)
+        })
+        .ok_or_else(|| match_error("fee overflow"))
+}
+
+fn match_error(message: &str) -> EntityError {
+    EntityError::Custom(message.to_owned())
+}
+
+fn conversion_error(error: impl std::fmt::Display) -> EntityError {
+    match_error(&error.to_string())
 }
 
 #[cfg(test)]
@@ -468,5 +696,138 @@ mod tests {
         );
 
         assert!(matches!(result, Err(CancelSpotOrderV7Error::Entity(_))));
+    }
+
+    fn match_order(
+        id: u64,
+        side: OrderSide,
+        tif: OrderTif,
+        price: i64,
+        size: i64,
+        fee_reserve: i64,
+        version: u64,
+    ) -> SpotOrderV7 {
+        SpotOrderV7::from_record(OrderBase {
+            owner: UserId(id + 100),
+            order_id: id,
+            symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+            side,
+            limit_px: Decimal::from(price),
+            size: Decimal::from(size),
+            orig_size: Decimal::from(size),
+            tif,
+            status: SpotOrderStatus::Open,
+            buy_quote_fee_reserve_limit: Decimal::from(fee_reserve),
+            version,
+            ..OrderBase::default()
+        })
+        .unwrap()
+    }
+
+    fn match_input() -> MatchSpotOrderV7Input {
+        MatchSpotOrderV7Input {
+            trade_id_start: 900,
+            maker_fee_bps: 100,
+            taker_fee_bps: 200,
+            timestamp: TIMESTAMP,
+        }
+    }
+
+    #[test]
+    fn match_order_plans_multiple_fills_and_commits_each_order_once() {
+        let taker = match_order(1, OrderSide::Buy, OrderTif::Gtc, 100, 3, 10, 7);
+        let skipped = match_order(2, OrderSide::Sell, OrderTif::Gtc, 101, 1, 0, 4);
+        let maker_a = match_order(3, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 5);
+        let maker_b = match_order(4, OrderSide::Sell, OrderTif::Gtc, 98, 2, 0, 6);
+
+        let outcome = SpotOrderV7DomainService::match_order(
+            taker,
+            vec![skipped.clone(), maker_a, maker_b],
+            match_input(),
+        )
+        .unwrap();
+        let MatchSpotOrderV7Outcome::Filled {
+            filled_taker_order_after,
+            maker_orders_after,
+            created_trades,
+            ..
+        } = outcome
+        else {
+            panic!("expected filled outcome")
+        };
+        assert_eq!(filled_taker_order_after.order_base().version, 8);
+        assert_eq!(
+            filled_taker_order_after.order_base().buy_quote_fee_reserve_consumed,
+            Decimal::from(6)
+        );
+        assert_eq!(maker_orders_after[0], skipped);
+        assert_eq!(maker_orders_after[1].order_base().version, 6);
+        assert_eq!(maker_orders_after[2].order_base().version, 7);
+        assert_eq!(created_trades.len(), 2);
+        assert_eq!(created_trades[0].comon_trade.trade_id, 900);
+        assert_eq!(created_trades[1].comon_trade.trade_id, 901);
+        assert_eq!(created_trades[0].comon_trade.price, Decimal::from(99));
+        assert_eq!(created_trades[1].comon_trade.price, Decimal::from(98));
+        assert_eq!(created_trades[0].comon_trade.taker_fee, Decimal::from(2));
+        assert_eq!(created_trades[0].comon_trade.maker_fee, Decimal::ONE);
+    }
+
+    #[test]
+    fn buy_maker_consumes_its_fee_reserve_while_sell_taker_does_not() {
+        let taker = match_order(1, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 7);
+        let maker = match_order(2, OrderSide::Buy, OrderTif::Gtc, 100, 1, 2, 4);
+        let MatchSpotOrderV7Outcome::Filled {
+            filled_taker_order_after, maker_orders_after, ..
+        } = SpotOrderV7DomainService::match_order(taker, vec![maker], match_input()).unwrap()
+        else {
+            panic!("expected fill")
+        };
+        assert_eq!(
+            filled_taker_order_after.order_base().buy_quote_fee_reserve_consumed,
+            Decimal::ZERO
+        );
+        assert_eq!(maker_orders_after[0].order_base().buy_quote_fee_reserve_consumed, Decimal::ONE);
+    }
+
+    #[test]
+    fn alo_rejects_without_changing_makers_and_ioc_zero_fill_rejects() {
+        let alo = match_order(1, OrderSide::Buy, OrderTif::Alo, 100, 1, 2, 7);
+        let maker = match_order(2, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 4);
+        let maker_before = maker.clone();
+        let outcome =
+            SpotOrderV7DomainService::match_order(alo, vec![maker], match_input()).unwrap();
+        assert!(matches!(outcome, MatchSpotOrderV7Outcome::Rejected { .. }));
+        assert_eq!(maker_before.order_base().version, 4);
+
+        let ioc = match_order(3, OrderSide::Buy, OrderTif::Ioc, 90, 1, 2, 9);
+        let non_crossing = match_order(4, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 2);
+        let MatchSpotOrderV7Outcome::Rejected { rejected_taker_order_after, .. } =
+            SpotOrderV7DomainService::match_order(ioc, vec![non_crossing], match_input()).unwrap()
+        else {
+            panic!("expected IOC rejection")
+        };
+        assert_eq!(rejected_taker_order_after.order_base().version, 10);
+    }
+
+    #[test]
+    fn planning_error_returns_no_partial_outcome_and_new_service_matches_legacy_success() {
+        let taker = match_order(1, OrderSide::Buy, OrderTif::Gtc, 100, 2, 1, 7);
+        let maker = match_order(2, OrderSide::Sell, OrderTif::Gtc, 100, 2, 0, 4);
+        let mut costly = match_input();
+        costly.taker_fee_bps = 10_000;
+        assert!(
+            SpotOrderV7DomainService::match_order(taker.clone(), vec![maker.clone()], costly)
+                .is_err()
+        );
+
+        let mut zero_fee = match_input();
+        zero_fee.maker_fee_bps = 0;
+        zero_fee.taker_fee_bps = 0;
+        let service =
+            SpotOrderV7DomainService::match_order(taker.clone(), vec![maker.clone()], zero_fee)
+                .unwrap();
+        let mut legacy_taker = taker;
+        let legacy = legacy_taker.match_with_input(vec![maker], zero_fee).unwrap();
+        assert_eq!(service, legacy);
     }
 }
