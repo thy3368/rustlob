@@ -36,7 +36,7 @@ mod tests {
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::identifiers::OrderId;
-    use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
+    use example_core_entity::common::{PriceType, OrderTrigger, OrderBase};
     use example_core_entity::entity::common::order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
     use example_core_entity::spot::spot_order_v7::SpotOrderV7;
     use example_core_use_case::{
@@ -115,9 +115,9 @@ mod tests {
             limit_px: Decimal::from(100),
             size: Decimal::ONE,
             orig_size: Decimal::ONE,
-            execution: CommonOrderExecution::Limit,
+            execution: PriceType::Limit,
             tif: OrderTif::Gtc,
-            trigger: CommonOrderTrigger::None,
+            trigger: OrderTrigger::None,
             trigger_px: None,
             group_relation: OrderGroupRelation::Standalone,
             is_position_tpsl: false,

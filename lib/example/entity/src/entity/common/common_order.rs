@@ -24,13 +24,13 @@ pub enum SpotAmountConversionError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CommonOrderExecution {
+pub enum PriceType {
     Limit,
     Market,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum CommonOrderTrigger {
+pub enum OrderTrigger {
     #[default]
     None,
     TakeProfit,
@@ -58,11 +58,11 @@ pub struct OrderBase {
     /// 下单数量。
     pub orig_size: Decimal,
     /// 订单如何执行。
-    pub execution: CommonOrderExecution,
+    pub execution: PriceType,
     /// 限价单有效方式；市价单固定按 IOC 执行。
     pub tif: OrderTif,
     /// 订单何时触发。
-    pub trigger: CommonOrderTrigger,
+    pub trigger: OrderTrigger,
     /// TP/SL 触发价格；普通订单必须为空。
     pub trigger_px: Option<Decimal>,
     /// `normalTpsl` 父子关系；历史订单反序列化时默认为独立订单。
@@ -102,9 +102,9 @@ impl Default for OrderBase {
             limit_px: Decimal::ONE,
             size: Decimal::ONE,
             orig_size: Decimal::ONE,
-            execution: CommonOrderExecution::Limit,
+            execution: PriceType::Limit,
             tif: OrderTif::Gtc,
-            trigger: CommonOrderTrigger::None,
+            trigger: OrderTrigger::None,
             trigger_px: None,
             group_relation: OrderGroupRelation::Standalone,
             is_position_tpsl: false,
@@ -123,40 +123,40 @@ impl Default for OrderBase {
 impl OrderBase {
     pub fn effective_tif(&self) -> OrderTif {
         match self.execution {
-            CommonOrderExecution::Market => OrderTif::Ioc,
-            CommonOrderExecution::Limit => self.tif,
+            PriceType::Market => OrderTif::Ioc,
+            PriceType::Limit => self.tif,
         }
     }
     pub fn is_trigger(&self) -> bool {
-        self.trigger != CommonOrderTrigger::None
+        self.trigger != OrderTrigger::None
     }
     pub fn trigger_role(&self) -> Option<crate::OrderTriggerRole> {
         match self.trigger {
-            CommonOrderTrigger::None => None,
-            CommonOrderTrigger::TakeProfit => Some(crate::OrderTriggerRole::TakeProfit),
-            CommonOrderTrigger::StopLoss => Some(crate::OrderTriggerRole::StopLoss),
+            OrderTrigger::None => None,
+            OrderTrigger::TakeProfit => Some(crate::OrderTriggerRole::TakeProfit),
+            OrderTrigger::StopLoss => Some(crate::OrderTriggerRole::StopLoss),
         }
     }
     pub fn has_consistent_execution_facts(&self) -> bool {
         let trigger_is_valid = match self.trigger {
-            CommonOrderTrigger::None => self.trigger_px.is_none(),
-            CommonOrderTrigger::TakeProfit | CommonOrderTrigger::StopLoss => {
+            OrderTrigger::None => self.trigger_px.is_none(),
+            OrderTrigger::TakeProfit | OrderTrigger::StopLoss => {
                 self.trigger_px.is_some_and(|px| px > Decimal::ZERO)
             }
         };
         let group_is_valid = match &self.group_relation {
             OrderGroupRelation::Standalone => {
-                !self.is_position_tpsl || self.trigger != CommonOrderTrigger::None
+                !self.is_position_tpsl || self.trigger != OrderTrigger::None
             }
             OrderGroupRelation::NormalTpslParent => {
-                !self.is_position_tpsl && self.trigger == CommonOrderTrigger::None
+                !self.is_position_tpsl && self.trigger == OrderTrigger::None
             }
             OrderGroupRelation::NormalTpslChild { .. } => {
-                !self.is_position_tpsl && self.trigger != CommonOrderTrigger::None
+                !self.is_position_tpsl && self.trigger != OrderTrigger::None
             }
         };
         trigger_is_valid
             && group_is_valid
-            && (self.execution != CommonOrderExecution::Market || self.limit_px > Decimal::ZERO)
+            && (self.execution != PriceType::Market || self.limit_px > Decimal::ZERO)
     }
 }

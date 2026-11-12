@@ -1,16 +1,13 @@
 use std::collections::HashSet;
 
 use common_entity::{EntityError, LogEntry, UseCase};
-use example_core_entity::SpotOrderStatus;
-use example_core_entity::common::CommonOrderExecution;
-use example_core_entity::spot::spot_order_v7::{
-    MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7,
-};
-use rust_decimal::Decimal;
+use example_core_entity::spot::spot_order_v7::SpotOrderV7;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::spot_order_v7_domain_service::SpotOrderV7DomainService;
+use super::spot_order_domain_service::{
+    MatchSpotOrderV3Input, MatchSpotOrderV3Outcome, SpotOrderDomainService,
+};
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct MatchSpotOrderV3Cmd {
     pub order_id: u64,
@@ -34,8 +31,8 @@ pub enum MatchSpotOrderV3Error {
     #[error(transparent)]
     Entity(#[from] EntityError),
 }
-pub type MatchSpotOrderV3AfterChanges = MatchSpotOrderV7Outcome;
-pub type MatchSpotOrderV3Changes = MatchSpotOrderV7Outcome;
+pub type MatchSpotOrderV3AfterChanges = MatchSpotOrderV3Outcome;
+pub type MatchSpotOrderV3Changes = MatchSpotOrderV3Outcome;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchSpotOrderV3State {
     pub taker_order: SpotOrderV7,
@@ -63,12 +60,7 @@ impl UseCase for MatchSpotOrderV3UseCase {
         if t.order_id != c.payload().order_id {
             return Err(MatchSpotOrderV3Error::TakerOrderIdMismatch);
         }
-        if t.size <= Decimal::ZERO
-            || t.size > t.orig_size
-            || t.limit_px <= Decimal::ZERO
-            || !t.has_consistent_execution_facts()
-            || !matches!(t.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
-        {
+        if s.taker_order.validate_matchable_as_taker().is_err() {
             return Err(MatchSpotOrderV3Error::TakerOrderNotMatchable);
         }
         let mut ids = HashSet::new();
@@ -80,13 +72,7 @@ impl UseCase for MatchSpotOrderV3UseCase {
             if !ids.insert(m.order_id) {
                 return Err(MatchSpotOrderV3Error::DuplicateMakerOrderId);
             }
-            if m.size <= Decimal::ZERO
-                || m.size > m.orig_size
-                || m.limit_px <= Decimal::ZERO
-                || m.execution != CommonOrderExecution::Limit
-                || !m.has_consistent_execution_facts()
-                || !matches!(m.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
-            {
+            if x.validate_matchable_as_maker().is_err() {
                 return Err(MatchSpotOrderV3Error::MakerOrderNotMatchable);
             }
             if m.order_id == t.order_id || m.symbol != t.symbol || m.side == t.side {
@@ -100,10 +86,10 @@ impl UseCase for MatchSpotOrderV3UseCase {
         c: &Self::Command,
         s: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        SpotOrderV7DomainService::match_order(
+        SpotOrderDomainService::match_order(
             s.taker_order.clone(),
             s.maker_orders.clone(),
-            MatchSpotOrderV7Input {
+            MatchSpotOrderV3Input {
                 trade_id_start: s.trade_id_start,
                 maker_fee_bps: s.maker_fee_bps,
                 taker_fee_bps: s.taker_fee_bps,
@@ -119,8 +105,9 @@ mod tests {
     use common_entity::{LogEntry, LogEntrySequencer, UseCase};
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
-    use example_core_entity::common::{OrderBase, UserId};
+    use example_core_entity::common::{OrderBase, PriceType, UserId};
     use example_core_entity::{OrderSide, OrderTif, SpotOrderStatus};
+    use rust_decimal::Decimal;
 
     use super::*;
 
@@ -135,6 +122,7 @@ mod tests {
             orig_size: Decimal::from(size),
             tif: OrderTif::Gtc,
             status,
+            execution: PriceType::Limit,
             version: 3,
             ..OrderBase::default()
         })
@@ -157,7 +145,7 @@ mod tests {
             };
             let outcome =
                 MatchSpotOrderV3UseCase.compute_state_changed(&command(), &state).unwrap();
-            assert!(matches!(outcome, MatchSpotOrderV7Outcome::PartiallyFilled { .. }));
+            assert!(matches!(outcome, MatchSpotOrderV3Outcome::PartiallyFilled { .. }));
         }
     }
 

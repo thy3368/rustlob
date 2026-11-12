@@ -4,7 +4,7 @@ use common_entity::stable_string_entity_id;
 use example_core_use_case::entity::account::coin::Coin;
 use example_core_use_case::entity::account::symbol::Symbol;
 use example_core_use_case::entity::common::common_order::{
-    CommonOrderExecution, CommonOrderTrigger, OrderBase,
+    PriceType, OrderTrigger, OrderBase,
 };
 use example_core_use_case::{
     BalanceV2, MarketRules, OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
@@ -247,7 +247,7 @@ impl MySqlStore {
                         orig_size: Decimal::from(qty),
                         execution,
                         tif,
-                        trigger: CommonOrderTrigger::None,
+                        trigger: OrderTrigger::None,
                         trigger_px: None,
                         group_relation: OrderGroupRelation::Standalone,
                         is_position_tpsl: false,
@@ -310,7 +310,7 @@ fn decode_side_mysql(value: &str) -> Option<OrderSide> {
 fn decode_execution_mysql(
     execution: &str,
     time_in_force: &str,
-) -> Option<(CommonOrderExecution, OrderTif)> {
+) -> Option<(PriceType, OrderTif)> {
     let tif = match time_in_force {
         "gtc" => OrderTif::Gtc,
         "ioc" => OrderTif::Ioc,
@@ -318,8 +318,8 @@ fn decode_execution_mysql(
         _ => return None,
     };
     let execution = match execution {
-        "limit" => Some(CommonOrderExecution::Limit),
-        "market" => Some(CommonOrderExecution::Market),
+        "limit" => Some(PriceType::Limit),
+        "market" => Some(PriceType::Market),
         _ => None,
     }?;
     Some((execution, tif))

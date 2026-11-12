@@ -3,12 +3,11 @@ use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
 
 use crate::account::coin::{CoinAmount, CoinAmountError};
+use crate::common::PriceType;
 use crate::entity::common::common_order::{OrderBase, SpotAmountConversionError};
-use crate::entity::common::common_trade::TradeBase;
 use crate::entity::common::order_primitives::{
     OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus,
 };
-use crate::spot::spot_trade_v3::{SpotTradeSettlementStatus, SpotTradeV3};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 
@@ -16,11 +15,6 @@ use crate::spot::spot_trade_v3::{SpotTradeSettlementStatus, SpotTradeV3};
 ///todo 可以在根聚合上加领域服务，因为不少动作确实涉及多个聚合的变化。
 pub enum SpotOrderV7Event {
     Activate {
-        timestamp: u64,
-    },
-    Match {
-        makers: Vec<SpotOrderV7>,
-        input: MatchSpotOrderV7Input,
         timestamp: u64,
     },
     /// 将已规划的全部 taker 成交一次性提交到订单聚合。
@@ -37,13 +31,6 @@ pub enum SpotOrderV7Event {
     },
     /// ALO 遇到可成交对手盘时拒绝 taker。
     RejectedAsTaker {
-        timestamp: u64,
-    },
-    ReplaceOrFill {
-        price: Decimal,
-        size: Decimal,
-        makers: Vec<SpotOrderV7>,
-        input: MatchSpotOrderV7Input,
         timestamp: u64,
     },
     Modify {
@@ -85,56 +72,10 @@ pub struct ActivateSpotOrderV7Output {
     pub freeze_requirement: SpotOrderV7FreezeRequirement,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MatchSpotOrderV7Input {
-    pub trade_id_start: u64,
-    pub maker_fee_bps: u64,
-    pub taker_fee_bps: u64,
-    pub timestamp: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MatchSpotOrderV7Outcome {
-    Resting {
-        taker_order_after: SpotOrderV7,
-    },
-    PartiallyFilled {
-        taker_order_after: SpotOrderV7,
-        maker_orders_after: Vec<SpotOrderV7>,
-        created_trades: Vec<SpotTradeV3>,
-    },
-    Filled {
-        filled_taker_order_after: SpotOrderV7,
-        maker_orders_after: Vec<SpotOrderV7>,
-        created_trades: Vec<SpotTradeV3>,
-        release_requirement: CoinAmount,
-    },
-    CanceledAfterPartialFill {
-        canceled_taker_order_after: SpotOrderV7,
-        maker_orders_after: Vec<SpotOrderV7>,
-        created_trades: Vec<SpotTradeV3>,
-        release_requirement: CoinAmount,
-    },
-    Rejected {
-        rejected_taker_order_after: SpotOrderV7,
-        release_requirement: CoinAmount,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchSpotOrderV7Output {
-    pub outcome: MatchSpotOrderV7Outcome,
-}
-
 /// 撮合角色事件提交后的订单事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplySpotOrderV7MatchOutput {
     pub order_after: SpotOrderV7,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplaceOrFillSpotOrderV7Output {
-    pub outcome: MatchSpotOrderV7Outcome,
 }
 
 /// 改单后订单对持仓冻结额的调整要求。
@@ -172,11 +113,9 @@ pub struct CancelSpotOrderV7Output {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV7Output {
     Activated(ActivateSpotOrderV7Output),
-    Matched(MatchSpotOrderV7Output),
     MatchedAsTaker(ApplySpotOrderV7MatchOutput),
     MatchedAsMaker(ApplySpotOrderV7MatchOutput),
     RejectedAsTaker(ApplySpotOrderV7MatchOutput),
-    ReplacedOrFilled(ReplaceOrFillSpotOrderV7Output),
     Modified(ModifySpotOrderV7Output),
     Canceled(CancelSpotOrderV7Output),
 }
@@ -240,17 +179,18 @@ impl SpotOrderV7 {
         Entity::track_create_event(self)
     }
 
-    ///todo 可以remove
-    pub fn match_with_input(
-        &mut self,
-        makers: Vec<SpotOrderV7>,
-        input: MatchSpotOrderV7Input,
-    ) -> Result<MatchSpotOrderV7Outcome, EntityError> {
-        self.transition(SpotOrderV7Event::Match { makers, timestamp: input.timestamp, input })
-            .and_then(|(_, output)| match output {
-                SpotOrderV7Output::Matched(output) => Ok(output.outcome),
-                _ => Err(err("match event produced mismatched output")),
-            })
+    /// 校验订单作为 taker 参与撮合所需的单聚合事实。
+    pub fn validate_matchable_as_taker(&self) -> Result<(), EntityError> {
+        validate_matchable(&self.order_base)
+    }
+
+    /// 校验订单作为 maker 参与撮合所需的单聚合事实。
+    pub fn validate_matchable_as_maker(&self) -> Result<(), EntityError> {
+        validate_matchable(&self.order_base)?;
+        if self.order_base.execution != PriceType::Limit {
+            return Err(err("maker order must use limit execution"));
+        }
+        Ok(())
     }
 
     ///todo 可以remove
@@ -262,22 +202,6 @@ impl SpotOrderV7 {
     ) -> Result<(), EntityError> {
         self.apply(SpotOrderV7Event::Modify { price, size, tif: None, cloid: None, timestamp })
             .map(|_| ())
-    }
-
-    ///todo 可以remove
-    pub fn replace_or_fill(
-        &mut self,
-        price: Decimal,
-        size: Decimal,
-        makers: Vec<SpotOrderV7>,
-        input: MatchSpotOrderV7Input,
-        timestamp: u64,
-    ) -> Result<MatchSpotOrderV7Outcome, EntityError> {
-        self.transition(SpotOrderV7Event::ReplaceOrFill { price, size, makers, input, timestamp })
-            .and_then(|(_, output)| match output {
-                SpotOrderV7Output::ReplacedOrFilled(output) => Ok(output.outcome),
-                _ => Err(err("replace-or-fill event produced mismatched output")),
-            })
     }
 }
 
@@ -316,13 +240,8 @@ impl Fsm for SpotOrderV7 {
                     SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
                 )
             }
-            SpotOrderV7Event::Match { makers, input, timestamp } => {
-                let mut adjusted_input = input;
-                adjusted_input.timestamp = timestamp;
-                let (next, outcome) = compute_match(&self.order_base, makers, adjusted_input)?;
-                (next, SpotOrderV7Output::Matched(MatchSpotOrderV7Output { outcome }))
-            }
             SpotOrderV7Event::MatchedAsTaker { filled_size, quote_fee, timestamp } => {
+                self.validate_matchable_as_taker()?;
                 let next = matched_order(
                     &self.order_base,
                     filled_size,
@@ -337,6 +256,7 @@ impl Fsm for SpotOrderV7 {
                 )
             }
             SpotOrderV7Event::MatchedAsMaker { filled_size, quote_fee, timestamp } => {
+                self.validate_matchable_as_maker()?;
                 let next = matched_order(
                     &self.order_base,
                     filled_size,
@@ -351,11 +271,8 @@ impl Fsm for SpotOrderV7 {
                 )
             }
             SpotOrderV7Event::RejectedAsTaker { timestamp } => {
-                if !matches!(
-                    self.status(),
-                    SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-                ) || self.order_base.effective_tif() != OrderTif::Alo
-                {
+                self.validate_matchable_as_taker()?;
+                if self.order_base.effective_tif() != OrderTif::Alo {
                     return Err(err("order cannot be rejected as ALO taker"));
                 }
                 let mut next = self.order_base.clone();
@@ -369,18 +286,6 @@ impl Fsm for SpotOrderV7 {
                 (
                     next,
                     SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput { order_after }),
-                )
-            }
-            SpotOrderV7Event::ReplaceOrFill { price, size, makers, input, timestamp } => {
-                let replaced =
-                    modified_order_without_version(&self.order_base, price, size, timestamp)?;
-                validate_replace_makers(&replaced, &makers)?;
-                let mut adjusted_input = input;
-                adjusted_input.timestamp = timestamp;
-                let (next, outcome) = compute_match(&replaced, makers, adjusted_input)?;
-                (
-                    next,
-                    SpotOrderV7Output::ReplacedOrFilled(ReplaceOrFillSpotOrderV7Output { outcome }),
                 )
             }
             SpotOrderV7Event::Modify { price, size, tif, cloid, timestamp } => {
@@ -439,10 +344,6 @@ fn matched_order(
     timestamp: u64,
     role: MatchRole,
 ) -> Result<OrderBase, EntityError> {
-    validate_record(current)?;
-    if !matches!(current.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
-        return Err(err("order is not matchable"));
-    }
     if filled_size < Decimal::ZERO || filled_size > current.size || quote_fee < Decimal::ZERO {
         return Err(err("invalid match facts"));
     }
@@ -508,41 +409,6 @@ fn modified_order(
         .checked_add(1)
         .ok_or(EntityError::VersionOverflow { version: current.version })?;
     Ok(next)
-}
-
-fn modified_order_without_version(
-    current: &OrderBase,
-    price: Decimal,
-    size: Decimal,
-    timestamp: u64,
-) -> Result<OrderBase, EntityError> {
-    let filled =
-        current.orig_size.checked_sub(current.size).ok_or_else(|| err("invalid filled size"))?;
-    if price <= Decimal::ZERO || size <= Decimal::ZERO || size < filled {
-        return Err(err("invalid modified order"));
-    }
-    let mut next = current.clone();
-    next.limit_px = price;
-    next.orig_size = size;
-    next.size = size.checked_sub(filled).ok_or_else(|| err("size overflow"))?;
-    next.updated_at = timestamp;
-    Ok(next)
-}
-
-fn validate_replace_makers(taker: &OrderBase, makers: &[SpotOrderV7]) -> Result<(), EntityError> {
-    for maker in makers {
-        let order = &maker.order_base;
-        validate_record(order)?;
-        if order.order_id == taker.order_id
-            || order.side == taker.side
-            || order.symbol != taker.symbol
-            || !matches!(order.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
-            || !crosses(taker, order)
-        {
-            return Err(err("maker does not match replacement"));
-        }
-    }
-    Ok(())
 }
 
 fn canceled_order(current: &OrderBase, timestamp: u64) -> Result<OrderBase, EntityError> {
@@ -682,6 +548,15 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
     }
     Ok(())
 }
+fn validate_matchable(o: &OrderBase) -> Result<(), EntityError> {
+    validate_record(o)?;
+    if !matches!(o.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
+        || o.size <= Decimal::ZERO
+    {
+        return Err(err("order is not matchable"));
+    }
+    Ok(())
+}
 fn freeze_requirement(
     o: &OrderBase,
 ) -> Result<SpotOrderV7FreezeRequirement, SpotAmountConversionError> {
@@ -791,159 +666,6 @@ fn hold_adjustment(
         std::cmp::Ordering::Equal => Ok(SpotOrderV7HoldAdjustment::Unchanged { currency }),
     }
 }
-fn fee(n: Decimal, b: u64, scale: u32) -> Result<Decimal, EntityError> {
-    Ok(n.checked_mul(Decimal::from(b))
-        .and_then(|x| x.checked_div(Decimal::from(10_000u64)))
-        .ok_or_else(|| err("fee overflow"))?
-        .round_dp_with_strategy(scale, rust_decimal::RoundingStrategy::ToPositiveInfinity))
-}
-fn compute_match(
-    t: &OrderBase,
-    mut makers: Vec<SpotOrderV7>,
-    i: MatchSpotOrderV7Input,
-) -> Result<(OrderBase, MatchSpotOrderV7Outcome), EntityError> {
-    validate_record(t)?;
-    if !matches!(t.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
-        return Err(err("order is not matchable"));
-    }
-    let mut taker = t.clone();
-    let mut trades = Vec::new();
-    if taker.effective_tif() == OrderTif::Alo
-        && makers.iter().any(|m| m.order_base.order_id != t.order_id && crosses(&t, &m.order_base))
-    {
-        taker.status = SpotOrderStatus::Rejected;
-        taker.version =
-            t.version.checked_add(1).ok_or(EntityError::VersionOverflow { version: t.version })?;
-        taker.updated_at = i.timestamp;
-        let rejected_taker_order_after = SpotOrderV7 { order_base: taker.clone() };
-        let release_requirement = entity_release_requirement(&rejected_taker_order_after)?;
-        return Ok((
-            taker,
-            MatchSpotOrderV7Outcome::Rejected { rejected_taker_order_after, release_requirement },
-        ));
-    }
-    for maker in &mut makers {
-        if taker.size == Decimal::ZERO {
-            break;
-        }
-        validate_record(&maker.order_base)?;
-        if maker.order_base.order_id == t.order_id
-            || maker.order_base.side == t.side
-            || maker.order_base.symbol != t.symbol
-            || maker.order_base.status == SpotOrderStatus::Pending
-            || !crosses(&taker, &maker.order_base)
-        {
-            continue;
-        }
-        let q = taker.size.min(maker.order_base.size);
-        let n = maker.order_base.limit_px.checked_mul(q).ok_or_else(|| err("notional overflow"))?;
-        let tf = fee(n, i.taker_fee_bps, t.symbol.quote.scale())?;
-        let mf = fee(n, i.maker_fee_bps, t.symbol.quote.scale())?;
-        taker.size = taker.size.checked_sub(q).ok_or_else(|| err("size underflow"))?;
-        maker.order_base.size =
-            maker.order_base.size.checked_sub(q).ok_or_else(|| err("size underflow"))?;
-        if t.side == OrderSide::Buy {
-            taker.buy_quote_fee_reserve_consumed = taker
-                .buy_quote_fee_reserve_consumed
-                .checked_add(tf)
-                .ok_or_else(|| err("fee overflow"))?;
-            if taker.buy_quote_fee_reserve_consumed > taker.buy_quote_fee_reserve_limit {
-                return Err(err("fee exceeds reserve"));
-            }
-        }
-        maker.order_base.version = maker
-            .order_base
-            .version
-            .checked_add(1)
-            .ok_or(EntityError::VersionOverflow { version: maker.order_base.version })?;
-        taker.updated_at = i.timestamp;
-        maker.order_base.updated_at = i.timestamp;
-        maker.order_base.status = if maker.order_base.size == Decimal::ZERO {
-            SpotOrderStatus::Filled
-        } else {
-            SpotOrderStatus::PartiallyFilled
-        };
-        trades.push(SpotTradeV3 {
-            comon_trade: TradeBase {
-                trade_id: i
-                    .trade_id_start
-                    .checked_add((trades.len()) as u64)
-                    .ok_or_else(|| err("trade id overflow"))?,
-                symbol: t.symbol,
-                taker_user: t.owner,
-                maker_user: maker.order_base.owner,
-                taker_order_id: t.order_id,
-                maker_order_id: maker.order_base.order_id,
-                taker_side: t.side,
-                price: maker.order_base.limit_px,
-                size: q,
-                taker_fee: tf,
-                maker_fee: mf,
-                created_at: i.timestamp,
-                updated_at: i.timestamp,
-                version: 0,
-            },
-            settlement_status: SpotTradeSettlementStatus::Unsettled,
-        });
-    }
-    if taker.size == Decimal::ZERO {
-        taker.status = SpotOrderStatus::Filled;
-    } else if trades.is_empty() {
-        if taker.effective_tif() == OrderTif::Ioc {
-            taker.status = SpotOrderStatus::Rejected;
-        }
-    } else if taker.effective_tif() == OrderTif::Ioc {
-        taker.status = SpotOrderStatus::Canceled;
-    } else {
-        taker.status = SpotOrderStatus::PartiallyFilled;
-    }
-    taker.version =
-        t.version.checked_add(1).ok_or(EntityError::VersionOverflow { version: t.version })?;
-    taker.updated_at = i.timestamp;
-    let after = SpotOrderV7 { order_base: taker };
-    let next = after.order_base.clone();
-    let outcome = if after.status() == SpotOrderStatus::Filled {
-        let release_requirement = entity_release_requirement(&after)?;
-        MatchSpotOrderV7Outcome::Filled {
-            filled_taker_order_after: after,
-            maker_orders_after: makers,
-            created_trades: trades,
-            release_requirement,
-        }
-    } else if trades.is_empty() {
-        if after.status() == SpotOrderStatus::Rejected {
-            let release_requirement = entity_release_requirement(&after)?;
-            MatchSpotOrderV7Outcome::Rejected {
-                rejected_taker_order_after: after,
-                release_requirement,
-            }
-        } else {
-            MatchSpotOrderV7Outcome::Resting { taker_order_after: after }
-        }
-    } else if after.status() == SpotOrderStatus::Canceled {
-        let release_requirement = entity_release_requirement(&after)?;
-        MatchSpotOrderV7Outcome::CanceledAfterPartialFill {
-            canceled_taker_order_after: after,
-            maker_orders_after: makers,
-            created_trades: trades,
-            release_requirement,
-        }
-    } else {
-        MatchSpotOrderV7Outcome::PartiallyFilled {
-            taker_order_after: after,
-            maker_orders_after: makers,
-            created_trades: trades,
-        }
-    };
-    Ok((next, outcome))
-}
-fn crosses(t: &OrderBase, m: &OrderBase) -> bool {
-    match t.side {
-        OrderSide::Buy => t.limit_px >= m.limit_px,
-        OrderSide::Sell => t.limit_px <= m.limit_px,
-    }
-}
-
 #[cfg(test)]
 #[path = "spot_order_v7_tests.rs"]
 mod spot_order_v7_tests;

@@ -21,9 +21,10 @@ pub use place_only_spot_order_v3::{
     PlaceOnlySpotOrderV3Error, PlaceOnlySpotOrderV3OrderCmd, PlaceOnlySpotOrderV3OrderType,
     PlaceOnlySpotOrderV3State, PlaceOnlySpotOrderV3UseCase,
 };
+pub use spot_order_domain_service::{MatchSpotOrderV3Input, MatchSpotOrderV3Outcome};
 
 pub mod pipeline;
-pub mod spot_order_v7_domain_service;
+pub mod spot_order_domain_service;
 
 pub use activate_spot_order_v7::{
     ActivateSpotOrderV7AfterChanges, ActivateSpotOrderV7Changes, ActivateSpotOrderV7Cmd,

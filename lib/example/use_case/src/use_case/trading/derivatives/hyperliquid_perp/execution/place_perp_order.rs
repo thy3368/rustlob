@@ -6,7 +6,7 @@ use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::entity::account::symbol::Symbol;
-use crate::entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
+use crate::entity::common::{PriceType, OrderTrigger, OrderBase};
 use crate::entity::{
     BalanceV2, BalanceV2Error, BalanceV2Event, OrderGroupRelation, OrderSide, OrderTif,
     PerpOrderV3, PerpPositionV3, SpotOrderStatus, UserId,
@@ -147,10 +147,10 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
         let intent = derive_intent(cmd.side, cmd.size, state.position.signed_size())?;
         let (execution, tif) = match cmd.execution {
             PlaceHyperliquidPerpOrderExecution::Limit { time_in_force, .. } => {
-                (CommonOrderExecution::Limit, time_in_force)
+                (PriceType::Limit, time_in_force)
             }
             PlaceHyperliquidPerpOrderExecution::Market { .. } => {
-                (CommonOrderExecution::Market, OrderTif::Ioc)
+                (PriceType::Market, OrderTif::Ioc)
             }
         };
         let created_order = PerpOrderV3 {
@@ -164,7 +164,7 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
                 orig_size: cmd.size,
                 execution,
                 tif,
-                trigger: CommonOrderTrigger::None,
+                trigger: OrderTrigger::None,
                 trigger_px: None,
                 group_relation: OrderGroupRelation::Standalone,
                 is_position_tpsl: false,

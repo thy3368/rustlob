@@ -4,7 +4,7 @@ use common_entity::{
     EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UseCase,
 };
 use example_core_entity::account::symbol::Symbol;
-use example_core_entity::common::{CommonOrderExecution, CommonOrderTrigger, OrderBase};
+use example_core_entity::common::{PriceType, OrderTrigger, OrderBase};
 use example_core_entity::spot::spot_order_v7::SpotOrderV7;
 use example_core_entity::{OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, UserId};
 use rust_decimal::Decimal;
@@ -14,7 +14,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaceOnlySpotOrderV3OrderType {
     None,
-    Trigger { is_market: bool, trigger_price: String, trigger_role: CommonOrderTrigger },
+    Trigger { is_market: bool, trigger_price: String, trigger_role: OrderTrigger },
 }
 
 /// 创建委托所需的完整事实；价格和数量按 Decimal 精确解析，不舍入。
@@ -205,7 +205,7 @@ fn check_order_command(
         &order.order_type
     {
         parse_positive_decimal(trigger_price, PlaceOnlySpotOrderV3Error::InvalidTriggerPrice)?;
-        if *trigger_role == CommonOrderTrigger::None {
+        if *trigger_role == OrderTrigger::None {
             return Err(PlaceOnlySpotOrderV3Error::InvalidTriggerRole);
         }
     }
@@ -264,10 +264,10 @@ fn build_order(
     let size = parse_positive_decimal(&order.size, PlaceOnlySpotOrderV3Error::InvalidSize)?;
     let (execution, trigger, trigger_px, tif) = match &order.order_type {
         PlaceOnlySpotOrderV3OrderType::None => {
-            (CommonOrderExecution::Limit, CommonOrderTrigger::None, None, order.tif)
+            (PriceType::Limit, OrderTrigger::None, None, order.tif)
         }
         PlaceOnlySpotOrderV3OrderType::Trigger { is_market, trigger_price, trigger_role } => (
-            if *is_market { CommonOrderExecution::Market } else { CommonOrderExecution::Limit },
+            if *is_market { PriceType::Market } else { PriceType::Limit },
             *trigger_role,
             Some(parse_positive_decimal(
                 trigger_price,
@@ -342,7 +342,7 @@ mod tests {
             order_type: PlaceOnlySpotOrderV3OrderType::Trigger {
                 is_market: true,
                 trigger_price: "110.5".into(),
-                trigger_role: CommonOrderTrigger::TakeProfit,
+                trigger_role: OrderTrigger::TakeProfit,
             },
             ..order(id)
         }
@@ -402,7 +402,7 @@ mod tests {
         sl.order_type = PlaceOnlySpotOrderV3OrderType::Trigger {
             is_market: false,
             trigger_price: "90.5".into(),
-            trigger_role: CommonOrderTrigger::StopLoss,
+            trigger_role: OrderTrigger::StopLoss,
         };
         let cmd =
             log(PlaceOnlySpotOrderV3Cmd::NormalTpsl { parent: order(1), children: vec![tp, sl] });
@@ -427,10 +427,10 @@ mod tests {
             assert_eq!(record.status, SpotOrderStatus::Pending);
             assert!(record.has_consistent_execution_facts());
         }
-        assert_eq!(created_child_orders[0].order_base().execution, CommonOrderExecution::Market);
+        assert_eq!(created_child_orders[0].order_base().execution, PriceType::Market);
         assert_eq!(created_child_orders[0].order_base().tif, OrderTif::Ioc);
-        assert_eq!(created_child_orders[1].order_base().execution, CommonOrderExecution::Limit);
-        assert_eq!(created_child_orders[1].order_base().trigger, CommonOrderTrigger::StopLoss);
+        assert_eq!(created_child_orders[1].order_base().execution, PriceType::Limit);
+        assert_eq!(created_child_orders[1].order_base().trigger, OrderTrigger::StopLoss);
         let events = changes.to_replayable_events().unwrap();
         assert_eq!(events.len(), 3);
         for (record, event) in
@@ -461,7 +461,7 @@ mod tests {
                     order.order_type = PlaceOnlySpotOrderV3OrderType::Trigger {
                         is_market: true,
                         trigger_price: value.into(),
-                        trigger_role: CommonOrderTrigger::TakeProfit,
+                        trigger_role: OrderTrigger::TakeProfit,
                     };
                     PlaceOnlySpotOrderV3Error::InvalidTriggerPrice
                 }
@@ -482,7 +482,7 @@ mod tests {
         invalid_role.order_type = PlaceOnlySpotOrderV3OrderType::Trigger {
             is_market: false,
             trigger_price: "1".into(),
-            trigger_role: CommonOrderTrigger::None,
+            trigger_role: OrderTrigger::None,
         };
         for (order, error) in [
             (order(0), PlaceOnlySpotOrderV3Error::InvalidOrderId),

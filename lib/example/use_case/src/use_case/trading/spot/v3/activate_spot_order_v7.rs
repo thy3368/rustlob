@@ -6,8 +6,8 @@ use example_core_entity::spot::spot_order_v7::SpotOrderV7;
 use example_core_entity::{BalanceV2, SpotOrderStatus};
 use serde::{Deserialize, Serialize};
 
-use super::spot_order_v7_domain_service::SpotOrderV7DomainService;
-pub(crate) use crate::spot_order_v7_domain_service::ActivateSpotOrderV7Error;
+use super::spot_order_domain_service::SpotOrderDomainService;
+pub(crate) use crate::spot_order_domain_service::ActivateSpotOrderV7Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActivateSpotOrderV7Cmd {
@@ -76,7 +76,7 @@ impl UseCase for ActivateSpotOrderV7UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let (order_after, balance_after) = SpotOrderV7DomainService::freeze(
+        let (order_after, balance_after) = SpotOrderDomainService::freeze(
             state.order.clone(),
             state.balance.clone(),
             cmd.logical_ts(),
@@ -111,10 +111,10 @@ impl ReplayableChanges for ActivateSpotOrderV7Changes {
 #[cfg(test)]
 mod tests {
     use common_entity::LogEntrySequencer;
+    use example_core_entity::OrderSide;
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::entity::common::{OrderBase, UserId};
-    use example_core_entity::OrderSide;
     use rust_decimal::Decimal;
 
     use super::*;

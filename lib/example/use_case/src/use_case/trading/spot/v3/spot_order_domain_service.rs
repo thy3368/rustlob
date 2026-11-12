@@ -1,11 +1,9 @@
 use std::collections::HashSet;
 
 use common_entity::{EntityError, Fsm};
-use example_core_entity::common::CommonOrderExecution;
 use example_core_entity::entity::common::common_trade::TradeBase;
 use example_core_entity::spot::spot_order_v7::{
-    ActivateSpotOrderV7Output, CancelSpotOrderV7Output, MatchSpotOrderV7Input,
-    MatchSpotOrderV7Outcome, ModifySpotOrderV7Output, SpotOrderV7Output,
+    ActivateSpotOrderV7Output, CancelSpotOrderV7Output, ModifySpotOrderV7Output, SpotOrderV7Output,
 };
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3};
 use example_core_entity::{
@@ -53,29 +51,59 @@ pub enum ModifySpotOrderV7Error {
     Entity(#[from] EntityError),
 }
 
-pub struct SpotOrderV7DomainService;
+pub struct SpotOrderDomainService;
 
-impl SpotOrderV7DomainService {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MatchSpotOrderV3Input {
+    pub trade_id_start: u64,
+    pub maker_fee_bps: u64,
+    pub taker_fee_bps: u64,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MatchSpotOrderV3Outcome {
+    Resting {
+        taker_order_after: SpotOrderV7,
+    },
+    PartiallyFilled {
+        taker_order_after: SpotOrderV7,
+        maker_orders_after: Vec<SpotOrderV7>,
+        created_trades: Vec<SpotTradeV3>,
+    },
+    Filled {
+        filled_taker_order_after: SpotOrderV7,
+        maker_orders_after: Vec<SpotOrderV7>,
+        created_trades: Vec<SpotTradeV3>,
+        release_requirement: example_core_entity::account::coin::CoinAmount,
+    },
+    CanceledAfterPartialFill {
+        canceled_taker_order_after: SpotOrderV7,
+        maker_orders_after: Vec<SpotOrderV7>,
+        created_trades: Vec<SpotTradeV3>,
+        release_requirement: example_core_entity::account::coin::CoinAmount,
+    },
+    Rejected {
+        rejected_taker_order_after: SpotOrderV7,
+        release_requirement: example_core_entity::account::coin::CoinAmount,
+    },
+}
+
+impl SpotOrderDomainService {
     /// 只读规划全部成交，验证成功后分别推进 taker 与 maker 聚合。
     pub fn match_order(
         mut taker: SpotOrderV7,
         mut makers: Vec<SpotOrderV7>,
-        input: MatchSpotOrderV7Input,
-    ) -> Result<MatchSpotOrderV7Outcome, EntityError> {
+        input: MatchSpotOrderV3Input,
+    ) -> Result<MatchSpotOrderV3Outcome, EntityError> {
         let t = taker.order_base().clone();
-        validate_matchable(taker.status(), t.size, t.orig_size, t.limit_px)?;
-        if !t.has_consistent_execution_facts() {
-            return Err(match_error("inconsistent taker execution facts"));
-        }
+        taker.validate_matchable_as_taker()?;
 
         let mut ids = HashSet::with_capacity(makers.len() + 1);
         ids.insert(t.order_id);
         for maker in &makers {
             let m = maker.order_base();
-            validate_matchable(maker.status(), m.size, m.orig_size, m.limit_px)?;
-            if m.execution != CommonOrderExecution::Limit || !m.has_consistent_execution_facts() {
-                return Err(match_error("maker execution facts are not matchable"));
-            }
+            maker.validate_matchable_as_maker()?;
             if !ids.insert(m.order_id) {
                 return Err(match_error("order ids must be unique"));
             }
@@ -91,7 +119,7 @@ impl SpotOrderV7DomainService {
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
             taker.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: input.timestamp })?;
             let release_requirement = taker.release_requirement().map_err(conversion_error)?;
-            return Ok(MatchSpotOrderV7Outcome::Rejected {
+            return Ok(MatchSpotOrderV3Outcome::Rejected {
                 rejected_taker_order_after: taker,
                 release_requirement,
             });
@@ -137,39 +165,8 @@ impl SpotOrderV7DomainService {
 
         let filled_size =
             t.size.checked_sub(remaining).ok_or_else(|| match_error("size underflow"))?;
-        let taker_buy_fee_after = t
-            .buy_quote_fee_reserve_consumed
-            .checked_add(if t.side == OrderSide::Buy { taker_fee_total } else { Decimal::ZERO })
-            .ok_or_else(|| match_error("fee overflow"))?;
-        if taker_buy_fee_after > t.buy_quote_fee_reserve_limit {
-            return Err(match_error("fee exceeds reserve"));
-        }
-        for fill in &fills {
-            let m = makers
-                .get(fill.maker_index)
-                .ok_or_else(|| match_error("planned maker index is missing"))?
-                .order_base();
-            if m.version == u64::MAX {
-                return Err(EntityError::VersionOverflow { version: m.version });
-            }
-            if m.side == OrderSide::Buy {
-                let consumed = m
-                    .buy_quote_fee_reserve_consumed
-                    .checked_add(fill.maker_fee)
-                    .ok_or_else(|| match_error("fee overflow"))?;
-                if consumed > m.buy_quote_fee_reserve_limit {
-                    return Err(match_error("fee exceeds reserve"));
-                }
-            }
-        }
-        if (filled_size > Decimal::ZERO || t.effective_tif() == OrderTif::Ioc)
-            && t.version == u64::MAX
-        {
-            return Err(EntityError::VersionOverflow { version: t.version });
-        }
-
         if filled_size == Decimal::ZERO && t.effective_tif() != OrderTif::Ioc {
-            return Ok(MatchSpotOrderV7Outcome::Resting { taker_order_after: taker });
+            return Ok(MatchSpotOrderV3Outcome::Resting { taker_order_after: taker });
         }
 
         let mut trades = Vec::with_capacity(fills.len());
@@ -212,7 +209,7 @@ impl SpotOrderV7DomainService {
         match taker.status() {
             SpotOrderStatus::Filled => {
                 let release_requirement = taker.release_requirement().map_err(conversion_error)?;
-                Ok(MatchSpotOrderV7Outcome::Filled {
+                Ok(MatchSpotOrderV3Outcome::Filled {
                     filled_taker_order_after: taker,
                     maker_orders_after: makers,
                     created_trades: trades,
@@ -221,7 +218,7 @@ impl SpotOrderV7DomainService {
             }
             SpotOrderStatus::Canceled => {
                 let release_requirement = taker.release_requirement().map_err(conversion_error)?;
-                Ok(MatchSpotOrderV7Outcome::CanceledAfterPartialFill {
+                Ok(MatchSpotOrderV3Outcome::CanceledAfterPartialFill {
                     canceled_taker_order_after: taker,
                     maker_orders_after: makers,
                     created_trades: trades,
@@ -230,12 +227,12 @@ impl SpotOrderV7DomainService {
             }
             SpotOrderStatus::Rejected => {
                 let release_requirement = taker.release_requirement().map_err(conversion_error)?;
-                Ok(MatchSpotOrderV7Outcome::Rejected {
+                Ok(MatchSpotOrderV3Outcome::Rejected {
                     rejected_taker_order_after: taker,
                     release_requirement,
                 })
             }
-            SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderV7Outcome::PartiallyFilled {
+            SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderV3Outcome::PartiallyFilled {
                 taker_order_after: taker,
                 maker_orders_after: makers,
                 created_trades: trades,
@@ -333,22 +330,6 @@ impl SpotOrderV7DomainService {
     }
 }
 
-fn validate_matchable(
-    status: SpotOrderStatus,
-    size: Decimal,
-    orig_size: Decimal,
-    price: Decimal,
-) -> Result<(), EntityError> {
-    if !matches!(status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
-        || size <= Decimal::ZERO
-        || size > orig_size
-        || price <= Decimal::ZERO
-    {
-        return Err(match_error("order is not matchable"));
-    }
-    Ok(())
-}
-
 fn match_fee(notional: Decimal, bps: u64, scale: u32) -> Result<Decimal, EntityError> {
     notional
         .checked_mul(Decimal::from(bps))
@@ -371,6 +352,7 @@ fn conversion_error(error: impl std::fmt::Display) -> EntityError {
 mod tests {
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
+    use example_core_entity::common::PriceType;
     use example_core_entity::entity::common::{OrderBase, UserId};
     use example_core_entity::{OrderSide, SpotOrderStatus};
 
@@ -415,7 +397,7 @@ mod tests {
         let balance = balance(Coin::USDT, 20, 32);
         let balance_before = balance.clone();
 
-        let (order_after, balance_after) = SpotOrderV7DomainService::modify(
+        let (order_after, balance_after) = SpotOrderDomainService::modify(
             order,
             balance,
             Decimal::from(12),
@@ -441,7 +423,7 @@ mod tests {
         let order = order(OrderSide::Buy, SpotOrderStatus::Open, 3, 5, 2);
         let balance = balance(Coin::USDT, 30, 33);
 
-        let (_, balance_after) = SpotOrderV7DomainService::modify(
+        let (_, balance_after) = SpotOrderDomainService::modify(
             order,
             balance,
             Decimal::from(12),
@@ -463,7 +445,7 @@ mod tests {
         let order = order(OrderSide::Buy, SpotOrderStatus::Open, 3, 5, 2);
         let balance = balance(Coin::USDT, 4, 33);
 
-        let (_, balance_after) = SpotOrderV7DomainService::modify(
+        let (_, balance_after) = SpotOrderDomainService::modify(
             order,
             balance,
             Decimal::from(8),
@@ -483,7 +465,7 @@ mod tests {
         let order = order(OrderSide::Buy, SpotOrderStatus::PartiallyFilled, 1, 5, 2);
         let balance = balance(Coin::USDT, 20, 13);
 
-        let (order_after, balance_after) = SpotOrderV7DomainService::modify(
+        let (order_after, balance_after) = SpotOrderDomainService::modify(
             order,
             balance,
             Decimal::from(12),
@@ -501,7 +483,7 @@ mod tests {
 
     #[test]
     fn modify_sell_adjusts_only_remaining_base_quantity() {
-        let increased = SpotOrderV7DomainService::modify(
+        let increased = SpotOrderDomainService::modify(
             order(OrderSide::Sell, SpotOrderStatus::Open, 3, 0, 0),
             balance(Coin::BTC, 5, 3),
             Decimal::from(99),
@@ -515,7 +497,7 @@ mod tests {
         assert_eq!(increased.available(), Decimal::from(4));
         assert_eq!(increased.frozen(), Decimal::from(4));
 
-        let decreased = SpotOrderV7DomainService::modify(
+        let decreased = SpotOrderDomainService::modify(
             order(OrderSide::Sell, SpotOrderStatus::Open, 3, 0, 0),
             balance(Coin::BTC, 5, 3),
             Decimal::ONE,
@@ -535,7 +517,7 @@ mod tests {
         let balance = balance(Coin::USDT, 7, 33);
         let balance_before = balance.clone();
 
-        let (order_after, balance_after) = SpotOrderV7DomainService::modify(
+        let (order_after, balance_after) = SpotOrderDomainService::modify(
             order(OrderSide::Buy, SpotOrderStatus::Open, 3, 5, 2),
             balance,
             Decimal::from(15),
@@ -552,7 +534,7 @@ mod tests {
 
     #[test]
     fn modify_rejects_asset_mismatch() {
-        let result = SpotOrderV7DomainService::modify(
+        let result = SpotOrderDomainService::modify(
             order(OrderSide::Buy, SpotOrderStatus::Pending, 3, 0, 0),
             balance(Coin::BTC, 10, 0),
             Decimal::ONE,
@@ -567,7 +549,7 @@ mod tests {
 
     #[test]
     fn modify_propagates_balance_errors_without_partial_result() {
-        let insufficient_available = SpotOrderV7DomainService::modify(
+        let insufficient_available = SpotOrderDomainService::modify(
             order(OrderSide::Buy, SpotOrderStatus::Open, 3, 0, 0),
             balance(Coin::USDT, 1, 30),
             Decimal::from(11),
@@ -581,7 +563,7 @@ mod tests {
             Err(ModifySpotOrderV7Error::Balance(BalanceV2Error::InsufficientAvailableBalance))
         );
 
-        let insufficient_frozen = SpotOrderV7DomainService::modify(
+        let insufficient_frozen = SpotOrderDomainService::modify(
             order(OrderSide::Sell, SpotOrderStatus::Open, 2, 0, 0),
             balance(Coin::BTC, 0, 1),
             Decimal::ONE,
@@ -603,7 +585,7 @@ mod tests {
             (Decimal::ONE, Decimal::ZERO, SpotOrderStatus::Open),
             (Decimal::ONE, Decimal::ONE, SpotOrderStatus::Canceled),
         ] {
-            let result = SpotOrderV7DomainService::modify(
+            let result = SpotOrderDomainService::modify(
                 order(OrderSide::Sell, status, 1, 0, 0),
                 balance(Coin::BTC, 0, 1),
                 price,
@@ -623,7 +605,7 @@ mod tests {
         let balance_before = balance.clone();
 
         let (order_after, balance_after) =
-            SpotOrderV7DomainService::cancel(order, balance, TIMESTAMP).unwrap();
+            SpotOrderDomainService::cancel(order, balance, TIMESTAMP).unwrap();
 
         assert_eq!(order_after.status(), SpotOrderStatus::Canceled);
         assert_eq!(order_after.order_base().version, 5);
@@ -637,7 +619,7 @@ mod tests {
         let balance = balance(Coin::USDT, 7, 23);
 
         let (order_after, balance_after) =
-            SpotOrderV7DomainService::cancel(order, balance, TIMESTAMP).unwrap();
+            SpotOrderDomainService::cancel(order, balance, TIMESTAMP).unwrap();
 
         assert_eq!(order_after.status(), SpotOrderStatus::Canceled);
         assert_eq!(order_after.order_base().version, 5);
@@ -653,8 +635,7 @@ mod tests {
         let order = order(OrderSide::Sell, SpotOrderStatus::PartiallyFilled, 1, 0, 0);
         let balance = balance(Coin::BTC, 4, 1);
 
-        let (_, balance_after) =
-            SpotOrderV7DomainService::cancel(order, balance, TIMESTAMP).unwrap();
+        let (_, balance_after) = SpotOrderDomainService::cancel(order, balance, TIMESTAMP).unwrap();
 
         assert_eq!(balance_after.available(), Decimal::from(5));
         assert_eq!(balance_after.frozen(), Decimal::ZERO);
@@ -664,7 +645,7 @@ mod tests {
 
     #[test]
     fn cancel_rejects_release_asset_mismatch() {
-        let result = SpotOrderV7DomainService::cancel(
+        let result = SpotOrderDomainService::cancel(
             order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0),
             balance(Coin::BTC, 0, 20),
             TIMESTAMP,
@@ -675,7 +656,7 @@ mod tests {
 
     #[test]
     fn cancel_rejects_insufficient_frozen_balance_without_partial_result() {
-        let result = SpotOrderV7DomainService::cancel(
+        let result = SpotOrderDomainService::cancel(
             order(OrderSide::Buy, SpotOrderStatus::Open, 2, 5, 2),
             balance(Coin::USDT, 7, 22),
             TIMESTAMP,
@@ -689,7 +670,7 @@ mod tests {
 
     #[test]
     fn cancel_propagates_terminal_order_error() {
-        let result = SpotOrderV7DomainService::cancel(
+        let result = SpotOrderDomainService::cancel(
             order(OrderSide::Sell, SpotOrderStatus::Canceled, 1, 0, 0),
             balance(Coin::BTC, 0, 1),
             TIMESTAMP,
@@ -717,6 +698,7 @@ mod tests {
             orig_size: Decimal::from(size),
             tif,
             status: SpotOrderStatus::Open,
+            execution: PriceType::Limit,
             buy_quote_fee_reserve_limit: Decimal::from(fee_reserve),
             version,
             ..OrderBase::default()
@@ -724,8 +706,8 @@ mod tests {
         .unwrap()
     }
 
-    fn match_input() -> MatchSpotOrderV7Input {
-        MatchSpotOrderV7Input {
+    fn match_input() -> MatchSpotOrderV3Input {
+        MatchSpotOrderV3Input {
             trade_id_start: 900,
             maker_fee_bps: 100,
             taker_fee_bps: 200,
@@ -740,13 +722,13 @@ mod tests {
         let maker_a = match_order(3, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 5);
         let maker_b = match_order(4, OrderSide::Sell, OrderTif::Gtc, 98, 2, 0, 6);
 
-        let outcome = SpotOrderV7DomainService::match_order(
+        let outcome = SpotOrderDomainService::match_order(
             taker,
             vec![skipped.clone(), maker_a, maker_b],
             match_input(),
         )
         .unwrap();
-        let MatchSpotOrderV7Outcome::Filled {
+        let MatchSpotOrderV3Outcome::Filled {
             filled_taker_order_after,
             maker_orders_after,
             created_trades,
@@ -776,9 +758,9 @@ mod tests {
     fn buy_maker_consumes_its_fee_reserve_while_sell_taker_does_not() {
         let taker = match_order(1, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 7);
         let maker = match_order(2, OrderSide::Buy, OrderTif::Gtc, 100, 1, 2, 4);
-        let MatchSpotOrderV7Outcome::Filled {
+        let MatchSpotOrderV3Outcome::Filled {
             filled_taker_order_after, maker_orders_after, ..
-        } = SpotOrderV7DomainService::match_order(taker, vec![maker], match_input()).unwrap()
+        } = SpotOrderDomainService::match_order(taker, vec![maker], match_input()).unwrap()
         else {
             panic!("expected fill")
         };
@@ -794,15 +776,14 @@ mod tests {
         let alo = match_order(1, OrderSide::Buy, OrderTif::Alo, 100, 1, 2, 7);
         let maker = match_order(2, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 4);
         let maker_before = maker.clone();
-        let outcome =
-            SpotOrderV7DomainService::match_order(alo, vec![maker], match_input()).unwrap();
-        assert!(matches!(outcome, MatchSpotOrderV7Outcome::Rejected { .. }));
+        let outcome = SpotOrderDomainService::match_order(alo, vec![maker], match_input()).unwrap();
+        assert!(matches!(outcome, MatchSpotOrderV3Outcome::Rejected { .. }));
         assert_eq!(maker_before.order_base().version, 4);
 
         let ioc = match_order(3, OrderSide::Buy, OrderTif::Ioc, 90, 1, 2, 9);
         let non_crossing = match_order(4, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 2);
-        let MatchSpotOrderV7Outcome::Rejected { rejected_taker_order_after, .. } =
-            SpotOrderV7DomainService::match_order(ioc, vec![non_crossing], match_input()).unwrap()
+        let MatchSpotOrderV3Outcome::Rejected { rejected_taker_order_after, .. } =
+            SpotOrderDomainService::match_order(ioc, vec![non_crossing], match_input()).unwrap()
         else {
             panic!("expected IOC rejection")
         };
@@ -810,24 +791,14 @@ mod tests {
     }
 
     #[test]
-    fn planning_error_returns_no_partial_outcome_and_new_service_matches_legacy_success() {
+    fn planning_error_returns_no_partial_outcome() {
         let taker = match_order(1, OrderSide::Buy, OrderTif::Gtc, 100, 2, 1, 7);
         let maker = match_order(2, OrderSide::Sell, OrderTif::Gtc, 100, 2, 0, 4);
         let mut costly = match_input();
         costly.taker_fee_bps = 10_000;
         assert!(
-            SpotOrderV7DomainService::match_order(taker.clone(), vec![maker.clone()], costly)
+            SpotOrderDomainService::match_order(taker.clone(), vec![maker.clone()], costly)
                 .is_err()
         );
-
-        let mut zero_fee = match_input();
-        zero_fee.maker_fee_bps = 0;
-        zero_fee.taker_fee_bps = 0;
-        let service =
-            SpotOrderV7DomainService::match_order(taker.clone(), vec![maker.clone()], zero_fee)
-                .unwrap();
-        let mut legacy_taker = taker;
-        let legacy = legacy_taker.match_with_input(vec![maker], zero_fee).unwrap();
-        assert_eq!(service, legacy);
     }
 }
