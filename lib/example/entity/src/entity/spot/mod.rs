@@ -11,5 +11,5 @@ pub mod spot_order_v7;
 pub use spot_order_v7::{
     ActivateSpotOrderV7Output, ApplySpotOrderV7MatchOutput, CancelSpotOrderV7Output,
     ModifySpotOrderV7Output, SpotOrderV7, SpotOrderV7Event, SpotOrderV7FreezeRequirement,
-    SpotOrderV7HoldAdjustment, SpotOrderV7Output,
+    SpotOrderV7HoldAdjustment, SpotOrderV7Output, SpotOrderV7ReleaseRequirement,
 };

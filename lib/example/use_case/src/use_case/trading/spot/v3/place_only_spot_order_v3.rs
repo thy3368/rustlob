@@ -4,7 +4,7 @@ use common_entity::{
     EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UseCase,
 };
 use example_core_entity::account::symbol::Symbol;
-use example_core_entity::common::{PriceType, OrderTrigger, OrderBase};
+use example_core_entity::common::{OrderBase, OrderTrigger, PriceType};
 use example_core_entity::spot::spot_order_v7::SpotOrderV7;
 use example_core_entity::{OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, UserId};
 use rust_decimal::Decimal;

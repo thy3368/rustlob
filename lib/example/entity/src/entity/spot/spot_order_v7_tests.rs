@@ -1,7 +1,7 @@
 use common_entity::{EntityError, Fsm};
 use rust_decimal::Decimal;
 
-use super::{SpotOrderV7, SpotOrderV7Event};
+use super::{SpotOrderV7, SpotOrderV7Event, SpotOrderV7Output, SpotOrderV7ReleaseRequirement};
 use crate::account::coin::Coin;
 use crate::account::symbol::Symbol;
 use crate::common::PriceType;
@@ -115,28 +115,76 @@ fn version_overflow_keeps_order_unchanged() {
 #[test]
 fn taker_tif_controls_final_state() {
     let mut gtc = order(OrderSide::Buy, SpotOrderStatus::Open);
-    gtc.apply(SpotOrderV7Event::MatchedAsTaker {
-        filled_size: Decimal::ONE,
-        quote_fee: Decimal::ZERO,
-        timestamp: TIMESTAMP,
-    })
-    .unwrap();
+    let (_, output) = gtc
+        .apply(SpotOrderV7Event::MatchedAsTaker {
+            filled_size: Decimal::ONE,
+            quote_fee: Decimal::ZERO,
+            timestamp: TIMESTAMP,
+        })
+        .unwrap();
     assert_eq!(gtc.status(), SpotOrderStatus::PartiallyFilled);
+    let SpotOrderV7Output::MatchedAsTaker(output) = output else {
+        panic!("expected taker match output")
+    };
+    assert_eq!(output.order_after, gtc);
+    assert_eq!(output.release_requirement, None);
 
     let mut ioc_record = order(OrderSide::Buy, SpotOrderStatus::Open).order_base().clone();
     ioc_record.tif = OrderTif::Ioc;
     let mut ioc = SpotOrderV7::from_record(ioc_record).unwrap();
-    ioc.apply(SpotOrderV7Event::MatchedAsTaker {
-        filled_size: Decimal::ONE,
-        quote_fee: Decimal::ZERO,
-        timestamp: TIMESTAMP,
-    })
-    .unwrap();
+    let (_, output) = ioc
+        .apply(SpotOrderV7Event::MatchedAsTaker {
+            filled_size: Decimal::ONE,
+            quote_fee: Decimal::ZERO,
+            timestamp: TIMESTAMP,
+        })
+        .unwrap();
     assert_eq!(ioc.status(), SpotOrderStatus::Canceled);
+    let SpotOrderV7Output::MatchedAsTaker(output) = output else {
+        panic!("expected taker match output")
+    };
+    assert_eq!(output.order_after, ioc);
+    assert!(matches!(
+        output.release_requirement,
+        Some(SpotOrderV7ReleaseRequirement::Buy { quote_amount })
+            if quote_amount.amount() == Decimal::from(103)
+    ));
 
     let mut alo_record = order(OrderSide::Buy, SpotOrderStatus::Open).order_base().clone();
     alo_record.tif = OrderTif::Alo;
     let mut alo = SpotOrderV7::from_record(alo_record).unwrap();
-    alo.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: TIMESTAMP }).unwrap();
+    let (_, output) =
+        alo.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: TIMESTAMP }).unwrap();
     assert_eq!(alo.status(), SpotOrderStatus::Rejected);
+    let SpotOrderV7Output::RejectedAsTaker(output) = output else {
+        panic!("expected rejected taker output")
+    };
+    assert_eq!(output.order_after, alo);
+    assert!(matches!(
+        output.release_requirement,
+        Some(SpotOrderV7ReleaseRequirement::Buy { quote_amount })
+            if quote_amount.amount() == Decimal::from(203)
+    ));
+}
+
+#[test]
+fn filled_sell_taker_returns_zero_base_release_requirement() {
+    let mut seller = order(OrderSide::Sell, SpotOrderStatus::Open);
+    let (_, output) = seller
+        .apply(SpotOrderV7Event::MatchedAsTaker {
+            filled_size: Decimal::from(2),
+            quote_fee: Decimal::ZERO,
+            timestamp: TIMESTAMP,
+        })
+        .unwrap();
+
+    let SpotOrderV7Output::MatchedAsTaker(output) = output else {
+        panic!("expected taker match output")
+    };
+    assert_eq!(output.order_after, seller);
+    assert!(matches!(
+        output.release_requirement,
+        Some(SpotOrderV7ReleaseRequirement::Sell { base_quantity })
+            if base_quantity.amount() == Decimal::ZERO
+    ));
 }

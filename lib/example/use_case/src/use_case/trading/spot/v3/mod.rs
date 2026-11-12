@@ -25,8 +25,12 @@ pub use spot_order_domain_service::{MatchSpotOrderV3Input, MatchSpotOrderV3Outco
 
 pub mod pipeline;
 pub mod spot_order_domain_service;
+pub mod spot_trade_domain_service;
 
 pub use activate_spot_order_v7::{
     ActivateSpotOrderV7AfterChanges, ActivateSpotOrderV7Changes, ActivateSpotOrderV7Cmd,
     ActivateSpotOrderV7Error, ActivateSpotOrderV7State, ActivateSpotOrderV7UseCase,
+};
+pub use spot_trade_domain_service::{
+    SpotTradeDomainService, SpotTradeDomainServiceError, SpotTradeSettlementOutcome,
 };

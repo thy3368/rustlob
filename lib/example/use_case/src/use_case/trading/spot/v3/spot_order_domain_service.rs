@@ -126,7 +126,7 @@ impl SpotOrderDomainService {
             };
             return Ok(MatchSpotOrderV3Outcome::Rejected {
                 rejected_taker_order_after: order_after,
-                release_requirement,
+                release_requirement: release_requirement.amount(),
             });
         }
 
@@ -224,7 +224,7 @@ impl SpotOrderDomainService {
                     filled_taker_order_after: taker_order_after,
                     maker_orders_after: makers,
                     created_trades: trades,
-                    release_requirement,
+                    release_requirement: release_requirement.amount(),
                 })
             }
             (SpotOrderStatus::Canceled, Some(release_requirement)) => {
@@ -232,13 +232,13 @@ impl SpotOrderDomainService {
                     canceled_taker_order_after: taker_order_after,
                     maker_orders_after: makers,
                     created_trades: trades,
-                    release_requirement,
+                    release_requirement: release_requirement.amount(),
                 })
             }
             (SpotOrderStatus::Rejected, Some(release_requirement)) => {
                 Ok(MatchSpotOrderV3Outcome::Rejected {
                     rejected_taker_order_after: taker_order_after,
-                    release_requirement,
+                    release_requirement: release_requirement.amount(),
                 })
             }
             (SpotOrderStatus::PartiallyFilled, None) => {

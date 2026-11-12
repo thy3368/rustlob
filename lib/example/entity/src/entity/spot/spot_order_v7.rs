@@ -77,7 +77,25 @@ pub struct ActivateSpotOrderV7Output {
 pub struct ApplySpotOrderV7MatchOutput {
     pub order_after: SpotOrderV7,
     /// taker 进入终态后应释放的冻结额；maker 或非终态 taker 为 `None`。
-    pub release_requirement: Option<CoinAmount>,
+    pub release_requirement: Option<SpotOrderV7ReleaseRequirement>,
+}
+
+/// 订单进入终态后应释放的冻结资产。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpotOrderV7ReleaseRequirement {
+    /// 买单释放未成交 quote principal 与未消费的 quote fee reserve。
+    Buy { quote_amount: CoinAmount },
+    /// 卖单释放未成交的 base quantity。
+    Sell { base_quantity: CoinAmount },
+}
+
+impl SpotOrderV7ReleaseRequirement {
+    pub fn amount(self) -> CoinAmount {
+        match self {
+            Self::Buy { quote_amount } => quote_amount,
+            Self::Sell { base_quantity } => base_quantity,
+        }
+    }
 }
 
 /// 改单后订单对持仓冻结额的调整要求。
@@ -255,7 +273,7 @@ impl Fsm for SpotOrderV7 {
                 let release_requirement = match order_after.status() {
                     SpotOrderStatus::Filled
                     | SpotOrderStatus::Canceled
-                    | SpotOrderStatus::Rejected => Some(entity_release_requirement(&order_after)?),
+                    | SpotOrderStatus::Rejected => Some(match_release_requirement(&order_after)?),
                     _ => None,
                 };
                 (
@@ -297,7 +315,7 @@ impl Fsm for SpotOrderV7 {
                     .checked_add(1)
                     .ok_or(EntityError::VersionOverflow { version: next.version })?;
                 let order_after = SpotOrderV7 { order_base: next.clone() };
-                let release_requirement = Some(entity_release_requirement(&order_after)?);
+                let release_requirement = Some(match_release_requirement(&order_after)?);
                 (
                     next,
                     SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
@@ -634,6 +652,15 @@ fn release_requirement(
 }
 fn entity_release_requirement(order: &SpotOrderV7) -> Result<CoinAmount, EntityError> {
     order.release_requirement().map_err(|error| err(&error.to_string()))
+}
+fn match_release_requirement(
+    order: &SpotOrderV7,
+) -> Result<SpotOrderV7ReleaseRequirement, EntityError> {
+    let amount = order.release_requirement().map_err(|error| err(&error.to_string()))?;
+    Ok(match order.order_base.side {
+        OrderSide::Buy => SpotOrderV7ReleaseRequirement::Buy { quote_amount: amount },
+        OrderSide::Sell => SpotOrderV7ReleaseRequirement::Sell { base_quantity: amount },
+    })
 }
 fn held_currency(o: &OrderBase) -> crate::account::coin::Coin {
     match o.side {
