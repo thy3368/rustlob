@@ -6,7 +6,7 @@ use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{BalanceV2, BalanceV2Error, OrderSide, SpotOrderStatus, SpotOrderV7};
 use thiserror::Error;
 
-use crate::use_case::trading::spot::v3::domain_service::spot_order_domain_service::{
+use crate::use_case::trading::spot::v3::domain_service::atom_spot_order_domain_service::{
     CancelSpotOrderV7Error, SpotOrderDomainService,
 };
 
