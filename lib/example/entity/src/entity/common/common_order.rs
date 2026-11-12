@@ -83,8 +83,8 @@ pub struct OrderBase {
     pub created_at: u64,
     /// 订单最后更新时间，单位为 Unix 纳秒。
     pub updated_at: u64,
-    /// 当前订单实体版本，用于生成可重放更新事件。
-    pub version: u64,
+    /// use case中给的lsn
+    pub lsn: u64,
 }
 
 // ironstate 的图分析会为携带数据的状态构造一个代表值。
@@ -115,7 +115,7 @@ impl Default for OrderBase {
             cloid: None,
             created_at: 0,
             updated_at: 0,
-            version: 0,
+            lsn: 0,
         }
     }
 }

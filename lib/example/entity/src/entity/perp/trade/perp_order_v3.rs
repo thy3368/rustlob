@@ -330,7 +330,7 @@ fn modified(
         total_size.checked_sub(filled).ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
     next.comon_order.updated_at = timestamp;
     if bump_version {
-        next.comon_order.version = checked_version(current.comon_order.version)?;
+        next.comon_order.lsn = checked_version(current.comon_order.lsn)?;
     }
     Ok(next)
 }
@@ -388,7 +388,7 @@ fn crosses(taker: &PerpOrderV3, maker: &PerpOrderV3) -> bool {
 }
 
 fn advance(order: &mut OrderBase, timestamp: u64) -> Result<(), PerpOrderV3Error> {
-    order.version = checked_version(order.version)?;
+    order.lsn = checked_version(order.lsn)?;
     order.updated_at = timestamp;
     Ok(())
 }
@@ -440,7 +440,7 @@ fn values(order: &PerpOrderV3) -> Vec<(&'static str, String)> {
         ("is_liquidation", order.is_liquidation.to_string()),
         ("created_at", base.created_at.to_string()),
         ("updated_at", base.updated_at.to_string()),
-        ("version", base.version.to_string()),
+        ("version", base.lsn.to_string()),
     ]
 }
 
@@ -468,7 +468,7 @@ impl Entity for PerpOrderV3 {
     }
 
     fn lsn(&self) -> u64 {
-        self.comon_order.version
+        self.comon_order.lsn
     }
 
     fn four_color_archetype() -> FourColorArchetype {

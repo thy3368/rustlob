@@ -1,4 +1,7 @@
-use common_entity::Fsm;
+use common_entity::{
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
+    Fsm, Shard,
+};
 use rust_decimal::Decimal;
 use thiserror::Error;
 
@@ -50,6 +53,80 @@ pub enum SpotTradeStateError {
 pub struct SpotTradeV3 {
     pub comon_trade: TradeBase,
     pub settlement_status: SpotTradeSettlementStatus,
+}
+
+impl FieldDiff for SpotTradeV3 {
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        let trade = &self.comon_trade;
+        vec![
+            EntityFieldChange::new("trade_id", "", trade.trade_id.to_string()),
+            EntityFieldChange::new("taker_order_id", "", trade.taker_order_id.to_string()),
+            EntityFieldChange::new("maker_order_id", "", trade.maker_order_id.to_string()),
+            EntityFieldChange::new("price", "", trade.price.to_string()),
+            EntityFieldChange::new("size", "", trade.size.to_string()),
+            EntityFieldChange::new("taker_fee", "", trade.taker_fee.to_string()),
+            EntityFieldChange::new("maker_fee", "", trade.maker_fee.to_string()),
+            EntityFieldChange::new(
+                "settlement_status",
+                "",
+                format!("{:?}", self.settlement_status),
+            ),
+            EntityFieldChange::new("created_at", "", trade.created_at.to_string()),
+            EntityFieldChange::new("updated_at", "", trade.updated_at.to_string()),
+        ]
+    }
+
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+        let mut changes = Vec::new();
+        if self.settlement_status != other.settlement_status {
+            changes.push(EntityFieldChange::new(
+                "settlement_status",
+                format!("{:?}", self.settlement_status),
+                format!("{:?}", other.settlement_status),
+            ));
+        }
+        if self.comon_trade.updated_at != other.comon_trade.updated_at {
+            changes.push(EntityFieldChange::new(
+                "updated_at",
+                self.comon_trade.updated_at.to_string(),
+                other.comon_trade.updated_at.to_string(),
+            ));
+        }
+        changes
+    }
+}
+
+impl Entity for SpotTradeV3 {
+    fn entity_id(&self) -> u64 {
+        self.comon_trade.trade_id
+    }
+    fn is_derived() -> bool {
+        false
+    }
+    fn entity_type() -> u8 {
+        13
+    }
+    fn lsn(&self) -> u64 {
+        self.comon_trade.version
+    }
+    fn four_color_archetype() -> FourColorArchetype {
+        FourColorArchetype::MomentInterval
+    }
+    fn mutation_model() -> EntityMutationModel {
+        EntityMutationModel::AppendOnlyRecord
+    }
+    fn aggregate_role() -> AggregateRole {
+        AggregateRole::AggregateRoot
+    }
+    fn replay_field_type(name: &str) -> u8 {
+        if matches!(name, "created_at" | "updated_at") { 1 } else { 0 }
+    }
+}
+
+impl Shard for SpotTradeV3 {
+    fn partition(&self) -> u8 {
+        self.comon_trade.symbol.base.index() as u8
+    }
 }
 
 impl SpotTradeV3 {

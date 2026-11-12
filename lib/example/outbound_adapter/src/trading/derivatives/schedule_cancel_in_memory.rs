@@ -244,7 +244,7 @@ fn replay_events(
                 .spot_orders
                 .get_mut(&event.entity_id)
                 .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
-            check_version(event, order.order_base().version)?;
+            check_version(event, order.order_base().lsn)?;
             order.transition(SpotOrderV7Event::Cancel { timestamp: event.logical_ts }).map_err(
                 |error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()),
             )?;
@@ -253,7 +253,7 @@ fn replay_events(
                 .perp_orders
                 .get_mut(&event.entity_id)
                 .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
-            check_version(event, order.comon_order.version)?;
+            check_version(event, order.comon_order.lsn)?;
             order.transition(PerpOrderV3Event::Cancel { timestamp: event.logical_ts }).map_err(
                 |error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()),
             )?;

@@ -258,7 +258,7 @@ impl MySqlStore {
                         cloid: None,
                         created_at: 0,
                         updated_at: 1,
-                        version: 1,
+                        lsn: 1,
                     })
                     .ok()?;
                     Some((order_id, order))

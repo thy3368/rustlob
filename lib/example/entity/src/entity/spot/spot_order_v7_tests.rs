@@ -24,7 +24,7 @@ fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {
         status,
         execution: PriceType::Limit,
         buy_quote_fee_reserve_limit: Decimal::from(3),
-        version: 4,
+        lsn: 4,
         ..OrderBase::default()
     })
     .unwrap()
@@ -98,7 +98,7 @@ fn match_failure_keeps_order_unchanged() {
 #[test]
 fn version_overflow_keeps_order_unchanged() {
     let mut record = order(OrderSide::Buy, SpotOrderStatus::Open).order_base().clone();
-    record.version = u64::MAX;
+    record.lsn = u64::MAX;
     let mut subject = SpotOrderV7::from_record(record).unwrap();
     let before = subject.clone();
     assert_eq!(

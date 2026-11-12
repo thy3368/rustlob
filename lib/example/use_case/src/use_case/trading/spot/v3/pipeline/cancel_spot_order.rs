@@ -229,7 +229,7 @@ mod tests {
             cloid: cloid.map(str::to_owned),
             created_at: 1,
             updated_at: 100,
-            version: 4,
+            lsn: 4,
         })
         .expect("test order must be valid")
     }
@@ -263,7 +263,7 @@ mod tests {
                 .expect("cancel must succeed");
 
             assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
-            assert_eq!(changes.updated_order.after.order_base().version, 5);
+            assert_eq!(changes.updated_order.after.order_base().lsn, 5);
             assert_eq!(changes.updated_order.after.order_base().updated_at, LOGICAL_TS);
             let balance = changes.updated_balance.expect("open order must release its hold");
             assert_eq!(balance.after.available(), Decimal::from(30));

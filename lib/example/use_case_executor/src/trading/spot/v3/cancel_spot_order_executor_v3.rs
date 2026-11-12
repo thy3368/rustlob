@@ -128,7 +128,7 @@ mod tests {
             cloid: Some("client-order-11".to_string()),
             created_at: 1,
             updated_at: 1,
-            version: 0,
+            lsn: 0,
         }
     }
 

@@ -251,10 +251,10 @@ impl Fsm for SpotOrderV7 {
                 let mut next = self.order_base.clone();
                 next.status = SpotOrderStatus::Open;
                 next.updated_at = timestamp;
-                next.version = next
-                    .version
+                next.lsn = next
+                    .lsn
                     .checked_add(1)
-                    .ok_or(EntityError::VersionOverflow { version: next.version })?;
+                    .ok_or(EntityError::VersionOverflow { version: next.lsn })?;
                 (
                     next,
                     SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
@@ -310,10 +310,10 @@ impl Fsm for SpotOrderV7 {
                 let mut next = self.order_base.clone();
                 next.status = SpotOrderStatus::Rejected;
                 next.updated_at = timestamp;
-                next.version = next
-                    .version
+                next.lsn = next
+                    .lsn
                     .checked_add(1)
-                    .ok_or(EntityError::VersionOverflow { version: next.version })?;
+                    .ok_or(EntityError::VersionOverflow { version: next.lsn })?;
                 let order_after = SpotOrderV7 { order_base: next.clone() };
                 let release_requirement = Some(match_release_requirement(&order_after)?);
                 (
@@ -417,10 +417,11 @@ fn matched_order(
         }
     };
     next.updated_at = timestamp;
-    next.version = next
-        .version
+    //todo lsn 为use case中的，由event传入
+    next.lsn = next
+        .lsn
         .checked_add(1)
-        .ok_or(EntityError::VersionOverflow { version: next.version })?;
+        .ok_or(EntityError::VersionOverflow { version: next.lsn })?;
     Ok(next)
 }
 
@@ -440,10 +441,10 @@ fn modified_order(
     next.orig_size = size;
     next.size = size.checked_sub(filled).ok_or_else(|| err("size overflow"))?;
     next.updated_at = timestamp;
-    next.version = current
-        .version
+    next.lsn = current
+        .lsn
         .checked_add(1)
-        .ok_or(EntityError::VersionOverflow { version: current.version })?;
+        .ok_or(EntityError::VersionOverflow { version: current.lsn })?;
     Ok(next)
 }
 
@@ -451,10 +452,10 @@ fn canceled_order(current: &OrderBase, timestamp: u64) -> Result<OrderBase, Enti
     let mut next = current.clone();
     next.status = SpotOrderStatus::Canceled;
     next.updated_at = timestamp;
-    next.version = current
-        .version
+    next.lsn = current
+        .lsn
         .checked_add(1)
-        .ok_or(EntityError::VersionOverflow { version: current.version })?;
+        .ok_or(EntityError::VersionOverflow { version: current.lsn })?;
     Ok(next)
 }
 
@@ -463,7 +464,7 @@ impl FieldDiff for SpotOrderV7 {
         vec![
             EntityFieldChange::new("order_id", "", self.order_base.order_id.to_string()),
             EntityFieldChange::new("status", "", format!("{:?}", self.status())),
-            EntityFieldChange::new("version", "", self.order_base.version.to_string()),
+            EntityFieldChange::new("version", "", self.order_base.lsn.to_string()),
         ]
     }
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
@@ -476,7 +477,7 @@ impl FieldDiff for SpotOrderV7 {
             ("orig_size", a.orig_size.to_string(), b.orig_size.to_string()),
             ("status", format!("{:?}", a.status), format!("{:?}", b.status)),
             ("updated_at", a.updated_at.to_string(), b.updated_at.to_string()),
-            ("version", a.version.to_string(), b.version.to_string()),
+            ("version", a.lsn.to_string(), b.lsn.to_string()),
         ] {
             if x != y {
                 v.push(EntityFieldChange::new(n, x, y));
@@ -497,7 +498,7 @@ impl Entity for SpotOrderV7 {
         16
     }
     fn lsn(&self) -> u64 {
-        self.order_base.version
+        self.order_base.lsn
     }
     fn four_color_archetype() -> common_entity::FourColorArchetype {
         common_entity::FourColorArchetype::MomentInterval
@@ -548,7 +549,7 @@ impl LobOrder for SpotOrderV7 {
         self.order_base.created_at
     }
     fn entity_ver(&self) -> u64 {
-        self.order_base.version
+        self.order_base.lsn
     }
     fn is_active(&self) -> bool {
         matches!(

@@ -175,7 +175,7 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
                 cloid: cmd.cloid.clone(),
                 created_at: cmd.logical_ts(),
                 updated_at: cmd.logical_ts(),
-                version: 0,
+                lsn: 0,
             },
             reduce_only: cmd.reduce_only,
             is_liquidation: cmd.liquidation_id.is_some(),

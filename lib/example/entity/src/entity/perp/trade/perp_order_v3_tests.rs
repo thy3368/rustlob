@@ -103,9 +103,9 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
     else {
         panic!("expected filled outcome")
     };
-    assert_eq!(filled_taker_order_after.comon_order.version, 1);
+    assert_eq!(filled_taker_order_after.comon_order.lsn, 1);
     assert_eq!(
-        maker_orders_after.iter().map(|m| m.comon_order.version).collect::<Vec<_>>(),
+        maker_orders_after.iter().map(|m| m.comon_order.lsn).collect::<Vec<_>>(),
         [1, 1]
     );
     assert_eq!(created_trades.len(), 2);
@@ -150,7 +150,7 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
     let MatchPerpOrderV3Output::Rejected { .. } = outcome.unwrap() else {
         panic!("expected rejected outcome")
     };
-    assert_eq!(maker_before.comon_order.version, 0);
+    assert_eq!(maker_before.comon_order.lsn, 0);
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn modify_cancel_and_replace_or_fill_preserve_expected_facts() {
         .unwrap();
     assert_eq!(modified.comon_order.status, SpotOrderStatus::PartiallyFilled);
     assert_eq!(modified.comon_order.size, dec!(7));
-    assert_eq!(modified.comon_order.version, 1);
+    assert_eq!(modified.comon_order.lsn, 1);
 
     let remaining = modified.comon_order.size;
     modified.transition(PerpOrderV3Event::Cancel { timestamp: NOW }).unwrap();
@@ -215,7 +215,7 @@ fn modify_cancel_and_replace_or_fill_preserve_expected_facts() {
         })
         .unwrap();
     assert_eq!(replaced.comon_order.status, SpotOrderStatus::Filled);
-    assert_eq!(replaced.comon_order.version, 1);
+    assert_eq!(replaced.comon_order.lsn, 1);
     assert_eq!(replaced.comon_order.orig_size, dec!(4));
 }
 
@@ -236,7 +236,7 @@ fn invalid_inputs_and_late_failures_are_atomic() {
     }
 
     let mut subject = taker(SpotOrderStatus::Pending);
-    subject.comon_order.version = u64::MAX;
+    subject.comon_order.lsn = u64::MAX;
     let before = subject.clone();
     assert_eq!(
         subject.transition(PerpOrderV3Event::Cancel { timestamp: NOW }),

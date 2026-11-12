@@ -388,7 +388,7 @@ mod tests {
             buy_quote_fee_reserve_limit: Decimal::from(fee_reserve),
             buy_quote_fee_reserve_consumed: Decimal::from(fee_consumed),
             updated_at: 100,
-            version: 4,
+            lsn: 4,
             ..OrderBase::default()
         })
         .unwrap()
@@ -420,7 +420,7 @@ mod tests {
         assert_eq!(order_after.order_base().orig_size, Decimal::from(4));
         assert_eq!(order_after.order_base().tif, OrderTif::Alo);
         assert_eq!(order_after.order_base().cloid.as_deref(), Some("replacement"));
-        assert_eq!(order_after.order_base().version, 5);
+        assert_eq!(order_after.order_base().lsn, 5);
         assert_eq!(order_after.order_base().updated_at, TIMESTAMP);
         assert_eq!(balance_after, balance_before);
     }
@@ -615,7 +615,7 @@ mod tests {
             SpotOrderDomainService::cancel(order, balance, TIMESTAMP).unwrap();
 
         assert_eq!(order_after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(order_after.order_base().version, 5);
+        assert_eq!(order_after.order_base().lsn, 5);
         assert_eq!(order_after.order_base().updated_at, TIMESTAMP);
         assert_eq!(balance_after, balance_before);
     }
@@ -629,7 +629,7 @@ mod tests {
             SpotOrderDomainService::cancel(order, balance, TIMESTAMP).unwrap();
 
         assert_eq!(order_after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(order_after.order_base().version, 5);
+        assert_eq!(order_after.order_base().lsn, 5);
         assert_eq!(order_after.order_base().updated_at, TIMESTAMP);
         assert_eq!(balance_after.available(), Decimal::from(30));
         assert_eq!(balance_after.frozen(), Decimal::ZERO);
@@ -707,7 +707,7 @@ mod tests {
             status: SpotOrderStatus::Open,
             execution: PriceType::Limit,
             buy_quote_fee_reserve_limit: Decimal::from(fee_reserve),
-            version,
+            lsn: version,
             ..OrderBase::default()
         })
         .unwrap()
@@ -744,14 +744,14 @@ mod tests {
         else {
             panic!("expected filled outcome")
         };
-        assert_eq!(filled_taker_order_after.order_base().version, 8);
+        assert_eq!(filled_taker_order_after.order_base().lsn, 8);
         assert_eq!(
             filled_taker_order_after.order_base().buy_quote_fee_reserve_consumed,
             Decimal::from(6)
         );
         assert_eq!(maker_orders_after[0], skipped);
-        assert_eq!(maker_orders_after[1].order_base().version, 6);
-        assert_eq!(maker_orders_after[2].order_base().version, 7);
+        assert_eq!(maker_orders_after[1].order_base().lsn, 6);
+        assert_eq!(maker_orders_after[2].order_base().lsn, 7);
         assert_eq!(created_trades.len(), 2);
         assert_eq!(created_trades[0].comon_trade.trade_id, 900);
         assert_eq!(created_trades[1].comon_trade.trade_id, 901);
@@ -785,7 +785,7 @@ mod tests {
         let maker_before = maker.clone();
         let outcome = SpotOrderDomainService::match_order(alo, vec![maker], match_input()).unwrap();
         assert!(matches!(outcome, MatchSpotOrderV3Outcome::Rejected { .. }));
-        assert_eq!(maker_before.order_base().version, 4);
+        assert_eq!(maker_before.order_base().lsn, 4);
 
         let ioc = match_order(3, OrderSide::Buy, OrderTif::Ioc, 90, 1, 2, 9);
         let non_crossing = match_order(4, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 2);
@@ -794,7 +794,7 @@ mod tests {
         else {
             panic!("expected IOC rejection")
         };
-        assert_eq!(rejected_taker_order_after.order_base().version, 10);
+        assert_eq!(rejected_taker_order_after.order_base().lsn, 10);
     }
 
     #[test]
