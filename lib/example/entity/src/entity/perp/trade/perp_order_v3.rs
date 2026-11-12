@@ -123,13 +123,13 @@ pub struct PerpOrderV3 {
 
 impl Fsm for PerpOrderV3 {
     type State = SpotOrderStatus;
-    type Event = PerpOrderV3Event;
+    type BizEvent = PerpOrderV3Event;
     type Output = Option<MatchPerpOrderV3Output>;
     type Error = PerpOrderV3Error;
 
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if is_terminal(self.comon_order.status) {
             return Err(PerpOrderV3Error::Terminal);

@@ -189,12 +189,12 @@ fn validate_leverage(l: Leverage) -> Result<(), PositionError> {
 
 impl Fsm for PositionV4 {
     type State = PositionState;
-    type Event = PositionEvent;
+    type BizEvent = PositionEvent;
     type Output = PositionOutput;
     type Error = PositionError;
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let mut n = self.clone();
         let out = match event {

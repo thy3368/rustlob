@@ -11,6 +11,9 @@ use crate::entity::common::order_primitives::{
 use crate::spot::spot_trade_v3::{SpotTradeSettlementStatus, SpotTradeV3};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+
+///todo 创建(冻结)，撮合(fill,balance)，修改(金额变化)，取消(金额变化)
+///todo 可以在根聚合上加领域服务，因为不少动作确实涉及多个聚合的变化。
 pub enum SpotOrderV7Event {
     Activate {
         timestamp: u64,
@@ -234,7 +237,7 @@ impl SpotOrderV7 {
 
 impl Fsm for SpotOrderV7 {
     type State = SpotOrderStatus;
-    type Event = SpotOrderV7Event;
+    type BizEvent = SpotOrderV7Event;
     type Output = SpotOrderV7Output;
     type Error = EntityError;
 
@@ -415,6 +418,8 @@ impl FieldDiff for SpotOrderV7 {
         v
     }
 }
+
+
 impl Entity for SpotOrderV7 {
     fn entity_id(&self) -> u64 {
         self.order_base.order_id

@@ -505,13 +505,13 @@ impl PerpPositionV3 {
 
 impl Fsm for PerpPositionV3 {
     type State = PerpPositionV3State;
-    type Event = PerpPositionV3Event;
+    type BizEvent = PerpPositionV3Event;
     type Output = PerpPositionV3Output;
     type Error = PerpPositionV3Error;
 
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match event {
             PerpPositionV3Event::TradeFilled { trade, logical_ts } => {

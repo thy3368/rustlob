@@ -76,13 +76,13 @@ pub struct PerpTradeV3 {
 
 impl Fsm for PerpTradeV3 {
     type State = PerpTradeV3State;
-    type Event = PerpTradeV3Event;
+    type BizEvent = PerpTradeV3Event;
     type Output = PerpTradeV3Output;
     type Error = PerpTradeV3Error;
 
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if self.state == PerpTradeV3State::Settled {
             return Err(PerpTradeV3Error::AlreadySettled);

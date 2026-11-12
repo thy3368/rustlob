@@ -8,6 +8,8 @@ pub use spot_trade_v3::{
 
 pub mod spot_order_v7;
 
+pub mod spot_order_v7_domain_service;
+
 pub use spot_order_v7::{
     ActivateSpotOrderV7Output, CancelSpotOrderV7Output, MatchSpotOrderV7Input,
     MatchSpotOrderV7Outcome, MatchSpotOrderV7Output, ModifySpotOrderV7Output,

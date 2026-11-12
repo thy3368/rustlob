@@ -106,13 +106,13 @@ impl SpotTradeV3 {
 
 impl Fsm for SpotTradeV3 {
     type State = SpotTradeSettlementStatus;
-    type Event = SpotTradeEvent;
+    type BizEvent = SpotTradeEvent;
     type Output = ();
     type Error = SpotTradeStateError;
 
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match (self.settlement_status, event) {
             (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle) => {

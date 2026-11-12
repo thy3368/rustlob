@@ -169,12 +169,12 @@ impl UserFunding {
 
 impl Fsm for UserFunding {
     type State = UserFundingState;
-    type Event = UserFundingEvent;
+    type BizEvent = UserFundingEvent;
     type Output = UserFundingOutput;
     type Error = UserFundingError;
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let UserFundingEvent::Settle { settled_at } = event;
         if self.state == UserFundingState::Settled {

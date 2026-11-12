@@ -103,7 +103,7 @@ impl SpotAccount {
 
 impl Fsm for SpotAccount {
     type State = AccountStatus;
-    type Event = SpotAccountEvent;
+    type BizEvent = SpotAccountEvent;
     type Output = ();
     type Error = SpotAccountError;
 
@@ -115,7 +115,7 @@ impl Fsm for SpotAccount {
     /// 任一错误都不会修改实体。
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let (next_status, timestamp) = match (self.status, event) {
             (AccountStatus::Active, SpotAccountEvent::FreezeForRisk { timestamp }) => {

@@ -175,6 +175,7 @@
       <sourceFolder url="file://$MODULE_DIR$/study/hl_node_domain/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_node/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/study/hyperliquid_node/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/common/base_types_v2/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/app/dapp/target" />
       <excludeFolder url="file://$MODULE_DIR$/lib/domain/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

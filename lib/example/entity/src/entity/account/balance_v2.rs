@@ -154,12 +154,12 @@ impl BalanceV2 {
 
 impl Fsm for BalanceV2 {
     type State = BalanceV2Status;
-    type Event = BalanceV2Event;
+    type BizEvent = BalanceV2Event;
     type Output = ();
     type Error = BalanceV2Error;
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);

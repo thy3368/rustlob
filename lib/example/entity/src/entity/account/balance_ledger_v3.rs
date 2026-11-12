@@ -98,13 +98,13 @@ impl BalanceLedgerV3 {
 
 impl Fsm for BalanceLedgerV3 {
     type State = BalanceLedgerV3State;
-    type Event = BalanceLedgerV3Event;
+    type BizEvent = BalanceLedgerV3Event;
     type Output = BalanceLedgerV3Output;
     type Error = BalanceLedgerV3Error;
 
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if self.state()? == BalanceLedgerV3State::Applied {
             return Err(BalanceLedgerV3Error::AlreadyApplied);
