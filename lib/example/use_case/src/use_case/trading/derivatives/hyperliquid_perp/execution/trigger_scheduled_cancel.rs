@@ -71,6 +71,8 @@ pub enum TriggerScheduledCancelError {
     OrderOwnerMismatch,
     #[error("loaded order ids must be unique")]
     DuplicateOrderId,
+    #[error("command LSN must be newer than every loaded spot order")]
+    StaleSpotOrder,
     #[error("spot release balance is missing")]
     MissingSpotBalance,
     #[error("multiple spot balances match one release asset")]
@@ -112,6 +114,9 @@ impl UseCase for TriggerScheduledCancelUseCase {
             if !ids.insert(order.order_base().order_id) {
                 return Err(TriggerScheduledCancelError::DuplicateOrderId);
             }
+            if cmd.lsn() <= order.order_base().lsn {
+                return Err(TriggerScheduledCancelError::StaleSpotOrder);
+            }
         }
         for order in &state.perp_orders {
             if order.comon_order.owner != cmd.user_id {
@@ -137,7 +142,10 @@ impl UseCase for TriggerScheduledCancelUseCase {
         let mut canceled_spot_orders = Vec::with_capacity(state.spot_orders.len());
         for before in &state.spot_orders {
             let mut after = before.clone();
-            after.transition(SpotOrderV7Event::Cancel { timestamp: cmd.logical_ts() })?;
+            after.transition(SpotOrderV7Event::Cancel {
+                lsn: cmd.lsn(),
+                timestamp: cmd.logical_ts(),
+            })?;
             let release = after.release_requirement()?;
             let coin_idx = u64::from(release.currency().index());
             let mut matching = balances_after.iter_mut().filter(|balance| {

@@ -56,6 +56,7 @@ pub struct SpotOrderDomainService;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MatchSpotOrderV3Input {
+    pub lsn: u64,
     pub trade_id_start: u64,
     pub maker_fee_bps: u64,
     pub taker_fee_bps: u64,
@@ -116,7 +117,10 @@ impl SpotOrderDomainService {
         };
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
             let (_, output) =
-                taker.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: input.timestamp })?;
+                taker.apply(SpotOrderV7Event::RejectedAsTaker {
+                    lsn: input.lsn,
+                    timestamp: input.timestamp,
+                })?;
             let SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
                 order_after,
                 release_requirement: Some(release_requirement),
@@ -181,6 +185,7 @@ impl SpotOrderDomainService {
                 .ok_or_else(|| match_error("planned maker index is missing"))?;
             let maker_before = maker.order_base().clone();
             maker.apply(SpotOrderV7Event::MatchedAsMaker {
+                lsn: input.lsn,
                 filled_size: fill.size,
                 quote_fee: fill.maker_fee,
                 timestamp: input.timestamp,
@@ -206,6 +211,7 @@ impl SpotOrderDomainService {
             });
         }
         let (_, output) = taker.apply(SpotOrderV7Event::MatchedAsTaker {
+            lsn: input.lsn,
             filled_size,
             quote_fee: taker_fee_total,
             timestamp: input.timestamp,
@@ -259,10 +265,11 @@ impl SpotOrderDomainService {
         size: Decimal,
         tif: Option<OrderTif>,
         cloid: Option<String>,
+        lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ModifySpotOrderV7Error> {
         let (_, output) =
-            order.apply(SpotOrderV7Event::Modify { price, size, tif, cloid, timestamp })?;
+            order.apply(SpotOrderV7Event::Modify { price, size, tif, cloid, lsn, timestamp })?;
         let SpotOrderV7Output::Modified(ModifySpotOrderV7Output { order_after, hold_adjustment }) =
             output
         else {
@@ -294,9 +301,10 @@ impl SpotOrderDomainService {
     pub fn freeze(
         mut order: SpotOrderV7,
         mut balance: BalanceV2,
+        lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ActivateSpotOrderV7Error> {
-        let (_, output) = order.apply(SpotOrderV7Event::Activate { timestamp })?;
+        let (_, output) = order.apply(SpotOrderV7Event::Activate { lsn, timestamp })?;
         let SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }) = output
         else {
             return Err(
@@ -315,9 +323,10 @@ impl SpotOrderDomainService {
     pub fn cancel(
         mut order: SpotOrderV7,
         mut balance: BalanceV2,
+        lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), CancelSpotOrderV7Error> {
-        let (_, output) = order.apply(SpotOrderV7Event::Cancel { timestamp })?;
+        let (_, output) = order.apply(SpotOrderV7Event::Cancel { lsn, timestamp })?;
         let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output { release_requirement, .. }) =
             output
         else {
@@ -437,6 +446,7 @@ mod tests {
             Decimal::from(3),
             None,
             None,
+            10,
             TIMESTAMP,
         )
         .unwrap();
@@ -459,6 +469,7 @@ mod tests {
             Decimal::from(2),
             None,
             None,
+            10,
             TIMESTAMP,
         )
         .unwrap();
@@ -479,6 +490,7 @@ mod tests {
             Decimal::from(3),
             None,
             None,
+            10,
             TIMESTAMP,
         )
         .unwrap();
@@ -497,6 +509,7 @@ mod tests {
             Decimal::from(4),
             None,
             None,
+            10,
             TIMESTAMP,
         )
         .unwrap()
@@ -511,6 +524,7 @@ mod tests {
             Decimal::from(2),
             None,
             None,
+            10,
             TIMESTAMP,
         )
         .unwrap()
@@ -531,6 +545,7 @@ mod tests {
             Decimal::from(2),
             Some(OrderTif::Ioc),
             None,
+            10,
             TIMESTAMP,
         )
         .unwrap();
@@ -548,6 +563,7 @@ mod tests {
             Decimal::ONE,
             None,
             None,
+            10,
             TIMESTAMP,
         );
 
@@ -563,6 +579,7 @@ mod tests {
             Decimal::from(3),
             None,
             None,
+            10,
             TIMESTAMP,
         );
         assert_eq!(
@@ -577,6 +594,7 @@ mod tests {
             Decimal::ONE,
             None,
             None,
+            10,
             TIMESTAMP,
         );
         assert_eq!(
@@ -598,8 +616,9 @@ mod tests {
                 price,
                 size,
                 None,
-                None,
-                TIMESTAMP,
+            None,
+            10,
+            TIMESTAMP,
             );
             assert!(matches!(result, Err(ModifySpotOrderV7Error::Entity(_))));
         }

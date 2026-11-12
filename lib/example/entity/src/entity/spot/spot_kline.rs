@@ -1,79 +1,59 @@
+use base_types_v2::Symbol;
 use common_entity::{
     Entity, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
 };
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 const SPOT_KLINE_ENTITY_TYPE: u8 = 6;
 
-/// 由历史现货成交事实派生出的固定周期 K 线快照。
-///
-/// `SpotKline` 不是成交事实来源，而是可按成交事实重新投影的行情读模型。
-/// 同一交易对、周期和开盘时间只对应一个稳定实体 ID。
+/// 由历史现货成交事实派生出的固定周期 K 线读模型。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotKline {
-    /// 按交易对、周期和开盘时间生成的稳定数值身份。
     pub id: u64,
-    /// Hyperliquid 现货资产编号。
-    pub asset: u32,
-    /// 交易对。
-    pub symbol: String,
-    /// K 线周期，单位毫秒。
-    pub interval_ms: u64,
-    /// K 线开盘时间，单位毫秒。
-    pub open_time_ms: u64,
-    /// K 线收盘时间，单位毫秒，包含在当前周期内。
-    pub close_time_ms: u64,
-    /// 周期内首笔成交价格。
-    pub open_price: u64,
-    /// 周期内最高成交价格。
-    pub high_price: u64,
-    /// 周期内最低成交价格。
-    pub low_price: u64,
-    /// 周期内末笔成交价格。
-    pub close_price: u64,
-    /// base asset 成交量。
-    pub volume_base: u64,
-    /// quote asset 成交量。
-    pub volume_quote: u64,
-    /// 周期内成交笔数。
+    pub symbol: Symbol,
+    pub interval_ns: u64,
+    pub open_time_ns: u64,
+    pub close_time_ns: u64,
+    pub open_price: Decimal,
+    pub high_price: Decimal,
+    pub low_price: Decimal,
+    pub close_price: Decimal,
+    pub volume_base: Decimal,
+    pub volume_quote: Decimal,
     pub trade_count: u64,
-    /// 按成交时间和成交 ID 排序后的首笔成交 ID。
-    pub first_trade_id: String,
-    /// 按成交时间和成交 ID 排序后的末笔成交 ID。
-    pub last_trade_id: String,
-    // todo 应该还要加一个该k线是否已完成
+    pub first_trade_id: u64,
+    pub last_trade_id: u64,
 }
 
 impl SpotKline {
-    /// 从已经完成校验的聚合事实构造 K 线快照。
-    #[expect(clippy::too_many_arguments, reason = "K 线快照需要完整保留 OHLCV 与来源成交事实")]
+    /// 从已校验的聚合事实构造完整周期快照。
+    #[expect(clippy::too_many_arguments, reason = "K 线需要完整保留 OHLCV 与来源成交事实")]
     pub fn new(
-        asset: u32,
-        symbol: String,
-        interval_ms: u64,
-        open_time_ms: u64,
-        close_time_ms: u64,
-        open_price: u64,
-        high_price: u64,
-        low_price: u64,
-        close_price: u64,
-        volume_base: u64,
-        volume_quote: u64,
+        symbol: Symbol,
+        interval_ns: u64,
+        open_time_ns: u64,
+        close_time_ns: u64,
+        open_price: Decimal,
+        high_price: Decimal,
+        low_price: Decimal,
+        close_price: Decimal,
+        volume_base: Decimal,
+        volume_quote: Decimal,
         trade_count: u64,
-        first_trade_id: String,
-        last_trade_id: String,
+        first_trade_id: u64,
+        last_trade_id: u64,
     ) -> Self {
         let id = crate::support::derived_entity_id(
             SPOT_KLINE_ENTITY_TYPE,
-            &[symbol.as_bytes(), &interval_ms.to_le_bytes(), &open_time_ms.to_le_bytes()],
+            &[&symbol.id().to_le_bytes(), &interval_ns.to_le_bytes(), &open_time_ns.to_le_bytes()],
         );
         Self {
             id,
-            asset,
             symbol,
-            interval_ms,
-            open_time_ms,
-            close_time_ms,
+            interval_ns,
+            open_time_ns,
+            close_time_ns,
             open_price,
             high_price,
             low_price,
@@ -90,11 +70,10 @@ impl SpotKline {
 impl FieldDiff for SpotKline {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            EntityFieldChange::new("asset", "", self.asset.to_string()),
-            EntityFieldChange::new("symbol", "", self.symbol.clone()),
-            EntityFieldChange::new("interval_ms", "", self.interval_ms.to_string()),
-            EntityFieldChange::new("open_time_ms", "", self.open_time_ms.to_string()),
-            EntityFieldChange::new("close_time_ms", "", self.close_time_ms.to_string()),
+            EntityFieldChange::new("symbol", "", self.symbol.id().to_string()),
+            EntityFieldChange::new("interval_ns", "", self.interval_ns.to_string()),
+            EntityFieldChange::new("open_time_ns", "", self.open_time_ns.to_string()),
+            EntityFieldChange::new("close_time_ns", "", self.close_time_ns.to_string()),
             EntityFieldChange::new("open_price", "", self.open_price.to_string()),
             EntityFieldChange::new("high_price", "", self.high_price.to_string()),
             EntityFieldChange::new("low_price", "", self.low_price.to_string()),
@@ -102,13 +81,12 @@ impl FieldDiff for SpotKline {
             EntityFieldChange::new("volume_base", "", self.volume_base.to_string()),
             EntityFieldChange::new("volume_quote", "", self.volume_quote.to_string()),
             EntityFieldChange::new("trade_count", "", self.trade_count.to_string()),
-            EntityFieldChange::new("first_trade_id", "", self.first_trade_id.clone()),
-            EntityFieldChange::new("last_trade_id", "", self.last_trade_id.clone()),
+            EntityFieldChange::new("first_trade_id", "", self.first_trade_id.to_string()),
+            EntityFieldChange::new("last_trade_id", "", self.last_trade_id.to_string()),
         ]
     }
-
     fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::with_capacity(0)
+        Vec::new()
     }
 }
 
@@ -116,39 +94,25 @@ impl Entity for SpotKline {
     fn entity_id(&self) -> u64 {
         self.id
     }
-
     fn is_derived() -> bool {
         true
     }
-
     fn entity_type() -> u8 {
         SPOT_KLINE_ENTITY_TYPE
     }
-
-    fn four_color_archetype() -> FourColorArchetype
-    where
-        Self: Sized,
-    {
+    fn four_color_archetype() -> FourColorArchetype {
         FourColorArchetype::MomentInterval
     }
-
-    fn mutation_model() -> EntityMutationModel
-    where
-        Self: Sized,
-    {
+    fn mutation_model() -> EntityMutationModel {
         EntityMutationModel::DerivedReadModel
     }
-
     fn lsn(&self) -> u64 {
         1
     }
-
     fn replay_field_type(field_name: &str) -> u8 {
         match field_name {
-            "symbol" | "first_trade_id" | "last_trade_id" => 0,
-            "asset" | "interval_ms" | "open_time_ms" | "close_time_ms" | "open_price"
-            | "high_price" | "low_price" | "close_price" | "volume_base" | "volume_quote"
-            | "trade_count" => 1,
+            "symbol" | "interval_ns" | "open_time_ns" | "close_time_ns" | "trade_count"
+            | "first_trade_id" | "last_trade_id" => 1,
             _ => 0,
         }
     }
@@ -156,59 +120,54 @@ impl Entity for SpotKline {
 
 impl common_entity::Shard for SpotKline {
     fn partition(&self) -> u8 {
-        self.asset as u8
+        self.symbol.id() as u8
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{Entity, EntityMutationModel, FourColorArchetype};
+    use base_types_v2::Coin;
+    use common_entity::{Entity, Shard};
 
     use super::*;
 
     fn kline() -> SpotKline {
         SpotKline::new(
-            10_001,
-            "BTCUSDT".to_string(),
-            60_000,
-            1_717_171_680_000,
-            1_717_171_739_999,
-            100,
-            110,
-            90,
-            105,
-            5,
-            520,
+            Symbol::new(10_001, Coin::BTC, Coin::USDT),
+            60,
+            120,
+            179,
+            Decimal::new(1005, 1),
+            Decimal::new(1105, 1),
+            Decimal::new(905, 1),
+            Decimal::new(1055, 1),
+            Decimal::new(55, 1),
+            Decimal::new(52025, 2),
             3,
-            "trade-1".to_string(),
-            "trade-3".to_string(),
+            1,
+            3,
         )
     }
 
     #[test]
-    fn identity_is_deterministic_from_symbol_interval_and_open_time() {
-        let snapshot = kline();
-
-        assert_eq!(snapshot.entity_id(), snapshot.id);
-        assert_eq!(snapshot.entity_id(), kline().entity_id());
-    }
-
-    #[test]
-    fn derived_snapshot_replays_all_business_fields() {
+    fn structured_identity_replay_and_partition_are_stable() {
         let kline = kline();
-
-        assert_eq!(SpotKline::four_color_archetype(), FourColorArchetype::MomentInterval);
-        assert_eq!(SpotKline::mutation_model(), EntityMutationModel::DerivedReadModel);
-
-        let event = kline.track_create_event().expect("kline create event");
-        assert!(event.is_created());
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("volume_quote")
-                && change.new_value_bytes() == b"520"
-        }));
-        assert!(event.field_changes.iter().any(|change| {
-            change.field_name_as_str().ok() == Some("first_trade_id")
-                && change.new_value_bytes() == b"trade-1"
-        }));
+        assert_eq!(kline.entity_id(), self::kline().entity_id());
+        assert_eq!(kline.partition(), 10_001_u32 as u8);
+        let event = kline.track_create_event().expect("create event");
+        assert!(
+            event
+                .field_changes
+                .iter()
+                .any(|change| change.field_name_as_str().ok() == Some("volume_quote")
+                    && change.new_value_bytes() == b"520.25")
+        );
+        assert!(
+            event
+                .field_changes
+                .iter()
+                .any(|change| change.field_name_as_str().ok() == Some("open_time_ns")
+                    && change.new_value_bytes() == b"120")
+        );
     }
 }

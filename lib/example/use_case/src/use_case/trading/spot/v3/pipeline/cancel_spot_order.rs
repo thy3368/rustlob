@@ -46,6 +46,8 @@ pub enum CancelSpotOrderV3Error {
     OrderCloidMissing,
     #[error("order is not cancelable")]
     OrderNotCancelable,
+    #[error("command LSN must be newer than the loaded order")]
+    StaleOrder,
     #[error("balance party does not match the order owner")]
     PartyMismatch,
     #[error("balance coin does not match the asset held by the order")]
@@ -117,6 +119,9 @@ impl UseCase for CancelSpotOrderV3UseCase {
         ) {
             return Err(CancelSpotOrderV3Error::OrderNotCancelable);
         }
+        if cmd.lsn() <= order.lsn {
+            return Err(CancelSpotOrderV3Error::StaleOrder);
+        }
         if state.balance.party_id() != order.owner.0 {
             return Err(CancelSpotOrderV3Error::PartyMismatch);
         }
@@ -138,6 +143,7 @@ impl UseCase for CancelSpotOrderV3UseCase {
         let (order_after, balance_after) = SpotOrderDomainService::cancel(
             state.order.clone(),
             state.balance.clone(),
+            cmd.lsn(),
             cmd.logical_ts(),
         )
         .map_err(map_cancel_error)?;

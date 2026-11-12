@@ -110,6 +110,8 @@ pub enum PlaceSpotOrderV3Error {
     InvalidGroup,
     #[error("maker state does not match the command")]
     InvalidMaker,
+    #[error("command LSN must be newer than every loaded maker order")]
+    StaleMaker,
     #[error("authoritative balances are missing, duplicated, or mismatched")]
     InvalidBalances,
     #[error("trade id range overflows")]
@@ -173,6 +175,9 @@ impl UseCase for PlaceSpotOrderV3UseCase {
             command_orders(cmd).into_iter().map(|o| o.order_id).collect();
         for maker in &state.maker_orders {
             let value = maker.order_base();
+            if cmd.lsn() <= value.lsn {
+                return Err(Self::Error::StaleMaker);
+            }
             if !order_ids.insert(value.order_id)
                 || value.symbol != parent.symbol
                 || value.side == parent.side
@@ -194,6 +199,7 @@ impl UseCase for PlaceSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
+        let lsn = cmd.lsn();
         let timestamp = cmd.logical_ts();
         let specs = command_orders(cmd);
         let mut balance_workspace = BalanceWorkspace::new(cmd, state)?;
@@ -208,7 +214,7 @@ impl UseCase for PlaceSpotOrderV3UseCase {
                     OrderGroupRelation::NormalTpslChild { parent_order_id: parent.order_id }
                 }
             };
-            created_orders.push(build_order(spec, relation, state.taker_fee_bps, timestamp)?);
+            created_orders.push(build_order(spec, relation, state.taker_fee_bps, lsn, timestamp)?);
         }
         if specs[0].order_type.is_trigger() {
             return Ok(PlaceSpotOrderV3AfterChanges {
@@ -225,6 +231,7 @@ impl UseCase for PlaceSpotOrderV3UseCase {
         let (active, frozen) = SpotOrderDomainService::freeze(
             created_orders[0].clone(),
             balance_workspace.working[taker_balance].clone(),
+            lsn,
             timestamp,
         )?;
         created_orders[0] = active.clone();
@@ -233,6 +240,7 @@ impl UseCase for PlaceSpotOrderV3UseCase {
             active,
             state.maker_orders.clone(),
             MatchSpotOrderV3Input {
+                lsn,
                 trade_id_start: state.trade_id_start,
                 maker_fee_bps: state.maker_fee_bps,
                 taker_fee_bps: state.taker_fee_bps,
@@ -455,6 +463,7 @@ fn build_order(
     cmd: &PlaceSpotOrderV3OrderCmd,
     relation: OrderGroupRelation,
     fee_bps: u64,
+    lsn: u64,
     timestamp: u64,
 ) -> Result<SpotOrderV7, PlaceSpotOrderV3Error> {
     let (execution, tif, trigger, trigger_px) = match cmd.order_type {
@@ -505,7 +514,7 @@ fn build_order(
         cloid: cmd.cloid.clone(),
         created_at: timestamp,
         updated_at: timestamp,
-        lsn: 0,
+        lsn,
     })?)
 }
 

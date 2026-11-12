@@ -61,6 +61,7 @@ fn buy_match_consumes_fee_reserve_and_sell_match_does_not() {
     let mut buyer = order(OrderSide::Buy, SpotOrderStatus::Open);
     buyer
         .apply(SpotOrderV7Event::MatchedAsTaker {
+            lsn: 10,
             filled_size: Decimal::ONE,
             quote_fee: Decimal::from(2),
             timestamp: TIMESTAMP,
@@ -71,6 +72,7 @@ fn buy_match_consumes_fee_reserve_and_sell_match_does_not() {
     let mut seller = order(OrderSide::Sell, SpotOrderStatus::Open);
     seller
         .apply(SpotOrderV7Event::MatchedAsMaker {
+            lsn: 10,
             filled_size: Decimal::ONE,
             quote_fee: Decimal::from(2),
             timestamp: TIMESTAMP,
@@ -86,6 +88,7 @@ fn match_failure_keeps_order_unchanged() {
     assert!(
         subject
             .apply(SpotOrderV7Event::MatchedAsTaker {
+                lsn: 10,
                 filled_size: Decimal::ONE,
                 quote_fee: Decimal::from(4),
                 timestamp: TIMESTAMP,
@@ -103,6 +106,7 @@ fn version_overflow_keeps_order_unchanged() {
     let before = subject.clone();
     assert_eq!(
         subject.apply(SpotOrderV7Event::MatchedAsTaker {
+            lsn: u64::MAX,
             filled_size: Decimal::ONE,
             quote_fee: Decimal::ZERO,
             timestamp: TIMESTAMP,
@@ -117,6 +121,7 @@ fn taker_tif_controls_final_state() {
     let mut gtc = order(OrderSide::Buy, SpotOrderStatus::Open);
     let (_, output) = gtc
         .apply(SpotOrderV7Event::MatchedAsTaker {
+            lsn: 10,
             filled_size: Decimal::ONE,
             quote_fee: Decimal::ZERO,
             timestamp: TIMESTAMP,
@@ -134,6 +139,7 @@ fn taker_tif_controls_final_state() {
     let mut ioc = SpotOrderV7::from_record(ioc_record).unwrap();
     let (_, output) = ioc
         .apply(SpotOrderV7Event::MatchedAsTaker {
+            lsn: 10,
             filled_size: Decimal::ONE,
             quote_fee: Decimal::ZERO,
             timestamp: TIMESTAMP,
@@ -154,7 +160,7 @@ fn taker_tif_controls_final_state() {
     alo_record.tif = OrderTif::Alo;
     let mut alo = SpotOrderV7::from_record(alo_record).unwrap();
     let (_, output) =
-        alo.apply(SpotOrderV7Event::RejectedAsTaker { timestamp: TIMESTAMP }).unwrap();
+        alo.apply(SpotOrderV7Event::RejectedAsTaker { lsn: 10, timestamp: TIMESTAMP }).unwrap();
     assert_eq!(alo.status(), SpotOrderStatus::Rejected);
     let SpotOrderV7Output::RejectedAsTaker(output) = output else {
         panic!("expected rejected taker output")
@@ -172,6 +178,7 @@ fn filled_sell_taker_returns_zero_base_release_requirement() {
     let mut seller = order(OrderSide::Sell, SpotOrderStatus::Open);
     let (_, output) = seller
         .apply(SpotOrderV7Event::MatchedAsTaker {
+            lsn: 10,
             filled_size: Decimal::from(2),
             quote_fee: Decimal::ZERO,
             timestamp: TIMESTAMP,

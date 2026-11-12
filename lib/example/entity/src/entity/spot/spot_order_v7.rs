@@ -15,25 +15,30 @@ use crate::entity::common::order_primitives::{
 ///todo 可以在根聚合上加领域服务，因为不少动作确实涉及多个聚合的变化。
 pub enum SpotOrderV7Event {
     Activate {
+        lsn: u64,
         timestamp: u64,
     },
     /// 将已规划的全部 taker 成交一次性提交到订单聚合。
     MatchedAsTaker {
+        lsn: u64,
         filled_size: Decimal,
         quote_fee: Decimal,
         timestamp: u64,
     },
     /// 将一笔已规划的 maker 成交提交到订单聚合。
     MatchedAsMaker {
+        lsn: u64,
         filled_size: Decimal,
         quote_fee: Decimal,
         timestamp: u64,
     },
     /// ALO 遇到可成交对手盘时拒绝 taker。
     RejectedAsTaker {
+        lsn: u64,
         timestamp: u64,
     },
     Modify {
+        lsn: u64,
         price: Decimal,
         size: Decimal,
         tif: Option<crate::entity::common::order_primitives::OrderTif>,
@@ -41,6 +46,7 @@ pub enum SpotOrderV7Event {
         timestamp: u64,
     },
     Cancel {
+        lsn: u64,
         timestamp: u64,
     },
 }
@@ -218,9 +224,10 @@ impl SpotOrderV7 {
         &mut self,
         price: Decimal,
         size: Decimal,
+        lsn: u64,
         timestamp: u64,
     ) -> Result<(), EntityError> {
-        self.apply(SpotOrderV7Event::Modify { price, size, tif: None, cloid: None, timestamp })
+        self.apply(SpotOrderV7Event::Modify { price, size, tif: None, cloid: None, lsn, timestamp })
             .map(|_| ())
     }
 }
@@ -235,6 +242,10 @@ impl Fsm for SpotOrderV7 {
         &mut self,
         event: SpotOrderV7Event,
     ) -> Result<(Self::State, Self::Output), EntityError> {
+        let incoming_lsn = event.lsn();
+        if incoming_lsn < self.order_base.lsn {
+            return Err(err("order command LSN is older than the current LSN"));
+        }
         if matches!(
             self.order_base.status,
             SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
@@ -242,7 +253,7 @@ impl Fsm for SpotOrderV7 {
             return Err(err("order is terminal"));
         }
         let (next, output) = match event {
-            SpotOrderV7Event::Activate { timestamp } => {
+            SpotOrderV7Event::Activate { lsn, timestamp } => {
                 if self.status() != SpotOrderStatus::Pending {
                     return Err(err("order is not pending"));
                 }
@@ -251,21 +262,19 @@ impl Fsm for SpotOrderV7 {
                 let mut next = self.order_base.clone();
                 next.status = SpotOrderStatus::Open;
                 next.updated_at = timestamp;
-                next.lsn = next
-                    .lsn
-                    .checked_add(1)
-                    .ok_or(EntityError::VersionOverflow { version: next.lsn })?;
+                next.lsn = lsn;
                 (
                     next,
                     SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
                 )
             }
-            SpotOrderV7Event::MatchedAsTaker { filled_size, quote_fee, timestamp } => {
+            SpotOrderV7Event::MatchedAsTaker { lsn, filled_size, quote_fee, timestamp } => {
                 self.validate_matchable_as_taker()?;
                 let next = matched_order(
                     &self.order_base,
                     filled_size,
                     quote_fee,
+                    lsn,
                     timestamp,
                     MatchRole::Taker,
                 )?;
@@ -284,12 +293,13 @@ impl Fsm for SpotOrderV7 {
                     }),
                 )
             }
-            SpotOrderV7Event::MatchedAsMaker { filled_size, quote_fee, timestamp } => {
+            SpotOrderV7Event::MatchedAsMaker { lsn, filled_size, quote_fee, timestamp } => {
                 self.validate_matchable_as_maker()?;
                 let next = matched_order(
                     &self.order_base,
                     filled_size,
                     quote_fee,
+                    lsn,
                     timestamp,
                     MatchRole::Maker,
                 )?;
@@ -302,7 +312,7 @@ impl Fsm for SpotOrderV7 {
                     }),
                 )
             }
-            SpotOrderV7Event::RejectedAsTaker { timestamp } => {
+            SpotOrderV7Event::RejectedAsTaker { lsn, timestamp } => {
                 self.validate_matchable_as_taker()?;
                 if self.order_base.effective_tif() != OrderTif::Alo {
                     return Err(err("order cannot be rejected as ALO taker"));
@@ -310,10 +320,7 @@ impl Fsm for SpotOrderV7 {
                 let mut next = self.order_base.clone();
                 next.status = SpotOrderStatus::Rejected;
                 next.updated_at = timestamp;
-                next.lsn = next
-                    .lsn
-                    .checked_add(1)
-                    .ok_or(EntityError::VersionOverflow { version: next.lsn })?;
+                next.lsn = lsn;
                 let order_after = SpotOrderV7 { order_base: next.clone() };
                 let release_requirement = Some(match_release_requirement(&order_after)?);
                 (
@@ -324,9 +331,9 @@ impl Fsm for SpotOrderV7 {
                     }),
                 )
             }
-            SpotOrderV7Event::Modify { price, size, tif, cloid, timestamp } => {
+            SpotOrderV7Event::Modify { lsn, price, size, tif, cloid, timestamp } => {
                 let hold_before = active_hold_requirement(&self.order_base)?;
-                let mut next = modified_order(&self.order_base, price, size, timestamp)?;
+                let mut next = modified_order(&self.order_base, price, size, lsn, timestamp)?;
                 if let Some(tif) = tif {
                     next.tif = tif;
                 }
@@ -344,9 +351,9 @@ impl Fsm for SpotOrderV7 {
                     }),
                 )
             }
-            SpotOrderV7Event::Cancel { timestamp } => {
+            SpotOrderV7Event::Cancel { lsn, timestamp } => {
                 let was_pending = self.status() == SpotOrderStatus::Pending;
-                let next = canceled_order(&self.order_base, timestamp)?;
+                let next = canceled_order(&self.order_base, lsn, timestamp)?;
                 let order_after = SpotOrderV7 { order_base: next.clone() };
                 let release_requirement = if was_pending {
                     zero_release_requirement(&order_after)?
@@ -367,6 +374,19 @@ impl Fsm for SpotOrderV7 {
     }
 }
 
+impl SpotOrderV7Event {
+    fn lsn(&self) -> u64 {
+        match self {
+            Self::Activate { lsn, .. }
+            | Self::MatchedAsTaker { lsn, .. }
+            | Self::MatchedAsMaker { lsn, .. }
+            | Self::RejectedAsTaker { lsn, .. }
+            | Self::Modify { lsn, .. }
+            | Self::Cancel { lsn, .. } => *lsn,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum MatchRole {
     Taker,
@@ -377,6 +397,7 @@ fn matched_order(
     current: &OrderBase,
     filled_size: Decimal,
     quote_fee: Decimal,
+    lsn: u64,
     timestamp: u64,
     role: MatchRole,
 ) -> Result<OrderBase, EntityError> {
@@ -417,11 +438,7 @@ fn matched_order(
         }
     };
     next.updated_at = timestamp;
-    //todo lsn 为use case中的，由event传入
-    next.lsn = next
-        .lsn
-        .checked_add(1)
-        .ok_or(EntityError::VersionOverflow { version: next.lsn })?;
+    next.lsn = lsn;
     Ok(next)
 }
 
@@ -429,6 +446,7 @@ fn modified_order(
     current: &OrderBase,
     price: Decimal,
     size: Decimal,
+    lsn: u64,
     timestamp: u64,
 ) -> Result<OrderBase, EntityError> {
     let filled =
@@ -441,21 +459,15 @@ fn modified_order(
     next.orig_size = size;
     next.size = size.checked_sub(filled).ok_or_else(|| err("size overflow"))?;
     next.updated_at = timestamp;
-    next.lsn = current
-        .lsn
-        .checked_add(1)
-        .ok_or(EntityError::VersionOverflow { version: current.lsn })?;
+    next.lsn = lsn;
     Ok(next)
 }
 
-fn canceled_order(current: &OrderBase, timestamp: u64) -> Result<OrderBase, EntityError> {
+fn canceled_order(current: &OrderBase, lsn: u64, timestamp: u64) -> Result<OrderBase, EntityError> {
     let mut next = current.clone();
     next.status = SpotOrderStatus::Canceled;
     next.updated_at = timestamp;
-    next.lsn = current
-        .lsn
-        .checked_add(1)
-        .ok_or(EntityError::VersionOverflow { version: current.lsn })?;
+    next.lsn = lsn;
     Ok(next)
 }
 
