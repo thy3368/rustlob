@@ -1,8 +1,8 @@
 use common_entity::Fsm;
+use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::spot::spot_trade_v3::{
     SpotTradeEvent, SpotTradeSettlementError, SpotTradeStateError,
 };
-use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event, OrderSide};
 use rust_decimal::Decimal;
 use thiserror::Error;
