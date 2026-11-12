@@ -24,6 +24,7 @@ pub struct LocalLobBtree<O: LobOrder> {
     /// 当前本地订单簿对应的交易标的，用于拒绝跨订单簿订单。
     symbol: Symbol,
     /// 订单主存储；索引保持稳定，删除订单后留下 `None` 空洞。
+    /// orders: Vec<Option<OrderNode<O>>>,
     slots: Vec<Option<O>>,
     /// 订单 ID 到 `SlotIndex` 的映射，用于快速定位仍存在的订单。
     ids: HashMap<u64, SlotIndex>,
@@ -164,6 +165,19 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
             )
         }
     }
+
+    fn add_order(&mut self, order: Self::Order) -> Result<(), LobError> {
+        todo!()
+    }
+
+    fn remove_order(&mut self, order_id: u64) -> Result<(), LobError> {
+        todo!()
+    }
+
+    fn find_order(&self, order_id: u64) -> Result<Self::Order, LobError> {
+        todo!()
+    }
+
     fn best_bid(&self) -> Option<Decimal> {
         self.bids.keys().next_back().map(|price| price.0)
     }

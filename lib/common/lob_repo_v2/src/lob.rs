@@ -3,11 +3,13 @@ use common_entity::EntityReplayableEvent;
 use rust_decimal::Decimal;
 
 use crate::LobError;
+
+pub type OrderId = u64;
 pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
     type Side: Copy + Eq;
 
     fn entity_type() -> u8;
-    fn entity_id(&self) -> u64;
+    fn entity_id(&self) -> OrderId;
     fn symbol(&self) -> Symbol;
     fn side(&self) -> Self::Side;
     fn is_buy_side(side: Self::Side) -> bool;
@@ -33,6 +35,14 @@ pub trait AssetLobV2 {
         quantity: Decimal,
         taker_side: <Self::Order as LobOrder>::Side,
     ) -> (Option<Vec<&Self::Order>>, Decimal);
+
+    fn add_order(&mut self, order: Self::Order) -> Result<(), LobError>;
+
+    fn remove_order(&mut self, order_id: OrderId) -> Result<(), LobError>;
+
+    /// 根据订单ID查找订单
+    fn find_order(&self, order_id: OrderId) -> Result<Self::Order, LobError>;
+
     fn best_bid(&self) -> Option<Decimal>;
     fn best_ask(&self) -> Option<Decimal>;
 

@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
 use super::lob_btree::LocalLobBtree;
-use crate::LobError;
 use crate::lob::LobOrder;
 use crate::lob_repo::LobRepo;
+use crate::LobError;
 
 pub struct LobBtreeRepository<O: LobOrder>(PhantomData<O>);
 
@@ -37,6 +37,7 @@ impl<O: LobOrder + serde::Serialize + for<'de> serde::Deserialize<'de>> LobRepo
     }
 
     fn load_from_orders(orders: Vec<Self::Order>) -> Result<Self::Lob, LobError> {
+        ///todo 也可先在这对orders排序，再insert_order
         let symbol = orders
             .first()
             .ok_or_else(|| {
