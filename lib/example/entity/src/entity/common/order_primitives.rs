@@ -159,8 +159,6 @@ mod tests {
     }
 }
 
-
-
 pub(crate) fn push_change(
     changes: &mut Vec<EntityFieldChange>,
     field_name: &'static str,
@@ -173,4 +171,3 @@ pub(crate) fn push_change(
         changes.push(EntityFieldChange::new(field_name, old_value, new_value));
     }
 }
-

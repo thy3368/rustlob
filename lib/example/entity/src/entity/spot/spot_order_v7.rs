@@ -115,9 +115,30 @@ pub struct ReplaceOrFillSpotOrderV7Output {
     pub outcome: MatchSpotOrderV7Outcome,
 }
 
+/// 改单后订单对持仓冻结额的调整要求。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpotOrderV7HoldAdjustment {
+    /// 冻结额不变；`currency` 仍明确指出订单占用的资产。
+    Unchanged { currency: crate::account::coin::Coin },
+    /// 需要额外冻结资产。
+    Increase { amount: CoinAmount },
+    /// 需要释放已冻结资产。
+    Decrease { amount: CoinAmount },
+}
+
+impl SpotOrderV7HoldAdjustment {
+    pub fn currency(self) -> crate::account::coin::Coin {
+        match self {
+            Self::Unchanged { currency } => currency,
+            Self::Increase { amount } | Self::Decrease { amount } => amount.currency(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModifySpotOrderV7Output {
     pub order_after: SpotOrderV7,
+    pub hold_adjustment: SpotOrderV7HoldAdjustment,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -289,6 +310,7 @@ impl Fsm for SpotOrderV7 {
                 )
             }
             SpotOrderV7Event::Modify { price, size, tif, cloid, timestamp } => {
+                let hold_before = active_hold_requirement(&self.order_base)?;
                 let mut next = modified_order(&self.order_base, price, size, timestamp)?;
                 if let Some(tif) = tif {
                     next.tif = tif;
@@ -296,8 +318,16 @@ impl Fsm for SpotOrderV7 {
                 if let Some(cloid) = cloid {
                     next.cloid = Some(cloid);
                 }
+                let hold_after = active_hold_requirement(&next)?;
+                let hold_adjustment = hold_adjustment(&self.order_base, hold_before, hold_after)?;
                 let order_after = SpotOrderV7 { order_base: next.clone() };
-                (next, SpotOrderV7Output::Modified(ModifySpotOrderV7Output { order_after }))
+                (
+                    next,
+                    SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
+                        order_after,
+                        hold_adjustment,
+                    }),
+                )
             }
             SpotOrderV7Event::Cancel { timestamp } => {
                 let was_pending = self.status() == SpotOrderStatus::Pending;
@@ -418,7 +448,6 @@ impl FieldDiff for SpotOrderV7 {
         v
     }
 }
-
 
 impl Entity for SpotOrderV7 {
     fn entity_id(&self) -> u64 {
@@ -577,6 +606,55 @@ fn release_requirement(
 }
 fn entity_release_requirement(order: &SpotOrderV7) -> Result<CoinAmount, EntityError> {
     order.release_requirement().map_err(|error| err(&error.to_string()))
+}
+fn held_currency(o: &OrderBase) -> crate::account::coin::Coin {
+    match o.side {
+        OrderSide::Buy => o.symbol.quote,
+        OrderSide::Sell => o.symbol.base,
+    }
+}
+fn active_hold_requirement(o: &OrderBase) -> Result<Option<Decimal>, EntityError> {
+    if o.status == SpotOrderStatus::Pending {
+        return Ok(None);
+    }
+    let amount = match o.side {
+        OrderSide::Buy => o
+            .limit_px
+            .checked_mul(o.size)
+            .and_then(|principal| principal.checked_add(o.buy_quote_fee_reserve_limit))
+            .and_then(|reserved| reserved.checked_sub(o.buy_quote_fee_reserve_consumed))
+            .filter(|amount| *amount >= Decimal::ZERO)
+            .ok_or_else(|| err("invalid active buy freeze requirement"))?,
+        OrderSide::Sell => o.size,
+    };
+    Ok(Some(amount))
+}
+fn hold_adjustment(
+    o: &OrderBase,
+    before: Option<Decimal>,
+    after: Option<Decimal>,
+) -> Result<SpotOrderV7HoldAdjustment, EntityError> {
+    let currency = held_currency(o);
+    let (Some(before), Some(after)) = (before, after) else {
+        return Ok(SpotOrderV7HoldAdjustment::Unchanged { currency });
+    };
+    match after.cmp(&before) {
+        std::cmp::Ordering::Greater => Ok(SpotOrderV7HoldAdjustment::Increase {
+            amount: coin_amount(
+                currency,
+                after.checked_sub(before).ok_or_else(|| err("modify freeze delta overflow"))?,
+            )
+            .map_err(|error| err(&error.to_string()))?,
+        }),
+        std::cmp::Ordering::Less => Ok(SpotOrderV7HoldAdjustment::Decrease {
+            amount: coin_amount(
+                currency,
+                before.checked_sub(after).ok_or_else(|| err("modify release delta overflow"))?,
+            )
+            .map_err(|error| err(&error.to_string()))?,
+        }),
+        std::cmp::Ordering::Equal => Ok(SpotOrderV7HoldAdjustment::Unchanged { currency }),
+    }
 }
 fn fee(n: Decimal, b: u64, scale: u32) -> Result<Decimal, EntityError> {
     Ok(n.checked_mul(Decimal::from(b))

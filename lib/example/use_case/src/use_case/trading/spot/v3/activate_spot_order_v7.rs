@@ -1,15 +1,13 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff,
-    UpdatedEntityPair, UseCase,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
+    UseCase,
 };
-use example_core_entity::spot::spot_order_v7::{
-    ActivateSpotOrderV7Output, SpotOrderV7, SpotOrderV7Event, SpotOrderV7FreezeRequirement,
-    SpotOrderV7Output,
-};
-use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event, SpotOrderStatus};
-use rust_decimal::Decimal;
+use example_core_entity::spot::spot_order_v7::SpotOrderV7;
+use example_core_entity::{BalanceV2, SpotOrderStatus};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+
+use super::spot_order_v7_domain_service::SpotOrderV7DomainService;
+pub(crate) use crate::spot_order_v7_domain_service::ActivateSpotOrderV7Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActivateSpotOrderV7Cmd {
@@ -26,32 +24,12 @@ pub struct ActivateSpotOrderV7State {
 pub struct ActivateSpotOrderV7AfterChanges {
     pub order_after: SpotOrderV7,
     pub balance_after: BalanceV2,
-    pub freeze_requirement: SpotOrderV7FreezeRequirement,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivateSpotOrderV7Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV7>,
     pub updated_balance: UpdatedEntityPair<BalanceV2>,
-    pub freeze_requirement: SpotOrderV7FreezeRequirement,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ActivateSpotOrderV7Error {
-    #[error("order id must be greater than zero")]
-    InvalidOrderId,
-    #[error("command order id does not match loaded order")]
-    OrderMismatch,
-    #[error("only pending orders can be activated")]
-    OrderNotPending,
-    #[error("balance owner does not match order owner")]
-    OwnerMismatch,
-    #[error("balance coin does not match freeze requirement")]
-    CoinMismatch,
-    #[error(transparent)]
-    Balance(#[from] BalanceV2Error),
-    #[error(transparent)]
-    Entity(#[from] EntityError),
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -87,7 +65,7 @@ impl UseCase for ActivateSpotOrderV7UseCase {
         let requirement = state.order.freeze_requirement().map_err(|error| {
             ActivateSpotOrderV7Error::Entity(EntityError::Custom(error.to_string()))
         })?;
-        if state.balance.coin_idx() != u64::from(freeze_amount(requirement).0.index()) {
+        if state.balance.coin_idx() != u64::from(requirement.currency().index()) {
             return Err(ActivateSpotOrderV7Error::CoinMismatch);
         }
         Ok(())
@@ -98,33 +76,13 @@ impl UseCase for ActivateSpotOrderV7UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let mut order_after = state.order.clone();
-        let (_, output) =
-            order_after.transition(SpotOrderV7Event::Activate { timestamp: cmd.logical_ts() })?;
-        let SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }) = output
-        else {
-            return Err(
-                EntityError::Custom("activate event produced mismatched output".into()).into()
-            );
-        };
-        let (coin, amount) = freeze_amount(freeze_requirement);
-        if state.balance.coin_idx() != u64::from(coin.index()) {
-            return Err(ActivateSpotOrderV7Error::CoinMismatch);
-        }
-        let mut balance_after = state.balance.clone();
-        balance_after.apply(BalanceV2Event::Freeze { amount, timestamp: cmd.logical_ts() })?;
-        Ok(ActivateSpotOrderV7AfterChanges { order_after, balance_after, freeze_requirement })
+        let (order_after, balance_after) = SpotOrderV7DomainService::freeze(
+            state.order.clone(),
+            state.balance.clone(),
+            cmd.logical_ts(),
+        )?;
+        Ok(ActivateSpotOrderV7AfterChanges { order_after, balance_after })
     }
-}
-
-fn freeze_amount(
-    requirement: SpotOrderV7FreezeRequirement,
-) -> (example_core_entity::account::coin::Coin, Decimal) {
-    let amount = match requirement {
-        SpotOrderV7FreezeRequirement::Buy { total_quote, .. } => total_quote,
-        SpotOrderV7FreezeRequirement::Sell { base_quantity } => base_quantity,
-    };
-    (amount.currency(), amount.amount())
 }
 
 impl StateDiff for ActivateSpotOrderV7UseCase {
@@ -137,7 +95,6 @@ impl StateDiff for ActivateSpotOrderV7UseCase {
         Ok(ActivateSpotOrderV7Changes {
             updated_order: UpdatedEntityPair::new(state.order, after.order_after),
             updated_balance: UpdatedEntityPair::new(state.balance, after.balance_after),
-            freeze_requirement: after.freeze_requirement,
         })
     }
 }
@@ -148,5 +105,72 @@ impl ReplayableChanges for ActivateSpotOrderV7Changes {
             self.updated_order.to_replayable_event()?,
             self.updated_balance.to_replayable_event()?,
         ])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_entity::LogEntrySequencer;
+    use example_core_entity::account::coin::Coin;
+    use example_core_entity::account::symbol::Symbol;
+    use example_core_entity::entity::common::{OrderBase, UserId};
+    use example_core_entity::OrderSide;
+    use rust_decimal::Decimal;
+
+    use super::*;
+
+    const ORDER_ID: u64 = 7;
+    const OWNER_ID: u64 = 11;
+
+    fn command() -> LogEntry<ActivateSpotOrderV7Cmd> {
+        LogEntrySequencer::from_metadata(
+            1,
+            500,
+            1,
+            1,
+            ActivateSpotOrderV7Cmd { order_id: ORDER_ID },
+        )
+    }
+
+    fn state(status: SpotOrderStatus, owner_id: u64, coin: Coin) -> ActivateSpotOrderV7State {
+        let order = SpotOrderV7::from_record(OrderBase {
+            owner: UserId(OWNER_ID),
+            order_id: ORDER_ID,
+            symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+            side: OrderSide::Buy,
+            limit_px: Decimal::from(10),
+            size: Decimal::from(3),
+            orig_size: Decimal::from(3),
+            status,
+            ..OrderBase::default()
+        })
+        .unwrap();
+        let balance = BalanceV2::new(owner_id, 99, u64::from(coin.index()), 100, 0, 1, 100);
+        ActivateSpotOrderV7State { order, balance }
+    }
+
+    #[test]
+    fn rejects_non_pending_owner_mismatch_and_coin_mismatch() {
+        let cases = [
+            (
+                state(SpotOrderStatus::Open, OWNER_ID, Coin::USDT),
+                ActivateSpotOrderV7Error::OrderNotPending,
+            ),
+            (
+                state(SpotOrderStatus::Pending, OWNER_ID + 1, Coin::USDT),
+                ActivateSpotOrderV7Error::OwnerMismatch,
+            ),
+            (
+                state(SpotOrderStatus::Pending, OWNER_ID, Coin::BTC),
+                ActivateSpotOrderV7Error::CoinMismatch,
+            ),
+        ];
+
+        for (state, expected) in cases {
+            assert_eq!(
+                ActivateSpotOrderV7UseCase.validate_state_given(&command(), &state),
+                Err(expected)
+            );
+        }
     }
 }

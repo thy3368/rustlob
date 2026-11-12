@@ -4,8 +4,9 @@ use rust_decimal::Decimal;
 
 use super::{
     MatchSpotOrderV7Input, MatchSpotOrderV7Outcome, SpotOrderV7, SpotOrderV7Event,
-    SpotOrderV7FreezeRequirement, SpotOrderV7Output,
+    SpotOrderV7FreezeRequirement, SpotOrderV7HoldAdjustment, SpotOrderV7Output,
 };
+use crate::account::coin::Coin;
 use crate::entity::common::common_order::OrderBase;
 use crate::{OrderSide, OrderTif, SpotOrderStatus};
 
@@ -215,6 +216,136 @@ fn modify_preserves_status_and_updates_order_facts(#[case] status: SpotOrderStat
     assert_eq!(subject.order_base().size, expected_remaining);
     assert_eq!(subject.order_base().version, 8);
     assert_eq!(subject.order_base().updated_at, EVENT_TIMESTAMP);
+}
+
+#[rstest]
+#[case(OrderSide::Buy, Coin::USDT)]
+#[case(OrderSide::Sell, Coin::BTC)]
+fn pending_modify_reports_unchanged_with_held_currency(
+    #[case] side: OrderSide,
+    #[case] expected_currency: Coin,
+) {
+    let mut subject = order(1, side, 2, 2, SpotOrderStatus::Pending, 7);
+
+    let (_, output) = subject
+        .transition(SpotOrderV7Event::Modify {
+            price: Decimal::from(105),
+            size: Decimal::from(3),
+            tif: None,
+            cloid: None,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+
+    let SpotOrderV7Output::Modified(output) = output else { panic!("unexpected output") };
+    assert_eq!(
+        output.hold_adjustment,
+        SpotOrderV7HoldAdjustment::Unchanged { currency: expected_currency }
+    );
+}
+
+#[test]
+fn active_buy_modify_reports_increase_using_remaining_size_and_unused_fee() {
+    let mut record = order_record(1, OrderSide::Buy, 3, 1, SpotOrderStatus::PartiallyFilled, 7);
+    record.buy_quote_fee_reserve_limit = Decimal::from(5);
+    record.buy_quote_fee_reserve_consumed = Decimal::from(2);
+    let mut subject = SpotOrderV7::from_record(record).unwrap();
+
+    let (_, output) = subject
+        .transition(SpotOrderV7Event::Modify {
+            price: Decimal::from(110),
+            size: Decimal::from(4),
+            tif: None,
+            cloid: None,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+
+    let SpotOrderV7Output::Modified(output) = output else { panic!("unexpected output") };
+    let SpotOrderV7HoldAdjustment::Increase { amount } = output.hold_adjustment else {
+        panic!("expected increase")
+    };
+    assert_eq!(amount.currency(), Coin::USDT);
+    assert_eq!(amount.amount(), Decimal::from(120));
+}
+
+#[test]
+fn active_buy_modify_reports_decrease_and_unchanged_deltas() {
+    let mut record = order_record(1, OrderSide::Buy, 2, 2, SpotOrderStatus::Open, 7);
+    record.buy_quote_fee_reserve_limit = Decimal::from(5);
+    record.buy_quote_fee_reserve_consumed = Decimal::from(2);
+
+    let mut decreased = SpotOrderV7::from_record(record.clone()).unwrap();
+    let (_, output) = decreased
+        .transition(SpotOrderV7Event::Modify {
+            price: Decimal::from(90),
+            size: Decimal::from(2),
+            tif: None,
+            cloid: None,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+    let SpotOrderV7Output::Modified(output) = output else { panic!("unexpected output") };
+    let SpotOrderV7HoldAdjustment::Decrease { amount } = output.hold_adjustment else {
+        panic!("expected decrease")
+    };
+    assert_eq!(amount.amount(), Decimal::from(20));
+
+    let mut unchanged = SpotOrderV7::from_record(record).unwrap();
+    let (_, output) = unchanged
+        .transition(SpotOrderV7Event::Modify {
+            price: Decimal::from(50),
+            size: Decimal::from(4),
+            tif: None,
+            cloid: None,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+    let SpotOrderV7Output::Modified(output) = output else { panic!("unexpected output") };
+    assert_eq!(
+        output.hold_adjustment,
+        SpotOrderV7HoldAdjustment::Unchanged { currency: Coin::USDT }
+    );
+}
+
+#[rstest]
+#[case(4, SpotOrderV7HoldAdjustment::Increase { amount: crate::account::coin::CoinAmount::new(Coin::BTC, Decimal::ONE).unwrap() })]
+#[case(2, SpotOrderV7HoldAdjustment::Decrease { amount: crate::account::coin::CoinAmount::new(Coin::BTC, Decimal::ONE).unwrap() })]
+fn active_sell_modify_reports_remaining_base_delta(
+    #[case] new_size: i64,
+    #[case] expected: SpotOrderV7HoldAdjustment,
+) {
+    let mut subject = order(1, OrderSide::Sell, 3, 3, SpotOrderStatus::Open, 7);
+
+    let (_, output) = subject
+        .transition(SpotOrderV7Event::Modify {
+            price: Decimal::ONE,
+            size: Decimal::from(new_size),
+            tif: None,
+            cloid: None,
+            timestamp: EVENT_TIMESTAMP,
+        })
+        .unwrap();
+
+    let SpotOrderV7Output::Modified(output) = output else { panic!("unexpected output") };
+    assert_eq!(output.hold_adjustment, expected);
+}
+
+#[test]
+fn hold_requirement_arithmetic_error_preserves_complete_order() {
+    let mut subject = order(1, OrderSide::Buy, 1, 1, SpotOrderStatus::Open, 7);
+    let before = subject.clone();
+
+    let result = subject.transition(SpotOrderV7Event::Modify {
+        price: Decimal::MAX,
+        size: Decimal::from(2),
+        tif: None,
+        cloid: None,
+        timestamp: EVENT_TIMESTAMP,
+    });
+
+    assert!(result.is_err());
+    assert_eq!(subject, before);
 }
 
 #[rstest]

@@ -12,5 +12,5 @@ pub use spot_order_v7::{
     ActivateSpotOrderV7Output, CancelSpotOrderV7Output, MatchSpotOrderV7Input,
     MatchSpotOrderV7Outcome, MatchSpotOrderV7Output, ModifySpotOrderV7Output,
     ReplaceOrFillSpotOrderV7Output, SpotOrderV7, SpotOrderV7Event, SpotOrderV7FreezeRequirement,
-    SpotOrderV7Output,
+    SpotOrderV7HoldAdjustment, SpotOrderV7Output,
 };
