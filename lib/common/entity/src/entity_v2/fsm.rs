@@ -3,7 +3,9 @@
 /// 实现应先完成领域校验和派生，再提交实体状态；失败时不得留下部分变更。
 pub trait Fsm {
     type State;
-    type Event;
+
+    ///内部业务事件，不可变唯一事实，驱动状态变化的唯一口子
+    type BizEvent;
     type Output;
     type Error;
 
@@ -11,11 +13,11 @@ pub trait Fsm {
 
     fn transition(
         &mut self,
-        event: Self::Event,
+        event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error>;
 
     ///直接调用
-    fn apply(&mut self, event: Self::Event) -> Result<(Self::State, Self::Output), Self::Error> {
+    fn apply(&mut self, event: Self::BizEvent) -> Result<(Self::State, Self::Output), Self::Error> {
         self.transition(event)
     }
 }
@@ -45,13 +47,13 @@ mod tests {
 
     impl Fsm for Machine {
         type State = State;
-        type Event = Event;
+        type BizEvent = Event;
         type Output = u64;
         type Error = InvalidTransition;
 
         fn transition(
             &mut self,
-            event: Self::Event,
+            event: Self::BizEvent,
         ) -> Result<(Self::State, Self::Output), Self::Error> {
             match (self.state, event) {
                 (State::Ready, Event::Inc) => {
