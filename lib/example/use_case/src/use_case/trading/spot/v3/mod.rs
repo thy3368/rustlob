@@ -23,6 +23,8 @@ pub use place_only_spot_order_v3::{
 };
 
 pub mod pipeline;
+pub mod spot_order_v7_domain_service;
+
 pub use activate_spot_order_v7::{
     ActivateSpotOrderV7AfterChanges, ActivateSpotOrderV7Changes, ActivateSpotOrderV7Cmd,
     ActivateSpotOrderV7Error, ActivateSpotOrderV7State, ActivateSpotOrderV7UseCase,
