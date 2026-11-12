@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use base_types_v2::Symbol;
 use common_entity::EntityReplayableEvent;
@@ -61,7 +61,7 @@ pub struct LocalLobBtree<O: LobOrder> {
     /// 订单存储池
     orders: Vec<Option<OrderNode<O>>>,
     /// 订单ID到存储池索引的映射
-    order_index: BTreeMap<OrderId, usize>,
+    order_index: HashMap<OrderId, usize>,
     /// 最佳买价（最高买入价）
     bid_max: Option<Px>,
     /// 最佳卖价（最低卖出价）
