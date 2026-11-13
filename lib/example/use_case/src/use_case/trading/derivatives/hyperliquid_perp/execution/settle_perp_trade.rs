@@ -308,6 +308,7 @@ mod tests {
             8,
             7,
             6,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             SettleHyperliquidPerpTradeCmd {
                 operator: UserId(99),
                 settlement_batch_id: 1,

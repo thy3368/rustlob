@@ -565,7 +565,14 @@ mod tests {
     }
 
     fn command(payload: PlaceSpotOrderV3Cmd) -> LogEntry<PlaceSpotOrderV3Cmd> {
-        LogEntrySequencer::from_metadata(1, 100, 1, 1, payload)
+        LogEntrySequencer::from_metadata(
+            1,
+            100,
+            1,
+            1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
+            payload,
+        )
     }
 
     fn pending_order(order_id: u64, side: OrderSide, lsn: u64) -> SpotOrderV7 {

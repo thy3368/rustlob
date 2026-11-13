@@ -160,6 +160,7 @@ mod tests {
             1,
             1,
             1,
+            "trader-1".to_owned(),
             DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 0 },
         ));
 
@@ -174,6 +175,7 @@ mod tests {
             1,
             1,
             1,
+            "trader-1".to_owned(),
             DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
         );
         let changes = use_case.compute_state_diff(&command, sample_state())?;

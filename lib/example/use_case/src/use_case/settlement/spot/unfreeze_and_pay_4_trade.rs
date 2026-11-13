@@ -322,6 +322,7 @@ mod tests {
             LOGICAL_TS,
             1,
             1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             UnFreezeSpotOrderV2Cmd { trade_id: 7 },
         )
     }

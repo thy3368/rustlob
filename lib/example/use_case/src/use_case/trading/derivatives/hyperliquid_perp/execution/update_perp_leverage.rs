@@ -132,6 +132,7 @@ mod tests {
             42,
             1,
             1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             UpdateHyperliquidPerpLeverageCmd {
                 user_id: UserId(7),
                 symbol: Symbol::new(3, Coin::BTC, Coin::USDC),

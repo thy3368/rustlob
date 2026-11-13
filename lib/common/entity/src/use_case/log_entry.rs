@@ -15,6 +15,8 @@ pub struct LogEntry<P> {
     client_id: u64,
     /// 在客户端标识内唯一的请求序号。
     request_id: u64,
+    /// 发起该业务命令的原始用户标识。
+    user_id: String,
     /// 完整的业务命令或其他日志负载。
     payload: P,
 }
@@ -59,18 +61,20 @@ impl<P> LogEntry<P> {
         logical_ts: u64,
         client_id: u64,
         request_id: u64,
+        user_id: String,
         payload: P,
     ) -> Self {
-        Self { t, p, lsn, logical_ts, client_id, request_id, payload }
+        Self { t, p, lsn, logical_ts, client_id, request_id, user_id, payload }
     }
     pub(crate) fn new(
         lsn: u64,
         logical_ts: u64,
         client_id: u64,
         request_id: u64,
+        user_id: String,
         payload: P,
     ) -> Self {
-        Self { t: 0, p: 0, lsn, logical_ts, client_id, request_id, payload }
+        Self { t: 0, p: 0, lsn, logical_ts, client_id, request_id, user_id, payload }
     }
 
     pub const fn lsn(&self) -> u64 {
@@ -84,6 +88,9 @@ impl<P> LogEntry<P> {
     }
     pub const fn request_id(&self) -> u64 {
         self.request_id
+    }
+    pub fn user_id(&self) -> &str {
+        &self.user_id
     }
     pub const fn topic(&self) -> u8 {
         self.t

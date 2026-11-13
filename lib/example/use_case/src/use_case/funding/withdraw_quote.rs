@@ -168,6 +168,7 @@ mod tests {
             1,
             1,
             1,
+            "trader-1".to_owned(),
             WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 0 },
         ));
 
@@ -182,6 +183,7 @@ mod tests {
             1,
             1,
             1,
+            "trader-1".to_owned(),
             WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 2_000 },
         );
         let result = use_case.validate_state_given(&command, &sample_state());
@@ -197,6 +199,7 @@ mod tests {
             1,
             1,
             1,
+            "trader-1".to_owned(),
             WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
         );
         let changes = use_case.compute_state_diff(&command, sample_state())?;

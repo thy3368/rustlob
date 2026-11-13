@@ -128,6 +128,7 @@ mod tests {
             NOW_MS * 1_000_000,
             7,
             1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             ScheduleHyperliquidCancelCmd { user_id: UserId(7), cancel_at_ms, now_ms: NOW_MS },
         )
     }

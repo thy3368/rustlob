@@ -110,7 +110,14 @@ mod tests {
     const LOGICAL_TS: u64 = 500;
 
     fn command(order_id: u64) -> LogEntry<UnFreezeSpotOrderV2Cmd> {
-        LogEntrySequencer::from_metadata(1, LOGICAL_TS, 1, 1, UnFreezeSpotOrderV2Cmd { order_id })
+        LogEntrySequencer::from_metadata(
+            1,
+            LOGICAL_TS,
+            1,
+            1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
+            UnFreezeSpotOrderV2Cmd { order_id },
+        )
     }
 
     fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {

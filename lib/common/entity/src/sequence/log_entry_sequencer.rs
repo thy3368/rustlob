@@ -2,6 +2,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::LogEntry;
 
+pub const SYSTEM_USER_ID: &str = "system";
+
 /// 为日志条目分配序号或时间戳失败时返回的错误。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogEntrySequenceError {
@@ -52,9 +54,10 @@ impl LogEntrySequencer {
         logical_ts: u64,
         client_id: u64,
         request_id: u64,
+        user_id: String,
         payload: P,
     ) -> LogEntry<P> {
-        LogEntry::new(lsn, logical_ts, client_id, request_id, payload)
+        LogEntry::new(lsn, logical_ts, client_id, request_id, user_id, payload)
     }
 
     pub fn from_metadata_with_topic<P>(
@@ -64,9 +67,10 @@ impl LogEntrySequencer {
         logical_ts: u64,
         client_id: u64,
         request_id: u64,
+        user_id: String,
         payload: P,
     ) -> LogEntry<P> {
-        LogEntry::new_with_topic(t, p, lsn, logical_ts, client_id, request_id, payload)
+        LogEntry::new_with_topic(t, p, lsn, logical_ts, client_id, request_id, user_id, payload)
     }
 
     /// 为子命令复用父日志的元数据，不分配新的序号。
@@ -78,6 +82,7 @@ impl LogEntrySequencer {
             parent.logical_ts(),
             parent.client_id(),
             parent.request_id(),
+            parent.user_id().to_owned(),
             payload,
         )
     }
@@ -108,9 +113,10 @@ impl LogEntrySequencer {
         &mut self,
         client_id: u64,
         request_id: u64,
+        user_id: String,
         payload: P,
     ) -> Result<LogEntry<P>, LogEntrySequenceError> {
-        self.sequence_at(SystemTime::now(), client_id, request_id, payload)
+        self.sequence_at(SystemTime::now(), client_id, request_id, user_id, payload)
     }
 
     fn sequence_at<P>(
@@ -118,6 +124,7 @@ impl LogEntrySequencer {
         now: SystemTime,
         client_id: u64,
         request_id: u64,
+        user_id: String,
         payload: P,
     ) -> Result<LogEntry<P>, LogEntrySequenceError> {
         let unix_nanos = now
@@ -135,7 +142,7 @@ impl LogEntrySequencer {
 
         self.next_lsn = lsn;
         self.last_logical_ts = logical_ts;
-        Ok(Self::from_metadata(lsn, logical_ts, client_id, request_id, payload))
+        Ok(Self::from_metadata(lsn, logical_ts, client_id, request_id, user_id, payload))
     }
 }
 
@@ -152,8 +159,8 @@ mod tests {
     #[test]
     fn first_and_continuous_allocations_are_ordered() {
         let mut sequencer = LogEntrySequencer::new(None);
-        let first = sequencer.sequence_at(at(10), 1, 2, "a").unwrap();
-        let second = sequencer.sequence_at(at(10), 3, 4, "b").unwrap();
+        let first = sequencer.sequence_at(at(10), 1, 2, "alice".into(), "a").unwrap();
+        let second = sequencer.sequence_at(at(10), 3, 4, "bob".into(), "b").unwrap();
         assert_eq!((first.lsn(), first.logical_ts()), (1, 10));
         assert_eq!((second.lsn(), second.logical_ts()), (2, 11));
     }
@@ -161,14 +168,14 @@ mod tests {
     #[test]
     fn clock_stall_or_regression_still_advances_logical_time() {
         let mut sequencer = LogEntrySequencer::new(None);
-        assert_eq!(sequencer.sequence_at(at(100), 0, 0, ()).unwrap().logical_ts(), 100);
-        assert_eq!(sequencer.sequence_at(at(90), 0, 1, ()).unwrap().logical_ts(), 101);
+        assert_eq!(sequencer.sequence_at(at(100), 0, 0, SYSTEM_USER_ID.into(), ()).unwrap().logical_ts(), 100);
+        assert_eq!(sequencer.sequence_at(at(90), 0, 1, SYSTEM_USER_ID.into(), ()).unwrap().logical_ts(), 101);
     }
 
     #[test]
     fn recovers_from_last_committed_entry() {
         let mut sequencer = LogEntrySequencer::new(Some((41, 900)));
-        let entry = sequencer.sequence_at(at(800), 1, 1, ()).unwrap();
+        let entry = sequencer.sequence_at(at(800), 1, 1, SYSTEM_USER_ID.into(), ()).unwrap();
         assert_eq!((entry.lsn(), entry.logical_ts()), (42, 901));
     }
 
@@ -176,33 +183,34 @@ mod tests {
     fn failures_do_not_change_state() {
         let mut sequencer = LogEntrySequencer::new(Some((7, 20)));
         assert_eq!(
-            sequencer.sequence_at(UNIX_EPOCH - Duration::from_nanos(1), 0, 0, ()),
+            sequencer.sequence_at(UNIX_EPOCH - Duration::from_nanos(1), 0, 0, SYSTEM_USER_ID.into(), ()),
             Err(LogEntrySequenceError::ClockBeforeUnixEpoch)
         );
-        assert_eq!(sequencer.sequence_at(at(21), 0, 0, ()).unwrap().lsn(), 8);
+        assert_eq!(sequencer.sequence_at(at(21), 0, 0, SYSTEM_USER_ID.into(), ()).unwrap().lsn(), 8);
     }
 
     #[test]
     fn detects_timestamp_and_lsn_overflow() {
         let mut timestamp = LogEntrySequencer::new(Some((1, u64::MAX)));
         assert_eq!(
-            timestamp.sequence_at(at(0), 0, 0, ()),
+            timestamp.sequence_at(at(0), 0, 0, SYSTEM_USER_ID.into(), ()),
             Err(LogEntrySequenceError::LogicalTimestampOverflow)
         );
         let mut lsn = LogEntrySequencer::new(Some((u64::MAX, 0)));
-        assert_eq!(lsn.sequence_at(at(0), 0, 0, ()), Err(LogEntrySequenceError::LsnOverflow));
+        assert_eq!(lsn.sequence_at(at(0), 0, 0, SYSTEM_USER_ID.into(), ()), Err(LogEntrySequenceError::LsnOverflow));
     }
 
     #[test]
     fn existing_metadata_and_derived_entries_do_not_advance_checkpoint() {
         let sequencer = LogEntrySequencer::new(Some((7, 20)));
-        let parent = LogEntrySequencer::from_metadata(42, 123, 3, 4, "parent");
+        let parent = LogEntrySequencer::from_metadata(42, 123, 3, 4, "alice".into(), "parent");
         let child = LogEntrySequencer::derive(&parent, String::from("child"));
         assert_eq!(
             (child.lsn(), child.logical_ts(), child.client_id(), child.request_id()),
             (42, 123, 3, 4)
         );
         assert_eq!(child.into_payload(), "child");
+        assert_eq!(parent.user_id(), "alice");
         assert_eq!(sequencer.last_committed(), Some((7, 20)));
     }
 }

@@ -220,6 +220,7 @@ mod tests {
             LOGICAL_TS,
             7,
             1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd { user_id: USER, now_ms: NOW_MS },
         )
     }

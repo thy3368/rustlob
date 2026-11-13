@@ -42,6 +42,8 @@ pub enum CancelSpotOrderV3Error {
     EmptyCloid,
     #[error("order lookup does not match the loaded order")]
     OrderLookupMismatch,
+    #[error("loaded order owner does not match the command user")]
+    OwnerMismatch,
     #[error("loaded order has no client order id")]
     OrderCloidMissing,
     #[error("order is not cancelable")]
@@ -100,6 +102,9 @@ impl UseCase for CancelSpotOrderV3UseCase {
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
         let order = state.order.order_base();
+        if order.owner.0 != common_entity::stable_string_entity_id(cmd.user_id()) {
+            return Err(CancelSpotOrderV3Error::OwnerMismatch);
+        }
         match &cmd.payload().order_id {
             OrderId::Oid(oid) if *oid != order.order_id => {
                 return Err(CancelSpotOrderV3Error::OrderLookupMismatch);
@@ -198,12 +203,19 @@ mod tests {
 
     use super::*;
 
-    const OWNER: u64 = 11;
+    const USER_ID: &str = "trader-1";
     const OID: u64 = 7;
     const LOGICAL_TS: u64 = 500;
 
     fn command(order_id: OrderId) -> LogEntry<CancelSpotOrderV3Cmd> {
-        LogEntrySequencer::from_metadata(9, LOGICAL_TS, 1, 2, CancelSpotOrderV3Cmd { order_id })
+        LogEntrySequencer::from_metadata(
+            9,
+            LOGICAL_TS,
+            1,
+            2,
+            USER_ID.to_owned(),
+            CancelSpotOrderV3Cmd { order_id },
+        )
     }
 
     fn order(
@@ -215,7 +227,7 @@ mod tests {
         cloid: Option<&str>,
     ) -> SpotOrderV7 {
         SpotOrderV7::from_record(OrderBase {
-            owner: OWNER.into(),
+            owner: common_entity::stable_string_entity_id(USER_ID).into(),
             order_id: OID,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
             side,
@@ -261,7 +273,7 @@ mod tests {
         for lookup in [OrderId::Oid(OID), OrderId::Cloid("client-7".into())] {
             let given = state(
                 order(OrderSide::Buy, SpotOrderStatus::Open, 2, 5, 2, Some("client-7")),
-                balance(Coin::USDT, OWNER, 7, 23),
+                balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 7, 23),
             );
 
             let changes = CancelSpotOrderV3UseCase
@@ -292,7 +304,7 @@ mod tests {
     fn partially_filled_sell_releases_only_remaining_base() {
         let given = state(
             order(OrderSide::Sell, SpotOrderStatus::PartiallyFilled, 1, 0, 0, Some("client-7")),
-            balance(Coin::BTC, OWNER, 4, 1),
+            balance(Coin::BTC, common_entity::stable_string_entity_id(USER_ID), 4, 1),
         );
 
         let changed = CancelSpotOrderV3UseCase
@@ -307,7 +319,7 @@ mod tests {
     fn pending_order_projects_only_order_and_keeps_balance_version() {
         let given = state(
             order(OrderSide::Buy, SpotOrderStatus::Pending, 3, 2, 0, Some("client-7")),
-            balance(Coin::USDT, OWNER, 20, 32),
+            balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 20, 32),
         );
         let balance_before = given.balance.clone();
 
@@ -325,7 +337,7 @@ mod tests {
         let valid = || {
             state(
                 order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7")),
-                balance(Coin::USDT, OWNER, 0, 20),
+                balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 20),
             )
         };
         assert_eq!(
@@ -343,7 +355,7 @@ mod tests {
                 OrderId::Cloid("client-7".into()),
                 state(
                     order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, None),
-                    balance(Coin::USDT, OWNER, 0, 20),
+                    balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 20),
                 ),
                 CancelSpotOrderV3Error::OrderCloidMissing,
             ),
@@ -351,7 +363,7 @@ mod tests {
                 OrderId::Oid(OID),
                 state(
                     order(OrderSide::Buy, SpotOrderStatus::Filled, 0, 0, 0, Some("client-7")),
-                    balance(Coin::USDT, OWNER, 0, 0),
+                    balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 0),
                 ),
                 CancelSpotOrderV3Error::OrderNotCancelable,
             ),
@@ -367,7 +379,7 @@ mod tests {
                 OrderId::Oid(OID),
                 state(
                     order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7")),
-                    balance(Coin::BTC, OWNER, 0, 20),
+                    balance(Coin::BTC, common_entity::stable_string_entity_id(USER_ID), 0, 20),
                 ),
                 CancelSpotOrderV3Error::CoinMismatch,
             ),
@@ -383,7 +395,7 @@ mod tests {
     fn insufficient_frozen_balance_returns_error_without_mutating_input() {
         let given = state(
             order(OrderSide::Buy, SpotOrderStatus::Open, 2, 5, 2, Some("client-7")),
-            balance(Coin::USDT, OWNER, 7, 22),
+            balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 7, 22),
         );
         let before = given.clone();
 
@@ -401,7 +413,15 @@ mod tests {
             .clone();
         record.lsn = 9;
         let given =
-            state(SpotOrderV7::from_record(record).unwrap(), balance(Coin::USDT, OWNER, 0, 20));
+            state(
+                SpotOrderV7::from_record(record).unwrap(),
+                balance(
+                    Coin::USDT,
+                    common_entity::stable_string_entity_id(USER_ID),
+                    0,
+                    20,
+                ),
+            );
 
         assert_eq!(
             CancelSpotOrderV3UseCase.validate_state_given(&command(OrderId::Oid(OID)), &given),

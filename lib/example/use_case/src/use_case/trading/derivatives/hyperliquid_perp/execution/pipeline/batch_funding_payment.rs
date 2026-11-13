@@ -305,6 +305,7 @@ mod tests {
             1_717_977_600_000,
             7,
             9,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             UserFundingCmd {
                 funding_batch_id: 1,
                 funding_time: 1_717_977_600_000,

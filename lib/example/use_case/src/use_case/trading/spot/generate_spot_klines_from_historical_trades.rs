@@ -236,6 +236,7 @@ mod tests {
             1,
             1,
             1,
+            "market-data".to_owned(),
             GenerateSpotKlinesFromHistoricalTradesCmd {
                 party_id: "market-data".into(),
                 symbol: symbol(),
