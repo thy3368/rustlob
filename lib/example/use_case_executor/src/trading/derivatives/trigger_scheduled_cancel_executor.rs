@@ -105,6 +105,7 @@ mod tests {
             NOW_MS,
             1,
             2,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd { user_id: USER, now_ms: NOW_MS },
         );
         let outbound = FakeOutbound::due();

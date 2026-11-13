@@ -76,6 +76,7 @@ where
                     event.logical_ts,
                     0,
                     order_id,
+                    common_entity::SYSTEM_USER_ID.to_owned(),
                     command,
                 ),
                 &self.outbound,

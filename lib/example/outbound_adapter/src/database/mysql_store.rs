@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use common_entity::stable_string_entity_id;
 use example_core_use_case::entity::account::coin::Coin;
 use example_core_use_case::entity::account::symbol::Symbol;
-use example_core_use_case::entity::common::common_order::{
-    PriceType, OrderTrigger, OrderBase,
-};
+use example_core_use_case::entity::common::common_order::{OrderBase, OrderTrigger, PriceType};
 use example_core_use_case::{
     BalanceV2, MarketRules, OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
     UserId,
@@ -307,10 +305,7 @@ fn decode_side_mysql(value: &str) -> Option<OrderSide> {
     }
 }
 
-fn decode_execution_mysql(
-    execution: &str,
-    time_in_force: &str,
-) -> Option<(PriceType, OrderTif)> {
+fn decode_execution_mysql(execution: &str, time_in_force: &str) -> Option<(PriceType, OrderTif)> {
     let tif = match time_in_force {
         "gtc" => OrderTif::Gtc,
         "ioc" => OrderTif::Ioc,

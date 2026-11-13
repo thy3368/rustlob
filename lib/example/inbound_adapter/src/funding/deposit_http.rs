@@ -32,11 +32,13 @@ pub struct DepositQuoteHttpRequest {
 
 impl DepositQuoteHttpRequest {
     fn into_log_entry(self) -> LogEntry<DepositQuoteCmd> {
+        let user_id = self.trader_id.clone();
         LogEntrySequencer::from_metadata(
             1,
             1,
             1,
             1,
+            user_id,
             DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
         )
     }

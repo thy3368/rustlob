@@ -392,6 +392,27 @@ mod tests {
     }
 
     #[test]
+    fn rejects_order_owned_by_a_different_command_user() {
+        let given = state(
+            order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7")),
+            balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 20),
+        );
+        let command = LogEntrySequencer::from_metadata(
+            9,
+            LOGICAL_TS,
+            1,
+            2,
+            "other-user".to_owned(),
+            CancelSpotOrderV3Cmd { order_id: OrderId::Oid(OID) },
+        );
+
+        assert_eq!(
+            CancelSpotOrderV3UseCase.validate_state_given(&command, &given),
+            Err(CancelSpotOrderV3Error::OwnerMismatch)
+        );
+    }
+
+    #[test]
     fn insufficient_frozen_balance_returns_error_without_mutating_input() {
         let given = state(
             order(OrderSide::Buy, SpotOrderStatus::Open, 2, 5, 2, Some("client-7")),
@@ -412,16 +433,10 @@ mod tests {
             .order_base()
             .clone();
         record.lsn = 9;
-        let given =
-            state(
-                SpotOrderV7::from_record(record).unwrap(),
-                balance(
-                    Coin::USDT,
-                    common_entity::stable_string_entity_id(USER_ID),
-                    0,
-                    20,
-                ),
-            );
+        let given = state(
+            SpotOrderV7::from_record(record).unwrap(),
+            balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 20),
+        );
 
         assert_eq!(
             CancelSpotOrderV3UseCase.validate_state_given(&command(OrderId::Oid(OID)), &given),

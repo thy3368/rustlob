@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
 
 use example_core_use_case::account::spot_account_v2::SpotAccount;
-use example_core_use_case::{
-    BalanceV2, PerpOrderV3, PerpPositionV3, SpotOrderV7,
-};
+use example_core_use_case::{BalanceV2, PerpOrderV3, PerpPositionV3, SpotOrderV7};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 /// 三户模型

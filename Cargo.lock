@@ -3047,6 +3047,7 @@ dependencies = [
  "rocksdb",
  "rust_decimal",
  "serde",
+ "tempfile",
  "thiserror 1.0.69",
 ]
 

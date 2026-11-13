@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use crate::lob::LobOrder;
 use crate::LobError;
+use crate::lob::LobOrder;
 
 pub trait LobRepo {
     type Lob;

@@ -98,7 +98,12 @@ impl Request2Command<CancelSpotOrderV2UseCase> for SpotOrderV2CancelExecutionSpe
             lookup: request.lookup.clone(),
         };
         common_entity::LogEntrySequencer::from_metadata(
-            lsn, logical_ts, client_id, request_id, payload,
+            lsn,
+            logical_ts,
+            client_id,
+            request_id,
+            request.party_id.clone(),
+            payload,
         )
     }
 }

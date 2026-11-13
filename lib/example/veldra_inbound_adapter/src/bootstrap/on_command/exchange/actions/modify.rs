@@ -159,7 +159,12 @@ impl Request2Command<ModifySpotOrderV2UseCase> for SpotOrderV2ModifyExecutionSpe
             cloid: request.cloid.clone(),
         };
         common_entity::LogEntrySequencer::from_metadata(
-            lsn, logical_ts, client_id, request_id, payload,
+            lsn,
+            logical_ts,
+            client_id,
+            request_id,
+            request.party_id.clone(),
+            payload,
         )
     }
 }

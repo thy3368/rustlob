@@ -132,6 +132,7 @@ mod tests {
                         index as u64 + 1,
                         1,
                         index as u64 + 1,
+                        common_entity::SYSTEM_USER_ID.to_owned(),
                         payload,
                     )
                 })

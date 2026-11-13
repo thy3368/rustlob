@@ -32,11 +32,13 @@ pub struct WithdrawQuoteHttpRequest {
 
 impl WithdrawQuoteHttpRequest {
     fn into_log_entry(self) -> LogEntry<WithdrawQuoteCmd> {
+        let user_id = self.trader_id.clone();
         LogEntrySequencer::from_metadata(
             1,
             1,
             1,
             1,
+            user_id,
             WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
         )
     }

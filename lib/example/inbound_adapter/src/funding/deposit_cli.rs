@@ -64,11 +64,13 @@ impl ExampleBusinessErrorMapping for DepositQuoteError {
 
 impl DepositQuoteCliCommand {
     fn into_log_entry(self) -> common_entity::LogEntry<DepositQuoteCmd> {
+        let user_id = self.trader_id.clone();
         LogEntrySequencer::from_metadata(
             1,
             1,
             1,
             1,
+            user_id,
             DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
         )
     }

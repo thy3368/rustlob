@@ -1,15 +1,14 @@
 use std::path::Path;
 
 use common_entity::{LogEntry, StateSource, stable_string_entity_id};
-use example_core_entity::common::{OrderBase, identifiers::OrderId};
+use example_core_entity::common::OrderBase;
+use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{BalanceV2, OrderSide, SpotOrderV7};
-use example_core_use_case::use_case::trading::spot::v3::pipeline::cancel_spot_order::{
+use example_core_use_case::pipeline::cancel_spot_order::{
     CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
 };
 use rocksdb::{DB, Options, WriteBatch};
 use thiserror::Error;
-use example_core_use_case::BalanceV2;
-use example_core_use_case::common::OrderBase;
 
 const KEY_VERSION: u8 = 1;
 const OID_INDEX: u8 = 1;
@@ -126,7 +125,7 @@ impl StateSource<CancelSpotOrderV3UseCase> for CancelSpotOrderV3UseCaseRocksDB {
     ) -> Result<CancelSpotOrderV3State, Self::Error> {
         let user_id = cmd.user_id();
         let snapshot = self.db.snapshot();
-        let (oid, from_cloid) = match &cmd.order_id {
+        let (oid, from_cloid) = match &cmd.payload().order_id {
             OrderId::Oid(oid) => {
                 let bytes = snapshot.get(oid_key(user_id, *oid))?.ok_or_else(|| {
                     CancelSpotOrderV3RocksDbError::OrderNotFound { user_id: user_id.to_owned() }
@@ -166,10 +165,7 @@ impl StateSource<CancelSpotOrderV3UseCase> for CancelSpotOrderV3UseCaseRocksDB {
         });
         let order = SpotOrderV7::from_record(record)?;
         let balance_bytes = snapshot.get(balance_key(user_id, coin_idx))?.ok_or_else(|| {
-            CancelSpotOrderV3RocksDbError::BalanceNotFound {
-                user_id: user_id.to_owned(),
-                coin_idx,
-            }
+            CancelSpotOrderV3RocksDbError::BalanceNotFound { user_id: user_id.to_owned(), coin_idx }
         })?;
         let balance: BalanceV2 = bincode::deserialize(&balance_bytes)?;
         if balance.party_id() != expected {
@@ -216,4 +212,175 @@ fn balance_key(user_id: &str, coin_idx: u64) -> Vec<u8> {
     let mut key = prefix(BALANCE, user_id);
     key.extend_from_slice(&coin_idx.to_be_bytes());
     key
+}
+
+#[cfg(test)]
+mod tests {
+    use common_entity::{LogEntrySequencer, StateSource, stable_string_entity_id};
+    use example_core_entity::account::coin::Coin;
+    use example_core_entity::account::symbol::Symbol;
+    use example_core_entity::common::{OrderBase, OrderTrigger, PriceType};
+    use example_core_entity::{OrderGroupRelation, OrderTif, SpotOrderStatus};
+    use rust_decimal::Decimal;
+
+    use super::*;
+
+    const USER: &str = "trader-1";
+
+    fn order(user: &str, oid: u64, side: OrderSide, cloid: Option<&str>) -> SpotOrderV7 {
+        SpotOrderV7::from_record(OrderBase {
+            owner: stable_string_entity_id(user).into(),
+            order_id: oid,
+            symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+            side,
+            limit_px: Decimal::from(10),
+            size: Decimal::ONE,
+            orig_size: Decimal::ONE,
+            execution: PriceType::Limit,
+            tif: OrderTif::Gtc,
+            trigger: OrderTrigger::None,
+            trigger_px: None,
+            group_relation: OrderGroupRelation::Standalone,
+            is_position_tpsl: false,
+            reduce_only: false,
+            status: SpotOrderStatus::Open,
+            buy_quote_fee_reserve_limit: Decimal::ZERO,
+            buy_quote_fee_reserve_consumed: Decimal::ZERO,
+            cloid: cloid.map(str::to_owned),
+            created_at: 1,
+            updated_at: 1,
+            lsn: 1,
+        })
+        .unwrap()
+    }
+
+    fn balance(user: &str, coin: Coin) -> BalanceV2 {
+        let party = stable_string_entity_id(user);
+        BalanceV2::new(
+            party,
+            party,
+            u64::from(coin.index()),
+            Decimal::ZERO,
+            Decimal::from(10),
+            1,
+            1,
+        )
+    }
+
+    fn command(user: &str, order_id: OrderId) -> LogEntry<CancelSpotOrderV3Cmd> {
+        LogEntrySequencer::from_metadata(
+            9,
+            9,
+            1,
+            1,
+            user.to_owned(),
+            CancelSpotOrderV3Cmd { order_id },
+        )
+    }
+
+    #[test]
+    fn oid_and_cloid_load_the_same_buy_order_and_quote_balance() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
+        source.upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("c-7"))).unwrap();
+        source.upsert_balance(USER, &balance(USER, Coin::USDT)).unwrap();
+
+        let by_oid = source.load_given_state(&command(USER, OrderId::Oid(7))).unwrap();
+        let by_cloid =
+            source.load_given_state(&command(USER, OrderId::Cloid("c-7".into()))).unwrap();
+
+        assert_eq!(by_oid, by_cloid);
+        assert_eq!(by_oid.balance.coin_idx(), u64::from(Coin::USDT.index()));
+    }
+
+    #[test]
+    fn sell_loads_base_and_cloid_is_scoped_by_user() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
+        for (user, oid) in [("alice", 7), ("bob", 8)] {
+            source.upsert_order(user, &order(user, oid, OrderSide::Sell, Some("shared"))).unwrap();
+            source.upsert_balance(user, &balance(user, Coin::BTC)).unwrap();
+            let state =
+                source.load_given_state(&command(user, OrderId::Cloid("shared".into()))).unwrap();
+            assert_eq!(state.order.order_base().order_id, oid);
+            assert_eq!(state.balance.coin_idx(), u64::from(Coin::BTC.index()));
+        }
+    }
+
+    #[test]
+    fn cloid_change_removes_old_index_and_conflict_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
+        source.upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("old"))).unwrap();
+        source.upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("new"))).unwrap();
+
+        assert!(matches!(
+            source.load_given_state(&command(USER, OrderId::Cloid("old".into()))),
+            Err(CancelSpotOrderV3RocksDbError::OrderNotFound { .. })
+        ));
+        assert!(matches!(
+            source.upsert_order(USER, &order(USER, 8, OrderSide::Buy, Some("new"))),
+            Err(CancelSpotOrderV3RocksDbError::CloidConflict { existing_oid: 7, .. })
+        ));
+    }
+
+    #[test]
+    fn missing_and_corrupt_state_have_specific_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
+        assert!(matches!(
+            source.load_given_state(&command(USER, OrderId::Oid(7))),
+            Err(CancelSpotOrderV3RocksDbError::OrderNotFound { .. })
+        ));
+
+        source.upsert_order(USER, &order(USER, 7, OrderSide::Buy, None)).unwrap();
+        assert!(matches!(
+            source.load_given_state(&command(USER, OrderId::Oid(7))),
+            Err(CancelSpotOrderV3RocksDbError::BalanceNotFound { .. })
+        ));
+        source.db.put(order_key(USER, 7), b"corrupt").unwrap();
+        assert!(matches!(
+            source.load_given_state(&command(USER, OrderId::Oid(7))),
+            Err(CancelSpotOrderV3RocksDbError::Codec(_))
+        ));
+    }
+
+    #[test]
+    fn dangling_index_and_identity_mismatches_are_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
+        source.db.put(cloid_key(USER, "dangling"), bincode::serialize(&99u64).unwrap()).unwrap();
+        assert!(matches!(
+            source.load_given_state(&command(USER, OrderId::Cloid("dangling".into()))),
+            Err(CancelSpotOrderV3RocksDbError::DanglingCloidIndex { oid: 99, .. })
+        ));
+
+        let foreign_order = order("someone-else", 7, OrderSide::Buy, None);
+        source.db.put(oid_key(USER, 7), bincode::serialize(&7u64).unwrap()).unwrap();
+        source
+            .db
+            .put(order_key(USER, 7), bincode::serialize(foreign_order.order_base()).unwrap())
+            .unwrap();
+        assert!(matches!(
+            source.load_given_state(&command(USER, OrderId::Oid(7))),
+            Err(CancelSpotOrderV3RocksDbError::OrderOwnerMismatch { .. })
+        ));
+
+        let valid_order = order(USER, 7, OrderSide::Buy, None);
+        source
+            .db
+            .put(order_key(USER, 7), bincode::serialize(valid_order.order_base()).unwrap())
+            .unwrap();
+        source
+            .db
+            .put(
+                balance_key(USER, u64::from(Coin::USDT.index())),
+                bincode::serialize(&balance("someone-else", Coin::USDT)).unwrap(),
+            )
+            .unwrap();
+        assert!(matches!(
+            source.load_given_state(&command(USER, OrderId::Oid(7))),
+            Err(CancelSpotOrderV3RocksDbError::BalancePartyMismatch { .. })
+        ));
+    }
 }

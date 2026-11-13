@@ -420,6 +420,7 @@ mod tests {
             NOW_MS,
             1,
             1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             ScheduleHyperliquidCancelCmd {
                 user_id: USER,
                 cancel_at_ms: Some(DUE_MS),
@@ -442,6 +443,7 @@ mod tests {
             DUE_MS,
             0,
             USER.0,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd { user_id: USER, now_ms: DUE_MS },
         );
         UseCaseExecutor

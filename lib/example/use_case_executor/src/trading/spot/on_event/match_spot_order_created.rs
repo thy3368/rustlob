@@ -45,6 +45,7 @@ impl EntityReplayableEventHandler for MatchSpotOrderCreatedEventHandler {
             event.logical_ts,
             0,
             event.lsn,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             command,
         ))
         .map(Some)

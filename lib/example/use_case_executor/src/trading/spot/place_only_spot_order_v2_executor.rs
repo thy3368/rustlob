@@ -66,7 +66,9 @@ mod tests {
     use super::*;
 
     fn entry<P>(payload: P) -> LogEntry<P> {
-        common_entity::LogEntrySequencer::from_metadata(7, 100, 1, 2, payload)
+        common_entity::LogEntrySequencer::from_metadata(
+            7, 100, 1, 2, common_entity::SYSTEM_USER_ID.to_owned(), payload,
+        )
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]

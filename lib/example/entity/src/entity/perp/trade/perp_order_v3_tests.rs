@@ -104,10 +104,7 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
         panic!("expected filled outcome")
     };
     assert_eq!(filled_taker_order_after.comon_order.lsn, 1);
-    assert_eq!(
-        maker_orders_after.iter().map(|m| m.comon_order.lsn).collect::<Vec<_>>(),
-        [1, 1]
-    );
+    assert_eq!(maker_orders_after.iter().map(|m| m.comon_order.lsn).collect::<Vec<_>>(), [1, 1]);
     assert_eq!(created_trades.len(), 2);
     assert_eq!(created_trades[0].trade_base.trade_id, 7_000_001);
     assert_eq!(created_trades[0].trade_base.price, dec!(90));

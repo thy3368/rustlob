@@ -10,9 +10,8 @@ use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::use_case::trading::spot::v3::domain_service::place_order_pipeline::{
-    PlaceOrderPipeline, PlaceDomainServiceError, PlaceNormalSpotOrderV2Input,
-    PlaceNormalSpotOrderV3AfterChanges, PlaceTriggerSpotOrderV2Input,
-    PlaceTriggerSpotOrderV3AfterChanges,
+    PlaceDomainServiceError, PlaceNormalSpotOrderV2Input, PlaceNormalSpotOrderV3AfterChanges,
+    PlaceOrderPipeline, PlaceTriggerSpotOrderV2Input, PlaceTriggerSpotOrderV3AfterChanges,
 };
 pub use crate::use_case::trading::spot::v3::domain_service::place_order_pipeline::{
     PlaceSpotOrderV3OrderCmd, SpotOrderV3Balances,

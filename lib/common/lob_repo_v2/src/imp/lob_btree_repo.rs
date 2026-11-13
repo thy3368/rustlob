@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
 use super::lob_btree::LocalLobBtree;
+use crate::LobError;
 use crate::lob::LobOrder;
 use crate::lob_repo::LobRepo;
-use crate::LobError;
 
 pub struct LobBtreeRepository<O: LobOrder>(PhantomData<O>);
 

@@ -172,7 +172,12 @@ where
         now_ms: request.now_ms,
     };
     let cmd = common_entity::LogEntrySequencer::from_metadata(
-        lsn, logical_ts, client_id, request_id, payload,
+        lsn,
+        logical_ts,
+        client_id,
+        request_id,
+        request.party_id.clone(),
+        payload,
     );
 
     use_case.check_command(&cmd).map_err(ScheduleCancelExecutionError::Business)?;

@@ -7,5 +7,3 @@ pub mod fsm;
 pub mod domain_service;
 
 pub use fsm::Fsm;
-
-

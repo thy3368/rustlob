@@ -16,7 +16,7 @@ pub struct LogEntry<P> {
     /// 在客户端标识内唯一的请求序号。
     request_id: u64,
     /// 发起该业务命令的原始用户标识。
-    user_id: String,
+    op_id: String,
     /// 完整的业务命令或其他日志负载。
     payload: P,
 }
@@ -54,6 +54,7 @@ impl<P> std::ops::Deref for LogEntry<P> {
 }
 
 impl<P> LogEntry<P> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new_with_topic(
         t: u8,
         p: u8,
@@ -64,7 +65,7 @@ impl<P> LogEntry<P> {
         user_id: String,
         payload: P,
     ) -> Self {
-        Self { t, p, lsn, logical_ts, client_id, request_id, user_id, payload }
+        Self { t, p, lsn, logical_ts, client_id, request_id, op_id: user_id, payload }
     }
     pub(crate) fn new(
         lsn: u64,
@@ -74,7 +75,7 @@ impl<P> LogEntry<P> {
         user_id: String,
         payload: P,
     ) -> Self {
-        Self { t: 0, p: 0, lsn, logical_ts, client_id, request_id, user_id, payload }
+        Self { t: 0, p: 0, lsn, logical_ts, client_id, request_id, op_id: user_id, payload }
     }
 
     pub const fn lsn(&self) -> u64 {
@@ -90,7 +91,7 @@ impl<P> LogEntry<P> {
         self.request_id
     }
     pub fn user_id(&self) -> &str {
-        &self.user_id
+        &self.op_id
     }
     pub const fn topic(&self) -> u8 {
         self.t

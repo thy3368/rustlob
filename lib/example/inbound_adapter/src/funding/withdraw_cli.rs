@@ -65,11 +65,13 @@ impl ExampleBusinessErrorMapping for WithdrawQuoteError {
 
 impl WithdrawQuoteCliCommand {
     fn into_log_entry(self) -> common_entity::LogEntry<WithdrawQuoteCmd> {
+        let user_id = self.trader_id.clone();
         LogEntrySequencer::from_metadata(
             1,
             1,
             1,
             1,
+            user_id,
             WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
         )
     }

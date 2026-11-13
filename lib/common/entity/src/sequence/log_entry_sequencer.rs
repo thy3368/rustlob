@@ -60,6 +60,7 @@ impl LogEntrySequencer {
         LogEntry::new(lsn, logical_ts, client_id, request_id, user_id, payload)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn from_metadata_with_topic<P>(
         t: u8,
         p: u8,
@@ -168,8 +169,14 @@ mod tests {
     #[test]
     fn clock_stall_or_regression_still_advances_logical_time() {
         let mut sequencer = LogEntrySequencer::new(None);
-        assert_eq!(sequencer.sequence_at(at(100), 0, 0, SYSTEM_USER_ID.into(), ()).unwrap().logical_ts(), 100);
-        assert_eq!(sequencer.sequence_at(at(90), 0, 1, SYSTEM_USER_ID.into(), ()).unwrap().logical_ts(), 101);
+        assert_eq!(
+            sequencer.sequence_at(at(100), 0, 0, SYSTEM_USER_ID.into(), ()).unwrap().logical_ts(),
+            100
+        );
+        assert_eq!(
+            sequencer.sequence_at(at(90), 0, 1, SYSTEM_USER_ID.into(), ()).unwrap().logical_ts(),
+            101
+        );
     }
 
     #[test]
@@ -183,10 +190,19 @@ mod tests {
     fn failures_do_not_change_state() {
         let mut sequencer = LogEntrySequencer::new(Some((7, 20)));
         assert_eq!(
-            sequencer.sequence_at(UNIX_EPOCH - Duration::from_nanos(1), 0, 0, SYSTEM_USER_ID.into(), ()),
+            sequencer.sequence_at(
+                UNIX_EPOCH - Duration::from_nanos(1),
+                0,
+                0,
+                SYSTEM_USER_ID.into(),
+                ()
+            ),
             Err(LogEntrySequenceError::ClockBeforeUnixEpoch)
         );
-        assert_eq!(sequencer.sequence_at(at(21), 0, 0, SYSTEM_USER_ID.into(), ()).unwrap().lsn(), 8);
+        assert_eq!(
+            sequencer.sequence_at(at(21), 0, 0, SYSTEM_USER_ID.into(), ()).unwrap().lsn(),
+            8
+        );
     }
 
     #[test]
@@ -197,7 +213,10 @@ mod tests {
             Err(LogEntrySequenceError::LogicalTimestampOverflow)
         );
         let mut lsn = LogEntrySequencer::new(Some((u64::MAX, 0)));
-        assert_eq!(lsn.sequence_at(at(0), 0, 0, SYSTEM_USER_ID.into(), ()), Err(LogEntrySequenceError::LsnOverflow));
+        assert_eq!(
+            lsn.sequence_at(at(0), 0, 0, SYSTEM_USER_ID.into(), ()),
+            Err(LogEntrySequenceError::LsnOverflow)
+        );
     }
 
     #[test]

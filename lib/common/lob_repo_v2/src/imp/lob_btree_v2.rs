@@ -5,8 +5,8 @@ use common_entity::EntityReplayableEvent;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::lob::{AssetLobV2, LobOrder, OrderId};
 use crate::LobError;
+use crate::lob::{AssetLobV2, LobOrder, OrderId};
 
 /// 价格点结构
 ///

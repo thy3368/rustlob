@@ -44,6 +44,7 @@ impl PlaceOrderHttpRequest {
     ) -> LogEntry<PlaceOnlySpotOrderV2Cmd> {
         let _trace_id = self.trace_id;
         let _command_id = self.command_id;
+        let user_id = self.trader_id.clone();
         let payload = PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
             order_id: 11,
             party_id: self.trader_id,
@@ -61,7 +62,7 @@ impl PlaceOrderHttpRequest {
             taker_fee_bps: 10,
         });
         common_entity::LogEntrySequencer::from_metadata(
-            lsn, logical_ts, client_id, request_id, payload,
+            lsn, logical_ts, client_id, request_id, user_id, payload,
         )
     }
 }

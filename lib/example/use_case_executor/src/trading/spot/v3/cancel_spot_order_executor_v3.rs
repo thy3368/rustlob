@@ -32,13 +32,15 @@ mod tests {
     use std::sync::Mutex;
 
     use common_entity::{EntityReplayableEvent, LogEntrySequencer, StateSink, StateSource};
-    use example_core_entity::{BalanceV2, OrderGroupRelation};
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::identifiers::OrderId;
-    use example_core_entity::common::{PriceType, OrderTrigger, OrderBase};
-    use example_core_entity::entity::common::order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
+    use example_core_entity::common::{OrderBase, OrderTrigger, PriceType};
+    use example_core_entity::entity::common::order_primitives::{
+        OrderSide, OrderTif, SpotOrderStatus,
+    };
     use example_core_entity::spot::spot_order_v7::SpotOrderV7;
+    use example_core_entity::{BalanceV2, OrderGroupRelation};
     use example_core_use_case::{
         CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
     };
@@ -75,7 +77,7 @@ mod tests {
                 order: SpotOrderV7::from_record(order(SpotOrderStatus::Open))
                     .map_err(|_| FakeOutboundError)?,
                 balance: BalanceV2::new(
-                    7,
+                    common_entity::stable_string_entity_id("trader-1"),
                     7,
                     u64::from(Coin::USDT.index()),
                     Decimal::ZERO,
@@ -108,7 +110,7 @@ mod tests {
 
     fn order(status: SpotOrderStatus) -> OrderBase {
         OrderBase {
-            owner: 7.into(),
+            owner: common_entity::stable_string_entity_id("trader-1").into(),
             order_id: 11,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
             side: OrderSide::Buy,
@@ -133,7 +135,14 @@ mod tests {
     }
 
     fn command(order_id: OrderId) -> LogEntry<CancelSpotOrderV3Cmd> {
-        LogEntrySequencer::from_metadata(7, 100, 1, 2, CancelSpotOrderV3Cmd { order_id })
+        LogEntrySequencer::from_metadata(
+            7,
+            100,
+            1,
+            2,
+            "trader-1".to_owned(),
+            CancelSpotOrderV3Cmd { order_id },
+        )
     }
 
     #[test]

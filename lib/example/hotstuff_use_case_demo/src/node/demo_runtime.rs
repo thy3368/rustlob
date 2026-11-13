@@ -152,6 +152,7 @@ impl SpotOrderApp {
             logical_ts,
             0,
             block_sequence,
+            common_entity::SYSTEM_USER_ID.to_owned(),
             spot_block_command,
         );
         let outbound = DemoSpotBlockOutbound;
