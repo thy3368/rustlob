@@ -191,6 +191,12 @@ pub trait EntityLifecycle {
 pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
     fn entity_id(&self) -> u64;
 
+    ///记录owner
+    fn owner_id(&self) -> String;
+
+    ///数据修改者
+    fn op_id(&self) -> String;
+
     ///true/derive
     fn is_derived() -> bool;
 
