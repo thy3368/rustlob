@@ -1,4 +1,4 @@
-pub use entity_derive::{ActionType, ObjectType, action_type, function};
+pub use entity_derive::{action_type, function, ActionType, ObjectType};
 
 mod entity_v2;
 mod stable_id;
@@ -7,22 +7,22 @@ pub use stable_id::stable_string_entity_id;
 mod sequence;
 mod use_case;
 
-pub use entity_v2::Fsm;
 pub use entity_v2::entity::{
-    AggregateRole, Entity, EntityLifecycle, EntityMutationModel, FieldDiff,
-    FinancialClassification, FourColorArchetype,
+    AggregateRole, Entity, EntityMutationModel, FieldDiff, FinancialClassification,
+    FourColorArchetype,
 };
-pub use entity_v2::entity_field_change::{
+pub use entity_v2::entity_replayable_event::{
     EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayEventFieldParseError,
     ReplayFieldChange,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
+pub use entity_v2::Fsm;
 pub use sequence::id_generator::EntityIdGenerator;
 pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer, SYSTEM_USER_ID};
 pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::event_handler::EntityReplayableEventHandler;
-pub use use_case::execution_command_spec::Request2Command;
+pub use use_case::request_2_command::Request2Command;
 pub use use_case::executor::{
     ExecutionError, ExecutionResult, StateSink, StateSource, UseCaseExecutor,
 };
@@ -32,7 +32,7 @@ pub use use_case::query::{
     ComputeView, QueryExecutionError, QueryExecutor, QueryUseCase, ReadModelSource,
 };
 pub use use_case::rewal_log_entry_repo::{RewalLogEntryRepo, RewalLogEntryRepoError};
-pub use use_case::shard::Shard;
+pub use entity_v2::shard::Shard;
 pub use use_case::support::{ReplayableChanges, UpdatedEntityPair};
 /// 文档首选称呼：带 replay / persist / audit case truth 扩展的多聚合 use case。
 ///

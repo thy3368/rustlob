@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
-use crate::entity_v2::entity_field_change::current_timestamp;
-use crate::use_case::shard::Shard;
+use crate::entity_v2::entity_replayable_event::current_timestamp;
+use crate::entity_v2::shard::Shard;
 use crate::{
     EntityChangeType, EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
 };
@@ -261,7 +261,7 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
     }
 }
 
-pub trait track_diff: Entity {
+pub trait TrackDiff: Entity {
     #[inline]
     fn track_create_event(&self) -> Result<EntityReplayableEvent, EntityError>
     where

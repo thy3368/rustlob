@@ -310,7 +310,7 @@ impl EntityReplayableEvent {
     }
 }
 
-impl crate::use_case::shard::Shard for EntityReplayableEvent {
+impl crate::entity_v2::shard::Shard for EntityReplayableEvent {
     fn topic(&self) -> u8 {
         self.t
     }

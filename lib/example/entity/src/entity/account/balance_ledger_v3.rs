@@ -230,6 +230,8 @@ impl Entity for BalanceLedgerV3 {
     }
 }
 
+impl TrackDiff for BalanceLedgerV3 {}
+
 #[cfg(test)]
 mod tests {
     use common_entity::Fsm;

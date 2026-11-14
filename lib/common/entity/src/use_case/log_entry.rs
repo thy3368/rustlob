@@ -1,4 +1,4 @@
-use super::shard::Shard;
+use crate::entity_v2::shard::Shard;
 
 /// 内存中的有序日志条目，携带完整负载。
 ///
