@@ -114,7 +114,9 @@ impl ReplayFieldChange {
 /// Entity event optimized for deterministic replay and optimistic locking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
+    ///topic
     pub t: u8,
+    ///partition
     pub p: u8,
     /// 全局单调递增的序列号 来自command
     /// 这是"全序"的唯一依据

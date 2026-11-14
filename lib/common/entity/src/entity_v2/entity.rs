@@ -166,27 +166,6 @@ pub trait FieldDiff {
     }
 }
 
-/// 实体生命周期时间约束。
-///
-/// 时间统一使用 Unix 纳秒。生命周期时间由调用方提供，实体只负责暴露并校验
-/// 创建时间不晚于最后更新时间。
-pub trait EntityLifecycle {
-    /// 返回实体创建时间，单位为 Unix 纳秒。创建时从command里面取
-    fn created_at(&self) -> u64;
-
-    /// 返回实体最后更新时间，单位为 Unix 纳秒。更新时从command里面取
-    fn updated_at(&self) -> u64;
-
-    /// 有点版本号的意思，如果command的高于entity里面的，说明entity没有更新，use
-    /// case里面要报错，在check state里面有用，解决数据一致问题。
-
-    /// 返回生命周期时间是否满足 `created_at <= updated_at`。
-    #[inline]
-    fn has_valid_lifecycle(&self) -> bool {
-        self.created_at() <= self.updated_at()
-    }
-}
-
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
     fn entity_id(&self) -> u64;
@@ -196,6 +175,12 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
 
     ///数据修改者
     fn op_id(&self) -> String;
+
+    fn lsn(&self) -> u64;
+
+    fn created_at(&self) -> u64;
+
+    fn updated_at(&self) -> u64;
 
     ///true/derive
     fn is_derived() -> bool;
@@ -270,13 +255,13 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
         AggregateRole::Unclassified
     }
 
-    fn lsn(&self) -> u64;
-
     #[inline]
     fn replay_field_type(_field_name: &str) -> u8 {
         0
     }
+}
 
+pub trait track_diff: Entity {
     #[inline]
     fn track_create_event(&self) -> Result<EntityReplayableEvent, EntityError>
     where

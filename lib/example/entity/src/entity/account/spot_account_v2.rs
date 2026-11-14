@@ -183,6 +183,14 @@ impl Entity for SpotAccount {
         self.account_id
     }
 
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
     fn is_derived() -> bool {
         false
     }
@@ -214,6 +222,14 @@ impl Entity for SpotAccount {
             "status" => 0,
             _ => 0,
         }
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 

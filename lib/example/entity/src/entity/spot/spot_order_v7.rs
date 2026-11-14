@@ -270,9 +270,9 @@ impl SpotOrderV7 {
         release_requirement(&self.order_base, original)
     }
 
-    pub fn track_create_event(&self) -> Result<common_entity::EntityReplayableEvent, EntityError> {
-        Entity::track_create_event(self)
-    }
+    // pub fn track_create_event(&self) -> Result<common_entity::EntityReplayableEvent, EntityError> {
+    //     Entity::track_create_event(self)
+    // }
 
     /// 校验订单作为 taker 参与撮合所需的单聚合事实。
     pub fn validate_matchable_as_taker(&self) -> Result<(), EntityError> {
@@ -592,6 +592,22 @@ impl Entity for SpotOrderV7 {
     }
     fn replay_field_type(name: &str) -> u8 {
         if matches!(name, "updated_at" | "version") { 1 } else { 0 }
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 impl Shard for SpotOrderV7 {

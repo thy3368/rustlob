@@ -121,6 +121,22 @@ impl Entity for SpotTradeV3 {
     fn replay_field_type(name: &str) -> u8 {
         if matches!(name, "created_at" | "updated_at") { 1 } else { 0 }
     }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
+    }
 }
 
 impl Shard for SpotTradeV3 {

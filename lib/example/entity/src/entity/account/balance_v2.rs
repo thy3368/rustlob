@@ -279,6 +279,23 @@ impl Entity for BalanceV2 {
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.business_entity_id())
     }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
+    }
+
     fn is_derived() -> bool {
         true
     }

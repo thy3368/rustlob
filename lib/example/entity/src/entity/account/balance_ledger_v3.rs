@@ -179,6 +179,7 @@ impl common_entity::Shard for BalanceLedgerV3 {
         (self.account_id % 256) as u8
     }
 }
+
 impl Entity for BalanceLedgerV3 {
     fn entity_id(&self) -> u64 {
         self.entry_id
@@ -210,6 +211,22 @@ impl Entity for BalanceLedgerV3 {
             | "after_frozen" => 1,
             _ => 0,
         }
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 

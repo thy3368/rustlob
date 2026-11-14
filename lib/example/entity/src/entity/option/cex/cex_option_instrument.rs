@@ -164,6 +164,14 @@ impl Entity for CexOptionInstrument {
         common_entity::stable_string_entity_id(&self.instrument_id)
     }
 
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
     fn is_derived() -> bool {
         false
     }
@@ -188,6 +196,14 @@ impl Entity for CexOptionInstrument {
             "expiry_time" | "strike_price" => 1,
             _ => 0,
         }
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 
