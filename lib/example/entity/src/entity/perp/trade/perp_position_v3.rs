@@ -1,12 +1,13 @@
 use common_entity::{Entity, EntityFieldChange, FieldDiff, Fsm, Shard};
-use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::account::coin::Coin;
 use crate::entity::common::{FundingRate, UserId};
 use crate::perp::fund::funding_payment::FundingPayment;
+use crate::perp::fund::user_funding::UserFunding;
 use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 
 const PERP_POSITION_V3_ENTITY_TYPE: u8 = 11;
@@ -64,7 +65,7 @@ pub enum PerpPositionV3State {
 #[derive(Debug, Clone)]
 pub enum PerpPositionV3Event {
     TradeFilled { trade: PerpTradeV3, logical_ts: u64 },
-    FundingSettled { payment: FundingPayment, logical_ts: u64 },
+    FundingSettled { payment: UserFunding, logical_ts: u64 },
     FundingAmountSettled { user_id: UserId, coin: Coin, signed_amount: Decimal, logical_ts: u64 },
     LeverageUpdated { leverage: Decimal, margin_mode: MarginModeV3, logical_ts: u64 },
     IsolatedMarginAdjusted { delta: Decimal, logical_ts: u64 },
@@ -110,7 +111,7 @@ pub struct PerpPositionV3 {
     /// 订单最后更新时间，单位为 Unix 纳秒。
     updated_at: u64,
     /// 仓位状态版本号，每次状态变更后递增。
-    version: u64,
+    lsn: u64,
 }
 
 impl PerpPositionV3 {
@@ -150,7 +151,7 @@ impl PerpPositionV3 {
             cum_funding,
             created_at: 0,
             updated_at: 0,
-            version,
+            lsn: version,
         })
     }
     pub fn empty(position_id: u64, user_id: UserId, coin: Coin) -> Self {
@@ -168,7 +169,7 @@ impl PerpPositionV3 {
             cum_funding: Default::default(),
             created_at: 0,
             updated_at: 0,
-            version: 0,
+            lsn: 0,
         }
     }
     pub fn position_key(&self) -> u64 {
@@ -205,7 +206,7 @@ impl PerpPositionV3 {
         self.cum_funding
     }
     pub fn version(&self) -> u64 {
-        self.version
+        self.lsn
     }
     pub fn created_at(&self) -> u64 {
         self.created_at
@@ -246,108 +247,6 @@ impl PerpPositionV3 {
     /// 现值
     pub fn notional(&self, mark_price: Decimal) -> Decimal {
         self.szi.abs() * mark_price
-    }
-
-    fn apply_trade(
-        &mut self,
-        signed_quantity: Decimal,
-        trade_price: Decimal,
-    ) -> Result<Decimal, PerpPositionV3Error> {
-        if signed_quantity.is_zero() {
-            return Err(PerpPositionV3Error::InvalidQuantity);
-        }
-        if trade_price <= Decimal::ZERO {
-            return Err(PerpPositionV3Error::InvalidPrice);
-        }
-        let old = self.szi;
-        let (new_size, realized, new_entry) = if old.is_zero() {
-            (signed_quantity, Decimal::ZERO, trade_price)
-        } else if old.signum() == signed_quantity.signum() {
-            let total =
-                old.checked_add(signed_quantity).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            let weighted = old
-                .abs()
-                .checked_mul(self.entry_px)
-                .and_then(|v| {
-                    signed_quantity.abs().checked_mul(trade_price).and_then(|w| v.checked_add(w))
-                })
-                .and_then(|v| v.checked_div(total.abs()))
-                .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            (total, Decimal::ZERO, weighted)
-        } else {
-            let closing = old.abs().min(signed_quantity.abs());
-            let delta = trade_price
-                .checked_sub(self.entry_px)
-                .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            let pnl = closing
-                .checked_mul(delta)
-                .and_then(|v| {
-                    if old.is_sign_negative() { Decimal::ZERO.checked_sub(v) } else { Some(v) }
-                })
-                .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            let total =
-                old.checked_add(signed_quantity).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            (
-                total,
-                pnl,
-                if total.is_zero() {
-                    Decimal::ZERO
-                } else if total.signum() == old.signum() {
-                    self.entry_px
-                } else {
-                    trade_price
-                },
-            )
-        };
-        let cumulative = self
-            .realized_pnl
-            .checked_add(realized)
-            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        let version = self.version.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        self.szi = new_size;
-        self.entry_px = new_entry;
-        self.realized_pnl = cumulative;
-        self.version = version;
-        if old.is_zero() || old.signum() != new_size.signum() || new_size.is_zero() {
-            self.cum_funding.since_open = Decimal::ZERO;
-            self.cum_funding.since_change = Decimal::ZERO;
-        }
-        Ok(realized)
-    }
-    fn apply_funding_amount(&mut self, signed_funding: Decimal) -> Result<(), PerpPositionV3Error> {
-        let a = self
-            .cum_funding
-            .all_time
-            .checked_add(signed_funding)
-            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        let o = self
-            .cum_funding
-            .since_open
-            .checked_add(signed_funding)
-            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        let c = self
-            .cum_funding
-            .since_change
-            .checked_add(signed_funding)
-            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        let v = self.version.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        self.cum_funding = FundingAccumulatorV3 { all_time: a, since_open: o, since_change: c };
-        self.version = v;
-        Ok(())
-    }
-    fn change_leverage(
-        &mut self,
-        leverage: Decimal,
-        margin_mode: MarginModeV3,
-        isolated_margin: Option<Decimal>,
-    ) -> Result<(), PerpPositionV3Error> {
-        validate_margin(leverage, margin_mode, isolated_margin)?;
-        let v = self.version.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        self.leverage = leverage;
-        self.margin_mode = margin_mode;
-        self.isolated_margin = isolated_margin;
-        self.version = v;
-        Ok(())
     }
 }
 
@@ -421,7 +320,7 @@ impl Entity for PerpPositionV3 {
     }
 
     fn lsn(&self) -> u64 {
-        self.version
+        self.lsn
     }
 
     fn replay_field_type(field_name: &str) -> u8 {
@@ -437,6 +336,22 @@ impl Entity for PerpPositionV3 {
             | "funding_since_change" => 1,
             _ => 0,
         }
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 fn validate_margin(
@@ -458,50 +373,7 @@ fn validate_margin(
     }
 }
 
-impl PerpPositionV3 {
-    fn apply_trade_filled(&mut self, trade: &PerpTradeV3) -> Result<Decimal, PerpPositionV3Error> {
-        if trade.kind == PerpTradeKind::InsuranceFundTransfer {
-            return Err(PerpPositionV3Error::InvalidState);
-        }
-        if self.coin != trade.trade_base.symbol.base {
-            return Err(PerpPositionV3Error::InvalidState);
-        }
-        let (signed_quantity, fee) = if self.user_id == trade.trade_base.taker_user {
-            let signed = match trade.trade_base.taker_side {
-                crate::OrderSide::Buy => Some(trade.trade_base.size),
-                crate::OrderSide::Sell => Decimal::ZERO.checked_sub(trade.trade_base.size),
-            }
-            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            (signed, trade.trade_base.taker_fee)
-        } else if self.user_id == trade.trade_base.maker_user {
-            let signed = match trade.trade_base.taker_side {
-                crate::OrderSide::Buy => Decimal::ZERO.checked_sub(trade.trade_base.size),
-                crate::OrderSide::Sell => Some(trade.trade_base.size),
-            }
-            .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-            (signed, trade.trade_base.maker_fee)
-        } else {
-            return Err(PerpPositionV3Error::InvalidState);
-        };
-        let cum_fee =
-            self.cum_fee.checked_add(fee).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        let closed_pnl = self.apply_trade(signed_quantity, trade.trade_base.price)?;
-        self.cum_fee = cum_fee;
-        Ok(closed_pnl)
-    }
-
-    fn apply_funding_settled(
-        &mut self,
-        trade: &FundingPayment,
-    ) -> Result<Decimal, PerpPositionV3Error> {
-        if self.user_id != trade.user || self.coin != trade.coin {
-            return Err(PerpPositionV3Error::InvalidState);
-        }
-        let signed = Decimal::from_i128_with_scale(trade.usdc.raw(), 6);
-        self.apply_funding_amount(signed)?;
-        Ok(signed)
-    }
-}
+impl PerpPositionV3 {}
 
 impl Fsm for PerpPositionV3 {
     type State = PerpPositionV3State;
@@ -515,21 +387,10 @@ impl Fsm for PerpPositionV3 {
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match event {
             PerpPositionV3Event::TradeFilled { trade, logical_ts } => {
-                let mut next = self.clone();
-                let closed_pnl = next.apply_trade_filled(&trade)?;
-                next.updated_at = logical_ts;
-                *self = next;
-                Ok((PerpPositionV3State::Active, PerpPositionV3Output::TradeApplied { closed_pnl }))
+                todo!()
             }
             PerpPositionV3Event::FundingSettled { payment, logical_ts } => {
-                let mut next = self.clone();
-                let signed_amount = next.apply_funding_settled(&payment)?;
-                next.updated_at = logical_ts;
-                *self = next;
-                Ok((
-                    PerpPositionV3State::Active,
-                    PerpPositionV3Output::FundingApplied { signed_amount },
-                ))
+                todo!()
             }
             PerpPositionV3Event::FundingAmountSettled {
                 user_id,
@@ -537,45 +398,13 @@ impl Fsm for PerpPositionV3 {
                 signed_amount,
                 logical_ts,
             } => {
-                if self.user_id != user_id || self.coin != coin {
-                    return Err(PerpPositionV3Error::InvalidState);
-                }
-                let mut next = self.clone();
-                next.apply_funding_amount(signed_amount)?;
-                next.updated_at = logical_ts;
-                *self = next;
-                Ok((
-                    PerpPositionV3State::Active,
-                    PerpPositionV3Output::FundingApplied { signed_amount },
-                ))
+                todo!()
             }
             PerpPositionV3Event::LeverageUpdated { leverage, margin_mode, logical_ts } => {
-                let mut next = self.clone();
-                next.change_leverage(leverage, margin_mode, next.isolated_margin)?;
-                next.updated_at = logical_ts;
-                *self = next;
-                Ok((PerpPositionV3State::Active, PerpPositionV3Output::LeverageApplied))
+                todo!()
             }
             PerpPositionV3Event::IsolatedMarginAdjusted { delta, logical_ts } => {
-                if self.margin_mode != MarginModeV3::Isolated {
-                    return Err(PerpPositionV3Error::InvalidMarginConfiguration);
-                }
-                let current =
-                    self.isolated_margin.ok_or(PerpPositionV3Error::InvalidMarginConfiguration)?;
-                let margin_after =
-                    current.checked_add(delta).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-                if margin_after < Decimal::ZERO {
-                    return Err(PerpPositionV3Error::InvalidIsolatedMargin);
-                }
-                let version =
-                    self.version.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-                self.isolated_margin = Some(margin_after);
-                self.version = version;
-                self.updated_at = logical_ts;
-                Ok((
-                    PerpPositionV3State::Active,
-                    PerpPositionV3Output::IsolatedMarginApplied { margin_after },
-                ))
+                todo!()
             }
         }
     }
@@ -583,7 +412,7 @@ impl Fsm for PerpPositionV3 {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{Entity, Fsm};
+    use common_entity::Fsm;
     use rust_decimal::Decimal;
 
     use super::*;
@@ -649,32 +478,5 @@ mod tests {
         assert_eq!(position.realized_pnl(), Decimal::TEN);
         assert_eq!(position.cum_fee(), Decimal::new(25, 2));
         assert_eq!(position.version(), 5);
-    }
-
-    #[test]
-    fn failed_transition_is_atomic_and_success_projects_single_step_update() {
-        let mut position = PerpPositionV3::empty(1, UserId(7), Coin::BTC);
-        let before_failure = position.clone();
-        assert_eq!(
-            position.apply(PerpPositionV3Event::TradeFilled {
-                trade: trade(OrderSide::Buy, 0, 1, Decimal::ZERO),
-                logical_ts: 9,
-            }),
-            Err(PerpPositionV3Error::InvalidPrice)
-        );
-        assert_eq!(position, before_failure);
-
-        let before = position.clone();
-        position
-            .apply(PerpPositionV3Event::LeverageUpdated {
-                leverage: Decimal::from(3),
-                margin_mode: MarginModeV3::Cross,
-                logical_ts: 10,
-            })
-            .unwrap();
-        let event = position.track_update_event_from(&before).unwrap();
-        assert_eq!(event.entity_id, 1);
-        assert_eq!(event.entity_type, 11);
-        assert_eq!(position.version(), before.version() + 1);
     }
 }
