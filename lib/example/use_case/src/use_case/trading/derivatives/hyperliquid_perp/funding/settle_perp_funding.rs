@@ -1,19 +1,16 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges,
-    UpdatedEntityPair, UseCase,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, TrackDiff, UpdatedEntityPair,
+    UseCase,
 };
-use rust_decimal::Decimal;
 use thiserror::Error;
 
-use crate::entity::perp::fund::user_funding::{
-    UserFunding, UserFundingError, UserFundingEvent, UserFundingOutput,
+use crate::entity::perp::fund::user_funding::UserFunding;
+use crate::entity::perp::fund::user_funding_domain_service::{
+    SettleUserFundingBatchError, settle_user_funding_batch,
 };
-use crate::entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, MarginModeV3, PerpPositionV3, PerpPositionV3Error,
-    PerpPositionV3Event, UserId,
-};
+use crate::entity::{BalanceV2, MarginModeV3, PerpPositionV3, UserId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpFundingCmd {
@@ -41,14 +38,8 @@ pub enum SettleHyperliquidPerpFundingError {
     FundingIdsMismatch,
     #[error("funding fact was already settled")]
     FundingAlreadySettled,
-    #[error("position was not found or mismatched")]
-    PositionMismatch,
-    #[error("margin balance was not found")]
-    MarginBalanceNotFound,
-    #[error("insufficient available margin")]
-    InsufficientAvailableMargin,
-    #[error("arithmetic overflow while settling funding")]
-    ArithmeticOverflow,
+    #[error(transparent)]
+    Settlement(#[from] SettleUserFundingBatchError),
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -115,7 +106,14 @@ impl UseCase for SettleHyperliquidPerpFundingUseCase {
         if cmd.funding_ids.iter().any(|id| settled.contains(id)) {
             return Err(SettleHyperliquidPerpFundingError::FundingAlreadySettled);
         }
-        derive_changes(cmd, state).map(|_| ())
+        settle_user_funding_batch(
+            &state.fundings,
+            &state.positions,
+            &state.margin_balances,
+            cmd.logical_ts(),
+        )
+        .map(|_| ())
+        .map_err(Into::into)
     }
 
     fn compute_state_changed_only(
@@ -123,101 +121,169 @@ impl UseCase for SettleHyperliquidPerpFundingUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        derive_changes(cmd, state)
+        //todo 增加 settle_hour
+        let output = settle_user_funding_batch(
+            &state.fundings,
+            &state.positions,
+            &state.margin_balances,
+            cmd.logical_ts(),
+        )?;
+        Ok(SettleHyperliquidPerpFundingChanges {
+            changed_fundings: output.changed_fundings,
+            changed_positions: output.changed_positions,
+            changed_margin_balances: output.changed_balances,
+        })
     }
 }
 
-fn derive_changes(
-    cmd: &LogEntry<SettleHyperliquidPerpFundingCmd>,
-    state: &SettleHyperliquidPerpFundingState,
-) -> Result<SettleHyperliquidPerpFundingChanges, SettleHyperliquidPerpFundingError> {
-    let mut positions: BTreeMap<(u64, u32), PerpPositionV3> = state
-        .positions
-        .iter()
-        .cloned()
-        .map(|position| ((position.user_id().0, position.coin().index()), position))
-        .collect();
-    let mut balance_deltas: BTreeMap<(u64, u64), Decimal> = BTreeMap::new();
-    let mut changed_fundings = Vec::with_capacity(state.fundings.len());
-    let mut changed_positions = Vec::with_capacity(state.fundings.len());
+#[cfg(test)]
+mod tests {
+    use common_entity::{Entity, LogEntrySequencer};
+    use rust_decimal::Decimal;
 
-    for funding in &state.fundings {
-        let before_funding = funding.clone();
-        let mut after_funding = before_funding.clone();
-        let (_, output) = after_funding
-            .transition(UserFundingEvent::Settle { settled_at: cmd.logical_ts() })
-            .map_err(map_funding_error)?;
-        let UserFundingOutput::BalanceImpact { party_id, quote_coin_idx, signed_usdc_delta } =
-            output;
-        changed_fundings.push(UpdatedEntityPair { before: before_funding, after: after_funding });
+    use super::*;
+    use crate::entity::account::coin::Coin;
+    use crate::entity::account::symbol::Symbol;
+    use crate::entity::common::FundingRate;
+    use crate::entity::perp::trade::perp_position_v3::FundingAccumulatorV3;
 
-        let key = (party_id, funding.coin().base.index());
-        let before_position = positions
-            .get(&key)
-            .cloned()
-            .ok_or(SettleHyperliquidPerpFundingError::PositionMismatch)?;
-        if before_position.margin_mode() != state.margin_mode {
-            return Err(SettleHyperliquidPerpFundingError::PositionMismatch);
-        }
-        let mut after_position = before_position.clone();
-        after_position
-            .apply(PerpPositionV3Event::FundingAmountSettled {
-                user_id: UserId(party_id),
-                coin: funding.coin().base,
-                signed_amount: signed_usdc_delta,
-                logical_ts: cmd.logical_ts(),
-            })
-            .map_err(map_position_error)?;
-        positions.insert(key, after_position.clone());
-        changed_positions
-            .push(UpdatedEntityPair { before: before_position, after: after_position });
+    const PARTY_ID: u64 = 7;
+    const SETTLED_AT: u64 = 120;
 
-        let delta = balance_deltas.entry((party_id, quote_coin_idx)).or_default();
-        *delta = delta
-            .checked_add(signed_usdc_delta)
-            .ok_or(SettleHyperliquidPerpFundingError::ArithmeticOverflow)?;
+    fn command(
+        funding_batch_id: u64,
+        funding_ids: Vec<u64>,
+    ) -> LogEntry<SettleHyperliquidPerpFundingCmd> {
+        LogEntrySequencer::from_metadata(
+            1,
+            SETTLED_AT,
+            1,
+            1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
+            SettleHyperliquidPerpFundingCmd { operator: UserId(99), funding_batch_id, funding_ids },
+        )
     }
 
-    let mut changed_margin_balances = Vec::with_capacity(balance_deltas.len());
-    for ((account_id, coin_idx), delta) in balance_deltas {
-        if delta.is_zero() {
-            continue;
-        }
-        let before = state
-            .margin_balances
-            .iter()
-            .find(|balance| balance.account_id() == account_id && balance.coin_idx() == coin_idx)
-            .cloned()
-            .ok_or(SettleHyperliquidPerpFundingError::MarginBalanceNotFound)?;
-        let mut after = before.clone();
-        let event = if delta.is_sign_positive() {
-            BalanceV2Event::CreditAvailable { amount: delta, timestamp: cmd.logical_ts() }
-        } else {
-            BalanceV2Event::DebitAvailable { amount: delta.abs(), timestamp: cmd.logical_ts() }
-        };
-        after.apply(event).map_err(map_balance_error)?;
-        changed_margin_balances.push(UpdatedEntityPair { before, after });
+    fn funding(id: u64, amount: Decimal) -> UserFunding {
+        UserFunding::new(
+            id,
+            PARTY_ID,
+            Symbol::new(1, Coin::BTC, Coin::USDC),
+            amount,
+            Decimal::ONE,
+            FundingRate::new(Decimal::new(1, 4)).unwrap(),
+            None,
+            100,
+        )
     }
-    Ok(SettleHyperliquidPerpFundingChanges {
-        changed_fundings,
-        changed_positions,
-        changed_margin_balances,
-    })
-}
 
-fn map_funding_error(_: UserFundingError) -> SettleHyperliquidPerpFundingError {
-    SettleHyperliquidPerpFundingError::FundingAlreadySettled
-}
-
-fn map_position_error(_: PerpPositionV3Error) -> SettleHyperliquidPerpFundingError {
-    SettleHyperliquidPerpFundingError::PositionMismatch
-}
-
-fn map_balance_error(error: BalanceV2Error) -> SettleHyperliquidPerpFundingError {
-    match error {
-        BalanceV2Error::InsufficientAvailableBalance => {
-            SettleHyperliquidPerpFundingError::InsufficientAvailableMargin
+    fn state(fundings: Vec<UserFunding>) -> SettleHyperliquidPerpFundingState {
+        SettleHyperliquidPerpFundingState {
+            fundings,
+            positions: vec![
+                PerpPositionV3::new(
+                    2,
+                    UserId(PARTY_ID),
+                    Coin::BTC,
+                    Decimal::ONE,
+                    Decimal::from(100),
+                    Decimal::from(5),
+                    MarginModeV3::Cross,
+                    None,
+                    Decimal::ZERO,
+                    FundingAccumulatorV3::default(),
+                    Decimal::ZERO,
+                    3,
+                )
+                .unwrap(),
+            ],
+            margin_balances: vec![BalanceV2::new(
+                PARTY_ID,
+                11,
+                u64::from(Coin::USDC.index()),
+                Decimal::TEN,
+                Decimal::ZERO,
+                4,
+                100,
+            )],
+            settled_funding_ids: Vec::new(),
+            margin_mode: MarginModeV3::Cross,
         }
-        _ => SettleHyperliquidPerpFundingError::ArithmeticOverflow,
+    }
+
+    #[test]
+    fn validates_command_and_authoritative_funding_ids() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        assert_eq!(
+            use_case.check_command(&command(0, vec![1])),
+            Err(SettleHyperliquidPerpFundingError::InvalidFundingBatchId)
+        );
+        assert_eq!(
+            use_case.check_command(&command(1, vec![])),
+            Err(SettleHyperliquidPerpFundingError::EmptyFundingIds)
+        );
+
+        let loaded = state(vec![funding(1, Decimal::ONE), funding(2, Decimal::ONE)]);
+        assert_eq!(
+            use_case.validate_state_given(&command(1, vec![2, 1]), &loaded),
+            Err(SettleHyperliquidPerpFundingError::FundingIdsMismatch)
+        );
+        let mut already_settled = loaded;
+        already_settled.settled_funding_ids.push(2);
+        assert_eq!(
+            use_case.validate_state_given(&command(1, vec![1, 2]), &already_settled),
+            Err(SettleHyperliquidPerpFundingError::FundingAlreadySettled)
+        );
+    }
+
+    #[test]
+    fn propagates_domain_error_transparently() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let loaded = state(vec![funding(1, Decimal::ZERO)]);
+
+        assert_eq!(
+            use_case.validate_state_given(&command(1, vec![1]), &loaded),
+            Err(SettleHyperliquidPerpFundingError::Settlement(
+                SettleUserFundingBatchError::ZeroFundingAmount { funding_id: 1 }
+            ))
+        );
+    }
+
+    #[test]
+    fn maps_pairs_and_projects_stable_unique_single_step_events() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let loaded = state(vec![funding(2, Decimal::from(3)), funding(1, Decimal::from(-1))]);
+        let changes = use_case.compute_state_changed(&command(1, vec![2, 1]), &loaded).unwrap();
+
+        assert_eq!(changes.changed_fundings.len(), 2);
+        assert_eq!(changes.changed_positions.len(), 1);
+        assert_eq!(changes.changed_margin_balances.len(), 1);
+        assert_eq!(
+            changes.changed_fundings[0].after.version(),
+            changes.changed_fundings[0].before.version() + 1
+        );
+        assert_eq!(
+            changes.changed_positions[0].after.version(),
+            changes.changed_positions[0].before.version() + 1
+        );
+        assert_eq!(
+            changes.changed_margin_balances[0].after.version(),
+            changes.changed_margin_balances[0].before.version() + 1
+        );
+
+        let events = changes.to_replayable_events().unwrap();
+        let expected = vec![
+            (UserFunding::entity_type(), 2),
+            (UserFunding::entity_type(), 1),
+            (PerpPositionV3::entity_type(), 2),
+            (BalanceV2::entity_type(), changes.changed_margin_balances[0].after.entity_id()),
+        ];
+        assert_eq!(
+            events.iter().map(|event| (event.entity_type, event.entity_id)).collect::<Vec<_>>(),
+            expected
+        );
+        let unique =
+            events.iter().map(|event| (event.entity_type, event.entity_id)).collect::<HashSet<_>>();
+        assert_eq!(unique.len(), events.len());
     }
 }

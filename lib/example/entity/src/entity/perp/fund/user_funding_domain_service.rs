@@ -1,13 +1,13 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use common_entity::{stable_string_entity_id, Fsm};
+use common_entity::{Fsm, UpdatedEntityPair, stable_string_entity_id};
 use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::account::symbol::Symbol;
 use crate::entity::common::price::Price;
 use crate::perp::fund::user_funding::{
-    UserFunding, UserFundingError, UserFundingEvent, UserFundingOutput, UserFundingState,
+    UserFunding, UserFundingError, UserFundingEvent, UserFundingState,
 };
 use crate::{
     BalanceV2, BalanceV2Error, BalanceV2Event, FundingRate, MarginModeV3, PerpPositionV3,
@@ -88,159 +88,239 @@ pub fn settle_hour(
         .collect())
 }
 
-/// 单笔小时资金费生效后的三个权威快照。
+/// 一批资金费结算形成的唯一 before/after 业务真相。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SettleHour2Output {
-    pub user_funding: UserFunding,
-    pub position: PerpPositionV3,
-    pub balance: BalanceV2,
+pub struct SettleUserFundingBatchOutput {
+    pub changed_fundings: Vec<UpdatedEntityPair<UserFunding>>,
+    pub changed_positions: Vec<UpdatedEntityPair<PerpPositionV3>>,
+    pub changed_balances: Vec<UpdatedEntityPair<BalanceV2>>,
 }
 
-/// 单笔小时资金费生效失败的明确领域原因。
+/// 批量资金费结算失败的明确领域原因。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum SettleHour2Error {
-    #[error("user funding is already settled")]
-    FundingAlreadySettled,
-    #[error("funding settlement time is invalid")]
-    InvalidSettlementTime,
-    #[error("user funding version overflow")]
-    FundingVersionOverflow,
-    #[error("funding party does not match position owner")]
-    FundingPositionPartyMismatch,
-    #[error("funding market does not match position market")]
-    FundingPositionMarketMismatch,
+pub enum SettleUserFundingBatchError {
+    #[error("duplicate funding id: {funding_id}")]
+    DuplicateFunding { funding_id: u64 },
+    #[error("user funding {funding_id} is already settled")]
+    FundingAlreadySettled { funding_id: u64 },
+    #[error("user funding {funding_id} has a zero amount")]
+    ZeroFundingAmount { funding_id: u64 },
+    #[error("funding settlement time is invalid for funding {funding_id}")]
+    InvalidSettlementTime { funding_id: u64 },
+    #[error("user funding version overflow for funding {funding_id}")]
+    FundingVersionOverflow { funding_id: u64 },
+    #[error("position is missing for funding {funding_id}")]
+    PositionNotFound { funding_id: u64 },
+    #[error("more than one position matches funding {funding_id}")]
+    DuplicatePosition { funding_id: u64 },
     #[error("funding settlement only supports cross-margin positions")]
-    CrossMarginRequired,
-    #[error("balance account does not match requested account")]
-    BalanceAccountMismatch,
-    #[error("balance party does not match funding party")]
-    BalancePartyMismatch,
-    #[error("balance coin does not match funding quote coin")]
-    BalanceQuoteCoinMismatch,
-    #[error("zero funding amount cannot be settled")]
-    ZeroFundingAmount,
+    CrossMarginRequired { position_id: u64 },
+    #[error("balance is missing for funding {funding_id}")]
+    BalanceNotFound { funding_id: u64 },
+    #[error("more than one balance matches funding {funding_id}")]
+    DuplicateBalance { funding_id: u64 },
+    #[error("funding delta arithmetic overflow")]
+    FundingDeltaOverflow,
     #[error("available balance is insufficient for funding debit")]
-    InsufficientAvailableBalance,
+    InsufficientAvailableBalance { account_id: u64 },
     #[error("balance is closed")]
-    BalanceClosed,
-    #[error("position funding accumulator, version, or timestamp arithmetic failed")]
-    PositionArithmeticOverflow,
+    BalanceClosed { account_id: u64 },
+    #[error("position funding accumulator or version arithmetic failed")]
+    PositionArithmeticOverflow { position_id: u64 },
     #[error("balance amount or version arithmetic overflow")]
-    BalanceArithmeticOverflow,
+    BalanceArithmeticOverflow { account_id: u64 },
 }
 
-/// 将一个待结算资金费事实原子推导为资金费、仓位和余额的 after 快照。
+/// 原子计算整批资金费、仓位和余额的 before/after truth。
 ///
-/// 本函数只接受全仓仓位。它先验证全部跨实体身份与账户不变量，再在输入的 clone 上依次推进
-/// 三个 FSM；任一步失败都不会修改调用方持有的输入，也不会返回部分生效结果。
-pub fn settle_hour2(
-    user_funding: &UserFunding,
-    position: &PerpPositionV3,
-    balance: &BalanceV2,
-    account_id: u64,
+/// funding pair 保持输入顺序，仓位与余额 pair 保持各自 state slice 的稳定顺序。同一仓位或余额
+/// 先聚合 signed delta，再只推进一次 FSM；净变化为零时不产生该实体的空 pair。
+pub fn settle_user_funding_batch(
+    fundings: &[UserFunding],
+    positions: &[PerpPositionV3],
+    balances: &[BalanceV2],
     settled_at: u64,
-) -> Result<SettleHour2Output, SettleHour2Error> {
-    if user_funding.state() == UserFundingState::Settled {
-        return Err(SettleHour2Error::FundingAlreadySettled);
-    }
-    if settled_at < user_funding.created_at() || settled_at < position.updated_at() {
-        return Err(SettleHour2Error::InvalidSettlementTime);
-    }
-    if user_funding.party_id() != position.user_id().0 {
-        return Err(SettleHour2Error::FundingPositionPartyMismatch);
-    }
-    if user_funding.coin().base != position.coin() {
-        return Err(SettleHour2Error::FundingPositionMarketMismatch);
-    }
-    if position.margin_mode() != MarginModeV3::Cross {
-        return Err(SettleHour2Error::CrossMarginRequired);
-    }
-    if !balance.belongs_to_account(account_id) {
-        return Err(SettleHour2Error::BalanceAccountMismatch);
-    }
-    if balance.party_id() != user_funding.party_id() {
-        return Err(SettleHour2Error::BalancePartyMismatch);
-    }
-    let quote_coin_idx = u64::from(user_funding.coin().quote.index());
-    if !balance.is_coin(quote_coin_idx) {
-        return Err(SettleHour2Error::BalanceQuoteCoinMismatch);
-    }
-    if user_funding.usdc().is_zero() {
-        return Err(SettleHour2Error::ZeroFundingAmount);
-    }
+) -> Result<SettleUserFundingBatchOutput, SettleUserFundingBatchError> {
+    let mut funding_ids = HashSet::with_capacity(fundings.len());
+    let mut position_by_business_key: HashMap<(u64, u32), usize> =
+        HashMap::with_capacity(positions.len());
+    let mut duplicate_position_keys = HashSet::new();
+    let mut balance_by_business_key: HashMap<(u64, u64), usize> =
+        HashMap::with_capacity(balances.len());
+    let mut duplicate_balance_keys = HashSet::new();
 
-    let mut user_funding_after = user_funding.clone();
-    let (_, funding_output) = user_funding_after
-        .apply(UserFundingEvent::Settle { settled_at })
-        .map_err(map_user_funding_error)?;
-    let UserFundingOutput::BalanceImpact { signed_usdc_delta, .. } = funding_output;
-
-    let mut position_after = position.clone();
-    position_after
-        .apply(PerpPositionV3Event::FundingAmountSettled {
-            user_id: position.user_id(),
-            coin: position.coin(),
-            signed_amount: signed_usdc_delta,
-            logical_ts: settled_at,
-        })
-        .map_err(map_position_error)?;
-
-    let mut balance_after = balance.clone();
-    let balance_event = if signed_usdc_delta.is_sign_positive() {
-        BalanceV2Event::CreditAvailable { amount: signed_usdc_delta, timestamp: settled_at }
-    } else {
-        let amount = Decimal::ZERO
-            .checked_sub(signed_usdc_delta)
-            .ok_or(SettleHour2Error::BalanceArithmeticOverflow)?;
-        BalanceV2Event::DebitAvailable { amount, timestamp: settled_at }
-    };
-    balance_after.apply(balance_event).map_err(map_balance_error)?;
-
-    Ok(SettleHour2Output {
-        user_funding: user_funding_after,
-        position: position_after,
-        balance: balance_after,
-    })
-}
-
-fn map_user_funding_error(error: UserFundingError) -> SettleHour2Error {
-    match error {
-        UserFundingError::AlreadySettled => SettleHour2Error::FundingAlreadySettled,
-        UserFundingError::InvalidSettlementTime => SettleHour2Error::InvalidSettlementTime,
-        UserFundingError::VersionOverflow => SettleHour2Error::FundingVersionOverflow,
-    }
-}
-
-fn map_position_error(error: PerpPositionV3Error) -> SettleHour2Error {
-    match error {
-        PerpPositionV3Error::FundingUserMismatch => SettleHour2Error::FundingPositionPartyMismatch,
-        PerpPositionV3Error::FundingCoinMismatch => SettleHour2Error::FundingPositionMarketMismatch,
-        PerpPositionV3Error::InvalidFundingSettlementTime => {
-            SettleHour2Error::InvalidSettlementTime
+    for (index, position) in positions.iter().enumerate() {
+        let key = (position.user_id().0, position.coin().index());
+        if position_by_business_key.insert(key, index).is_some() {
+            duplicate_position_keys.insert(key);
         }
-        _ => SettleHour2Error::PositionArithmeticOverflow,
+    }
+    for (index, balance) in balances.iter().enumerate() {
+        let key = (balance.party_id(), balance.coin_idx());
+        if balance_by_business_key.insert(key, index).is_some() {
+            duplicate_balance_keys.insert(key);
+        }
+    }
+
+    let mut position_deltas = vec![Decimal::ZERO; positions.len()];
+    let mut balance_deltas = vec![Decimal::ZERO; balances.len()];
+    for funding in fundings {
+        let funding_id = funding.funding_id();
+        if !funding_ids.insert(funding_id) {
+            return Err(SettleUserFundingBatchError::DuplicateFunding { funding_id });
+        }
+        if funding.state() == UserFundingState::Settled {
+            return Err(SettleUserFundingBatchError::FundingAlreadySettled { funding_id });
+        }
+        if funding.usdc().is_zero() {
+            return Err(SettleUserFundingBatchError::ZeroFundingAmount { funding_id });
+        }
+        if settled_at < funding.created_at() {
+            return Err(SettleUserFundingBatchError::InvalidSettlementTime { funding_id });
+        }
+
+        let position_key = (funding.party_id(), funding.coin().base.index());
+        if duplicate_position_keys.contains(&position_key) {
+            return Err(SettleUserFundingBatchError::DuplicatePosition { funding_id });
+        }
+        let position_index = position_by_business_key
+            .get(&position_key)
+            .copied()
+            .ok_or(SettleUserFundingBatchError::PositionNotFound { funding_id })?;
+        let position = &positions[position_index];
+        if position.margin_mode() != MarginModeV3::Cross {
+            return Err(SettleUserFundingBatchError::CrossMarginRequired {
+                position_id: position.position_id(),
+            });
+        }
+        if settled_at < position.updated_at() {
+            return Err(SettleUserFundingBatchError::InvalidSettlementTime { funding_id });
+        }
+
+        let quote_coin_idx = u64::from(funding.coin().quote.index());
+        let balance_key = (funding.party_id(), quote_coin_idx);
+        if duplicate_balance_keys.contains(&balance_key) {
+            return Err(SettleUserFundingBatchError::DuplicateBalance { funding_id });
+        }
+        let balance_index = balance_by_business_key
+            .get(&balance_key)
+            .copied()
+            .ok_or(SettleUserFundingBatchError::BalanceNotFound { funding_id })?;
+
+        position_deltas[position_index] = position_deltas[position_index]
+            .checked_add(funding.usdc())
+            .ok_or(SettleUserFundingBatchError::FundingDeltaOverflow)?;
+        balance_deltas[balance_index] = balance_deltas[balance_index]
+            .checked_add(funding.usdc())
+            .ok_or(SettleUserFundingBatchError::FundingDeltaOverflow)?;
+    }
+
+    let mut changed_fundings = Vec::with_capacity(fundings.len());
+    for funding in fundings {
+        let before = funding.clone();
+        let mut after = before.clone();
+        after
+            .apply(UserFundingEvent::Settle { settled_at })
+            .map_err(|error| map_user_funding_error(error, funding.funding_id()))?;
+        changed_fundings.push(UpdatedEntityPair::new(before, after));
+    }
+
+    let mut changed_positions = Vec::with_capacity(fundings.len().min(positions.len()));
+    for (index, (before, delta)) in positions.iter().zip(position_deltas).enumerate() {
+        if delta.is_zero() {
+            continue;
+        }
+        let mut after = before.clone();
+        after
+            .apply(PerpPositionV3Event::FundingAmountSettled {
+                user_id: before.user_id(),
+                coin: before.coin(),
+                signed_amount: delta,
+                logical_ts: settled_at,
+            })
+            .map_err(|error| map_position_error(error, positions[index].position_id()))?;
+        changed_positions.push(UpdatedEntityPair::new(before.clone(), after));
+    }
+
+    let mut changed_balances = Vec::with_capacity(balances.len());
+    for (before, delta) in balances.iter().zip(balance_deltas) {
+        if delta.is_zero() {
+            continue;
+        }
+        let mut after = before.clone();
+        let event = if delta.is_sign_positive() {
+            BalanceV2Event::CreditAvailable { amount: delta, timestamp: settled_at }
+        } else {
+            let amount = Decimal::ZERO.checked_sub(delta).ok_or(
+                SettleUserFundingBatchError::BalanceArithmeticOverflow {
+                    account_id: before.account_id(),
+                },
+            )?;
+            BalanceV2Event::DebitAvailable { amount, timestamp: settled_at }
+        };
+        after.apply(event).map_err(|error| map_balance_error(error, before.account_id()))?;
+        changed_balances.push(UpdatedEntityPair::new(before.clone(), after));
+    }
+
+    Ok(SettleUserFundingBatchOutput { changed_fundings, changed_positions, changed_balances })
+}
+
+fn map_user_funding_error(error: UserFundingError, funding_id: u64) -> SettleUserFundingBatchError {
+    match error {
+        UserFundingError::AlreadySettled => {
+            SettleUserFundingBatchError::FundingAlreadySettled { funding_id }
+        }
+        UserFundingError::InvalidSettlementTime => {
+            SettleUserFundingBatchError::InvalidSettlementTime { funding_id }
+        }
+        UserFundingError::VersionOverflow => {
+            SettleUserFundingBatchError::FundingVersionOverflow { funding_id }
+        }
     }
 }
 
-fn map_balance_error(error: BalanceV2Error) -> SettleHour2Error {
+fn map_position_error(error: PerpPositionV3Error, position_id: u64) -> SettleUserFundingBatchError {
+    match error {
+        PerpPositionV3Error::InvalidFundingSettlementTime => {
+            SettleUserFundingBatchError::InvalidSettlementTime { funding_id: position_id }
+        }
+        PerpPositionV3Error::InvalidQuantity
+        | PerpPositionV3Error::InvalidPrice
+        | PerpPositionV3Error::InvalidLeverage
+        | PerpPositionV3Error::InvalidMarginConfiguration
+        | PerpPositionV3Error::InvalidState
+        | PerpPositionV3Error::ArithmeticOverflow
+        | PerpPositionV3Error::InvalidIsolatedMargin
+        | PerpPositionV3Error::FundingUserMismatch
+        | PerpPositionV3Error::FundingCoinMismatch => {
+            SettleUserFundingBatchError::PositionArithmeticOverflow { position_id }
+        }
+    }
+}
+
+fn map_balance_error(error: BalanceV2Error, account_id: u64) -> SettleUserFundingBatchError {
     match error {
         BalanceV2Error::InsufficientAvailableBalance => {
-            SettleHour2Error::InsufficientAvailableBalance
+            SettleUserFundingBatchError::InsufficientAvailableBalance { account_id }
         }
-        BalanceV2Error::BalanceClosed => SettleHour2Error::BalanceClosed,
-        _ => SettleHour2Error::BalanceArithmeticOverflow,
+        BalanceV2Error::BalanceClosed => SettleUserFundingBatchError::BalanceClosed { account_id },
+        BalanceV2Error::InvalidAmount
+        | BalanceV2Error::InsufficientFrozenBalance
+        | BalanceV2Error::ArithmeticOverflow
+        | BalanceV2Error::CannotCloseNonZeroBalance => {
+            SettleUserFundingBatchError::BalanceArithmeticOverflow { account_id }
+        }
     }
 }
 
 #[cfg(test)]
-mod settle_hour2_tests {
+mod settle_user_funding_batch_tests {
     use common_entity::Fsm;
-    use rust_decimal::Decimal;
 
     use super::*;
+    use crate::FundingAccumulatorV3;
     use crate::account::coin::Coin;
     use crate::entity::common::UserId;
-    use crate::FundingAccumulatorV3;
 
     const PARTY_ID: u64 = 7;
     const ACCOUNT_ID: u64 = 11;
@@ -251,9 +331,9 @@ mod settle_hour2_tests {
         Symbol::new(1, Coin::BTC, Coin::USDC)
     }
 
-    fn funding(amount: Decimal) -> UserFunding {
+    fn funding(id: u64, amount: Decimal) -> UserFunding {
         UserFunding::new(
-            1,
+            id,
             PARTY_ID,
             symbol(),
             amount,
@@ -265,16 +345,14 @@ mod settle_hour2_tests {
     }
 
     fn position(
-        user_id: u64,
-        coin: Coin,
         margin_mode: MarginModeV3,
         accumulator: FundingAccumulatorV3,
         version: u64,
     ) -> PerpPositionV3 {
         PerpPositionV3::new(
             2,
-            UserId(user_id),
-            coin,
+            UserId(PARTY_ID),
+            Coin::BTC,
             Decimal::ONE,
             Decimal::from(100),
             Decimal::from(5),
@@ -288,17 +366,15 @@ mod settle_hour2_tests {
         .unwrap()
     }
 
-    fn balance(
-        party_id: u64,
-        account_id: u64,
-        coin: Coin,
-        available: Decimal,
-        version: u64,
-    ) -> BalanceV2 {
+    fn valid_position() -> PerpPositionV3 {
+        position(MarginModeV3::Cross, FundingAccumulatorV3::default(), 3)
+    }
+
+    fn balance(available: Decimal, version: u64) -> BalanceV2 {
         BalanceV2::new(
-            party_id,
-            account_id,
-            u64::from(coin.index()),
+            PARTY_ID,
+            ACCOUNT_ID,
+            u64::from(Coin::USDC.index()),
             available,
             Decimal::ZERO,
             version,
@@ -306,274 +382,238 @@ mod settle_hour2_tests {
         )
     }
 
-    fn valid_position() -> PerpPositionV3 {
-        position(PARTY_ID, Coin::BTC, MarginModeV3::Cross, FundingAccumulatorV3::default(), 3)
-    }
+    #[test]
+    fn aggregates_shared_entities_once_and_preserves_input_order() {
+        let fundings = vec![funding(20, Decimal::from(3)), funding(10, Decimal::from(-1))];
+        let positions = vec![valid_position()];
+        let balances = vec![balance(Decimal::TEN, 4)];
+        let before = (fundings.clone(), positions.clone(), balances.clone());
 
-    fn valid_balance() -> BalanceV2 {
-        balance(PARTY_ID, ACCOUNT_ID, Coin::USDC, Decimal::TEN, 4)
+        let output =
+            settle_user_funding_batch(&fundings, &positions, &balances, SETTLED_AT).unwrap();
+
+        assert_eq!((fundings, positions, balances), before);
+        assert_eq!(
+            output.changed_fundings.iter().map(|pair| pair.before.funding_id()).collect::<Vec<_>>(),
+            vec![20, 10]
+        );
+        assert!(
+            output
+                .changed_fundings
+                .iter()
+                .all(|pair| pair.after.state() == UserFundingState::Settled)
+        );
+        assert_eq!(output.changed_positions.len(), 1);
+        assert_eq!(output.changed_positions[0].after.cum_funding().all_time, Decimal::from(2));
+        assert_eq!(output.changed_positions[0].after.version(), 4);
+        assert_eq!(output.changed_balances.len(), 1);
+        assert_eq!(output.changed_balances[0].after.available(), Decimal::from(12));
+        assert_eq!(output.changed_balances[0].after.version(), 5);
     }
 
     #[test]
-    fn positive_funding_returns_three_after_snapshots_without_mutating_inputs() {
-        let funding = funding(Decimal::from(3));
-        let position = valid_position();
-        let balance = valid_balance();
-        let before = (funding.clone(), position.clone(), balance.clone());
-
-        let output = settle_hour2(&funding, &position, &balance, ACCOUNT_ID, SETTLED_AT).unwrap();
-
-        assert_eq!((funding, position, balance), before);
-        assert_eq!(output.user_funding.state(), UserFundingState::Settled);
-        assert_eq!(output.user_funding.version(), 2);
-        assert_eq!(output.user_funding.updated_at(), SETTLED_AT);
-        assert_eq!(output.position.cum_funding().all_time, Decimal::from(3));
-        assert_eq!(output.position.cum_funding().since_open, Decimal::from(3));
-        assert_eq!(output.position.cum_funding().since_change, Decimal::from(3));
-        assert_eq!(output.position.version(), 4);
-        assert_eq!(output.balance.available(), Decimal::from(13));
-        assert_eq!(output.balance.version(), 5);
-    }
-
-    #[test]
-    fn negative_funding_debits_absolute_amount_and_accumulates_signed_amount() {
-        let output = settle_hour2(
-            &funding(Decimal::from(-3)),
-            &valid_position(),
-            &valid_balance(),
-            ACCOUNT_ID,
+    fn net_zero_only_settles_funding_facts() {
+        let output = settle_user_funding_batch(
+            &[funding(1, Decimal::ONE), funding(2, Decimal::NEGATIVE_ONE)],
+            &[valid_position()],
+            &[balance(Decimal::TEN, 4)],
             SETTLED_AT,
         )
         .unwrap();
 
-        assert_eq!(output.position.cum_funding().all_time, Decimal::from(-3));
-        assert_eq!(output.balance.available(), Decimal::from(7));
+        assert_eq!(output.changed_fundings.len(), 2);
+        assert!(output.changed_positions.is_empty());
+        assert!(output.changed_balances.is_empty());
     }
 
     #[test]
-    fn rejects_funding_state_amount_time_and_margin_mode() {
-        let settled = UserFunding::restore_settled(
-            1,
-            PARTY_ID,
-            symbol(),
-            Decimal::ONE,
-            Decimal::ONE,
-            FundingRate::new(Decimal::new(1, 4)).unwrap(),
-            None,
-            CREATED_AT,
-            SETTLED_AT,
-            2,
-        );
-        let isolated = position(
-            PARTY_ID,
-            Coin::BTC,
-            MarginModeV3::Isolated,
-            FundingAccumulatorV3::default(),
-            3,
-        );
-        let cases = [
-            (
-                settle_hour2(&settled, &valid_position(), &valid_balance(), ACCOUNT_ID, SETTLED_AT),
-                SettleHour2Error::FundingAlreadySettled,
-            ),
-            (
-                settle_hour2(
-                    &funding(Decimal::ZERO),
-                    &valid_position(),
-                    &valid_balance(),
-                    ACCOUNT_ID,
-                    SETTLED_AT,
-                ),
-                SettleHour2Error::ZeroFundingAmount,
-            ),
-            (
-                settle_hour2(
-                    &funding(Decimal::ONE),
-                    &valid_position(),
-                    &valid_balance(),
-                    ACCOUNT_ID,
-                    CREATED_AT - 1,
-                ),
-                SettleHour2Error::InvalidSettlementTime,
-            ),
-            (
-                settle_hour2(
-                    &funding(Decimal::ONE),
-                    &isolated,
-                    &valid_balance(),
-                    ACCOUNT_ID,
-                    SETTLED_AT,
-                ),
-                SettleHour2Error::CrossMarginRequired,
-            ),
-        ];
-        for (actual, expected) in cases {
-            assert_eq!(actual, Err(expected));
-        }
-    }
-
-    #[test]
-    fn rejects_every_cross_entity_identity_mismatch() {
-        let other_party_position = position(
-            PARTY_ID + 1,
-            Coin::BTC,
-            MarginModeV3::Cross,
-            FundingAccumulatorV3::default(),
-            3,
-        );
-        let other_market_position =
-            position(PARTY_ID, Coin::ETH, MarginModeV3::Cross, FundingAccumulatorV3::default(), 3);
-        let funding = funding(Decimal::ONE);
-        let cases = [
-            (
-                settle_hour2(
-                    &funding,
-                    &other_party_position,
-                    &valid_balance(),
-                    ACCOUNT_ID,
-                    SETTLED_AT,
-                ),
-                SettleHour2Error::FundingPositionPartyMismatch,
-            ),
-            (
-                settle_hour2(
-                    &funding,
-                    &other_market_position,
-                    &valid_balance(),
-                    ACCOUNT_ID,
-                    SETTLED_AT,
-                ),
-                SettleHour2Error::FundingPositionMarketMismatch,
-            ),
-            (
-                settle_hour2(
-                    &funding,
-                    &valid_position(),
-                    &valid_balance(),
-                    ACCOUNT_ID + 1,
-                    SETTLED_AT,
-                ),
-                SettleHour2Error::BalanceAccountMismatch,
-            ),
-            (
-                settle_hour2(
-                    &funding,
-                    &valid_position(),
-                    &balance(PARTY_ID + 1, ACCOUNT_ID, Coin::USDC, Decimal::TEN, 4),
-                    ACCOUNT_ID,
-                    SETTLED_AT,
-                ),
-                SettleHour2Error::BalancePartyMismatch,
-            ),
-            (
-                settle_hour2(
-                    &funding,
-                    &valid_position(),
-                    &balance(PARTY_ID, ACCOUNT_ID, Coin::BTC, Decimal::TEN, 4),
-                    ACCOUNT_ID,
-                    SETTLED_AT,
-                ),
-                SettleHour2Error::BalanceQuoteCoinMismatch,
-            ),
-        ];
-        for (actual, expected) in cases {
-            assert_eq!(actual, Err(expected));
-        }
-    }
-
-    #[test]
-    fn rejects_insufficient_or_closed_balance_without_partial_result() {
-        let funding_input = funding(Decimal::from(-11));
-        let position = valid_position();
-        let balance_input = valid_balance();
+    fn rejects_duplicate_missing_and_invalid_business_state() {
+        let duplicate = funding(1, Decimal::ONE);
         assert_eq!(
-            settle_hour2(&funding_input, &position, &balance_input, ACCOUNT_ID, SETTLED_AT,),
-            Err(SettleHour2Error::InsufficientAvailableBalance)
-        );
-        assert_eq!(funding_input.state(), UserFundingState::Pending);
-        assert_eq!(position.cum_funding(), FundingAccumulatorV3::default());
-        assert_eq!(balance_input.available(), Decimal::TEN);
-
-        let mut closed = balance(PARTY_ID, ACCOUNT_ID, Coin::USDC, Decimal::ZERO, 4);
-        closed.apply(BalanceV2Event::Close { timestamp: 110 }).unwrap();
-        assert_eq!(
-            settle_hour2(
-                &funding(Decimal::ONE),
-                &valid_position(),
-                &closed,
-                ACCOUNT_ID,
+            settle_user_funding_batch(
+                &[duplicate.clone(), duplicate],
+                &[valid_position()],
+                &[balance(Decimal::TEN, 4)],
                 SETTLED_AT,
             ),
-            Err(SettleHour2Error::BalanceClosed)
+            Err(SettleUserFundingBatchError::DuplicateFunding { funding_id: 1 })
+        );
+        assert_eq!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ZERO)],
+                &[valid_position()],
+                &[balance(Decimal::TEN, 4)],
+                SETTLED_AT
+            ),
+            Err(SettleUserFundingBatchError::ZeroFundingAmount { funding_id: 1 })
+        );
+        assert_eq!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[],
+                &[balance(Decimal::TEN, 4)],
+                SETTLED_AT
+            ),
+            Err(SettleUserFundingBatchError::PositionNotFound { funding_id: 1 })
+        );
+        assert_eq!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[valid_position()],
+                &[],
+                SETTLED_AT
+            ),
+            Err(SettleUserFundingBatchError::BalanceNotFound { funding_id: 1 })
+        );
+        assert_eq!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[position(MarginModeV3::Isolated, FundingAccumulatorV3::default(), 3)],
+                &[balance(Decimal::TEN, 4)],
+                SETTLED_AT,
+            ),
+            Err(SettleUserFundingBatchError::CrossMarginRequired { position_id: 2 })
+        );
+    }
+
+    #[test]
+    fn settlement_time_accepts_equal_boundaries_and_rejects_the_previous_instant() {
+        assert_eq!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[valid_position()],
+                &[balance(Decimal::TEN, 4)],
+                CREATED_AT - 1,
+            ),
+            Err(SettleUserFundingBatchError::InvalidSettlementTime { funding_id: 1 })
+        );
+        assert!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[valid_position()],
+                &[balance(Decimal::TEN, 4)],
+                CREATED_AT,
+            )
+            .is_ok()
+        );
+
+        let mut position_value = serde_json::to_value(valid_position()).unwrap();
+        position_value["updated_at"] = serde_json::json!(SETTLED_AT);
+        let position_updated_at_settlement: PerpPositionV3 =
+            serde_json::from_value(position_value).unwrap();
+        assert_eq!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[position_updated_at_settlement.clone()],
+                &[balance(Decimal::TEN, 4)],
+                SETTLED_AT - 1,
+            ),
+            Err(SettleUserFundingBatchError::InvalidSettlementTime { funding_id: 1 })
+        );
+        assert!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[position_updated_at_settlement],
+                &[balance(Decimal::TEN, 4)],
+                SETTLED_AT,
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_balance_and_atomic_downstream_failures() {
+        let duplicate_balance = balance(Decimal::TEN, 4);
+        assert_eq!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[valid_position()],
+                &[duplicate_balance.clone(), duplicate_balance],
+                SETTLED_AT,
+            ),
+            Err(SettleUserFundingBatchError::DuplicateBalance { funding_id: 1 })
+        );
+
+        let fundings = vec![funding(1, Decimal::from(-11))];
+        let positions = vec![valid_position()];
+        let balances = vec![balance(Decimal::TEN, 4)];
+        let before = (fundings.clone(), positions.clone(), balances.clone());
+        assert_eq!(
+            settle_user_funding_batch(&fundings, &positions, &balances, SETTLED_AT),
+            Err(SettleUserFundingBatchError::InsufficientAvailableBalance {
+                account_id: ACCOUNT_ID
+            })
+        );
+        assert_eq!((fundings, positions, balances), before);
+
+        let mut closed = balance(Decimal::ZERO, 4);
+        closed.apply(BalanceV2Event::Close { timestamp: 110 }).unwrap();
+        assert_eq!(
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[valid_position()],
+                &[closed],
+                SETTLED_AT
+            ),
+            Err(SettleUserFundingBatchError::BalanceClosed { account_id: ACCOUNT_ID })
         );
     }
 
     #[test]
     fn maps_funding_position_and_balance_overflow() {
-        let mut funding_value = serde_json::to_value(funding(Decimal::ONE)).unwrap();
+        let mut funding_value = serde_json::to_value(funding(1, Decimal::ONE)).unwrap();
         funding_value["version"] = serde_json::json!(u64::MAX);
         let funding_version_max: UserFunding = serde_json::from_value(funding_value).unwrap();
         assert_eq!(
-            settle_hour2(
-                &funding_version_max,
-                &valid_position(),
-                &valid_balance(),
-                ACCOUNT_ID,
-                SETTLED_AT,
+            settle_user_funding_batch(
+                &[funding_version_max],
+                &[valid_position()],
+                &[balance(Decimal::TEN, 4)],
+                SETTLED_AT
             ),
-            Err(SettleHour2Error::FundingVersionOverflow)
+            Err(SettleUserFundingBatchError::FundingVersionOverflow { funding_id: 1 })
         );
 
-        let accumulator_max = FundingAccumulatorV3 {
+        let accumulator = FundingAccumulatorV3 {
             all_time: Decimal::MAX,
             since_open: Decimal::ZERO,
             since_change: Decimal::ZERO,
         };
         assert_eq!(
-            settle_hour2(
-                &funding(Decimal::ONE),
-                &position(PARTY_ID, Coin::BTC, MarginModeV3::Cross, accumulator_max, 3),
-                &valid_balance(),
-                ACCOUNT_ID,
-                SETTLED_AT,
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[position(MarginModeV3::Cross, accumulator, 3)],
+                &[balance(Decimal::TEN, 4)],
+                SETTLED_AT
             ),
-            Err(SettleHour2Error::PositionArithmeticOverflow)
+            Err(SettleUserFundingBatchError::PositionArithmeticOverflow { position_id: 2 })
         );
         assert_eq!(
-            settle_hour2(
-                &funding(Decimal::ONE),
-                &valid_position(),
-                &balance(PARTY_ID, ACCOUNT_ID, Coin::USDC, Decimal::MAX, 4),
-                ACCOUNT_ID,
-                SETTLED_AT,
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[valid_position()],
+                &[balance(Decimal::MAX, 4)],
+                SETTLED_AT
             ),
-            Err(SettleHour2Error::BalanceArithmeticOverflow)
+            Err(SettleUserFundingBatchError::BalanceArithmeticOverflow { account_id: ACCOUNT_ID })
         );
         assert_eq!(
-            settle_hour2(
-                &funding(Decimal::ONE),
-                &position(
-                    PARTY_ID,
-                    Coin::BTC,
-                    MarginModeV3::Cross,
-                    FundingAccumulatorV3::default(),
-                    u64::MAX,
-                ),
-                &valid_balance(),
-                ACCOUNT_ID,
-                SETTLED_AT,
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[position(MarginModeV3::Cross, FundingAccumulatorV3::default(), u64::MAX)],
+                &[balance(Decimal::TEN, 4)],
+                SETTLED_AT
             ),
-            Err(SettleHour2Error::PositionArithmeticOverflow)
+            Err(SettleUserFundingBatchError::PositionArithmeticOverflow { position_id: 2 })
         );
         assert_eq!(
-            settle_hour2(
-                &funding(Decimal::ONE),
-                &valid_position(),
-                &balance(PARTY_ID, ACCOUNT_ID, Coin::USDC, Decimal::TEN, u64::MAX),
-                ACCOUNT_ID,
-                SETTLED_AT,
+            settle_user_funding_batch(
+                &[funding(1, Decimal::ONE)],
+                &[valid_position()],
+                &[balance(Decimal::TEN, u64::MAX)],
+                SETTLED_AT
             ),
-            Err(SettleHour2Error::BalanceArithmeticOverflow)
+            Err(SettleUserFundingBatchError::BalanceArithmeticOverflow { account_id: ACCOUNT_ID })
         );
     }
 }

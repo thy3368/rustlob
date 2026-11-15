@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges,
+    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::account::symbol::Symbol;

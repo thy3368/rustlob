@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges,
+    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use rust_decimal::Decimal;
@@ -115,7 +115,12 @@ fn map_position_error(error: PerpPositionV3Error) -> UpdateHyperliquidPerpLevera
         }
         PerpPositionV3Error::InvalidQuantity
         | PerpPositionV3Error::InvalidPrice
-        | PerpPositionV3Error::InvalidState => UpdateHyperliquidPerpLeverageError::PositionMismatch,
+        | PerpPositionV3Error::InvalidState
+        | PerpPositionV3Error::FundingUserMismatch
+        | PerpPositionV3Error::FundingCoinMismatch
+        | PerpPositionV3Error::InvalidFundingSettlementTime => {
+            UpdateHyperliquidPerpLeverageError::PositionMismatch
+        }
     }
 }
 

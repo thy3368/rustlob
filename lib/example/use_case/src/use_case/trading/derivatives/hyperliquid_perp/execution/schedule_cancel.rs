@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::{ScheduledCancel, ScheduledCancelError, UserId};

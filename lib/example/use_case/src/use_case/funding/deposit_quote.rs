@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff,
+    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use serde::{Deserialize, Serialize};

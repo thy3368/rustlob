@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    Entity, EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff,
+    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::spot::SpotTradeV3;
