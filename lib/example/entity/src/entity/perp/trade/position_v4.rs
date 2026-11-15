@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, TrackDiff, FourColorArchetype,
-    Fsm, Shard,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm, Shard,
+    TrackDiff,
 };
 use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
@@ -85,6 +85,8 @@ pub enum PositionError {
     InvalidLeverage,
     #[error("invalid margin configuration")]
     InvalidMarginConfiguration,
+    #[error("maintenance margin rate must be in (0, 1]")]
+    InvalidMaintenanceMarginRate,
     #[error("event is not valid for this state")]
     InvalidState,
     #[error("isolated margin cannot be negative")]
@@ -333,45 +335,65 @@ impl Fsm for PositionV4 {
     }
 }
 
+/// 单个活动全仓仓位在给定 mark price 下的风险事实。
+///
+/// 该结果只包含持仓风险，不包含挂单保证金占用。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PositionRiskSnapshot {
-    pub position_value: Decimal,
+pub struct CrossMarginPositionRisk {
+    /// 仓位绝对名义价值：`abs(size) * mark_price`。
+    pub notional: Decimal,
+    /// 未实现盈亏：`(mark_price - entry_price) * signed_size`。
     pub unrealized_pnl: Decimal,
-    pub return_on_equity: Decimal,
-    pub liquidation_px: Option<Decimal>,
-    pub margin_used: Decimal,
-    pub max_leverage: u8,
+    /// 初始保证金占用：`notional / leverage`，不包含挂单保证金。
+    pub initial_margin_used: Decimal,
+    /// 维持保证金占用：`notional * maintenance_margin_rate`，不包含挂单保证金。
+    pub maintenance_margin_used: Decimal,
 }
 impl PositionV4 {
-    pub fn risk_snapshot(
+    /// 无副作用地计算单个活动全仓仓位的风险。
+    ///
+    /// 要求仓位为非零 `Open` 全仓仓位、`mark_price > 0`、
+    /// `0 < maintenance_margin_rate <= 1` 且杠杆非零；任一计算无法由
+    /// [`Decimal`] 表示时返回 [`PositionError::ArithmeticOverflow`]。
+    pub fn cross_margin_risk(
         &self,
-        mark: Decimal,
-        equity: Decimal,
-        max_leverage: u8,
-    ) -> Result<PositionRiskSnapshot, PositionError> {
-        if mark <= Decimal::ZERO {
+        mark_price: Decimal,
+        maintenance_margin_rate: Decimal,
+    ) -> Result<CrossMarginPositionRisk, PositionError> {
+        if self.state != PositionState::Open || self.szi.is_zero() {
+            return Err(PositionError::InvalidState);
+        }
+        if self.leverage.leverage_type != MarginMode::Cross {
+            return Err(PositionError::InvalidMarginConfiguration);
+        }
+        if mark_price <= Decimal::ZERO {
             return Err(PositionError::InvalidPrice);
         }
-        let value = self.szi.abs().checked_mul(mark).ok_or(PositionError::ArithmeticOverflow)?;
-        let pnl = mark
+        if maintenance_margin_rate <= Decimal::ZERO || maintenance_margin_rate > Decimal::ONE {
+            return Err(PositionError::InvalidMaintenanceMarginRate);
+        }
+        if self.leverage.value == 0 {
+            return Err(PositionError::InvalidLeverage);
+        }
+
+        let notional =
+            self.szi.abs().checked_mul(mark_price).ok_or(PositionError::ArithmeticOverflow)?;
+        let unrealized_pnl = mark_price
             .checked_sub(self.entry_px)
             .and_then(|v| v.checked_mul(self.szi))
             .ok_or(PositionError::ArithmeticOverflow)?;
-        let roe = if equity.is_zero() {
-            Decimal::ZERO
-        } else {
-            pnl.checked_div(equity).ok_or(PositionError::ArithmeticOverflow)?
-        };
-        let margin = value
+        let initial_margin_used = notional
             .checked_div(Decimal::from(self.leverage.value))
             .ok_or(PositionError::ArithmeticOverflow)?;
-        Ok(PositionRiskSnapshot {
-            position_value: value,
-            unrealized_pnl: pnl,
-            return_on_equity: roe,
-            liquidation_px: None,
-            margin_used: margin,
-            max_leverage,
+        let maintenance_margin_used = notional
+            .checked_mul(maintenance_margin_rate)
+            .ok_or(PositionError::ArithmeticOverflow)?;
+
+        Ok(CrossMarginPositionRisk {
+            notional,
+            unrealized_pnl,
+            initial_margin_used,
+            maintenance_margin_used,
         })
     }
 }
@@ -439,8 +461,36 @@ impl Entity for PositionV4 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Leverage, MarginMode, PositionV4};
+    use common_entity::Fsm;
+    use rust_decimal::Decimal;
+
+    use super::{
+        FillSource, Leverage, MarginMode, PositionError, PositionEvent, PositionFill,
+        PositionState, PositionV4,
+    };
     use crate::account::coin::Coin;
+
+    fn open_position(size: Decimal, entry_price: Decimal, leverage: u8) -> PositionV4 {
+        let mut position = PositionV4::new(
+            1,
+            2,
+            Coin::BTC,
+            Leverage { leverage_type: MarginMode::Cross, value: leverage, raw_usd: None },
+            1,
+        )
+        .unwrap();
+        position
+            .apply(PositionEvent::TradeFilled {
+                fill: PositionFill {
+                    signed_quantity: size,
+                    price: entry_price,
+                    source: FillSource::Regular,
+                },
+                logical_ts: 2,
+            })
+            .unwrap();
+        position
+    }
 
     #[test]
     fn constructors_preserve_coin() {
@@ -456,5 +506,96 @@ mod tests {
         )
         .expect("valid leverage should construct a position");
         assert_eq!(position.coin(), Coin::ETH);
+    }
+
+    #[test]
+    fn calculates_long_and_short_cross_margin_risk_without_mutation() {
+        let long = open_position(Decimal::from(2), Decimal::from(100), 10);
+        let before = long.clone();
+        let risk = long.cross_margin_risk(Decimal::from(110), Decimal::new(5, 2)).unwrap();
+        assert_eq!(risk.notional, Decimal::from(220));
+        assert_eq!(risk.unrealized_pnl, Decimal::from(20));
+        assert_eq!(risk.initial_margin_used, Decimal::from(22));
+        assert_eq!(risk.maintenance_margin_used, Decimal::from(11));
+        assert_eq!(long, before);
+
+        let short = open_position(Decimal::from(-3), Decimal::from(50), 5);
+        let risk = short.cross_margin_risk(Decimal::from(60), Decimal::new(1, 1)).unwrap();
+        assert_eq!(risk.notional, Decimal::from(180));
+        assert_eq!(risk.unrealized_pnl, Decimal::from(-30));
+        assert_eq!(risk.initial_margin_used, Decimal::from(36));
+        assert_eq!(risk.maintenance_margin_used, Decimal::from(18));
+    }
+
+    #[test]
+    fn rejects_inactive_isolated_and_invalid_risk_inputs() {
+        let empty = PositionV4::empty(1, 2, Coin::BTC);
+        assert_eq!(
+            empty.cross_margin_risk(Decimal::ONE, Decimal::ONE),
+            Err(PositionError::InvalidState)
+        );
+
+        let mut zero_size = open_position(Decimal::ONE, Decimal::ONE, 1);
+        zero_size.szi = Decimal::ZERO;
+        assert_eq!(
+            zero_size.cross_margin_risk(Decimal::ONE, Decimal::ONE),
+            Err(PositionError::InvalidState)
+        );
+
+        let mut isolated = open_position(Decimal::ONE, Decimal::ONE, 1);
+        isolated.leverage = Leverage {
+            leverage_type: MarginMode::Isolated,
+            value: 1,
+            raw_usd: Some(Decimal::ZERO),
+        };
+        assert_eq!(
+            isolated.cross_margin_risk(Decimal::ONE, Decimal::ONE),
+            Err(PositionError::InvalidMarginConfiguration)
+        );
+
+        let position = open_position(Decimal::ONE, Decimal::ONE, 1);
+        for mark_price in [Decimal::ZERO, Decimal::NEGATIVE_ONE] {
+            assert_eq!(
+                position.cross_margin_risk(mark_price, Decimal::ONE),
+                Err(PositionError::InvalidPrice)
+            );
+        }
+        for rate in [Decimal::ZERO, Decimal::NEGATIVE_ONE, Decimal::from(2)] {
+            assert_eq!(
+                position.cross_margin_risk(Decimal::ONE, rate),
+                Err(PositionError::InvalidMaintenanceMarginRate)
+            );
+        }
+
+        let mut zero_leverage = position;
+        zero_leverage.leverage.value = 0;
+        assert_eq!(
+            zero_leverage.cross_margin_risk(Decimal::ONE, Decimal::ONE),
+            Err(PositionError::InvalidLeverage)
+        );
+    }
+
+    #[test]
+    fn rejects_cross_margin_risk_arithmetic_overflow() {
+        let mut notional_overflow = open_position(Decimal::ONE, Decimal::ONE, 1);
+        notional_overflow.szi = Decimal::MAX;
+        assert_eq!(
+            notional_overflow.cross_margin_risk(Decimal::from(2), Decimal::ONE),
+            Err(PositionError::ArithmeticOverflow)
+        );
+
+        let mut pnl_overflow = open_position(Decimal::ONE, Decimal::ONE, 1);
+        pnl_overflow.entry_px = Decimal::NEGATIVE_ONE;
+        assert_eq!(
+            pnl_overflow.cross_margin_risk(Decimal::MAX, Decimal::ONE),
+            Err(PositionError::ArithmeticOverflow)
+        );
+
+        let mut flat = open_position(Decimal::ONE, Decimal::ONE, 1);
+        flat.state = PositionState::Flat;
+        assert_eq!(
+            flat.cross_margin_risk(Decimal::ONE, Decimal::ONE),
+            Err(PositionError::InvalidState)
+        );
     }
 }

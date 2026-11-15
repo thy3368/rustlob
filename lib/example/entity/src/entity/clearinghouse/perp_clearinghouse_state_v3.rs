@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::BalanceV2;
 use crate::account::coin::Coin;
-use crate::entity::perp::trade::position_v4::{MarginMode, PositionState, PositionV4};
+use crate::entity::perp::trade::position_v4::{PositionError, PositionV4};
 
 /// 永续合约账户在指定时点的全仓风险快照。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,58 +89,33 @@ impl PerpClearinghouseStateV3 {
 
         for input in positions {
             let position = input.position;
+            // 账户归属、币种唯一和快照时间是跨实体或集合事实，必须由 clearinghouse 校验。
             if position.account_id() != balance.account_id() {
                 return Err(BuildClearinghouseStateError::AccountMismatch);
             }
-            if position.state() != PositionState::Open || position.signed_size().is_zero() {
-                return Err(BuildClearinghouseStateError::InactivePosition);
-            }
-            if position.leverage().leverage_type != MarginMode::Cross {
-                return Err(BuildClearinghouseStateError::PositionMustBeCrossMargin);
-            }
             if seen_coins.contains(&position.coin()) {
                 return Err(BuildClearinghouseStateError::DuplicateCoin);
-            }
-            if input.mark_price <= Decimal::ZERO {
-                return Err(BuildClearinghouseStateError::InvalidMarkPrice);
-            }
-            if input.maintenance_margin_rate <= Decimal::ZERO
-                || input.maintenance_margin_rate > Decimal::ONE
-            {
-                return Err(BuildClearinghouseStateError::InvalidMaintenanceMarginRate);
             }
             if time < position.updated_at() {
                 return Err(BuildClearinghouseStateError::StaleSnapshot);
             }
 
-            let size = position.signed_size().abs();
-            let notional = size
-                .checked_mul(input.mark_price)
-                .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
-            let pnl = input
-                .mark_price
-                .checked_sub(position.entry_price())
-                .and_then(|difference| difference.checked_mul(position.signed_size()))
-                .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
-            let position_initial_margin = notional
-                .checked_div(Decimal::from(position.leverage().value))
-                .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
-            let position_maintenance_margin =
-                notional
-                    .checked_mul(input.maintenance_margin_rate)
-                    .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
+            let risk = position
+                .cross_margin_risk(input.mark_price, input.maintenance_margin_rate)
+                .map_err(map_position_risk_error)?;
 
+            // 单仓位风险由实体给出；clearinghouse 只负责汇总为账户快照。
             total_notional = total_notional
-                .checked_add(notional)
+                .checked_add(risk.notional)
                 .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
             unrealized_pnl = unrealized_pnl
-                .checked_add(pnl)
+                .checked_add(risk.unrealized_pnl)
                 .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
             initial_margin_used = initial_margin_used
-                .checked_add(position_initial_margin)
+                .checked_add(risk.initial_margin_used)
                 .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
             maintenance_margin_used = maintenance_margin_used
-                .checked_add(position_maintenance_margin)
+                .checked_add(risk.maintenance_margin_used)
                 .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
             seen_coins.push(position.coin());
             snapshot_positions.push(position);
@@ -205,6 +180,25 @@ impl PerpClearinghouseStateV3 {
     }
 }
 
+fn map_position_risk_error(error: PositionError) -> BuildClearinghouseStateError {
+    match error {
+        PositionError::InvalidState => BuildClearinghouseStateError::InactivePosition,
+        PositionError::InvalidMarginConfiguration => {
+            BuildClearinghouseStateError::PositionMustBeCrossMargin
+        }
+        PositionError::InvalidPrice => BuildClearinghouseStateError::InvalidMarkPrice,
+        PositionError::InvalidMaintenanceMarginRate => {
+            BuildClearinghouseStateError::InvalidMaintenanceMarginRate
+        }
+        PositionError::ArithmeticOverflow | PositionError::InvalidLeverage => {
+            BuildClearinghouseStateError::ArithmeticOverflow
+        }
+        PositionError::InvalidQuantity | PositionError::InvalidIsolatedMargin => {
+            BuildClearinghouseStateError::ArithmeticOverflow
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use common_entity::Fsm;
@@ -212,7 +206,7 @@ mod tests {
 
     use super::*;
     use crate::entity::perp::trade::position_v4::{
-        FillSource, Leverage, PositionEvent, PositionFill,
+        FillSource, Leverage, MarginMode, PositionEvent, PositionFill,
     };
 
     const ACCOUNT: u64 = 7;
