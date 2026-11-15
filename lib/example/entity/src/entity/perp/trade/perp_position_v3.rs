@@ -1,5 +1,4 @@
 use common_entity::{Entity, EntityFieldChange, Fsm, Shard, TrackDiff};
-use rust_decimal::prelude::Signed;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -7,7 +6,7 @@ use thiserror::Error;
 use crate::account::coin::Coin;
 use crate::entity::common::{FundingRate, UserId};
 use crate::perp::fund::user_funding::UserFunding;
-use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
+use crate::perp::trade::perp_trade_v3::PerpTradeV3;
 
 const PERP_POSITION_V3_ENTITY_TYPE: u8 = 11;
 
@@ -54,6 +53,12 @@ pub enum PerpPositionV3Error {
     ArithmeticOverflow,
     #[error("isolated margin is invalid")]
     InvalidIsolatedMargin,
+    #[error("funding user does not match position owner")]
+    FundingUserMismatch,
+    #[error("funding coin does not match position market")]
+    FundingCoinMismatch,
+    #[error("funding settlement time precedes the position update time")]
+    InvalidFundingSettlementTime,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -395,7 +400,44 @@ impl Fsm for PerpPositionV3 {
                 signed_amount,
                 logical_ts,
             } => {
-                todo!()
+                if user_id != self.user_id {
+                    return Err(PerpPositionV3Error::FundingUserMismatch);
+                }
+                if coin != self.coin {
+                    return Err(PerpPositionV3Error::FundingCoinMismatch);
+                }
+                if logical_ts < self.updated_at {
+                    return Err(PerpPositionV3Error::InvalidFundingSettlementTime);
+                }
+
+                let cum_funding = FundingAccumulatorV3 {
+                    all_time: self
+                        .cum_funding
+                        .all_time
+                        .checked_add(signed_amount)
+                        .ok_or(PerpPositionV3Error::ArithmeticOverflow)?,
+                    since_open: self
+                        .cum_funding
+                        .since_open
+                        .checked_add(signed_amount)
+                        .ok_or(PerpPositionV3Error::ArithmeticOverflow)?,
+                    since_change: self
+                        .cum_funding
+                        .since_change
+                        .checked_add(signed_amount)
+                        .ok_or(PerpPositionV3Error::ArithmeticOverflow)?,
+                };
+                //todo lsn由event传入
+                let version =
+                    self.lsn.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
+
+                self.cum_funding = cum_funding;
+                self.updated_at = logical_ts;
+                self.lsn = version;
+                Ok((
+                    PerpPositionV3State::Active,
+                    PerpPositionV3Output::FundingApplied { signed_amount },
+                ))
             }
             PerpPositionV3Event::LeverageUpdated { leverage, margin_mode, logical_ts } => {
                 todo!()
@@ -475,5 +517,108 @@ mod tests {
         assert_eq!(position.realized_pnl(), Decimal::TEN);
         assert_eq!(position.cum_fee(), Decimal::new(25, 2));
         assert_eq!(position.version(), 5);
+    }
+
+    #[test]
+    fn funding_amount_settlement_updates_all_accumulators_and_metadata() {
+        let mut position = PerpPositionV3::new(
+            1,
+            UserId(7),
+            Coin::BTC,
+            Decimal::ONE,
+            Decimal::from(100),
+            Decimal::from(5),
+            MarginModeV3::Cross,
+            None,
+            Decimal::ZERO,
+            FundingAccumulatorV3 {
+                all_time: Decimal::ONE,
+                since_open: Decimal::from(2),
+                since_change: Decimal::from(3),
+            },
+            Decimal::ZERO,
+            4,
+        )
+        .unwrap();
+
+        let (state, output) = position
+            .transition(PerpPositionV3Event::FundingAmountSettled {
+                user_id: UserId(7),
+                coin: Coin::BTC,
+                signed_amount: Decimal::from(-1),
+                logical_ts: 9,
+            })
+            .unwrap();
+
+        assert_eq!(state, PerpPositionV3State::Active);
+        assert_eq!(output, PerpPositionV3Output::FundingApplied { signed_amount: -Decimal::ONE });
+        assert_eq!(
+            position.cum_funding(),
+            FundingAccumulatorV3 {
+                all_time: Decimal::ZERO,
+                since_open: Decimal::ONE,
+                since_change: Decimal::from(2),
+            }
+        );
+        assert_eq!(position.version(), 5);
+        assert_eq!(position.updated_at(), 9);
+    }
+
+    #[test]
+    fn funding_amount_settlement_errors_leave_position_unchanged() {
+        let base = PerpPositionV3::new(
+            1,
+            UserId(7),
+            Coin::BTC,
+            Decimal::ONE,
+            Decimal::from(100),
+            Decimal::from(5),
+            MarginModeV3::Cross,
+            None,
+            Decimal::ZERO,
+            FundingAccumulatorV3 {
+                all_time: Decimal::MAX,
+                since_open: Decimal::ZERO,
+                since_change: Decimal::ZERO,
+            },
+            Decimal::ZERO,
+            4,
+        )
+        .unwrap();
+        let cases = [
+            (
+                PerpPositionV3Event::FundingAmountSettled {
+                    user_id: UserId(8),
+                    coin: Coin::BTC,
+                    signed_amount: Decimal::ONE,
+                    logical_ts: 9,
+                },
+                PerpPositionV3Error::FundingUserMismatch,
+            ),
+            (
+                PerpPositionV3Event::FundingAmountSettled {
+                    user_id: UserId(7),
+                    coin: Coin::ETH,
+                    signed_amount: Decimal::ONE,
+                    logical_ts: 9,
+                },
+                PerpPositionV3Error::FundingCoinMismatch,
+            ),
+            (
+                PerpPositionV3Event::FundingAmountSettled {
+                    user_id: UserId(7),
+                    coin: Coin::BTC,
+                    signed_amount: Decimal::ONE,
+                    logical_ts: 9,
+                },
+                PerpPositionV3Error::ArithmeticOverflow,
+            ),
+        ];
+
+        for (event, expected) in cases {
+            let mut position = base.clone();
+            assert_eq!(position.transition(event), Err(expected));
+            assert_eq!(position, base);
+        }
     }
 }
