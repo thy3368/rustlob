@@ -1,7 +1,7 @@
 use rust_decimal::Decimal;
 
 use super::funding_rate_tick::FundingRateTick;
-use super::price::Price;
+use crate::entity::common::price::Price;
 use crate::account::symbol::Symbol;
 use crate::entity::common::FundingRate;
 

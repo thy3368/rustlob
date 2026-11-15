@@ -7,5 +7,6 @@ pub mod common_trade;
 pub mod decimal_value;
 pub mod order_primitives;
 pub mod scheduled_cancel;
+pub mod price;
 
 pub use decimal_value::{DecimalValueError, FundingRate, FundingRate2};
