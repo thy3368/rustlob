@@ -1,4 +1,5 @@
-use crate::{Entity, EntityError, EntityReplayableEvent};
+use crate::entity_v2::entity::TrackDiff;
+use crate::{EntityError, EntityReplayableEvent};
 
 /// 实体业务变更的最小回放契约。
 ///
@@ -24,7 +25,7 @@ impl<E> UpdatedEntityPair<E> {
 
 impl<E> UpdatedEntityPair<E>
 where
-    E: Entity,
+    E: TrackDiff,
 {
     #[inline]
     pub fn to_replayable_event(&self) -> Result<EntityReplayableEvent, EntityError> {
