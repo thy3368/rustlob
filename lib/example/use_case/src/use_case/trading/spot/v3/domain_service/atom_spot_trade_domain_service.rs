@@ -69,23 +69,23 @@ impl SpotTradeDomainService {
         buyer_quote_balance_after.apply(BalanceV2Event::DebitFrozen {
             amount: amounts.buyer_quote_payment,
             timestamp,
-            lsn: timestamp,
+            lsn: buyer_quote_balance.version() + 1,
         })?;
         buyer_base_balance_after.apply(BalanceV2Event::CreditAvailable {
             amount: amounts.base_amount,
             timestamp,
-            lsn: timestamp,
+            lsn: buyer_base_balance.version() + 1,
         })?;
         seller_base_balance_after.apply(BalanceV2Event::DebitFrozen {
             amount: amounts.base_amount,
             timestamp,
-            lsn: timestamp,
+            lsn: seller_base_balance.version() + 1,
         })?;
         if amounts.seller_quote_receipt > Decimal::ZERO {
             seller_quote_balance_after.apply(BalanceV2Event::CreditAvailable {
                 amount: amounts.seller_quote_receipt,
                 timestamp,
-                lsn: timestamp,
+                lsn: seller_quote_balance.version() + 1,
             })?;
         }
         trade_after.apply(SpotTradeEvent::Settle)?;

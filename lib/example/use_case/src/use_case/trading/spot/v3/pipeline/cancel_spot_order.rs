@@ -286,7 +286,7 @@ mod tests {
             let balance = changes.updated_balance.expect("open order must release its hold");
             assert_eq!(balance.after.available(), Decimal::from(30));
             assert_eq!(balance.after.frozen(), Decimal::ZERO);
-            assert_eq!(balance.after.version(), 10);
+            assert_eq!(balance.after.version(), 9);
             assert_eq!(balance.after.updated_at(), LOGICAL_TS);
             let events = CancelSpotOrderV3Changes {
                 updated_order: changes.updated_order,

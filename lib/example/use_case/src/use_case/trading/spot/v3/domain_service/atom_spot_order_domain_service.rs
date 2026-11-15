@@ -130,13 +130,13 @@ impl SpotOrderDomainService {
                 unfreeze_amount: current - target,
                 payment_amount: Decimal::ZERO,
                 timestamp,
-                lsn: timestamp,
+                lsn: settled_balance.version() + 1,
             })?;
         } else if current < target {
             settled_balance.apply(BalanceV2Event::Freeze {
                 amount: target - current,
                 timestamp,
-                lsn: timestamp,
+                lsn: settled_balance.version() + 1,
             })?;
         }
         Ok(settled_balance)
@@ -335,7 +335,7 @@ impl SpotOrderDomainService {
                 balance.apply(BalanceV2Event::Freeze {
                     amount: amount.amount(),
                     timestamp,
-                    lsn: timestamp,
+                    lsn,
                 })?;
             }
             SpotOrderV7HoldAdjustment::Decrease { amount } => {
@@ -343,7 +343,7 @@ impl SpotOrderDomainService {
                     unfreeze_amount: amount.amount(),
                     payment_amount: Decimal::ZERO,
                     timestamp,
-                    lsn: timestamp,
+                    lsn,
                 })?;
             }
             SpotOrderV7HoldAdjustment::Unchanged { .. } => {}
@@ -372,7 +372,7 @@ impl SpotOrderDomainService {
         balance.apply(BalanceV2Event::Freeze {
             amount: freeze_requirement.amount(),
             timestamp,
-            lsn: timestamp,
+            lsn,
         })?;
 
         Ok((order, balance))
@@ -401,7 +401,7 @@ impl SpotOrderDomainService {
                 unfreeze_amount: release_requirement.amount(),
                 payment_amount: Decimal::ZERO,
                 timestamp,
-                lsn: timestamp,
+                lsn,
             })?;
         }
 

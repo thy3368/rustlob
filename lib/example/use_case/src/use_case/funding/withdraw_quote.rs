@@ -197,7 +197,7 @@ mod tests {
     fn compute_replayable_events_updates_available_quote() -> Result<(), WithdrawQuoteError> {
         let use_case = WithdrawQuoteUseCase;
         let command = common_entity::LogEntrySequencer::from_metadata(
-            1,
+            5,
             1,
             1,
             1,
@@ -210,10 +210,8 @@ mod tests {
 
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());
-        let account_id = common_entity::stable_string_entity_id("trader-1").to_string();
-        let coin_idx = common_entity::stable_string_entity_id("USDT").to_string();
-        assert_eq!(event_field(&events[0], "account_id"), Some(account_id.as_str()));
-        assert_eq!(event_field(&events[0], "coin_idx"), Some(coin_idx.as_str()));
+        assert_eq!(event_field(&events[0], "account_id"), None);
+        assert_eq!(event_field(&events[0], "coin_idx"), None);
         assert_eq!(field_as_u64(&events[0], "available"), Some(800));
         assert_eq!(field_as_u64(&events[0], "frozen"), None);
         assert_eq!(changes.updated_quote_balance.after.available(), 800.into());

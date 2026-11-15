@@ -115,7 +115,7 @@ mod tests {
 
     fn command(order_id: u64) -> LogEntry<UnFreezeSpotOrderV2Cmd> {
         LogEntrySequencer::from_metadata(
-            1,
+            5,
             LOGICAL_TS,
             1,
             1,
