@@ -139,6 +139,8 @@ pub enum PerpOrderV3Error {
 }
 
 /// 永续订单实体，共享订单价格、数量与触发价的语义单位。
+///
+/// 订单 LSN 来自全局 command；一次撮合中的 taker、maker 与多次内部推进共享事件 LSN。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpOrderV3 {
     pub comon_order: OrderBase,
@@ -154,6 +156,7 @@ impl Fsm for PerpOrderV3 {
     type Output = Option<MatchPerpOrderV3Output>;
     type Error = PerpOrderV3Error;
 
+    /// 使用事件提供的权威 LSN 原子推进订单；允许跳号和相等 LSN，拒绝 stale LSN。
     fn transition(
         &mut self,
         event: Self::BizEvent,
@@ -406,10 +409,7 @@ fn validate_timestamp(order: &OrderBase, timestamp: u64) -> Result<(), PerpOrder
 
 fn validate_lsn(order: &OrderBase, lsn: u64) -> Result<(), PerpOrderV3Error> {
     if lsn < order.lsn {
-        Err(PerpOrderV3Error::StaleLsn {
-            incoming_lsn: lsn,
-            current_lsn: order.lsn,
-        })
+        Err(PerpOrderV3Error::StaleLsn { incoming_lsn: lsn, current_lsn: order.lsn })
     } else {
         Ok(())
     }

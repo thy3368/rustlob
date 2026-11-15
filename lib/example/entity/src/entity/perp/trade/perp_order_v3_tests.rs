@@ -280,7 +280,6 @@ fn invalid_inputs_and_late_failures_are_atomic() {
 
     let mut max = taker(SpotOrderStatus::Pending);
     max.comon_order.lsn = u64::MAX;
-    max.transition(PerpOrderV3Event::Cancel { timestamp: NOW, lsn: u64::MAX })
-        .unwrap();
+    max.transition(PerpOrderV3Event::Cancel { timestamp: NOW, lsn: u64::MAX }).unwrap();
     assert_eq!(max.comon_order.lsn, u64::MAX);
 }

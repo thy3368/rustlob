@@ -67,6 +67,7 @@ pub enum SpotTradeStateError {
     StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
+/// 现货成交；结算版本直接采用 command LSN，可从较早版本跳号。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotTradeV3 {
     pub comon_trade: TradeBase,
@@ -221,15 +222,13 @@ impl Fsm for SpotTradeV3 {
     type Output = ();
     type Error = SpotTradeStateError;
 
+    /// 使用结算事件的权威 LSN 与逻辑时间完成成交，不生成 entity-local 下一版本。
     fn transition(
         &mut self,
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match (self.settlement_status, event) {
-            (
-                SpotTradeSettlementStatus::Unsettled,
-                SpotTradeEvent::Settle { lsn, logical_ts },
-            ) => {
+            (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle { lsn, logical_ts }) => {
                 if lsn < self.comon_trade.version {
                     return Err(SpotTradeStateError::StaleLsn {
                         incoming_lsn: lsn,

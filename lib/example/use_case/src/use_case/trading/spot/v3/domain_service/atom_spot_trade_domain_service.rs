@@ -42,6 +42,8 @@ pub struct SpotTradeDomainService;
 
 impl SpotTradeDomainService {
     /// 协调成交与买卖双方四个余额聚合，原输入只作为结算前快照使用。
+    ///
+    /// `lsn` 与 `logical_ts` 来自所属 use case 的 `LogEntry`；所有实际修改的聚合共享该元数据。
     pub fn settlement(
         trade: SpotTradeV3,
         buyer_base_balance: BalanceV2,
@@ -89,10 +91,7 @@ impl SpotTradeDomainService {
                 lsn,
             })?;
         }
-        trade_after.apply(SpotTradeEvent::Settle {
-            lsn,
-            logical_ts,
-        })?;
+        trade_after.apply(SpotTradeEvent::Settle { lsn, logical_ts })?;
 
         Ok(SpotTradeSettlementOutcome {
             trade_after,

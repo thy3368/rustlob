@@ -61,6 +61,9 @@ pub enum BalanceLedgerV3Error {
 }
 
 /// 一条 create-only 余额账务事实；余额先完成 FSM 迁移，再由本实体校验并记录快照。
+///
+/// `version` 使用事件携带的全局 command LSN，不是本地自增 revision；它可以跳号，
+/// 同一 command 修改余额并生成 ledger 时二者共享同一 LSN。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BalanceLedgerV3 {
     pub entry_id: u64,
@@ -118,6 +121,7 @@ impl Fsm for BalanceLedgerV3 {
     type Output = BalanceLedgerV3Output;
     type Error = BalanceLedgerV3Error;
 
+    /// 校验余额 after 快照采用事件 LSN，before 快照不晚于事件 LSN，然后原子记录快照。
     fn transition(
         &mut self,
         event: Self::BizEvent,
@@ -263,13 +267,7 @@ mod tests {
     fn update(balance: &BalanceV2, timestamp: u64) -> common_entity::UpdatedEntityPair<BalanceV2> {
         let before = balance.clone();
         let mut after = before.clone();
-        after
-            .apply(BalanceV2Event::Freeze {
-                amount: Decimal::TEN,
-                timestamp,
-                lsn: 20,
-            })
-            .unwrap();
+        after.apply(BalanceV2Event::Freeze { amount: Decimal::TEN, timestamp, lsn: 20 }).unwrap();
         common_entity::UpdatedEntityPair { before, after }
     }
 

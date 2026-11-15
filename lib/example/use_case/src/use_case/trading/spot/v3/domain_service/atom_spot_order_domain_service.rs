@@ -106,6 +106,7 @@ pub enum MatchSpotOrderV3Outcome {
 }
 
 impl SpotOrderDomainService {
+    /// 将 taker 持仓冻结额对账到 command 结束状态，并直接采用 command 的 LSN 与逻辑时间。
     pub fn reconcile_taker_hold(
         order_after: &SpotOrderV7,
         mut settled_balance: BalanceV2,

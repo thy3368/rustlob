@@ -121,6 +121,7 @@ pub enum PositionError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// 永续仓位；`version` 是最近应用的全局 command LSN，可跳号或被同一 command 复用。
 pub struct PositionV4 {
     position_id: u64,
     account_id: u64,
@@ -216,16 +217,14 @@ impl Fsm for PositionV4 {
     type BizEvent = PositionEvent;
     type Output = PositionOutput;
     type Error = PositionError;
+    /// 使用事件的 LSN 与逻辑时间推进仓位，不从当前实体版本推导下一版本。
     fn transition(
         &mut self,
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let lsn = event.lsn();
         if lsn < self.version {
-            return Err(PositionError::StaleLsn {
-                incoming_lsn: lsn,
-                current_lsn: self.version,
-            });
+            return Err(PositionError::StaleLsn { incoming_lsn: lsn, current_lsn: self.version });
         }
         let mut n = self.clone();
         let out = match event {

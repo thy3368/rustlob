@@ -389,12 +389,8 @@ mod tests {
     #[test]
     fn command_lsn_can_jump_repeat_and_reach_max_while_stale_is_atomic() {
         let mut subject = account(AccountStatus::Active, 4);
-        subject
-            .apply(SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 20 })
-            .unwrap();
-        subject
-            .apply(SpotAccountEvent::UnfreezeFromRisk { timestamp: 20, lsn: 20 })
-            .unwrap();
+        subject.apply(SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 20 }).unwrap();
+        subject.apply(SpotAccountEvent::UnfreezeFromRisk { timestamp: 20, lsn: 20 }).unwrap();
         assert_eq!(subject.version, 20);
 
         assert_rejected_without_mutation(
@@ -404,8 +400,7 @@ mod tests {
         );
 
         let mut max = account(AccountStatus::Active, u64::MAX);
-        max.apply(SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: u64::MAX })
-            .unwrap();
+        max.apply(SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: u64::MAX }).unwrap();
         assert_eq!(max.version, u64::MAX);
     }
 

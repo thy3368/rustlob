@@ -68,6 +68,7 @@ pub enum PerpTradeV3Error {
     StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
+/// 永续成交；结算版本直接采用 command LSN，而不是成交本地版本加一。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpTradeV3 {
     pub trade_base: TradeBase,
