@@ -432,8 +432,8 @@
 
 use std::fmt::Debug;
 
-use crate::entity_v2::shard::Log;
 use crate::ReplayableChanges;
+use crate::entity_v2::shard::Log;
 
 /// 多聚合 `use-case family` 编排的最低实现契约。
 ///

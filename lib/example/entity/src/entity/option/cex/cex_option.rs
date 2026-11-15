@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, TrackDiff, FinancialClassification,
-    FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, FinancialClassification, FourColorArchetype,
+    TrackDiff,
 };
 use thiserror::Error;
 

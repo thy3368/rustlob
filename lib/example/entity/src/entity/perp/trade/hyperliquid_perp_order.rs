@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityReplayableEvent, TrackDiff,
-    FinancialClassification, FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityReplayableEvent, FinancialClassification,
+    FourColorArchetype, TrackDiff,
 };
 use lob_repo_v2::LobError;
 use lob_repo_v2::lob::LobOrder;

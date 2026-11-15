@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, TrackDiff, FourColorArchetype};
+use common_entity::{Entity, EntityFieldChange, FourColorArchetype, TrackDiff};
 
 const CEX_OPTION_INSTRUMENT_ENTITY_TYPE: u8 = 40;
 

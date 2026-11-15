@@ -1,4 +1,4 @@
-use common_entity::{AggregateRole, Entity, EntityFieldChange, TrackDiff, FourColorArchetype, Fsm};
+use common_entity::{AggregateRole, Entity, EntityFieldChange, FourColorArchetype, Fsm, TrackDiff};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

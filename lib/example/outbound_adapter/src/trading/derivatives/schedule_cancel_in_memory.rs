@@ -322,6 +322,7 @@ fn replay_balance(
             unfreeze_amount: unfreeze,
             payment_amount: Decimal::ZERO,
             timestamp: event.logical_ts,
+            lsn: event.lsn,
         })
         .map_err(|error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()))?;
     if balance.available() != available || balance.frozen() != frozen {

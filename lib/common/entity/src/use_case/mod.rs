@@ -1,6 +1,6 @@
 pub mod event_handler;
-pub mod request_2_command;
 pub mod executor;
+pub mod request_2_command;
 
 pub mod log_entry;
 pub mod log_entry_repo;

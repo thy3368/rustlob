@@ -180,3 +180,131 @@ impl SettleHyperliquidPerpFundingUseCase {
         )?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use common_entity::{Entity, LogEntrySequencer};
+
+    use super::*;
+    use crate::entity::account::coin::Coin;
+    use crate::entity::perp::trade::perp_position_v3::FundingAccumulatorV3;
+
+    const COMMAND_LSN: u64 = 20;
+
+    fn command(rate: Decimal) -> LogEntry<SettleHyperliquidPerpFundingCmd> {
+        LogEntrySequencer::from_metadata(
+            COMMAND_LSN,
+            120,
+            1,
+            1,
+            common_entity::SYSTEM_USER_ID.to_owned(),
+            SettleHyperliquidPerpFundingCmd {
+                operator: UserId(99),
+                funding_batch_id: 7,
+                funding_time: 100,
+                settled_at: 120,
+                symbol: Symbol::new(1, Coin::BTC, Coin::USDC),
+                oracle_price: Decimal::from(100),
+                funding_rate: FundingRate::new(rate).unwrap(),
+                position_ids: vec![2],
+            },
+        )
+    }
+
+    fn state() -> SettleHyperliquidPerpFundingState {
+        SettleHyperliquidPerpFundingState {
+            positions: vec![
+                PerpPositionV3::new(
+                    2,
+                    UserId(7),
+                    Coin::BTC,
+                    Decimal::ONE,
+                    Decimal::from(100),
+                    Decimal::from(5),
+                    MarginModeV3::Cross,
+                    None,
+                    Decimal::ZERO,
+                    FundingAccumulatorV3::default(),
+                    Decimal::ZERO,
+                    3,
+                )
+                .unwrap(),
+            ],
+            margin_balances: vec![BalanceV2::new(
+                7,
+                11,
+                u64::from(Coin::USDC.index()),
+                Decimal::TEN,
+                Decimal::ZERO,
+                4,
+                90,
+            )],
+            settled_position_ids: vec![],
+            margin_mode: MarginModeV3::Cross,
+        }
+    }
+
+    #[test]
+    fn creates_final_settled_funding_and_replays_unique_entities_in_order() {
+        let changes = SettleHyperliquidPerpFundingUseCase
+            .compute_state_changed(&command(Decimal::new(1, 4)), &state())
+            .unwrap();
+
+        assert_eq!(changes.created_fundings.len(), 1);
+        assert_eq!(changes.created_fundings[0].version(), COMMAND_LSN);
+        assert_eq!(changes.changed_positions[0].after.version(), COMMAND_LSN);
+        assert_eq!(changes.changed_margin_balances[0].after.version(), COMMAND_LSN);
+
+        let events = changes.to_replayable_events().unwrap();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].entity_type, UserFunding::entity_type());
+        assert_eq!(events[0].previous_lsn, 0);
+        assert!(events.iter().all(|event| event.lsn == COMMAND_LSN));
+        let keys =
+            events.iter().map(|event| (event.entity_type, event.entity_id)).collect::<HashSet<_>>();
+        assert_eq!(keys.len(), events.len());
+    }
+
+    #[test]
+    fn zero_rate_is_a_successful_noop() {
+        let changes = SettleHyperliquidPerpFundingUseCase
+            .compute_state_changed(&command(Decimal::ZERO), &state())
+            .unwrap();
+        assert!(changes.created_fundings.is_empty());
+        assert!(changes.changed_positions.is_empty());
+        assert!(changes.changed_margin_balances.is_empty());
+    }
+
+    #[test]
+    fn rejects_position_order_and_batch_duplicates() {
+        let use_case = SettleHyperliquidPerpFundingUseCase;
+        let cmd = command(Decimal::new(1, 4));
+        let mut loaded = state();
+        loaded.settled_position_ids.push(2);
+        assert_eq!(
+            use_case.validate_state_given(&cmd, &loaded),
+            Err(SettleHyperliquidPerpFundingError::PositionAlreadySettled)
+        );
+
+        let mut mismatched = state();
+        mismatched.positions[0] = PerpPositionV3::new(
+            3,
+            UserId(7),
+            Coin::BTC,
+            Decimal::ONE,
+            Decimal::from(100),
+            Decimal::from(5),
+            MarginModeV3::Cross,
+            None,
+            Decimal::ZERO,
+            FundingAccumulatorV3::default(),
+            Decimal::ZERO,
+            3,
+        )
+        .unwrap();
+        assert_eq!(
+            use_case.validate_state_given(&cmd, &mismatched),
+            Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch)
+        );
+    }
+}

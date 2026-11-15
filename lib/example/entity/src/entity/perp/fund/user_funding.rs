@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, TrackDiff,
-    FinancialClassification, FourColorArchetype, Fsm, Shard,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FinancialClassification,
+    FourColorArchetype, Fsm, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};

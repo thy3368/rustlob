@@ -131,6 +131,12 @@ pub enum SettleUserFundingBatchError {
     PositionArithmeticOverflow { position_id: u64 },
     #[error("balance amount or version arithmetic overflow")]
     BalanceArithmeticOverflow { account_id: u64 },
+    #[error("funding {funding_id} has an lsn newer than the command")]
+    StaleFundingLsn { funding_id: u64 },
+    #[error("position {position_id} has an lsn newer than the command")]
+    StalePositionLsn { position_id: u64 },
+    #[error("balance account {account_id} has an lsn newer than the command")]
+    StaleBalanceLsn { account_id: u64 },
 }
 
 /// 原子计算整批资金费、仓位和余额的 before/after truth。
@@ -281,7 +287,7 @@ fn map_user_funding_error(error: UserFundingError, funding_id: u64) -> SettleUse
             SettleUserFundingBatchError::FundingVersionOverflow { funding_id }
         }
         UserFundingError::StaleLsn { .. } => {
-            SettleUserFundingBatchError::FundingVersionOverflow { funding_id }
+            SettleUserFundingBatchError::StaleFundingLsn { funding_id }
         }
     }
 }
@@ -303,7 +309,7 @@ fn map_position_error(error: PerpPositionV3Error, position_id: u64) -> SettleUse
             SettleUserFundingBatchError::PositionArithmeticOverflow { position_id }
         }
         PerpPositionV3Error::StaleLsn { .. } => {
-            SettleUserFundingBatchError::PositionArithmeticOverflow { position_id }
+            SettleUserFundingBatchError::StalePositionLsn { position_id }
         }
     }
 }
@@ -321,7 +327,7 @@ fn map_balance_error(error: BalanceV2Error, account_id: u64) -> SettleUserFundin
             SettleUserFundingBatchError::BalanceArithmeticOverflow { account_id }
         }
         BalanceV2Error::StaleLsn { .. } => {
-            SettleUserFundingBatchError::BalanceArithmeticOverflow { account_id }
+            SettleUserFundingBatchError::StaleBalanceLsn { account_id }
         }
     }
 }
@@ -405,14 +411,8 @@ mod settle_user_funding_batch_tests {
         let before = (fundings.clone(), positions.clone(), balances.clone());
 
         let output =
-            settle_user_funding_batch(
-                &fundings,
-                &positions,
-                &balances,
-                SETTLED_AT,
-                COMMAND_LSN,
-            )
-            .unwrap();
+            settle_user_funding_batch(&fundings, &positions, &balances, SETTLED_AT, COMMAND_LSN)
+                .unwrap();
 
         assert_eq!((fundings, positions, balances), before);
         assert_eq!(
@@ -572,13 +572,7 @@ mod settle_user_funding_batch_tests {
         let balances = vec![balance(Decimal::TEN, 4)];
         let before = (fundings.clone(), positions.clone(), balances.clone());
         assert_eq!(
-            settle_user_funding_batch(
-                &fundings,
-                &positions,
-                &balances,
-                SETTLED_AT,
-                COMMAND_LSN,
-            ),
+            settle_user_funding_batch(&fundings, &positions, &balances, SETTLED_AT, COMMAND_LSN,),
             Err(SettleUserFundingBatchError::InsufficientAvailableBalance {
                 account_id: ACCOUNT_ID
             })

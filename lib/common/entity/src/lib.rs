@@ -1,4 +1,4 @@
-pub use entity_derive::{action_type, function, ActionType, ObjectType};
+pub use entity_derive::{ActionType, ObjectType, action_type, function};
 
 mod entity_v2;
 mod stable_id;
@@ -7,6 +7,7 @@ pub use stable_id::stable_string_entity_id;
 mod sequence;
 mod use_case;
 
+pub use entity_v2::Fsm;
 pub use entity_v2::entity::{
     AggregateRole, Entity, EntityMutationModel, FinancialClassification, FourColorArchetype,
     TrackDiff,
@@ -17,7 +18,6 @@ pub use entity_v2::entity_replayable_event::{
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use entity_v2::shard::Shard;
-pub use entity_v2::Fsm;
 pub use sequence::id_generator::EntityIdGenerator;
 pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer, SYSTEM_USER_ID};
 pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;

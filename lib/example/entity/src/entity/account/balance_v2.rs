@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, TrackDiff, Fsm};
+use common_entity::{Entity, EntityFieldChange, Fsm, TrackDiff};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -181,10 +181,7 @@ impl Fsm for BalanceV2 {
             | BalanceV2Event::Close { lsn, .. } => *lsn,
         };
         if lsn < self.version {
-            return Err(BalanceV2Error::StaleLsn {
-                incoming_lsn: lsn,
-                current_lsn: self.version,
-            });
+            return Err(BalanceV2Error::StaleLsn { incoming_lsn: lsn, current_lsn: self.version });
         }
         let (available, frozen, status, timestamp) = match event {
             BalanceV2Event::Freeze { amount, timestamp, .. } => {
@@ -199,7 +196,9 @@ impl Fsm for BalanceV2 {
                     timestamp,
                 )
             }
-            BalanceV2Event::UnfreezeAndPay { unfreeze_amount, payment_amount, timestamp, .. } => {
+            BalanceV2Event::UnfreezeAndPay {
+                unfreeze_amount, payment_amount, timestamp, ..
+            } => {
                 positive(unfreeze_amount)?;
                 if payment_amount < Decimal::ZERO {
                     return Err(BalanceV2Error::InvalidAmount);
@@ -534,7 +533,11 @@ mod tests {
                 lsn: LSN,
             },
             BalanceV2Event::DebitFrozen { amount: Decimal::ONE, timestamp: TIMESTAMP, lsn: LSN },
-            BalanceV2Event::CreditAvailable { amount: Decimal::ONE, timestamp: TIMESTAMP, lsn: LSN },
+            BalanceV2Event::CreditAvailable {
+                amount: Decimal::ONE,
+                timestamp: TIMESTAMP,
+                lsn: LSN,
+            },
             BalanceV2Event::DebitAvailable { amount: Decimal::ONE, timestamp: TIMESTAMP, lsn: LSN },
         ] {
             assert_rejected_without_mutation(closed.clone(), event, BalanceV2Error::BalanceClosed);
@@ -545,7 +548,11 @@ mod tests {
     fn arithmetic_overflow_rejects_transition_without_mutation() {
         assert_rejected_without_mutation(
             balance(1, 0, u64::MAX),
-            BalanceV2Event::CreditAvailable { amount: Decimal::ONE, timestamp: TIMESTAMP, lsn: LSN },
+            BalanceV2Event::CreditAvailable {
+                amount: Decimal::ONE,
+                timestamp: TIMESTAMP,
+                lsn: LSN,
+            },
             BalanceV2Error::StaleLsn { incoming_lsn: LSN, current_lsn: u64::MAX },
         );
 
@@ -553,7 +560,11 @@ mod tests {
         decimal_max.available = Decimal::MAX;
         assert_rejected_without_mutation(
             decimal_max,
-            BalanceV2Event::CreditAvailable { amount: Decimal::ONE, timestamp: TIMESTAMP, lsn: LSN },
+            BalanceV2Event::CreditAvailable {
+                amount: Decimal::ONE,
+                timestamp: TIMESTAMP,
+                lsn: LSN,
+            },
             BalanceV2Error::ArithmeticOverflow,
         );
     }

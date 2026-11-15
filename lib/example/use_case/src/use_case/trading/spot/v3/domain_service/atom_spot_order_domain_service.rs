@@ -133,12 +133,11 @@ impl SpotOrderDomainService {
                 lsn: timestamp,
             })?;
         } else if current < target {
-            settled_balance
-                .apply(BalanceV2Event::Freeze {
-                    amount: target - current,
-                    timestamp,
-                    lsn: timestamp,
-                })?;
+            settled_balance.apply(BalanceV2Event::Freeze {
+                amount: target - current,
+                timestamp,
+                lsn: timestamp,
+            })?;
         }
         Ok(settled_balance)
     }

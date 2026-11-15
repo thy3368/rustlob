@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, TrackDiff, Fsm};
+use common_entity::{Entity, EntityFieldChange, Fsm, TrackDiff};
 use rust_decimal::Decimal;
 use thiserror::Error;
 

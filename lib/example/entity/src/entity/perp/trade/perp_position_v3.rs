@@ -70,8 +70,14 @@ pub enum PerpPositionV3State {
 
 #[derive(Debug, Clone)]
 pub enum PerpPositionV3Event {
-    TradeFilled { trade: PerpTradeV3, logical_ts: u64 },
-    FundingSettled { payment: UserFunding, logical_ts: u64 },
+    TradeFilled {
+        trade: PerpTradeV3,
+        logical_ts: u64,
+    },
+    FundingSettled {
+        payment: UserFunding,
+        logical_ts: u64,
+    },
     FundingAmountSettled {
         user_id: UserId,
         coin: Coin,
@@ -79,8 +85,15 @@ pub enum PerpPositionV3Event {
         logical_ts: u64,
         lsn: u64,
     },
-    LeverageUpdated { leverage: Decimal, margin_mode: MarginModeV3, logical_ts: u64 },
-    IsolatedMarginAdjusted { delta: Decimal, logical_ts: u64 },
+    LeverageUpdated {
+        leverage: Decimal,
+        margin_mode: MarginModeV3,
+        logical_ts: u64,
+    },
+    IsolatedMarginAdjusted {
+        delta: Decimal,
+        logical_ts: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

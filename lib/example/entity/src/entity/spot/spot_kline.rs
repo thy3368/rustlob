@@ -1,6 +1,6 @@
 use base_types_v2::Symbol;
 use common_entity::{
-    Entity, EntityFieldChange, EntityMutationModel, TrackDiff, FourColorArchetype,
+    Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, TrackDiff,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};

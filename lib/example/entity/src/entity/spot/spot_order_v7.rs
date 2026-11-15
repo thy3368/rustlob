@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, TrackDiff, Fsm, Shard};
+use common_entity::{Entity, EntityError, EntityFieldChange, Fsm, Shard, TrackDiff};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
 

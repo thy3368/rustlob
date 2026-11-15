@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, TrackDiff, FourColorArchetype, Shard,
+    AggregateRole, Entity, EntityFieldChange, FourColorArchetype, Shard, TrackDiff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

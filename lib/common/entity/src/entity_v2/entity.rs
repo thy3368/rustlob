@@ -167,7 +167,7 @@ impl AggregateRole {
 // }
 
 /// Enhanced entity contract for generating compact replayable entity events.
-pub trait Entity:   Shard + Clone + Debug + Send + Sync + 'static {
+pub trait Entity: Shard + Clone + Debug + Send + Sync + 'static {
     fn entity_id(&self) -> u64;
 
     ///记录owner
@@ -262,14 +262,12 @@ pub trait Entity:   Shard + Clone + Debug + Send + Sync + 'static {
 }
 
 pub trait TrackDiff: Entity {
-
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange>;
 
     #[inline]
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         Vec::with_capacity(0)
     }
-
 
     #[inline]
     fn track_create_event(&self) -> Result<EntityReplayableEvent, EntityError>
@@ -281,7 +279,7 @@ pub trait TrackDiff: Entity {
             self.partition(),
             current_timestamp()?,
             0,
-            0,
+            self.lsn(),
             self.entity_id(),
             Self::entity_type(),
             EntityChangeType::Created.as_tag(),
@@ -376,7 +374,6 @@ pub trait TrackDiff: Entity {
         ))
     }
 }
-
 
 ///todo 应该不需要 从use case 传入就好
 #[inline]

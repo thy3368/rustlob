@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, TrackDiff, FourColorArchetype,
-    Fsm, Shard,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm, Shard,
+    TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;

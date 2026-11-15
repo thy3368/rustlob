@@ -1,9 +1,9 @@
 use rust_decimal::Decimal;
 
 use super::funding_rate_tick::FundingRateTick;
-use crate::entity::common::price::Price;
 use crate::account::symbol::Symbol;
 use crate::entity::common::FundingRate;
+use crate::entity::common::price::Price;
 
 /// 根据一个小时内的 premium 样本构造市场级资金费率观测。
 ///
