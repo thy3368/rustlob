@@ -61,8 +61,8 @@ impl UseCase for PerpLiquidation {
         if cmd.logical_ts() < clearinghouse_state.snapshot_at() {
             return Err(LiquidationError::StaleSnapshot);
         }
-        let equity = clearinghouse_state.cross_equity();
-        let mm = clearinghouse_state.cross_mm_required();
+        let equity = clearinghouse_state.equity();
+        let mm = clearinghouse_state.maintenance_margin_required();
         if equity <= rust_decimal::Decimal::ZERO {
             return Ok(PlaceOnlySpotOrderV3AfterChanges::Adl {
                 liquidation_id: cmd.liquidation_id.clone(),
