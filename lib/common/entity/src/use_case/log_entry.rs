@@ -1,4 +1,4 @@
-use crate::entity_v2::shard::{Log, Shard};
+use crate::entity_v2::shard::{LogAttr, Shard};
 
 /// 真正的时标对象，全序唯一，可回放；内存中的有序日志条目，携带完整负载。
 ///
@@ -23,7 +23,7 @@ pub struct LogEntry<P> {
     payload: P,
 }
 
-impl<P> Log for LogEntry<P> {
+impl<P> LogAttr for LogEntry<P> {
     fn lsn(&self) -> u64 {
         self.lsn
     }

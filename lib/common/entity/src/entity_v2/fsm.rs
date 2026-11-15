@@ -1,3 +1,5 @@
+use crate::entity_v2::shard::LogAttr;
+
 /// 与业务无关的实体有限状态机契约。
 ///
 /// 实现应先完成领域校验和派生，再提交实体状态；失败时不得留下部分变更。
@@ -5,6 +7,8 @@ pub trait Fsm {
     type State;
 
     ///内部业务事件，不可变唯一事实，驱动状态变化的唯一口子
+    /// event应该要带ts,lsn,par
+    // type BizEvent: LogAttr;
     type BizEvent;
     type Output;
     type Error;

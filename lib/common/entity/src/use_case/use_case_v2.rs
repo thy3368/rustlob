@@ -433,7 +433,7 @@
 use std::fmt::Debug;
 
 use crate::ReplayableChanges;
-use crate::entity_v2::shard::Log;
+use crate::entity_v2::shard::LogAttr;
 
 /// 多聚合 `use-case family` 编排的最低实现契约。
 ///
@@ -442,7 +442,7 @@ use crate::entity_v2::shard::Log;
 /// 关键在于这些动作仍共享同一业务主题，以及可匹配的 `GivenState` / truth 模型。
 /// 不要把聚合内部业务演进或单对象内部推导的契约放进这里。
 pub trait UseCase: Clone + Debug + Send + Sync {
-    type Command: Log;
+    type Command: LogAttr;
 
     type StateGiven;
 

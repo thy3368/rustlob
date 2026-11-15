@@ -10,7 +10,7 @@ pub trait Shard {
 }
 
 /// 提供状态机 executor 投影事件时所需的日志元数据。
-pub trait Log: Shard {
+pub trait LogAttr: Shard {
     fn lsn(&self) -> u64;
     fn logical_ts(&self) -> u64;
 }

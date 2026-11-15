@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::entity_v2::shard::Log;
+use crate::entity_v2::shard::LogAttr;
 use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateDiff};
 
 /// 多聚合 MI state-machine family 的运行时编排器。
