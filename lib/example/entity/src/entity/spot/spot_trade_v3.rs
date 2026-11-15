@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm, Shard,
-    TrackDiff,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm,
+    LogAttr, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -39,7 +39,23 @@ pub enum SpotTradeSettlementStatus {
 /// 现货成交支持的生命周期事件。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpotTradeEvent {
-    Settle,
+    Settle { lsn: u64, logical_ts: u64 },
+}
+
+impl Shard for SpotTradeEvent {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+impl LogAttr for SpotTradeEvent {
+    fn lsn(&self) -> u64 {
+        let Self::Settle { lsn, .. } = self;
+        *lsn
+    }
+    fn logical_ts(&self) -> u64 {
+        let Self::Settle { logical_ts, .. } = self;
+        *logical_ts
+    }
 }
 
 /// 现货成交状态迁移错误。
@@ -208,11 +224,11 @@ impl Fsm for SpotTradeV3 {
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match (self.settlement_status, event) {
-            (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle) => {
+            (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle { .. }) => {
                 self.settlement_status = SpotTradeSettlementStatus::Settled;
                 Ok((self.settlement_status, ()))
             }
-            (SpotTradeSettlementStatus::Settled, SpotTradeEvent::Settle) => {
+            (SpotTradeSettlementStatus::Settled, SpotTradeEvent::Settle { .. }) => {
                 Err(SpotTradeStateError::AlreadySettled)
             }
         }
@@ -221,7 +237,7 @@ impl Fsm for SpotTradeV3 {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::Fsm;
+    use common_entity::{Fsm, LogAttr, Shard};
     use rust_decimal::Decimal;
 
     use super::{
@@ -233,6 +249,15 @@ mod tests {
     use crate::account::symbol::Symbol;
     use crate::entity::common::UserId;
     use crate::entity::common::common_trade::TradeBase;
+
+    #[test]
+    fn settle_event_exposes_log_metadata_and_default_route() {
+        let event = SpotTradeEvent::Settle { lsn: 9, logical_ts: 7 };
+        assert_eq!(event.lsn(), 9);
+        assert_eq!(event.logical_ts(), 7);
+        assert_eq!(event.topic(), 0);
+        assert_eq!(event.partition(), 0);
+    }
 
     fn trade(taker_side: OrderSide, taker_fee: i64, maker_fee: i64) -> SpotTradeV3 {
         SpotTradeV3 {
@@ -284,11 +309,11 @@ mod tests {
     fn apply_transitions_directly_and_preserves_state_on_error() {
         let mut trade = trade(OrderSide::Buy, 1, 2);
 
-        Fsm::apply(&mut trade, SpotTradeEvent::Settle).unwrap();
+        Fsm::apply(&mut trade, SpotTradeEvent::Settle { lsn: 1, logical_ts: 1 }).unwrap();
         assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
 
         assert_eq!(
-            Fsm::apply(&mut trade, SpotTradeEvent::Settle),
+            Fsm::apply(&mut trade, SpotTradeEvent::Settle { lsn: 1, logical_ts: 1 }),
             Err(SpotTradeStateError::AlreadySettled)
         );
         assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);

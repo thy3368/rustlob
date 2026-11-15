@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm, Shard,
-    TrackDiff,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm,
+    LogAttr, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -31,7 +31,23 @@ pub enum PerpTradeV3Event {
         taker_closed_pnl: Decimal,
         maker_closed_pnl: Decimal,
         timestamp: u64,
+        lsn: u64,
     },
+}
+impl Shard for PerpTradeV3Event {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+impl LogAttr for PerpTradeV3Event {
+    fn lsn(&self) -> u64 {
+        let Self::Settle { lsn, .. } = self;
+        *lsn
+    }
+    fn logical_ts(&self) -> u64 {
+        let Self::Settle { timestamp, .. } = self;
+        *timestamp
+    }
 }
 
 /// 永续成交结算产生的稳定业务事实。
@@ -103,6 +119,7 @@ impl Fsm for PerpTradeV3 {
                 taker_closed_pnl,
                 maker_closed_pnl,
                 timestamp,
+                ..
             } => {
                 if timestamp < base.created_at || timestamp < base.updated_at {
                     return Err(PerpTradeV3Error::TimestampRegression);
@@ -290,6 +307,7 @@ mod tests {
             taker_closed_pnl: Decimal::from(4),
             maker_closed_pnl: Decimal::from(-5),
             timestamp,
+            lsn: 4,
         }
     }
 

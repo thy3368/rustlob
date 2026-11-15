@@ -163,6 +163,7 @@ fn derive_changes(
                 .transition(PerpPositionV3Event::TradeFilled {
                     trade: trade.clone(),
                     logical_ts: cmd.logical_ts(),
+                    lsn: cmd.lsn(),
                 })
                 .map_err(map_position_error)?;
             let PerpPositionV3Output::TradeApplied { closed_pnl } = output else {
@@ -190,6 +191,7 @@ fn derive_changes(
                 taker_closed_pnl: closed_pnls[0],
                 maker_closed_pnl: closed_pnls[1],
                 timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
             })
             .map_err(map_trade_error)?;
         let PerpTradeV3Output::Settled { .. } = output;

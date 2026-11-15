@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, Fsm, Shard, TrackDiff};
+use common_entity::{Entity, EntityError, EntityFieldChange, Fsm, LogAttr, Shard, TrackDiff};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
 
@@ -50,6 +50,36 @@ pub enum SpotOrderV7Event {
         lsn: u64,
         timestamp: u64,
     },
+}
+
+impl Shard for SpotOrderV7Event {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+
+impl LogAttr for SpotOrderV7Event {
+    fn lsn(&self) -> u64 {
+        match self {
+            Self::Activate { lsn, .. }
+            | Self::MatchedAsTaker { lsn, .. }
+            | Self::MatchedAsMaker { lsn, .. }
+            | Self::RejectedAsTaker { lsn, .. }
+            | Self::Modify { lsn, .. }
+            | Self::Cancel { lsn, .. } => *lsn,
+        }
+    }
+
+    fn logical_ts(&self) -> u64 {
+        match self {
+            Self::Activate { timestamp, .. }
+            | Self::MatchedAsTaker { timestamp, .. }
+            | Self::MatchedAsMaker { timestamp, .. }
+            | Self::RejectedAsTaker { timestamp, .. }
+            | Self::Modify { timestamp, .. }
+            | Self::Cancel { timestamp, .. } => *timestamp,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

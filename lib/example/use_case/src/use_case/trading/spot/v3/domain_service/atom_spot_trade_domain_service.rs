@@ -88,7 +88,10 @@ impl SpotTradeDomainService {
                 lsn: seller_quote_balance.version() + 1,
             })?;
         }
-        trade_after.apply(SpotTradeEvent::Settle)?;
+        trade_after.apply(SpotTradeEvent::Settle {
+            lsn: trade.comon_trade.version.saturating_add(1),
+            logical_ts: timestamp,
+        })?;
 
         Ok(SpotTradeSettlementOutcome {
             trade_after,

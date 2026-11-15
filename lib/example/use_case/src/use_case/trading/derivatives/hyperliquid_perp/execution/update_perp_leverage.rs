@@ -95,6 +95,7 @@ impl UseCase for UpdateHyperliquidPerpLeverageUseCase {
                 leverage: cmd.leverage,
                 margin_mode: cmd.margin_mode,
                 logical_ts: cmd.logical_ts(),
+                lsn: cmd.lsn(),
             })
             .map_err(map_position_error)?;
         Ok(UpdateHyperliquidPerpLeverageChanges {

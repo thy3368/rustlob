@@ -203,8 +203,11 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let amounts = given_state.trade.settlement_amounts()?;
         let mut trade_after = given_state.trade.clone();
-        Fsm::apply(&mut trade_after, SpotTradeEvent::Settle)
-            .map_err(|_| UnFreezeSpotOrderV2Error::DuplicateSettlement)?;
+        Fsm::apply(
+            &mut trade_after,
+            SpotTradeEvent::Settle { lsn: cmd.lsn(), logical_ts: cmd.logical_ts() },
+        )
+        .map_err(|_| UnFreezeSpotOrderV2Error::DuplicateSettlement)?;
         let mut buyer_base_balance_after = given_state.buyer_base_balance.clone();
         let mut buyer_quote_balance_after = given_state.buyer_quote_balance.clone();
         let mut seller_base_balance_after = given_state.seller_base_balance.clone();

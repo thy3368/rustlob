@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, Fsm, Shard, TrackDiff};
+use common_entity::{Entity, EntityFieldChange, Fsm, LogAttr, Shard, TrackDiff};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -73,10 +73,12 @@ pub enum PerpPositionV3Event {
     TradeFilled {
         trade: PerpTradeV3,
         logical_ts: u64,
+        lsn: u64,
     },
     FundingSettled {
         payment: UserFunding,
         logical_ts: u64,
+        lsn: u64,
     },
     FundingAmountSettled {
         user_id: UserId,
@@ -89,11 +91,38 @@ pub enum PerpPositionV3Event {
         leverage: Decimal,
         margin_mode: MarginModeV3,
         logical_ts: u64,
+        lsn: u64,
     },
     IsolatedMarginAdjusted {
         delta: Decimal,
         logical_ts: u64,
+        lsn: u64,
     },
+}
+impl Shard for PerpPositionV3Event {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+impl LogAttr for PerpPositionV3Event {
+    fn lsn(&self) -> u64 {
+        match self {
+            Self::TradeFilled { lsn, .. }
+            | Self::FundingSettled { lsn, .. }
+            | Self::FundingAmountSettled { lsn, .. }
+            | Self::LeverageUpdated { lsn, .. }
+            | Self::IsolatedMarginAdjusted { lsn, .. } => *lsn,
+        }
+    }
+    fn logical_ts(&self) -> u64 {
+        match self {
+            Self::TradeFilled { logical_ts, .. }
+            | Self::FundingSettled { logical_ts, .. }
+            | Self::FundingAmountSettled { logical_ts, .. }
+            | Self::LeverageUpdated { logical_ts, .. }
+            | Self::IsolatedMarginAdjusted { logical_ts, .. } => *logical_ts,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -409,10 +438,10 @@ impl Fsm for PerpPositionV3 {
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match event {
-            PerpPositionV3Event::TradeFilled { trade, logical_ts } => {
+            PerpPositionV3Event::TradeFilled { trade, logical_ts, .. } => {
                 todo!()
             }
-            PerpPositionV3Event::FundingSettled { payment, logical_ts } => {
+            PerpPositionV3Event::FundingSettled { payment, logical_ts, .. } => {
                 todo!()
             }
             PerpPositionV3Event::FundingAmountSettled {
@@ -463,10 +492,10 @@ impl Fsm for PerpPositionV3 {
                     PerpPositionV3Output::FundingApplied { signed_amount },
                 ))
             }
-            PerpPositionV3Event::LeverageUpdated { leverage, margin_mode, logical_ts } => {
+            PerpPositionV3Event::LeverageUpdated { leverage, margin_mode, logical_ts, .. } => {
                 todo!()
             }
-            PerpPositionV3Event::IsolatedMarginAdjusted { delta, logical_ts } => {
+            PerpPositionV3Event::IsolatedMarginAdjusted { delta, logical_ts, .. } => {
                 todo!()
             }
         }
@@ -534,6 +563,7 @@ mod tests {
             .transition(PerpPositionV3Event::TradeFilled {
                 trade: trade(OrderSide::Sell, 110, 1, Decimal::new(25, 2)),
                 logical_ts: 9,
+                lsn: 5,
             })
             .unwrap();
 

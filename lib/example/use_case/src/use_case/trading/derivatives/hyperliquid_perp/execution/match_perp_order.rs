@@ -116,6 +116,7 @@ impl UseCase for MatchHyperliquidPerpOrderUseCase {
                 timestamp: cmd.executed_at,
             },
             timestamp: cmd.executed_at,
+            lsn: cmd.lsn(),
         })?;
         let (taker_after, maker_orders_after, created_trades) =
             outcome.ok_or(MatchHyperliquidPerpOrderError::MissingOutcome)?.into_parts();

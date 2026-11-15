@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, Fsm, TrackDiff};
+use common_entity::{Entity, EntityFieldChange, Fsm, LogAttr, Shard, TrackDiff};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -74,6 +74,35 @@ pub enum BalanceV2Event {
         timestamp: u64,
         lsn: u64,
     },
+}
+
+impl Shard for BalanceV2Event {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+
+impl LogAttr for BalanceV2Event {
+    fn lsn(&self) -> u64 {
+        match self {
+            Self::Freeze { lsn, .. }
+            | Self::UnfreezeAndPay { lsn, .. }
+            | Self::DebitFrozen { lsn, .. }
+            | Self::CreditAvailable { lsn, .. }
+            | Self::DebitAvailable { lsn, .. }
+            | Self::Close { lsn, .. } => *lsn,
+        }
+    }
+    fn logical_ts(&self) -> u64 {
+        match self {
+            Self::Freeze { timestamp, .. }
+            | Self::UnfreezeAndPay { timestamp, .. }
+            | Self::DebitFrozen { timestamp, .. }
+            | Self::CreditAvailable { timestamp, .. }
+            | Self::DebitAvailable { timestamp, .. }
+            | Self::Close { timestamp, .. } => *timestamp,
+        }
+    }
 }
 
 /// 可变余额实体，同时承载稳定身份、生命周期和 replay 字段。
@@ -335,13 +364,36 @@ impl Entity for BalanceV2 {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::Fsm;
+    use common_entity::{Fsm, LogAttr, Shard};
     use rust_decimal::Decimal;
 
     use super::{BalanceV2, BalanceV2Error, BalanceV2Event, BalanceV2Status};
 
     const TIMESTAMP: u64 = 42;
     const LSN: u64 = 4;
+
+    #[test]
+    fn every_event_exposes_log_metadata_and_default_route() {
+        let events = [
+            BalanceV2Event::Freeze { amount: Decimal::ONE, timestamp: 7, lsn: 9 },
+            BalanceV2Event::UnfreezeAndPay {
+                unfreeze_amount: Decimal::ONE,
+                payment_amount: Decimal::ZERO,
+                timestamp: 7,
+                lsn: 9,
+            },
+            BalanceV2Event::DebitFrozen { amount: Decimal::ONE, timestamp: 7, lsn: 9 },
+            BalanceV2Event::CreditAvailable { amount: Decimal::ONE, timestamp: 7, lsn: 9 },
+            BalanceV2Event::DebitAvailable { amount: Decimal::ONE, timestamp: 7, lsn: 9 },
+            BalanceV2Event::Close { timestamp: 7, lsn: 9 },
+        ];
+        for event in events {
+            assert_eq!(event.lsn(), 9);
+            assert_eq!(event.logical_ts(), 7);
+            assert_eq!(event.topic(), 0);
+            assert_eq!(event.partition(), 0);
+        }
+    }
 
     fn decimal(value: i64) -> Decimal {
         Decimal::from(value)

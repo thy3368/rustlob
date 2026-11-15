@@ -8,13 +8,11 @@ pub trait Fsm {
 
     ///内部业务事件，不可变唯一事实，驱动状态变化的唯一口子
     /// event应该要带ts,lsn,par
-    // type BizEvent: LogAttr;
-    type BizEvent;
+    type BizEvent: LogAttr;
     type Output;
     type Error;
 
     ///不建议直接调用
-
     fn transition(
         &mut self,
         event: Self::BizEvent,
@@ -28,7 +26,8 @@ pub trait Fsm {
 
 #[cfg(test)]
 mod tests {
-    use super::Fsm;
+    use super::{Fsm, LogAttr};
+    use crate::Shard;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum State {
@@ -39,6 +38,22 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     enum Event {
         Inc,
+    }
+
+    impl Shard for Event {
+        fn partition(&self) -> u8 {
+            0
+        }
+    }
+
+    impl LogAttr for Event {
+        fn lsn(&self) -> u64 {
+            1
+        }
+
+        fn logical_ts(&self) -> u64 {
+            2
+        }
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]

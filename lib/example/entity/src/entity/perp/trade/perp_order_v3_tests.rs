@@ -1,4 +1,4 @@
-use common_entity::Fsm;
+use common_entity::{Fsm, LogAttr, Shard};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 
@@ -47,17 +47,28 @@ fn input() -> MatchPerpOrderV3Input {
 
 fn events() -> Vec<PerpOrderV3Event> {
     vec![
-        PerpOrderV3Event::Match { makers: vec![], input: input(), timestamp: NOW },
+        PerpOrderV3Event::Match { makers: vec![], input: input(), timestamp: NOW, lsn: 1 },
         PerpOrderV3Event::ReplaceOrFill {
             price: dec!(101),
             size: dec!(11),
             makers: vec![],
             input: input(),
             timestamp: NOW,
+            lsn: 1,
         },
-        PerpOrderV3Event::Modify { price: dec!(101), size: dec!(11), timestamp: NOW },
-        PerpOrderV3Event::Cancel { timestamp: NOW },
+        PerpOrderV3Event::Modify { price: dec!(101), size: dec!(11), timestamp: NOW, lsn: 1 },
+        PerpOrderV3Event::Cancel { timestamp: NOW, lsn: 1 },
     ]
+}
+
+#[test]
+fn every_event_exposes_log_metadata_and_default_route() {
+    for event in events() {
+        assert_eq!(event.lsn(), 1);
+        assert_eq!(event.logical_ts(), NOW);
+        assert_eq!(event.topic(), 0);
+        assert_eq!(event.partition(), 0);
+    }
 }
 
 #[test]
@@ -93,6 +104,7 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
             makers: vec![maker(2, dec!(4)), maker(3, dec!(6))],
             input: input(),
             timestamp: NOW,
+            lsn: 1,
         })
         .unwrap();
     let MatchPerpOrderV3Output::Filled {
@@ -119,7 +131,12 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
 fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
     let mut gtc = taker(SpotOrderStatus::Pending);
     let (state, outcome) = gtc
-        .transition(PerpOrderV3Event::Match { makers: vec![], input: input(), timestamp: NOW })
+        .transition(PerpOrderV3Event::Match {
+            makers: vec![],
+            input: input(),
+            timestamp: NOW,
+            lsn: 1,
+        })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Open);
     assert!(matches!(outcome, Some(MatchPerpOrderV3Output::Resting { .. })));
@@ -127,7 +144,12 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
     let mut ioc = taker(SpotOrderStatus::Pending);
     ioc.comon_order.tif = OrderTif::Ioc;
     let (state, outcome) = ioc
-        .transition(PerpOrderV3Event::Match { makers: vec![], input: input(), timestamp: NOW })
+        .transition(PerpOrderV3Event::Match {
+            makers: vec![],
+            input: input(),
+            timestamp: NOW,
+            lsn: 1,
+        })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Rejected);
     assert!(matches!(outcome, Some(MatchPerpOrderV3Output::Rejected { .. })));
@@ -141,6 +163,7 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
             makers: vec![crossing_maker],
             input: input(),
             timestamp: NOW,
+            lsn: 1,
         })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Rejected);
@@ -159,6 +182,7 @@ fn ioc_partial_fill_cancels_remainder() {
             makers: vec![maker(2, dec!(4))],
             input: input(),
             timestamp: NOW,
+            lsn: 1,
         })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Canceled);
@@ -180,6 +204,7 @@ fn incompatible_makers_are_skipped() {
             makers: vec![same_side, pending, non_crossing],
             input: input(),
             timestamp: NOW,
+            lsn: 1,
         })
         .unwrap();
     assert_eq!(state, SpotOrderStatus::Open);
@@ -190,14 +215,19 @@ fn incompatible_makers_are_skipped() {
 fn modify_cancel_and_replace_or_fill_preserve_expected_facts() {
     let mut modified = taker(SpotOrderStatus::PartiallyFilled);
     modified
-        .transition(PerpOrderV3Event::Modify { price: dec!(105), size: dec!(12), timestamp: NOW })
+        .transition(PerpOrderV3Event::Modify {
+            price: dec!(105),
+            size: dec!(12),
+            timestamp: NOW,
+            lsn: 1,
+        })
         .unwrap();
     assert_eq!(modified.comon_order.status, SpotOrderStatus::PartiallyFilled);
     assert_eq!(modified.comon_order.size, dec!(7));
     assert_eq!(modified.comon_order.lsn, 1);
 
     let remaining = modified.comon_order.size;
-    modified.transition(PerpOrderV3Event::Cancel { timestamp: NOW }).unwrap();
+    modified.transition(PerpOrderV3Event::Cancel { timestamp: NOW, lsn: 1 }).unwrap();
     assert_eq!(modified.comon_order.size, remaining);
     assert_eq!(modified.comon_order.status, SpotOrderStatus::Canceled);
 
@@ -209,6 +239,7 @@ fn modify_cancel_and_replace_or_fill_preserve_expected_facts() {
             makers: vec![maker(2, dec!(4))],
             input: input(),
             timestamp: NOW,
+            lsn: 1,
         })
         .unwrap();
     assert_eq!(replaced.comon_order.status, SpotOrderStatus::Filled);
@@ -221,9 +252,14 @@ fn invalid_inputs_and_late_failures_are_atomic() {
     let mut cases = Vec::new();
     let mut bad_fee = input();
     bad_fee.taker_fee_rate = dec!(-0.1);
-    cases.push(PerpOrderV3Event::Match { makers: vec![], input: bad_fee, timestamp: NOW });
-    cases.push(PerpOrderV3Event::Modify { price: dec!(1), size: Decimal::ZERO, timestamp: NOW });
-    cases.push(PerpOrderV3Event::Cancel { timestamp: 9 });
+    cases.push(PerpOrderV3Event::Match { makers: vec![], input: bad_fee, timestamp: NOW, lsn: 1 });
+    cases.push(PerpOrderV3Event::Modify {
+        price: dec!(1),
+        size: Decimal::ZERO,
+        timestamp: NOW,
+        lsn: 1,
+    });
+    cases.push(PerpOrderV3Event::Cancel { timestamp: 9, lsn: 1 });
 
     for event in cases {
         let mut subject = taker(SpotOrderStatus::Pending);
@@ -236,7 +272,7 @@ fn invalid_inputs_and_late_failures_are_atomic() {
     subject.comon_order.lsn = u64::MAX;
     let before = subject.clone();
     assert_eq!(
-        subject.transition(PerpOrderV3Event::Cancel { timestamp: NOW }),
+        subject.transition(PerpOrderV3Event::Cancel { timestamp: NOW, lsn: 1 }),
         Err(PerpOrderV3Error::VersionOverflow { version: u64::MAX })
     );
     assert_eq!(subject, before);

@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm, Shard,
-    TrackDiff,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm,
+    LogAttr, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
@@ -45,10 +45,33 @@ pub struct PositionFill {
 }
 #[derive(Debug, Clone)]
 pub enum PositionEvent {
-    TradeFilled { fill: PositionFill, logical_ts: u64 },
-    FundingSettled { signed_amount: Decimal, logical_ts: u64 },
-    LeverageUpdated { leverage: Leverage, logical_ts: u64 },
-    IsolatedMarginAdjusted { delta: Decimal, logical_ts: u64 },
+    TradeFilled { fill: PositionFill, logical_ts: u64, lsn: u64 },
+    FundingSettled { signed_amount: Decimal, logical_ts: u64, lsn: u64 },
+    LeverageUpdated { leverage: Leverage, logical_ts: u64, lsn: u64 },
+    IsolatedMarginAdjusted { delta: Decimal, logical_ts: u64, lsn: u64 },
+}
+impl Shard for PositionEvent {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+impl LogAttr for PositionEvent {
+    fn lsn(&self) -> u64 {
+        match self {
+            Self::TradeFilled { lsn, .. }
+            | Self::FundingSettled { lsn, .. }
+            | Self::LeverageUpdated { lsn, .. }
+            | Self::IsolatedMarginAdjusted { lsn, .. } => *lsn,
+        }
+    }
+    fn logical_ts(&self) -> u64 {
+        match self {
+            Self::TradeFilled { logical_ts, .. }
+            | Self::FundingSettled { logical_ts, .. }
+            | Self::LeverageUpdated { logical_ts, .. }
+            | Self::IsolatedMarginAdjusted { logical_ts, .. } => *logical_ts,
+        }
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TradeChange {
@@ -200,7 +223,7 @@ impl Fsm for PositionV4 {
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let mut n = self.clone();
         let out = match event {
-            PositionEvent::TradeFilled { fill, logical_ts } => {
+            PositionEvent::TradeFilled { fill, logical_ts, .. } => {
                 if fill.signed_quantity.is_zero() {
                     return Err(PositionError::InvalidQuantity);
                 }
@@ -281,7 +304,7 @@ impl Fsm for PositionV4 {
                     source: fill.source,
                 }
             }
-            PositionEvent::FundingSettled { signed_amount, logical_ts } => {
+            PositionEvent::FundingSettled { signed_amount, logical_ts, .. } => {
                 if n.state != PositionState::Open {
                     return Err(PositionError::InvalidState);
                 }
@@ -304,7 +327,7 @@ impl Fsm for PositionV4 {
                 n.updated_at = logical_ts;
                 PositionOutput::FundingApplied { signed_amount }
             }
-            PositionEvent::LeverageUpdated { leverage, logical_ts } => {
+            PositionEvent::LeverageUpdated { leverage, logical_ts, .. } => {
                 validate_leverage(leverage)?;
                 n.leverage = leverage;
                 n.cum_funding.since_change = Decimal::ZERO;
@@ -312,7 +335,7 @@ impl Fsm for PositionV4 {
                 n.updated_at = logical_ts;
                 PositionOutput::LeverageApplied
             }
-            PositionEvent::IsolatedMarginAdjusted { delta, logical_ts } => {
+            PositionEvent::IsolatedMarginAdjusted { delta, logical_ts, .. } => {
                 if n.state != PositionState::Open
                     || n.leverage.leverage_type != MarginMode::Isolated
                 {
@@ -487,6 +510,7 @@ mod tests {
                     source: FillSource::Regular,
                 },
                 logical_ts: 2,
+                lsn: 1,
             })
             .unwrap();
         position

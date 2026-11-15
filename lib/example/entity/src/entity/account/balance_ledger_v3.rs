@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FinancialClassification,
-    FourColorArchetype, Fsm, TrackDiff, UpdatedEntityPair,
+    FourColorArchetype, Fsm, LogAttr, Shard, TrackDiff, UpdatedEntityPair,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,23 @@ pub enum BalanceLedgerV3State {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceLedgerV3Event {
-    BalanceApplied { balance_update: UpdatedEntityPair<BalanceV2>, applied_at: u64 },
+    BalanceApplied { balance_update: UpdatedEntityPair<BalanceV2>, applied_at: u64, lsn: u64 },
+}
+
+impl Shard for BalanceLedgerV3Event {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+impl LogAttr for BalanceLedgerV3Event {
+    fn lsn(&self) -> u64 {
+        let Self::BalanceApplied { lsn, .. } = self;
+        *lsn
+    }
+    fn logical_ts(&self) -> u64 {
+        let Self::BalanceApplied { applied_at, .. } = self;
+        *applied_at
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,7 +129,7 @@ impl Fsm for BalanceLedgerV3 {
             return Err(BalanceLedgerV3Error::InvalidAmount);
         }
 
-        let BalanceLedgerV3Event::BalanceApplied { balance_update, applied_at } = event;
+        let BalanceLedgerV3Event::BalanceApplied { balance_update, applied_at, .. } = event;
         let before = &balance_update.before;
         let after = &balance_update.after;
         if before.party_id() != self.party_id
@@ -263,7 +279,7 @@ mod tests {
         update: common_entity::UpdatedEntityPair<BalanceV2>,
         applied_at: u64,
     ) -> BalanceLedgerV3Event {
-        BalanceLedgerV3Event::BalanceApplied { balance_update: update, applied_at }
+        BalanceLedgerV3Event::BalanceApplied { balance_update: update, applied_at, lsn: 1 }
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm, Shard,
-    TrackDiff,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm,
+    LogAttr, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -18,6 +18,7 @@ pub enum PerpOrderV3Event {
         makers: Vec<PerpOrderV3>,
         input: MatchPerpOrderV3Input,
         timestamp: u64,
+        lsn: u64,
     },
     ReplaceOrFill {
         price: Decimal,
@@ -25,15 +26,41 @@ pub enum PerpOrderV3Event {
         makers: Vec<PerpOrderV3>,
         input: MatchPerpOrderV3Input,
         timestamp: u64,
+        lsn: u64,
     },
     Modify {
         price: Decimal,
         size: Decimal,
         timestamp: u64,
+        lsn: u64,
     },
     Cancel {
         timestamp: u64,
+        lsn: u64,
     },
+}
+impl Shard for PerpOrderV3Event {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+impl LogAttr for PerpOrderV3Event {
+    fn lsn(&self) -> u64 {
+        match self {
+            Self::Match { lsn, .. }
+            | Self::ReplaceOrFill { lsn, .. }
+            | Self::Modify { lsn, .. }
+            | Self::Cancel { lsn, .. } => *lsn,
+        }
+    }
+    fn logical_ts(&self) -> u64 {
+        match self {
+            Self::Match { timestamp, .. }
+            | Self::ReplaceOrFill { timestamp, .. }
+            | Self::Modify { timestamp, .. }
+            | Self::Cancel { timestamp, .. } => *timestamp,
+        }
+    }
 }
 
 /// 永续订单撮合所需的稳定业务输入。
@@ -135,21 +162,23 @@ impl Fsm for PerpOrderV3 {
             return Err(PerpOrderV3Error::Terminal);
         }
         let (next, output) = match event {
-            PerpOrderV3Event::Match { makers, mut input, timestamp } => {
+            PerpOrderV3Event::Match { makers, mut input, timestamp, .. } => {
                 input.timestamp = timestamp;
                 let (next, output) = compute_match(self, makers, input)?;
                 (next, Some(output))
             }
-            PerpOrderV3Event::ReplaceOrFill { price, size, makers, mut input, timestamp } => {
+            PerpOrderV3Event::ReplaceOrFill {
+                price, size, makers, mut input, timestamp, ..
+            } => {
                 let replaced = modified(self, price, size, timestamp, false)?;
                 input.timestamp = timestamp;
                 let (next, output) = compute_match(&replaced, makers, input)?;
                 (next, Some(output))
             }
-            PerpOrderV3Event::Modify { price, size, timestamp } => {
+            PerpOrderV3Event::Modify { price, size, timestamp, .. } => {
                 (modified(self, price, size, timestamp, true)?, None)
             }
-            PerpOrderV3Event::Cancel { timestamp } => {
+            PerpOrderV3Event::Cancel { timestamp, .. } => {
                 validate_timestamp(&self.comon_order, timestamp)?;
                 let mut next = self.clone();
                 next.comon_order.status = SpotOrderStatus::Canceled;

@@ -238,6 +238,7 @@ mod tests {
         p.apply(PositionEvent::TradeFilled {
             fill: PositionFill { signed_quantity: size, price: entry, source: FillSource::Regular },
             logical_ts: time,
+            lsn: 1,
         })
         .unwrap();
         p

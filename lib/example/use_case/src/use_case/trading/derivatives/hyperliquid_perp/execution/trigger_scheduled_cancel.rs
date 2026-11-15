@@ -176,7 +176,10 @@ impl UseCase for TriggerScheduledCancelUseCase {
         let mut canceled_perp_orders = Vec::with_capacity(state.perp_orders.len());
         for before in &state.perp_orders {
             let mut after = before.clone();
-            after.transition(PerpOrderV3Event::Cancel { timestamp: cmd.logical_ts() })?;
+            after.transition(PerpOrderV3Event::Cancel {
+                timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
+            })?;
             canceled_perp_orders.push(UpdatedEntityPair::new(before.clone(), after));
         }
 

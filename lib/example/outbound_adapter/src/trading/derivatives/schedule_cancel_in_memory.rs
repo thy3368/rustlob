@@ -259,9 +259,14 @@ fn replay_events(
                 .get_mut(&event.entity_id)
                 .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
             check_version(event, order.comon_order.lsn)?;
-            order.transition(PerpOrderV3Event::Cancel { timestamp: event.logical_ts }).map_err(
-                |error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()),
-            )?;
+            order
+                .transition(PerpOrderV3Event::Cancel {
+                    timestamp: event.logical_ts,
+                    lsn: event.lsn,
+                })
+                .map_err(|error| {
+                    HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
+                })?;
         } else if event.entity_type == BalanceV2::entity_type() {
             replay_balance(state, event)?;
         } else {

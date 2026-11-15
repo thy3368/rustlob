@@ -1,4 +1,6 @@
-use common_entity::{AggregateRole, Entity, EntityFieldChange, FourColorArchetype, Fsm, TrackDiff};
+use common_entity::{
+    AggregateRole, Entity, EntityFieldChange, FourColorArchetype, Fsm, LogAttr, Shard, TrackDiff,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -32,9 +34,29 @@ impl AccountStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpotAccountEvent {
     /// 因风控要求冻结激活账户。
-    FreezeForRisk { timestamp: u64 },
+    FreezeForRisk { timestamp: u64, lsn: u64 },
     /// 解除风控冻结，使账户恢复激活。
-    UnfreezeFromRisk { timestamp: u64 },
+    UnfreezeFromRisk { timestamp: u64, lsn: u64 },
+}
+
+impl Shard for SpotAccountEvent {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+impl LogAttr for SpotAccountEvent {
+    fn lsn(&self) -> u64 {
+        match self {
+            Self::FreezeForRisk { lsn, .. } | Self::UnfreezeFromRisk { lsn, .. } => *lsn,
+        }
+    }
+    fn logical_ts(&self) -> u64 {
+        match self {
+            Self::FreezeForRisk { timestamp, .. } | Self::UnfreezeFromRisk { timestamp, .. } => {
+                *timestamp
+            }
+        }
+    }
 }
 
 /// 账户生命周期迁移错误。
@@ -118,10 +140,10 @@ impl Fsm for SpotAccount {
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let (next_status, timestamp) = match (self.status, event) {
-            (AccountStatus::Active, SpotAccountEvent::FreezeForRisk { timestamp }) => {
+            (AccountStatus::Active, SpotAccountEvent::FreezeForRisk { timestamp, .. }) => {
                 (AccountStatus::Frozen, timestamp)
             }
-            (AccountStatus::Frozen, SpotAccountEvent::UnfreezeFromRisk { timestamp }) => {
+            (AccountStatus::Frozen, SpotAccountEvent::UnfreezeFromRisk { timestamp, .. }) => {
                 (AccountStatus::Active, timestamp)
             }
             (state, event) => {
@@ -235,7 +257,7 @@ impl Entity for SpotAccount {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{AggregateRole, FourColorArchetype, Fsm, Shard};
+    use common_entity::{AggregateRole, FourColorArchetype, Fsm, LogAttr, Shard};
 
     use super::*;
 
@@ -278,12 +300,25 @@ mod tests {
     }
 
     #[test]
+    fn every_event_exposes_log_metadata_and_default_route() {
+        for event in [
+            SpotAccountEvent::FreezeForRisk { timestamp: 7, lsn: 9 },
+            SpotAccountEvent::UnfreezeFromRisk { timestamp: 7, lsn: 9 },
+        ] {
+            assert_eq!(event.lsn(), 9);
+            assert_eq!(event.logical_ts(), 7);
+            assert_eq!(event.topic(), 0);
+            assert_eq!(event.partition(), 0);
+        }
+    }
+
+    #[test]
     fn freeze_for_risk_transitions_active_account_atomically() {
         let mut account = account(AccountStatus::Active, 7);
         let identity_before = (account.account_id, account.party_id, account.created_at);
 
         assert_eq!(
-            account.transition(SpotAccountEvent::FreezeForRisk { timestamp: 25 }),
+            account.transition(SpotAccountEvent::FreezeForRisk { timestamp: 25, lsn: 8 }),
             Ok((AccountStatus::Frozen, ()))
         );
         assert_eq!(
@@ -299,7 +334,7 @@ mod tests {
         let identity_before = (account.account_id, account.party_id, account.created_at);
 
         assert_eq!(
-            account.transition(SpotAccountEvent::UnfreezeFromRisk { timestamp: 30 }),
+            account.transition(SpotAccountEvent::UnfreezeFromRisk { timestamp: 30, lsn: 10 }),
             Ok((AccountStatus::Active, ()))
         );
         assert_eq!(
@@ -312,10 +347,10 @@ mod tests {
     #[test]
     fn invalid_state_event_matrix_is_rejected_without_mutation() {
         let cases = [
-            (AccountStatus::Active, SpotAccountEvent::UnfreezeFromRisk { timestamp: 20 }),
-            (AccountStatus::Frozen, SpotAccountEvent::FreezeForRisk { timestamp: 20 }),
-            (AccountStatus::Closed, SpotAccountEvent::FreezeForRisk { timestamp: 20 }),
-            (AccountStatus::Closed, SpotAccountEvent::UnfreezeFromRisk { timestamp: 20 }),
+            (AccountStatus::Active, SpotAccountEvent::UnfreezeFromRisk { timestamp: 20, lsn: 4 }),
+            (AccountStatus::Frozen, SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 4 }),
+            (AccountStatus::Closed, SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 4 }),
+            (AccountStatus::Closed, SpotAccountEvent::UnfreezeFromRisk { timestamp: 20, lsn: 4 }),
         ];
 
         for (state, event) in cases {
@@ -334,13 +369,13 @@ mod tests {
         created_at_is_latest.updated_at = 20;
         assert_rejected_without_mutation(
             created_at_is_latest,
-            SpotAccountEvent::FreezeForRisk { timestamp: 29 },
+            SpotAccountEvent::FreezeForRisk { timestamp: 29, lsn: 4 },
             SpotAccountError::TimestampRegression { timestamp: 29, earliest_allowed: 30 },
         );
 
         assert_rejected_without_mutation(
             account(AccountStatus::Frozen, 3),
-            SpotAccountEvent::UnfreezeFromRisk { timestamp: 19 },
+            SpotAccountEvent::UnfreezeFromRisk { timestamp: 19, lsn: 4 },
             SpotAccountError::TimestampRegression { timestamp: 19, earliest_allowed: 20 },
         );
     }
@@ -349,7 +384,7 @@ mod tests {
     fn version_overflow_is_rejected_without_mutation() {
         assert_rejected_without_mutation(
             account(AccountStatus::Active, u64::MAX),
-            SpotAccountEvent::FreezeForRisk { timestamp: 20 },
+            SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: u64::MAX },
             SpotAccountError::VersionOverflow,
         );
     }
@@ -358,7 +393,7 @@ mod tests {
     fn apply_reuses_transition_and_only_discards_output() {
         let mut transitioned = account(AccountStatus::Active, 7);
         let mut applied = transitioned.clone();
-        let event = SpotAccountEvent::FreezeForRisk { timestamp: 25 };
+        let event = SpotAccountEvent::FreezeForRisk { timestamp: 25, lsn: 8 };
 
         assert_eq!(transitioned.transition(event), Ok((AccountStatus::Frozen, ())));
         assert_eq!(applied, transitioned);

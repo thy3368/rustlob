@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FinancialClassification,
-    FourColorArchetype, Fsm, Shard, TrackDiff,
+    FourColorArchetype, Fsm, LogAttr, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -59,6 +59,21 @@ impl UserFundingState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserFundingEvent {
     Settle { settled_at: u64, lsn: u64 },
+}
+impl Shard for UserFundingEvent {
+    fn partition(&self) -> u8 {
+        0
+    }
+}
+impl LogAttr for UserFundingEvent {
+    fn lsn(&self) -> u64 {
+        let Self::Settle { lsn, .. } = self;
+        *lsn
+    }
+    fn logical_ts(&self) -> u64 {
+        let Self::Settle { settled_at, .. } = self;
+        *settled_at
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserFundingOutput {
