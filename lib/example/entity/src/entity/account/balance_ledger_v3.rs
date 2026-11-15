@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff,
-    FinancialClassification, FourColorArchetype, Fsm, UpdatedEntityPair,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FinancialClassification,
+    FourColorArchetype, Fsm, TrackDiff, UpdatedEntityPair,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -152,7 +152,7 @@ impl Fsm for BalanceLedgerV3 {
     }
 }
 
-impl FieldDiff for BalanceLedgerV3 {
+impl TrackDiff for BalanceLedgerV3 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         let value = |v: Option<Decimal>| v.map(|n| n.to_string()).unwrap_or_default();
         vec![
@@ -229,8 +229,6 @@ impl Entity for BalanceLedgerV3 {
         todo!()
     }
 }
-
-impl TrackDiff for BalanceLedgerV3 {}
 
 #[cfg(test)]
 mod tests {

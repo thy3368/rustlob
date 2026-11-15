@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, FieldDiff, FourColorArchetype, Shard,
+    AggregateRole, Entity, EntityFieldChange, TrackDiff, FourColorArchetype, Shard,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -108,7 +108,7 @@ impl ScheduledCancel {
     }
 }
 
-impl FieldDiff for ScheduledCancel {
+impl TrackDiff for ScheduledCancel {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("user_id", "", self.user_id.to_string()),

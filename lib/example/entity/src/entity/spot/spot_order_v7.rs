@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, FieldDiff, Fsm, Shard};
+use common_entity::{Entity, EntityError, EntityFieldChange, TrackDiff, Fsm, Shard};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
 
@@ -540,7 +540,7 @@ fn canceled_order(current: &OrderBase, lsn: u64, timestamp: u64) -> Result<Order
     Ok(next)
 }
 
-impl FieldDiff for SpotOrderV7 {
+impl TrackDiff for SpotOrderV7 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("order_id", "", self.order_base.order_id.to_string()),

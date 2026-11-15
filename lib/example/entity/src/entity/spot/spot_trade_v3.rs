@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, TrackDiff, FourColorArchetype,
     Fsm, Shard,
 };
 use rust_decimal::Decimal;
@@ -55,7 +55,7 @@ pub struct SpotTradeV3 {
     pub settlement_status: SpotTradeSettlementStatus,
 }
 
-impl FieldDiff for SpotTradeV3 {
+impl TrackDiff for SpotTradeV3 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         let trade = &self.comon_trade;
         vec![

@@ -153,21 +153,21 @@ impl AggregateRole {
     }
 }
 
-/// 可复用的字段级 diff 契约。
-///
-/// 纯值对象可以只实现该 trait 来复用 [`EntityFieldChange`] 表达字段变化；
-/// 只有需要 identity、version、replay、audit 或生命周期语义的对象才应实现 [`Entity`]。
-pub trait FieldDiff {
-    fn diff(&self, other: &Self) -> Vec<EntityFieldChange>;
-
-    #[inline]
-    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
-        Vec::with_capacity(0)
-    }
-}
+// /// 可复用的字段级 diff 契约。
+// ///
+// /// 纯值对象可以只实现该 trait 来复用 [`EntityFieldChange`] 表达字段变化；
+// /// 只有需要 identity、version、replay、audit 或生命周期语义的对象才应实现 [`Entity`]。
+// pub trait FieldDiff {
+//     // fn diff(&self, other: &Self) -> Vec<EntityFieldChange>;
+//     //
+//     // #[inline]
+//     // fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+//     //     Vec::with_capacity(0)
+//     // }
+// }
 
 /// Enhanced entity contract for generating compact replayable entity events.
-pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
+pub trait Entity:   Shard + Clone + Debug + Send + Sync + 'static {
     fn entity_id(&self) -> u64;
 
     ///记录owner
@@ -262,6 +262,15 @@ pub trait Entity: FieldDiff + Shard + Clone + Debug + Send + Sync + 'static {
 }
 
 pub trait TrackDiff: Entity {
+
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange>;
+
+    #[inline]
+    fn created_field_changes(&self) -> Vec<EntityFieldChange> {
+        Vec::with_capacity(0)
+    }
+
+
     #[inline]
     fn track_create_event(&self) -> Result<EntityReplayableEvent, EntityError>
     where
@@ -368,6 +377,8 @@ pub trait TrackDiff: Entity {
     }
 }
 
+
+///todo 应该不需要 从use case 传入就好
 #[inline]
 fn increment_version(version: u64) -> Result<u64, EntityError> {
     version.checked_add(1).ok_or(EntityError::VersionOverflow { version })

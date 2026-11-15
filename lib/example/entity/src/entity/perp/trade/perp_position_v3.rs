@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, FieldDiff, Fsm, Shard};
+use common_entity::{Entity, EntityFieldChange, Fsm, Shard, TrackDiff};
 use rust_decimal::prelude::Signed;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,6 @@ use thiserror::Error;
 
 use crate::account::coin::Coin;
 use crate::entity::common::{FundingRate, UserId};
-use crate::perp::fund::funding_payment::FundingPayment;
 use crate::perp::fund::user_funding::UserFunding;
 use crate::perp::trade::perp_trade_v3::{PerpTradeKind, PerpTradeV3};
 
@@ -85,8 +84,6 @@ pub struct PerpPositionV3 {
     position_id: u64,
     /// 持有该仓位的账户标识。
     user_id: UserId,
-    // /// 仓位对应的资产编号。
-    // asset: u32,
     /// 仓位对应的币种或合约名称。
     coin: Coin,
     /// 带方向的仓位数量；正数表示多仓，负数表示空仓，零表示无仓位。
@@ -172,7 +169,7 @@ impl PerpPositionV3 {
             lsn: 0,
         }
     }
-    pub fn position_key(&self) -> u64 {
+    pub fn position_id(&self) -> u64 {
         self.position_id
     }
     pub fn user_id(&self) -> UserId {
@@ -250,7 +247,7 @@ impl PerpPositionV3 {
     }
 }
 
-impl FieldDiff for PerpPositionV3 {
+impl TrackDiff for PerpPositionV3 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         position_fields(self, "")
     }

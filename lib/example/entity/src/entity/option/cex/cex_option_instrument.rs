@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, FieldDiff, FourColorArchetype};
+use common_entity::{Entity, EntityFieldChange, TrackDiff, FourColorArchetype};
 
 const CEX_OPTION_INSTRUMENT_ENTITY_TYPE: u8 = 40;
 
@@ -106,7 +106,7 @@ impl CexOptionInstrument {
     }
 }
 
-impl FieldDiff for CexOptionInstrument {
+impl TrackDiff for CexOptionInstrument {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("instrument_id", "", self.instrument_id.clone()),

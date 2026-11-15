@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, TrackDiff, FourColorArchetype,
     Fsm, Shard,
 };
 use rust_decimal::Decimal;
@@ -375,7 +375,7 @@ impl PositionV4 {
         })
     }
 }
-impl FieldDiff for PositionV4 {
+impl TrackDiff for PositionV4 {
     fn diff(&self, o: &Self) -> Vec<EntityFieldChange> {
         [
             ("state", format!("{:?}", self.state), format!("{:?}", o.state)),
@@ -418,6 +418,22 @@ impl Entity for PositionV4 {
     }
     fn replay_field_type(_: &str) -> u8 {
         1
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 

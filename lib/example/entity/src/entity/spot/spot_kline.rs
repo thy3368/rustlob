@@ -1,6 +1,6 @@
 use base_types_v2::Symbol;
 use common_entity::{
-    Entity, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
+    Entity, EntityFieldChange, EntityMutationModel, TrackDiff, FourColorArchetype,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -67,7 +67,7 @@ impl SpotKline {
     }
 }
 
-impl FieldDiff for SpotKline {
+impl TrackDiff for SpotKline {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("symbol", "", self.symbol.id().to_string()),
@@ -115,6 +115,22 @@ impl Entity for SpotKline {
             | "first_trade_id" | "last_trade_id" => 1,
             _ => 0,
         }
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 

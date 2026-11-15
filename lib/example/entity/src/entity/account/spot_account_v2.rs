@@ -1,4 +1,4 @@
-use common_entity::{AggregateRole, Entity, EntityFieldChange, FieldDiff, FourColorArchetype, Fsm};
+use common_entity::{AggregateRole, Entity, EntityFieldChange, TrackDiff, FourColorArchetype, Fsm};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -143,7 +143,7 @@ impl Fsm for SpotAccount {
     }
 }
 
-impl FieldDiff for SpotAccount {
+impl TrackDiff for SpotAccount {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("account_id", "", self.account_id.to_string()),

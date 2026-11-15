@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, TrackDiff, FourColorArchetype,
     Fsm, Shard,
 };
 use rust_decimal::Decimal;
@@ -404,7 +404,7 @@ fn is_terminal(status: SpotOrderStatus) -> bool {
     )
 }
 
-impl FieldDiff for PerpOrderV3 {
+impl TrackDiff for PerpOrderV3 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         fields(self, "")
     }
@@ -488,6 +488,22 @@ impl Entity for PerpOrderV3 {
             "limit_px" | "size" | "orig_size" | "version" => 1,
             _ => 0,
         }
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 

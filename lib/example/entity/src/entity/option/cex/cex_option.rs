@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, FieldDiff, FinancialClassification,
+    AggregateRole, Entity, EntityFieldChange, TrackDiff, FinancialClassification,
     FourColorArchetype,
 };
 use thiserror::Error;
@@ -492,7 +492,7 @@ impl CexOptionOrder {
     }
 }
 
-impl FieldDiff for CexOptionOrder {
+impl TrackDiff for CexOptionOrder {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("order_id", "", self.order_id.clone()),

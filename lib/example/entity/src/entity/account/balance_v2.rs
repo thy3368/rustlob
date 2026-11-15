@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, FieldDiff, Fsm};
+use common_entity::{Entity, EntityFieldChange, TrackDiff, Fsm};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -237,7 +237,7 @@ fn checked_sub(a: Decimal, b: Decimal) -> Result<Decimal, BalanceV2Error> {
     a.checked_sub(b).ok_or(BalanceV2Error::ArithmeticOverflow)
 }
 
-impl FieldDiff for BalanceV2 {
+impl TrackDiff for BalanceV2 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             change("party_id", "", self.party_id),

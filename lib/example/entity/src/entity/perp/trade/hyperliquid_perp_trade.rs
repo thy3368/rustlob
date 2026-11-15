@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, FieldDiff, Fsm};
+use common_entity::{Entity, EntityFieldChange, TrackDiff, Fsm};
 use rust_decimal::Decimal;
 use thiserror::Error;
 
@@ -164,7 +164,7 @@ fn parse_coin(s: &str) -> Result<Coin, HyperliquidPerpTradeError> {
         _ => Err(HyperliquidPerpTradeError::InvalidSymbol),
     }
 }
-impl FieldDiff for HyperliquidPerpTrade {
+impl TrackDiff for HyperliquidPerpTrade {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         Vec::new()
     }
@@ -192,5 +192,21 @@ impl Entity for HyperliquidPerpTrade {
     }
     fn replay_field_type(_: &str) -> u8 {
         0
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }

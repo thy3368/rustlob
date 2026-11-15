@@ -45,7 +45,7 @@ pub fn settle_hour(
 
     let mut position_ids = HashSet::with_capacity(positions.len());
     for position in positions {
-        let position_id = position.position_key();
+        let position_id = position.position_id();
         if !position_ids.insert(position_id) {
             return Err(SettleHourError::DuplicatePositionId { position_id });
         }
@@ -56,7 +56,7 @@ pub fn settle_hour(
 
     let mut pending = Vec::with_capacity(positions.len());
     for position in positions {
-        let position_id = position.position_key();
+        let position_id = position.position_id();
         let usdc = position
             .funding_usdc_delta(oracle, rate)
             .map_err(|_| SettleHourError::ArithmeticOverflow { position_id })?;
@@ -68,7 +68,7 @@ pub fn settle_hour(
     Ok(pending
         .into_iter()
         .map(|(position, usdc)| {
-            let funding_key = format!("{funding_batch_id}:{}", position.position_key());
+            let funding_key = format!("{funding_batch_id}:{}", position.position_id());
             UserFunding::new(
                 stable_string_entity_id(&funding_key),
                 position.user_id().0,
@@ -84,7 +84,7 @@ pub fn settle_hour(
 }
 
 
-// 将资金结算事实生效
+// 将资金结算事实生效,结算到哪里？
 pub fn settle_hour2(
     user_funding: UserFunding,
     position: PerpPositionV3,

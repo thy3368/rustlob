@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff, FourColorArchetype,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, TrackDiff, FourColorArchetype,
     Fsm, Shard,
 };
 use rust_decimal::Decimal;
@@ -125,7 +125,7 @@ impl Fsm for PerpTradeV3 {
     }
 }
 
-impl FieldDiff for PerpTradeV3 {
+impl TrackDiff for PerpTradeV3 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         trade_values(self)
             .into_iter()
@@ -213,6 +213,22 @@ impl Entity for PerpTradeV3 {
             | "version" => 1,
             _ => 0,
         }
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 

@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityReplayableEvent, FieldDiff,
+    AggregateRole, Entity, EntityFieldChange, EntityReplayableEvent, TrackDiff,
     FinancialClassification, FourColorArchetype,
 };
 use lob_repo_v2::LobError;
@@ -407,7 +407,7 @@ impl HyperliquidPerpOrder {
     }
 }
 
-impl FieldDiff for HyperliquidPerpOrder {
+impl TrackDiff for HyperliquidPerpOrder {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("order_id", "", self.order_id.to_string()),
@@ -551,6 +551,22 @@ impl Entity for HyperliquidPerpOrder {
 
     fn is_derived() -> bool {
         false
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
 

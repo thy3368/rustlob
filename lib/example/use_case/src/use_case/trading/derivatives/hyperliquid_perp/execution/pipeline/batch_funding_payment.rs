@@ -149,7 +149,7 @@ fn validate_positions(
         return Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch);
     }
     for (position_id, position) in cmd.position_ids.iter().zip(&state.positions) {
-        if *position_id != position.position_key() {
+        if *position_id != position.position_id() {
             return Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch);
         }
         if position.coin() != cmd.symbol.base {
@@ -181,7 +181,7 @@ fn derive_funding_payments(
                 _ => SettleHyperliquidPerpFundingError::ArithmeticOverflow,
             })? else { continue };
 
-        let funding_key = format!("{}:{}", cmd.funding_batch_id, position.position_key());
+        let funding_key = format!("{}:{}", cmd.funding_batch_id, position.position_id());
         let mut payment = UserFunding::new(
             common_entity::stable_string_entity_id(&funding_key),
             position.user_id().0,

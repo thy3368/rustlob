@@ -1,5 +1,5 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FieldDiff,
+    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, TrackDiff,
     FinancialClassification, FourColorArchetype, Fsm, Shard,
 };
 use rust_decimal::Decimal;
@@ -196,7 +196,7 @@ impl Fsm for UserFunding {
     }
 }
 
-impl FieldDiff for UserFunding {
+impl TrackDiff for UserFunding {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
             EntityFieldChange::new("funding_id", "", self.funding_id.to_string()),
@@ -281,5 +281,21 @@ impl Entity for UserFunding {
             | "version" | "created_at" | "updated_at" => 1,
             _ => 0,
         }
+    }
+
+    fn owner_id(&self) -> String {
+        todo!()
+    }
+
+    fn op_id(&self) -> String {
+        todo!()
+    }
+
+    fn created_at(&self) -> u64 {
+        todo!()
+    }
+
+    fn updated_at(&self) -> u64 {
+        todo!()
     }
 }
