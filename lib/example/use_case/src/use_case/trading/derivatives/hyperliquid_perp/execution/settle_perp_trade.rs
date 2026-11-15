@@ -209,9 +209,17 @@ fn derive_changes(
             .ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
         let mut after = before.clone();
         let event = if delta.is_sign_positive() {
-            BalanceV2Event::CreditAvailable { amount: delta, timestamp: cmd.logical_ts() }
+            BalanceV2Event::CreditAvailable {
+                amount: delta,
+                timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
+            }
         } else {
-            BalanceV2Event::DebitAvailable { amount: delta.abs(), timestamp: cmd.logical_ts() }
+            BalanceV2Event::DebitAvailable {
+                amount: delta.abs(),
+                timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
+            }
         };
         after.apply(event).map_err(map_balance_error)?;
         changed_margin_balances.push(UpdatedEntityPair { before, after });

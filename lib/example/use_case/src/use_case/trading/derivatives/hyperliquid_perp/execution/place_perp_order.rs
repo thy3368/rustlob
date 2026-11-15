@@ -185,7 +185,11 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
                 let before = state.margin_balance.clone();
                 let mut after = before.clone();
                 after
-                    .apply(BalanceV2Event::Freeze { amount, timestamp: cmd.logical_ts() })
+                    .apply(BalanceV2Event::Freeze {
+                        amount,
+                        timestamp: cmd.logical_ts(),
+                        lsn: cmd.lsn(),
+                    })
                     .map_err(map_balance_error)?;
                 Some(UpdatedEntityPair { before, after })
             } else {

@@ -77,6 +77,7 @@ impl UseCase for DepositQuoteUseCase {
             .apply(BalanceV2Event::CreditAvailable {
                 amount: cmd.amount.into(),
                 timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
             })
             .map_err(map_balance_error)?;
 
@@ -111,7 +112,8 @@ fn map_balance_error(error: BalanceV2Error) -> DepositQuoteError {
         | BalanceV2Error::InsufficientAvailableBalance
         | BalanceV2Error::InsufficientFrozenBalance
         | BalanceV2Error::BalanceClosed
-        | BalanceV2Error::CannotCloseNonZeroBalance => DepositQuoteError::ArithmeticOverflow,
+        | BalanceV2Error::CannotCloseNonZeroBalance
+        | BalanceV2Error::StaleLsn { .. } => DepositQuoteError::ArithmeticOverflow,
     }
 }
 

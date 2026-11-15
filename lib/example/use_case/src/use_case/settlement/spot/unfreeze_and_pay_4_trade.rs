@@ -215,6 +215,7 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
             BalanceV2Event::DebitFrozen {
                 amount: amounts.buyer_quote_payment,
                 timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
             },
         )?;
         Fsm::apply(
@@ -222,6 +223,7 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
             BalanceV2Event::CreditAvailable {
                 amount: amounts.base_amount,
                 timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
             },
         )?;
         Fsm::apply(
@@ -229,6 +231,7 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
             BalanceV2Event::DebitFrozen {
                 amount: amounts.base_amount,
                 timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
             },
         )?;
         if amounts.seller_quote_receipt > rust_decimal::Decimal::ZERO {
@@ -237,6 +240,7 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
                 BalanceV2Event::CreditAvailable {
                     amount: amounts.seller_quote_receipt,
                     timestamp: cmd.logical_ts(),
+                    lsn: cmd.lsn(),
                 },
             )?;
         }

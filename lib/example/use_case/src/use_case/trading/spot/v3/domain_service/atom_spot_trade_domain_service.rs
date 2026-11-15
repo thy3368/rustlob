@@ -69,15 +69,25 @@ impl SpotTradeDomainService {
         buyer_quote_balance_after.apply(BalanceV2Event::DebitFrozen {
             amount: amounts.buyer_quote_payment,
             timestamp,
+            lsn: timestamp,
         })?;
         buyer_base_balance_after
-            .apply(BalanceV2Event::CreditAvailable { amount: amounts.base_amount, timestamp })?;
+            .apply(BalanceV2Event::CreditAvailable {
+                amount: amounts.base_amount,
+                timestamp,
+                lsn: timestamp,
+            })?;
         seller_base_balance_after
-            .apply(BalanceV2Event::DebitFrozen { amount: amounts.base_amount, timestamp })?;
+            .apply(BalanceV2Event::DebitFrozen {
+                amount: amounts.base_amount,
+                timestamp,
+                lsn: timestamp,
+            })?;
         if amounts.seller_quote_receipt > Decimal::ZERO {
             seller_quote_balance_after.apply(BalanceV2Event::CreditAvailable {
                 amount: amounts.seller_quote_receipt,
                 timestamp,
+                lsn: timestamp,
             })?;
         }
         trade_after.apply(SpotTradeEvent::Settle)?;
@@ -273,7 +283,7 @@ mod tests {
 
         let mut closed = inputs(OrderSide::Buy, 2);
         closed.1 = BalanceV2::new(10, 10, u64::from(Coin::BTC.index()), 0, 0, 4, 100);
-        closed.1.apply(BalanceV2Event::Close { timestamp: 200 }).unwrap();
+        closed.1.apply(BalanceV2Event::Close { timestamp: 200, lsn: 200 }).unwrap();
         let before = closed.clone();
         assert_eq!(
             settle(&closed),

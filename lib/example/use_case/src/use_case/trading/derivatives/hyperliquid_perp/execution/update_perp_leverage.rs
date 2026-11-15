@@ -118,7 +118,8 @@ fn map_position_error(error: PerpPositionV3Error) -> UpdateHyperliquidPerpLevera
         | PerpPositionV3Error::InvalidState
         | PerpPositionV3Error::FundingUserMismatch
         | PerpPositionV3Error::FundingCoinMismatch
-        | PerpPositionV3Error::InvalidFundingSettlementTime => {
+        | PerpPositionV3Error::InvalidFundingSettlementTime
+        | PerpPositionV3Error::StaleLsn { .. } => {
             UpdateHyperliquidPerpLeverageError::PositionMismatch
         }
     }

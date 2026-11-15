@@ -159,6 +159,7 @@ impl UseCase for TriggerScheduledCancelUseCase {
                 unfreeze_amount: release.amount(),
                 payment_amount: Decimal::ZERO,
                 timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
             })?;
             canceled_spot_orders.push(UpdatedEntityPair::new(before.clone(), after));
         }

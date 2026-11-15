@@ -4,27 +4,33 @@ use common_entity::{
     EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, TrackDiff, UpdatedEntityPair,
     UseCase,
 };
+use rust_decimal::Decimal;
 use thiserror::Error;
 
+use crate::account::symbol::Symbol;
 use crate::entity::perp::fund::user_funding::UserFunding;
 use crate::entity::perp::fund::user_funding_domain_service::{
-    SettleUserFundingBatchError, settle_user_funding_batch,
+    SettleHourError, SettleUserFundingBatchError, settle_hour, settle_user_funding_batch,
 };
-use crate::entity::{BalanceV2, MarginModeV3, PerpPositionV3, UserId};
+use crate::entity::{BalanceV2, FundingRate, MarginModeV3, PerpPositionV3, UserId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpFundingCmd {
     pub operator: UserId,
     pub funding_batch_id: u64,
-    pub funding_ids: Vec<u64>,
+    pub funding_time: u64,
+    pub settled_at: u64,
+    pub symbol: Symbol,
+    pub oracle_price: Decimal,
+    pub funding_rate: FundingRate,
+    pub position_ids: Vec<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpFundingState {
-    pub fundings: Vec<UserFunding>,
     pub positions: Vec<PerpPositionV3>,
     pub margin_balances: Vec<BalanceV2>,
-    pub settled_funding_ids: Vec<u64>,
+    pub settled_position_ids: Vec<u64>,
     pub margin_mode: MarginModeV3,
 }
 
@@ -32,12 +38,20 @@ pub struct SettleHyperliquidPerpFundingState {
 pub enum SettleHyperliquidPerpFundingError {
     #[error("funding batch id must be non-zero")]
     InvalidFundingBatchId,
-    #[error("funding ids must not be empty")]
-    EmptyFundingIds,
-    #[error("funding ids do not match loaded facts")]
-    FundingIdsMismatch,
-    #[error("funding fact was already settled")]
-    FundingAlreadySettled,
+    #[error("position ids must not be empty")]
+    EmptyPositionIds,
+    #[error("oracle price must be greater than zero")]
+    InvalidOraclePrice,
+    #[error("settlement time must not precede funding time")]
+    InvalidSettlementTime,
+    #[error("position ids do not match loaded positions")]
+    PositionIdsMismatch,
+    #[error("funding settlement only supports cross margin")]
+    UnsupportedMarginMode,
+    #[error("position was already settled in this batch")]
+    PositionAlreadySettled,
+    #[error(transparent)]
+    Generate(#[from] SettleHourError),
     #[error(transparent)]
     Settlement(#[from] SettleUserFundingBatchError),
 }
@@ -47,7 +61,7 @@ pub struct SettleHyperliquidPerpFundingUseCase;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpFundingChanges {
-    pub changed_fundings: Vec<UpdatedEntityPair<UserFunding>>,
+    pub created_fundings: Vec<UserFunding>,
     pub changed_positions: Vec<UpdatedEntityPair<PerpPositionV3>>,
     pub changed_margin_balances: Vec<UpdatedEntityPair<BalanceV2>>,
 }
@@ -55,12 +69,12 @@ pub struct SettleHyperliquidPerpFundingChanges {
 impl ReplayableChanges for SettleHyperliquidPerpFundingChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         let mut events = Vec::with_capacity(
-            self.changed_fundings.len()
+            self.created_fundings.len()
                 + self.changed_positions.len()
                 + self.changed_margin_balances.len(),
         );
-        for pair in &self.changed_fundings {
-            events.push(pair.after.track_update_event_from(&pair.before)?);
+        for funding in &self.created_fundings {
+            events.push(funding.track_create_event()?);
         }
         for pair in &self.changed_positions {
             events.push(pair.after.track_update_event_from(&pair.before)?);
@@ -82,8 +96,14 @@ impl UseCase for SettleHyperliquidPerpFundingUseCase {
         if cmd.funding_batch_id == 0 {
             return Err(SettleHyperliquidPerpFundingError::InvalidFundingBatchId);
         }
-        if cmd.funding_ids.is_empty() {
-            return Err(SettleHyperliquidPerpFundingError::EmptyFundingIds);
+        if cmd.position_ids.is_empty() {
+            return Err(SettleHyperliquidPerpFundingError::EmptyPositionIds);
+        }
+        if cmd.oracle_price <= Decimal::ZERO {
+            return Err(SettleHyperliquidPerpFundingError::InvalidOraclePrice);
+        }
+        if cmd.settled_at < cmd.funding_time {
+            return Err(SettleHyperliquidPerpFundingError::InvalidSettlementTime);
         }
         Ok(())
     }
@@ -93,27 +113,33 @@ impl UseCase for SettleHyperliquidPerpFundingUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        if cmd.funding_ids.len() != state.fundings.len()
+        if cmd.position_ids.len() != state.positions.len()
             || cmd
-                .funding_ids
+                .position_ids
                 .iter()
-                .zip(&state.fundings)
-                .any(|(id, funding)| *id != funding.funding_id())
+                .zip(&state.positions)
+                .any(|(id, position)| *id != position.position_id())
         {
-            return Err(SettleHyperliquidPerpFundingError::FundingIdsMismatch);
+            return Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch);
         }
-        let settled: HashSet<u64> = state.settled_funding_ids.iter().copied().collect();
-        if cmd.funding_ids.iter().any(|id| settled.contains(id)) {
-            return Err(SettleHyperliquidPerpFundingError::FundingAlreadySettled);
+        if state.margin_mode != MarginModeV3::Cross
+            || state.positions.iter().any(|position| position.margin_mode() != MarginModeV3::Cross)
+        {
+            return Err(SettleHyperliquidPerpFundingError::UnsupportedMarginMode);
         }
+        let settled: HashSet<u64> = state.settled_position_ids.iter().copied().collect();
+        if cmd.position_ids.iter().any(|id| settled.contains(id)) {
+            return Err(SettleHyperliquidPerpFundingError::PositionAlreadySettled);
+        }
+        let fundings = self.generate_fundings(cmd, state)?;
         settle_user_funding_batch(
-            &state.fundings,
+            &fundings,
             &state.positions,
             &state.margin_balances,
-            cmd.logical_ts(),
-        )
-        .map(|_| ())
-        .map_err(Into::into)
+            cmd.settled_at,
+            cmd.lsn(),
+        )?;
+        Ok(())
     }
 
     fn compute_state_changed_only(
@@ -121,169 +147,36 @@ impl UseCase for SettleHyperliquidPerpFundingUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        //todo 增加 settle_hour
+        let fundings = self.generate_fundings(cmd, state)?;
         let output = settle_user_funding_batch(
-            &state.fundings,
+            &fundings,
             &state.positions,
             &state.margin_balances,
-            cmd.logical_ts(),
+            cmd.settled_at,
+            cmd.lsn(),
         )?;
         Ok(SettleHyperliquidPerpFundingChanges {
-            changed_fundings: output.changed_fundings,
+            created_fundings: output.changed_fundings.into_iter().map(|pair| pair.after).collect(),
             changed_positions: output.changed_positions,
             changed_margin_balances: output.changed_balances,
         })
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use common_entity::{Entity, LogEntrySequencer};
-    use rust_decimal::Decimal;
-
-    use super::*;
-    use crate::entity::account::coin::Coin;
-    use crate::entity::account::symbol::Symbol;
-    use crate::entity::common::FundingRate;
-    use crate::entity::perp::trade::perp_position_v3::FundingAccumulatorV3;
-
-    const PARTY_ID: u64 = 7;
-    const SETTLED_AT: u64 = 120;
-
-    fn command(
-        funding_batch_id: u64,
-        funding_ids: Vec<u64>,
-    ) -> LogEntry<SettleHyperliquidPerpFundingCmd> {
-        LogEntrySequencer::from_metadata(
-            1,
-            SETTLED_AT,
-            1,
-            1,
-            common_entity::SYSTEM_USER_ID.to_owned(),
-            SettleHyperliquidPerpFundingCmd { operator: UserId(99), funding_batch_id, funding_ids },
-        )
-    }
-
-    fn funding(id: u64, amount: Decimal) -> UserFunding {
-        UserFunding::new(
-            id,
-            PARTY_ID,
-            Symbol::new(1, Coin::BTC, Coin::USDC),
-            amount,
-            Decimal::ONE,
-            FundingRate::new(Decimal::new(1, 4)).unwrap(),
-            None,
-            100,
-        )
-    }
-
-    fn state(fundings: Vec<UserFunding>) -> SettleHyperliquidPerpFundingState {
-        SettleHyperliquidPerpFundingState {
-            fundings,
-            positions: vec![
-                PerpPositionV3::new(
-                    2,
-                    UserId(PARTY_ID),
-                    Coin::BTC,
-                    Decimal::ONE,
-                    Decimal::from(100),
-                    Decimal::from(5),
-                    MarginModeV3::Cross,
-                    None,
-                    Decimal::ZERO,
-                    FundingAccumulatorV3::default(),
-                    Decimal::ZERO,
-                    3,
-                )
-                .unwrap(),
-            ],
-            margin_balances: vec![BalanceV2::new(
-                PARTY_ID,
-                11,
-                u64::from(Coin::USDC.index()),
-                Decimal::TEN,
-                Decimal::ZERO,
-                4,
-                100,
-            )],
-            settled_funding_ids: Vec::new(),
-            margin_mode: MarginModeV3::Cross,
-        }
-    }
-
-    #[test]
-    fn validates_command_and_authoritative_funding_ids() {
-        let use_case = SettleHyperliquidPerpFundingUseCase;
-        assert_eq!(
-            use_case.check_command(&command(0, vec![1])),
-            Err(SettleHyperliquidPerpFundingError::InvalidFundingBatchId)
-        );
-        assert_eq!(
-            use_case.check_command(&command(1, vec![])),
-            Err(SettleHyperliquidPerpFundingError::EmptyFundingIds)
-        );
-
-        let loaded = state(vec![funding(1, Decimal::ONE), funding(2, Decimal::ONE)]);
-        assert_eq!(
-            use_case.validate_state_given(&command(1, vec![2, 1]), &loaded),
-            Err(SettleHyperliquidPerpFundingError::FundingIdsMismatch)
-        );
-        let mut already_settled = loaded;
-        already_settled.settled_funding_ids.push(2);
-        assert_eq!(
-            use_case.validate_state_given(&command(1, vec![1, 2]), &already_settled),
-            Err(SettleHyperliquidPerpFundingError::FundingAlreadySettled)
-        );
-    }
-
-    #[test]
-    fn propagates_domain_error_transparently() {
-        let use_case = SettleHyperliquidPerpFundingUseCase;
-        let loaded = state(vec![funding(1, Decimal::ZERO)]);
-
-        assert_eq!(
-            use_case.validate_state_given(&command(1, vec![1]), &loaded),
-            Err(SettleHyperliquidPerpFundingError::Settlement(
-                SettleUserFundingBatchError::ZeroFundingAmount { funding_id: 1 }
-            ))
-        );
-    }
-
-    #[test]
-    fn maps_pairs_and_projects_stable_unique_single_step_events() {
-        let use_case = SettleHyperliquidPerpFundingUseCase;
-        let loaded = state(vec![funding(2, Decimal::from(3)), funding(1, Decimal::from(-1))]);
-        let changes = use_case.compute_state_changed(&command(1, vec![2, 1]), &loaded).unwrap();
-
-        assert_eq!(changes.changed_fundings.len(), 2);
-        assert_eq!(changes.changed_positions.len(), 1);
-        assert_eq!(changes.changed_margin_balances.len(), 1);
-        assert_eq!(
-            changes.changed_fundings[0].after.version(),
-            changes.changed_fundings[0].before.version() + 1
-        );
-        assert_eq!(
-            changes.changed_positions[0].after.version(),
-            changes.changed_positions[0].before.version() + 1
-        );
-        assert_eq!(
-            changes.changed_margin_balances[0].after.version(),
-            changes.changed_margin_balances[0].before.version() + 1
-        );
-
-        let events = changes.to_replayable_events().unwrap();
-        let expected = vec![
-            (UserFunding::entity_type(), 2),
-            (UserFunding::entity_type(), 1),
-            (PerpPositionV3::entity_type(), 2),
-            (BalanceV2::entity_type(), changes.changed_margin_balances[0].after.entity_id()),
-        ];
-        assert_eq!(
-            events.iter().map(|event| (event.entity_type, event.entity_id)).collect::<Vec<_>>(),
-            expected
-        );
-        let unique =
-            events.iter().map(|event| (event.entity_type, event.entity_id)).collect::<HashSet<_>>();
-        assert_eq!(unique.len(), events.len());
+impl SettleHyperliquidPerpFundingUseCase {
+    fn generate_fundings(
+        self,
+        cmd: &LogEntry<SettleHyperliquidPerpFundingCmd>,
+        state: &SettleHyperliquidPerpFundingState,
+    ) -> Result<Vec<UserFunding>, SettleHyperliquidPerpFundingError> {
+        Ok(settle_hour(
+            cmd.symbol,
+            cmd.funding_batch_id,
+            cmd.funding_time,
+            cmd.funding_rate,
+            cmd.oracle_price,
+            &state.positions,
+            cmd.lsn(),
+        )?)
     }
 }

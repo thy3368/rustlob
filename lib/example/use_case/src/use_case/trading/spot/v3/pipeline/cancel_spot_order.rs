@@ -184,7 +184,9 @@ fn map_cancel_error(error: CancelSpotOrderV7Error) -> CancelSpotOrderV3Error {
             BalanceV2Error::InvalidAmount | BalanceV2Error::InsufficientAvailableBalance => {
                 CancelSpotOrderV3Error::InvalidBalanceAmount
             }
-            BalanceV2Error::ArithmeticOverflow | BalanceV2Error::CannotCloseNonZeroBalance => {
+            BalanceV2Error::ArithmeticOverflow
+            | BalanceV2Error::CannotCloseNonZeroBalance
+            | BalanceV2Error::StaleLsn { .. } => {
                 CancelSpotOrderV3Error::ArithmeticOverflow
             }
         },

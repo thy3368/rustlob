@@ -59,6 +59,8 @@ pub enum PerpPositionV3Error {
     FundingCoinMismatch,
     #[error("funding settlement time precedes the position update time")]
     InvalidFundingSettlementTime,
+    #[error("incoming lsn {incoming_lsn} is older than current lsn {current_lsn}")]
+    StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,7 +72,13 @@ pub enum PerpPositionV3State {
 pub enum PerpPositionV3Event {
     TradeFilled { trade: PerpTradeV3, logical_ts: u64 },
     FundingSettled { payment: UserFunding, logical_ts: u64 },
-    FundingAmountSettled { user_id: UserId, coin: Coin, signed_amount: Decimal, logical_ts: u64 },
+    FundingAmountSettled {
+        user_id: UserId,
+        coin: Coin,
+        signed_amount: Decimal,
+        logical_ts: u64,
+        lsn: u64,
+    },
     LeverageUpdated { leverage: Decimal, margin_mode: MarginModeV3, logical_ts: u64 },
     IsolatedMarginAdjusted { delta: Decimal, logical_ts: u64 },
 }
@@ -399,7 +407,14 @@ impl Fsm for PerpPositionV3 {
                 coin,
                 signed_amount,
                 logical_ts,
+                lsn,
             } => {
+                if lsn < self.lsn {
+                    return Err(PerpPositionV3Error::StaleLsn {
+                        incoming_lsn: lsn,
+                        current_lsn: self.lsn,
+                    });
+                }
                 if user_id != self.user_id {
                     return Err(PerpPositionV3Error::FundingUserMismatch);
                 }
@@ -427,13 +442,9 @@ impl Fsm for PerpPositionV3 {
                         .checked_add(signed_amount)
                         .ok_or(PerpPositionV3Error::ArithmeticOverflow)?,
                 };
-                //todo lsn由event传入
-                let version =
-                    self.lsn.checked_add(1).ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-
                 self.cum_funding = cum_funding;
                 self.updated_at = logical_ts;
-                self.lsn = version;
+                self.lsn = lsn;
                 Ok((
                     PerpPositionV3State::Active,
                     PerpPositionV3Output::FundingApplied { signed_amount },
@@ -547,6 +558,7 @@ mod tests {
                 coin: Coin::BTC,
                 signed_amount: Decimal::from(-1),
                 logical_ts: 9,
+                lsn: 5,
             })
             .unwrap();
 
@@ -592,6 +604,7 @@ mod tests {
                     coin: Coin::BTC,
                     signed_amount: Decimal::ONE,
                     logical_ts: 9,
+                    lsn: 5,
                 },
                 PerpPositionV3Error::FundingUserMismatch,
             ),
@@ -601,6 +614,7 @@ mod tests {
                     coin: Coin::ETH,
                     signed_amount: Decimal::ONE,
                     logical_ts: 9,
+                    lsn: 5,
                 },
                 PerpPositionV3Error::FundingCoinMismatch,
             ),
@@ -610,6 +624,7 @@ mod tests {
                     coin: Coin::BTC,
                     signed_amount: Decimal::ONE,
                     logical_ts: 9,
+                    lsn: 5,
                 },
                 PerpPositionV3Error::ArithmeticOverflow,
             ),

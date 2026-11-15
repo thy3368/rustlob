@@ -87,7 +87,11 @@ impl UseCase for Freeze4SpotOrderV2UseCase {
         let mut balance_after = given_state.balance.clone();
         common_entity::Fsm::apply(
             &mut balance_after,
-            BalanceV2Event::Freeze { amount: requirement.amount(), timestamp: cmd.logical_ts() },
+            BalanceV2Event::Freeze {
+                amount: requirement.amount(),
+                timestamp: cmd.logical_ts(),
+                lsn: cmd.lsn(),
+            },
         )?;
         Ok(UnFreezeSpotOrderV2AfterChanges { balance_after })
     }

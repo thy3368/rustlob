@@ -130,10 +130,15 @@ impl SpotOrderDomainService {
                 unfreeze_amount: current - target,
                 payment_amount: Decimal::ZERO,
                 timestamp,
+                lsn: timestamp,
             })?;
         } else if current < target {
             settled_balance
-                .apply(BalanceV2Event::Freeze { amount: target - current, timestamp })?;
+                .apply(BalanceV2Event::Freeze {
+                    amount: target - current,
+                    timestamp,
+                    lsn: timestamp,
+                })?;
         }
         Ok(settled_balance)
     }
@@ -328,13 +333,18 @@ impl SpotOrderDomainService {
         }
         match hold_adjustment {
             SpotOrderV7HoldAdjustment::Increase { amount } => {
-                balance.apply(BalanceV2Event::Freeze { amount: amount.amount(), timestamp })?;
+                balance.apply(BalanceV2Event::Freeze {
+                    amount: amount.amount(),
+                    timestamp,
+                    lsn: timestamp,
+                })?;
             }
             SpotOrderV7HoldAdjustment::Decrease { amount } => {
                 balance.apply(BalanceV2Event::UnfreezeAndPay {
                     unfreeze_amount: amount.amount(),
                     payment_amount: Decimal::ZERO,
                     timestamp,
+                    lsn: timestamp,
                 })?;
             }
             SpotOrderV7HoldAdjustment::Unchanged { .. } => {}
@@ -360,7 +370,11 @@ impl SpotOrderDomainService {
         if balance.coin_idx() != u64::from(freeze_requirement.currency().index()) {
             return Err(ActivateSpotOrderV7Error::CoinMismatch);
         }
-        balance.apply(BalanceV2Event::Freeze { amount: freeze_requirement.amount(), timestamp })?;
+        balance.apply(BalanceV2Event::Freeze {
+            amount: freeze_requirement.amount(),
+            timestamp,
+            lsn: timestamp,
+        })?;
 
         Ok((order, balance))
     }
@@ -388,6 +402,7 @@ impl SpotOrderDomainService {
                 unfreeze_amount: release_requirement.amount(),
                 payment_amount: Decimal::ZERO,
                 timestamp,
+                lsn: timestamp,
             })?;
         }
 

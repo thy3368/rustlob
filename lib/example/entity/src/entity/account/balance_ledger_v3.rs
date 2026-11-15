@@ -245,7 +245,13 @@ mod tests {
     fn update(balance: &BalanceV2, timestamp: u64) -> common_entity::UpdatedEntityPair<BalanceV2> {
         let before = balance.clone();
         let mut after = before.clone();
-        after.apply(BalanceV2Event::Freeze { amount: Decimal::TEN, timestamp }).unwrap();
+        after
+            .apply(BalanceV2Event::Freeze {
+                amount: Decimal::TEN,
+                timestamp,
+                lsn: before.version() + 1,
+            })
+            .unwrap();
         common_entity::UpdatedEntityPair { before, after }
     }
 

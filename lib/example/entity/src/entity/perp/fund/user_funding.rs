@@ -58,7 +58,7 @@ impl UserFundingState {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserFundingEvent {
-    Settle { settled_at: u64 },
+    Settle { settled_at: u64, lsn: u64 },
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserFundingOutput {
@@ -72,6 +72,8 @@ pub enum UserFundingError {
     InvalidSettlementTime,
     #[error("user funding version overflow")]
     VersionOverflow,
+    #[error("incoming lsn {incoming_lsn} is older than current lsn {current_lsn}")]
+    StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
 impl UserFunding {
@@ -86,6 +88,7 @@ impl UserFunding {
         funding_rate: FundingRate,
         n_samples: Option<u32>,
         created_at: u64,
+        lsn: u64,
     ) -> Self {
         let funding_rate = funding_rate.value();
         Self {
@@ -97,7 +100,7 @@ impl UserFunding {
             funding_rate,
             n_samples,
             state: UserFundingState::Pending,
-            version: 1,
+            version: lsn,
             created_at,
             updated_at: created_at,
         }
@@ -176,21 +179,26 @@ impl Fsm for UserFunding {
         &mut self,
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
-        let UserFundingEvent::Settle { settled_at } = event;
+        let UserFundingEvent::Settle { settled_at, lsn } = event;
+        if lsn < self.version {
+            return Err(UserFundingError::StaleLsn {
+                incoming_lsn: lsn,
+                current_lsn: self.version,
+            });
+        }
         if self.state == UserFundingState::Settled {
             return Err(UserFundingError::AlreadySettled);
         }
         if settled_at < self.created_at {
             return Err(UserFundingError::InvalidSettlementTime);
         }
-        let version = self.version.checked_add(1).ok_or(UserFundingError::VersionOverflow)?;
         let output = UserFundingOutput::BalanceImpact {
             party_id: self.party_id,
             quote_coin_idx: u64::from(self.coin.quote.index()),
             signed_usdc_delta: self.usdc,
         };
         self.state = UserFundingState::Settled;
-        self.version = version;
+        self.version = lsn;
         self.updated_at = settled_at;
         Ok((self.state, output))
     }
