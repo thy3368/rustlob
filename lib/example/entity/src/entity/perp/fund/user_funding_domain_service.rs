@@ -606,7 +606,7 @@ mod settle_user_funding_batch_tests {
                 SETTLED_AT,
                 COMMAND_LSN,
             ),
-            Err(SettleUserFundingBatchError::FundingVersionOverflow { funding_id: 1 })
+            Err(SettleUserFundingBatchError::StaleFundingLsn { funding_id: 1 })
         );
 
         let accumulator = FundingAccumulatorV3 {
@@ -642,7 +642,7 @@ mod settle_user_funding_batch_tests {
                 SETTLED_AT,
                 COMMAND_LSN,
             ),
-            Err(SettleUserFundingBatchError::PositionArithmeticOverflow { position_id: 2 })
+            Err(SettleUserFundingBatchError::StalePositionLsn { position_id: 2 })
         );
         assert_eq!(
             settle_user_funding_batch(
@@ -652,7 +652,7 @@ mod settle_user_funding_batch_tests {
                 SETTLED_AT,
                 COMMAND_LSN,
             ),
-            Err(SettleUserFundingBatchError::BalanceArithmeticOverflow { account_id: ACCOUNT_ID })
+            Err(SettleUserFundingBatchError::StaleBalanceLsn { account_id: ACCOUNT_ID })
         );
     }
 }
