@@ -8,3 +8,9 @@ pub trait Shard {
         0
     }
 }
+
+/// 提供状态机 executor 投影事件时所需的日志元数据。
+pub trait Log: Shard {
+    fn lsn(&self) -> u64;
+    fn logical_ts(&self) -> u64;
+}

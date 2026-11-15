@@ -1,12 +1,14 @@
-use crate::entity_v2::shard::Shard;
+use crate::entity_v2::shard::{Log, Shard};
 
-/// 内存中的有序日志条目，携带完整负载。
+/// 真正的时标对象，全序唯一，可回放；内存中的有序日志条目，携带完整负载。
 ///
 /// 当前类型不定义持久化或传输格式；日志成为唯一真相源取决于后续写入链路。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogEntry<P> {
-    pub(crate) t: u8,
-    pub(crate) p: u8,
+    ///topic
+    t: u8,
+    ///partition
+    p: u8,
     /// 全局单调递增的序列号，是全序的依据。
     lsn: u64,
     /// 由定序器分配的逻辑时间戳。
@@ -21,13 +23,7 @@ pub struct LogEntry<P> {
     payload: P,
 }
 
-/// 提供状态机 executor 投影事件时所需的日志元数据。
-pub trait LogEntryMetadata: Shard {
-    fn lsn(&self) -> u64;
-    fn logical_ts(&self) -> u64;
-}
-
-impl<P> LogEntryMetadata for LogEntry<P> {
+impl<P> Log for LogEntry<P> {
     fn lsn(&self) -> u64 {
         self.lsn
     }
