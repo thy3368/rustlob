@@ -48,7 +48,7 @@ pub enum BalanceLedgerV3Error {
     InvalidAmount,
     #[error("balance identity does not match ledger")]
     BalanceIdentityMismatch,
-    #[error("balance versions must increase by one")]
+    #[error("balance snapshots do not use the event lsn")]
     BalanceVersionMismatch,
     #[error("ledger snapshots are incomplete or inconsistent")]
     IncompleteSnapshots,
@@ -56,8 +56,8 @@ pub enum BalanceLedgerV3Error {
     AlreadyApplied,
     #[error("application time moves backwards")]
     TimeWentBackwards,
-    #[error("ledger version overflow")]
-    VersionOverflow,
+    #[error("stale lsn {incoming_lsn}; current lsn is {current_lsn}")]
+    StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
 /// 一条 create-only 余额账务事实；余额先完成 FSM 迁移，再由本实体校验并记录快照。
@@ -129,7 +129,13 @@ impl Fsm for BalanceLedgerV3 {
             return Err(BalanceLedgerV3Error::InvalidAmount);
         }
 
-        let BalanceLedgerV3Event::BalanceApplied { balance_update, applied_at, .. } = event;
+        let BalanceLedgerV3Event::BalanceApplied { balance_update, applied_at, lsn } = event;
+        if lsn < self.version {
+            return Err(BalanceLedgerV3Error::StaleLsn {
+                incoming_lsn: lsn,
+                current_lsn: self.version,
+            });
+        }
         let before = &balance_update.before;
         let after = &balance_update.after;
         if before.party_id() != self.party_id
@@ -141,17 +147,13 @@ impl Fsm for BalanceLedgerV3 {
         {
             return Err(BalanceLedgerV3Error::BalanceIdentityMismatch);
         }
-        let expected_balance_version =
-            before.version().checked_add(1).ok_or(BalanceLedgerV3Error::BalanceVersionMismatch)?;
-        if after.version() != expected_balance_version {
+        if before.version() > lsn || after.version() != lsn {
             return Err(BalanceLedgerV3Error::BalanceVersionMismatch);
         }
         if applied_at < self.created_at || after.updated_at() != applied_at {
             return Err(BalanceLedgerV3Error::TimeWentBackwards);
         }
 
-        let next_version =
-            self.version.checked_add(1).ok_or(BalanceLedgerV3Error::VersionOverflow)?;
         let before_available = before.available();
         let before_frozen = before.frozen();
         let after_available = after.available();
@@ -161,7 +163,7 @@ impl Fsm for BalanceLedgerV3 {
         self.before_frozen = Some(before_frozen);
         self.after_available = Some(after_available);
         self.after_frozen = Some(after_frozen);
-        self.version = next_version;
+        self.version = lsn;
         self.updated_at = applied_at;
 
         Ok((BalanceLedgerV3State::Applied, BalanceLedgerV3Output::Applied { balance_update }))
@@ -265,7 +267,7 @@ mod tests {
             .apply(BalanceV2Event::Freeze {
                 amount: Decimal::TEN,
                 timestamp,
-                lsn: before.version() + 1,
+                lsn: 20,
             })
             .unwrap();
         common_entity::UpdatedEntityPair { before, after }
@@ -279,7 +281,7 @@ mod tests {
         update: common_entity::UpdatedEntityPair<BalanceV2>,
         applied_at: u64,
     ) -> BalanceLedgerV3Event {
-        BalanceLedgerV3Event::BalanceApplied { balance_update: update, applied_at, lsn: 1 }
+        BalanceLedgerV3Event::BalanceApplied { balance_update: update, applied_at, lsn: 20 }
     }
 
     #[test]
@@ -296,7 +298,7 @@ mod tests {
         assert_eq!(ledger.before_frozen, Some(Decimal::from(20)));
         assert_eq!(ledger.after_available, Some(Decimal::from(90)));
         assert_eq!(ledger.after_frozen, Some(Decimal::from(30)));
-        assert_eq!(ledger.version, 1);
+        assert_eq!(ledger.version, 20);
         assert_eq!(ledger.updated_at, 12);
     }
 
@@ -337,7 +339,7 @@ mod tests {
 
         let invalid_version = common_entity::UpdatedEntityPair {
             before: balance.clone(),
-            after: BalanceV2::new(7, 11, 42, 90_u64, 30_u64, 5, 12),
+            after: BalanceV2::new(7, 11, 42, 90_u64, 30_u64, 19, 12),
         };
         assert_rejected_unchanged(
             &balance,
@@ -361,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_amount_and_ledger_version_overflow_atomically() {
+    fn rejects_invalid_amount_and_stale_lsn_atomically() {
         let balance = balance();
         let update = update(&balance, 12);
         let mut invalid_amount = ledger(&balance);
@@ -373,11 +375,14 @@ mod tests {
         );
         assert_eq!(invalid_amount, before);
 
-        let mut overflow = ledger(&balance);
-        overflow.version = u64::MAX;
-        let before = overflow.clone();
-        assert_eq!(overflow.apply(event(update, 12)), Err(BalanceLedgerV3Error::VersionOverflow));
-        assert_eq!(overflow, before);
+        let mut stale = ledger(&balance);
+        stale.version = 21;
+        let before = stale.clone();
+        assert_eq!(
+            stale.apply(event(update, 12)),
+            Err(BalanceLedgerV3Error::StaleLsn { incoming_lsn: 20, current_lsn: 21 })
+        );
+        assert_eq!(stale, before);
     }
 
     #[test]

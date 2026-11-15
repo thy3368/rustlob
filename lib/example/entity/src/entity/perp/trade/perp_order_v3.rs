@@ -134,8 +134,8 @@ pub enum PerpOrderV3Error {
     TimestampRegression,
     #[error("arithmetic overflow while changing order")]
     ArithmeticOverflow,
-    #[error("entity version overflow at {version}")]
-    VersionOverflow { version: u64 },
+    #[error("stale lsn {incoming_lsn}; current lsn is {current_lsn}")]
+    StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
 /// 永续订单实体，共享订单价格、数量与触发价的语义单位。
@@ -161,28 +161,30 @@ impl Fsm for PerpOrderV3 {
         if is_terminal(self.comon_order.status) {
             return Err(PerpOrderV3Error::Terminal);
         }
+        let lsn = event.lsn();
+        validate_lsn(&self.comon_order, lsn)?;
         let (next, output) = match event {
             PerpOrderV3Event::Match { makers, mut input, timestamp, .. } => {
                 input.timestamp = timestamp;
-                let (next, output) = compute_match(self, makers, input)?;
+                let (next, output) = compute_match(self, makers, input, lsn)?;
                 (next, Some(output))
             }
             PerpOrderV3Event::ReplaceOrFill {
                 price, size, makers, mut input, timestamp, ..
             } => {
-                let replaced = modified(self, price, size, timestamp, false)?;
+                let replaced = modified(self, price, size, timestamp, lsn, true)?;
                 input.timestamp = timestamp;
-                let (next, output) = compute_match(&replaced, makers, input)?;
+                let (next, output) = compute_match(&replaced, makers, input, lsn)?;
                 (next, Some(output))
             }
             PerpOrderV3Event::Modify { price, size, timestamp, .. } => {
-                (modified(self, price, size, timestamp, true)?, None)
+                (modified(self, price, size, timestamp, lsn, true)?, None)
             }
             PerpOrderV3Event::Cancel { timestamp, .. } => {
                 validate_timestamp(&self.comon_order, timestamp)?;
                 let mut next = self.clone();
                 next.comon_order.status = SpotOrderStatus::Canceled;
-                advance(&mut next.comon_order, timestamp)?;
+                advance(&mut next.comon_order, timestamp, lsn);
                 (next, None)
             }
         };
@@ -195,6 +197,7 @@ fn compute_match(
     current: &PerpOrderV3,
     mut makers: Vec<PerpOrderV3>,
     input: MatchPerpOrderV3Input,
+    lsn: u64,
 ) -> Result<(PerpOrderV3, MatchPerpOrderV3Output), PerpOrderV3Error> {
     validate_order(current)?;
     validate_timestamp(&current.comon_order, input.timestamp)?;
@@ -207,6 +210,7 @@ fn compute_match(
     for maker in &makers {
         validate_maker(maker)?;
         validate_timestamp(&maker.comon_order, input.timestamp)?;
+        validate_lsn(&maker.comon_order, lsn)?;
     }
 
     let mut taker = current.clone();
@@ -214,7 +218,7 @@ fn compute_match(
         && makers.iter().any(|maker| compatible(&taker, maker) && crosses(&taker, maker))
     {
         taker.comon_order.status = SpotOrderStatus::Rejected;
-        advance(&mut taker.comon_order, input.timestamp)?;
+        advance(&mut taker.comon_order, input.timestamp, lsn);
         return Ok((
             taker.clone(),
             MatchPerpOrderV3Output::Rejected { rejected_taker_order_after: taker },
@@ -250,7 +254,7 @@ fn compute_match(
         } else {
             SpotOrderStatus::PartiallyFilled
         };
-        advance(&mut maker.comon_order, input.timestamp)?;
+        advance(&mut maker.comon_order, input.timestamp, lsn);
         let ordinal = u64::try_from(trades.len())
             .ok()
             .and_then(|value| value.checked_add(1))
@@ -275,7 +279,7 @@ fn compute_match(
                 maker_fee,
                 created_at: input.timestamp,
                 updated_at: input.timestamp,
-                version: 0,
+                version: lsn,
             },
             state: crate::entity::PerpTradeV3State::Unsettled,
             kind: if taker.is_liquidation {
@@ -307,7 +311,7 @@ fn compute_match(
     } else {
         SpotOrderStatus::PartiallyFilled
     };
-    advance(&mut taker.comon_order, input.timestamp)?;
+    advance(&mut taker.comon_order, input.timestamp, lsn);
 
     let outcome = match taker.comon_order.status {
         SpotOrderStatus::Filled => MatchPerpOrderV3Output::Filled {
@@ -340,7 +344,8 @@ fn modified(
     price: Decimal,
     total_size: Decimal,
     timestamp: u64,
-    bump_version: bool,
+    lsn: u64,
+    apply_metadata: bool,
 ) -> Result<PerpOrderV3, PerpOrderV3Error> {
     validate_order(current)?;
     validate_timestamp(&current.comon_order, timestamp)?;
@@ -358,8 +363,8 @@ fn modified(
     next.comon_order.size =
         total_size.checked_sub(filled).ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
     next.comon_order.updated_at = timestamp;
-    if bump_version {
-        next.comon_order.lsn = checked_version(current.comon_order.lsn)?;
+    if apply_metadata {
+        next.comon_order.lsn = lsn;
     }
     Ok(next)
 }
@@ -399,6 +404,17 @@ fn validate_timestamp(order: &OrderBase, timestamp: u64) -> Result<(), PerpOrder
     }
 }
 
+fn validate_lsn(order: &OrderBase, lsn: u64) -> Result<(), PerpOrderV3Error> {
+    if lsn < order.lsn {
+        Err(PerpOrderV3Error::StaleLsn {
+            incoming_lsn: lsn,
+            current_lsn: order.lsn,
+        })
+    } else {
+        Ok(())
+    }
+}
+
 fn compatible(taker: &PerpOrderV3, maker: &PerpOrderV3) -> bool {
     maker.comon_order.order_id != taker.comon_order.order_id
         && maker.comon_order.side != taker.comon_order.side
@@ -416,14 +432,9 @@ fn crosses(taker: &PerpOrderV3, maker: &PerpOrderV3) -> bool {
     }
 }
 
-fn advance(order: &mut OrderBase, timestamp: u64) -> Result<(), PerpOrderV3Error> {
-    order.lsn = checked_version(order.lsn)?;
+fn advance(order: &mut OrderBase, timestamp: u64, lsn: u64) {
+    order.lsn = lsn;
     order.updated_at = timestamp;
-    Ok(())
-}
-
-fn checked_version(version: u64) -> Result<u64, PerpOrderV3Error> {
-    version.checked_add(1).ok_or(PerpOrderV3Error::VersionOverflow { version })
 }
 
 fn is_terminal(status: SpotOrderStatus) -> bool {

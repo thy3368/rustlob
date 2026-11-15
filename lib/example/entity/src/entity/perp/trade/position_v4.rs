@@ -116,6 +116,8 @@ pub enum PositionError {
     InvalidIsolatedMargin,
     #[error("arithmetic overflow")]
     ArithmeticOverflow,
+    #[error("stale lsn {incoming_lsn}; current lsn is {current_lsn}")]
+    StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -195,9 +197,6 @@ impl PositionV4 {
     pub fn updated_at(&self) -> u64 {
         self.updated_at
     }
-    fn next_version(&self) -> Result<u64, PositionError> {
-        self.version.checked_add(1).ok_or(PositionError::ArithmeticOverflow)
-    }
 }
 fn validate_leverage(l: Leverage) -> Result<(), PositionError> {
     if l.value == 0 {
@@ -221,6 +220,13 @@ impl Fsm for PositionV4 {
         &mut self,
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
+        let lsn = event.lsn();
+        if lsn < self.version {
+            return Err(PositionError::StaleLsn {
+                incoming_lsn: lsn,
+                current_lsn: self.version,
+            });
+        }
         let mut n = self.clone();
         let out = match event {
             PositionEvent::TradeFilled { fill, logical_ts, .. } => {
@@ -268,7 +274,7 @@ impl Fsm for PositionV4 {
                 n.szi = total;
                 n.entry_px = entry;
                 n.state = if total.is_zero() { PositionState::Flat } else { PositionState::Open };
-                n.version = n.next_version()?;
+                n.version = lsn;
                 n.updated_at = logical_ts;
                 n.cum_funding = if total.is_zero() {
                     FundingAccum {
@@ -323,7 +329,7 @@ impl Fsm for PositionV4 {
                     .since_change
                     .checked_add(signed_amount)
                     .ok_or(PositionError::ArithmeticOverflow)?;
-                n.version = n.next_version()?;
+                n.version = lsn;
                 n.updated_at = logical_ts;
                 PositionOutput::FundingApplied { signed_amount }
             }
@@ -331,7 +337,7 @@ impl Fsm for PositionV4 {
                 validate_leverage(leverage)?;
                 n.leverage = leverage;
                 n.cum_funding.since_change = Decimal::ZERO;
-                n.version = n.next_version()?;
+                n.version = lsn;
                 n.updated_at = logical_ts;
                 PositionOutput::LeverageApplied
             }
@@ -348,7 +354,7 @@ impl Fsm for PositionV4 {
                 }
                 n.leverage.raw_usd = Some(after);
                 n.cum_funding.since_change = Decimal::ZERO;
-                n.version = n.next_version()?;
+                n.version = lsn;
                 n.updated_at = logical_ts;
                 PositionOutput::IsolatedMarginApplied { margin_after: after }
             }
@@ -530,6 +536,47 @@ mod tests {
         )
         .expect("valid leverage should construct a position");
         assert_eq!(position.coin(), Coin::ETH);
+    }
+
+    #[test]
+    fn command_lsn_can_jump_repeat_and_reach_max_while_stale_is_atomic() {
+        let mut position = open_position(Decimal::ONE, Decimal::from(100), 2);
+        position
+            .apply(PositionEvent::FundingSettled {
+                signed_amount: Decimal::ONE,
+                logical_ts: 20,
+                lsn: 20,
+            })
+            .unwrap();
+        position
+            .apply(PositionEvent::FundingSettled {
+                signed_amount: Decimal::ONE,
+                logical_ts: 21,
+                lsn: 20,
+            })
+            .unwrap();
+        assert_eq!(position.version(), 20);
+
+        let before = position.clone();
+        assert_eq!(
+            position.apply(PositionEvent::FundingSettled {
+                signed_amount: Decimal::ONE,
+                logical_ts: 22,
+                lsn: 19,
+            }),
+            Err(PositionError::StaleLsn { incoming_lsn: 19, current_lsn: 20 })
+        );
+        assert_eq!(position, before);
+
+        position.version = u64::MAX;
+        position
+            .apply(PositionEvent::FundingSettled {
+                signed_amount: Decimal::ONE,
+                logical_ts: 23,
+                lsn: u64::MAX,
+            })
+            .unwrap();
+        assert_eq!(position.version(), u64::MAX);
     }
 
     #[test]

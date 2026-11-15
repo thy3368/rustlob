@@ -70,9 +70,9 @@ pub enum SpotAccountError {
         "event timestamp {timestamp} is earlier than the earliest allowed timestamp {earliest_allowed}"
     )]
     TimestampRegression { timestamp: u64, earliest_allowed: u64 },
-    /// 账户版本已经达到上限，不能继续递增。
-    #[error("account version overflow")]
-    VersionOverflow,
+    /// 事件 LSN 早于账户已经应用的全局 command LSN。
+    #[error("stale lsn {incoming_lsn}; current lsn is {current_lsn}")]
+    StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
 /// 交易账户主档。
@@ -133,18 +133,19 @@ impl Fsm for SpotAccount {
     ///
     /// `Active` 只接受冻结事件并转为 `Frozen`，`Frozen` 只接受解冻事件并转为
     /// `Active`；`Closed` 是终态，拒绝全部事件。事件时间不得早于创建时间或当前更新时间。
-    /// 成功输出为空，并在所有校验和版本计算完成后同时提交状态、更新时间和递增版本；
+    /// 成功输出为空，并在所有校验完成后同时提交状态、事件时间和全局 command LSN；
+    /// LSN 可以跳号，同一 command 的连续合法迁移可以复用同一 LSN；
     /// 任一错误都不会修改实体。
     fn transition(
         &mut self,
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
-        let (next_status, timestamp) = match (self.status, event) {
-            (AccountStatus::Active, SpotAccountEvent::FreezeForRisk { timestamp, .. }) => {
-                (AccountStatus::Frozen, timestamp)
+        let (next_status, timestamp, lsn) = match (self.status, event) {
+            (AccountStatus::Active, SpotAccountEvent::FreezeForRisk { timestamp, lsn }) => {
+                (AccountStatus::Frozen, timestamp, lsn)
             }
-            (AccountStatus::Frozen, SpotAccountEvent::UnfreezeFromRisk { timestamp, .. }) => {
-                (AccountStatus::Active, timestamp)
+            (AccountStatus::Frozen, SpotAccountEvent::UnfreezeFromRisk { timestamp, lsn }) => {
+                (AccountStatus::Active, timestamp, lsn)
             }
             (state, event) => {
                 return Err(SpotAccountError::InvalidTransition { state, event });
@@ -155,11 +156,16 @@ impl Fsm for SpotAccount {
         if timestamp < earliest_allowed {
             return Err(SpotAccountError::TimestampRegression { timestamp, earliest_allowed });
         }
-        let next_version = self.version.checked_add(1).ok_or(SpotAccountError::VersionOverflow)?;
+        if lsn < self.version {
+            return Err(SpotAccountError::StaleLsn {
+                incoming_lsn: lsn,
+                current_lsn: self.version,
+            });
+        }
 
         self.status = next_status;
         self.updated_at = timestamp;
-        self.version = next_version;
+        self.version = lsn;
 
         Ok((next_status, ()))
     }
@@ -381,12 +387,26 @@ mod tests {
     }
 
     #[test]
-    fn version_overflow_is_rejected_without_mutation() {
+    fn command_lsn_can_jump_repeat_and_reach_max_while_stale_is_atomic() {
+        let mut subject = account(AccountStatus::Active, 4);
+        subject
+            .apply(SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 20 })
+            .unwrap();
+        subject
+            .apply(SpotAccountEvent::UnfreezeFromRisk { timestamp: 20, lsn: 20 })
+            .unwrap();
+        assert_eq!(subject.version, 20);
+
         assert_rejected_without_mutation(
-            account(AccountStatus::Active, u64::MAX),
-            SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: u64::MAX },
-            SpotAccountError::VersionOverflow,
+            subject,
+            SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 19 },
+            SpotAccountError::StaleLsn { incoming_lsn: 19, current_lsn: 20 },
         );
+
+        let mut max = account(AccountStatus::Active, u64::MAX);
+        max.apply(SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: u64::MAX })
+            .unwrap();
+        assert_eq!(max.version, u64::MAX);
     }
 
     #[test]
@@ -396,6 +416,7 @@ mod tests {
         let event = SpotAccountEvent::FreezeForRisk { timestamp: 25, lsn: 8 };
 
         assert_eq!(transitioned.transition(event), Ok((AccountStatus::Frozen, ())));
+        applied.apply(event).unwrap();
         assert_eq!(applied, transitioned);
     }
 

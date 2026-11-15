@@ -48,7 +48,8 @@ impl SpotTradeDomainService {
         buyer_quote_balance: BalanceV2,
         seller_base_balance: BalanceV2,
         seller_quote_balance: BalanceV2,
-        timestamp: u64,
+        lsn: u64,
+        logical_ts: u64,
     ) -> Result<SpotTradeSettlementOutcome, SpotTradeDomainServiceError> {
         validate_balances(
             &trade,
@@ -68,29 +69,29 @@ impl SpotTradeDomainService {
 
         buyer_quote_balance_after.apply(BalanceV2Event::DebitFrozen {
             amount: amounts.buyer_quote_payment,
-            timestamp,
-            lsn: buyer_quote_balance.version() + 1,
+            timestamp: logical_ts,
+            lsn,
         })?;
         buyer_base_balance_after.apply(BalanceV2Event::CreditAvailable {
             amount: amounts.base_amount,
-            timestamp,
-            lsn: buyer_base_balance.version() + 1,
+            timestamp: logical_ts,
+            lsn,
         })?;
         seller_base_balance_after.apply(BalanceV2Event::DebitFrozen {
             amount: amounts.base_amount,
-            timestamp,
-            lsn: seller_base_balance.version() + 1,
+            timestamp: logical_ts,
+            lsn,
         })?;
         if amounts.seller_quote_receipt > Decimal::ZERO {
             seller_quote_balance_after.apply(BalanceV2Event::CreditAvailable {
                 amount: amounts.seller_quote_receipt,
-                timestamp,
-                lsn: seller_quote_balance.version() + 1,
+                timestamp: logical_ts,
+                lsn,
             })?;
         }
         trade_after.apply(SpotTradeEvent::Settle {
-            lsn: trade.comon_trade.version.saturating_add(1),
-            logical_ts: timestamp,
+            lsn,
+            logical_ts,
         })?;
 
         Ok(SpotTradeSettlementOutcome {
@@ -158,6 +159,7 @@ mod tests {
     use super::*;
 
     const TIMESTAMP: u64 = 500;
+    const LSN: u64 = 20;
 
     fn balance(party: u64, account: u64, coin: Coin, available: i64, frozen: i64) -> BalanceV2 {
         BalanceV2::new(party, account, u64::from(coin.index()), available, frozen, 4, 100)
@@ -216,6 +218,7 @@ mod tests {
             values.2.clone(),
             values.3.clone(),
             values.4.clone(),
+            LSN,
             TIMESTAMP,
         )
     }
@@ -238,9 +241,11 @@ mod tests {
             &outcome.seller_base_balance_after,
             &outcome.seller_quote_balance_after,
         ] {
-            assert_eq!(balance.version(), 5);
+            assert_eq!(balance.version(), LSN);
             assert_eq!(balance.updated_at(), TIMESTAMP);
         }
+        assert_eq!(outcome.trade_after.comon_trade.version, LSN);
+        assert_eq!(outcome.trade_after.comon_trade.updated_at, TIMESTAMP);
     }
 
     #[test]

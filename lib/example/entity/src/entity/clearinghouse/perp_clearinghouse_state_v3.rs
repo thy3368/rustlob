@@ -190,7 +190,9 @@ fn map_position_risk_error(error: PositionError) -> BuildClearinghouseStateError
         PositionError::InvalidMaintenanceMarginRate => {
             BuildClearinghouseStateError::InvalidMaintenanceMarginRate
         }
-        PositionError::ArithmeticOverflow | PositionError::InvalidLeverage => {
+        PositionError::ArithmeticOverflow
+        | PositionError::InvalidLeverage
+        | PositionError::StaleLsn { .. } => {
             BuildClearinghouseStateError::ArithmeticOverflow
         }
         PositionError::InvalidQuantity | PositionError::InvalidIsolatedMargin => {

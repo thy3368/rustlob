@@ -104,7 +104,7 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
             makers: vec![maker(2, dec!(4)), maker(3, dec!(6))],
             input: input(),
             timestamp: NOW,
-            lsn: 1,
+            lsn: 20,
         })
         .unwrap();
     let MatchPerpOrderV3Output::Filled {
@@ -115,8 +115,8 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
     else {
         panic!("expected filled outcome")
     };
-    assert_eq!(filled_taker_order_after.comon_order.lsn, 1);
-    assert_eq!(maker_orders_after.iter().map(|m| m.comon_order.lsn).collect::<Vec<_>>(), [1, 1]);
+    assert_eq!(filled_taker_order_after.comon_order.lsn, 20);
+    assert_eq!(maker_orders_after.iter().map(|m| m.comon_order.lsn).collect::<Vec<_>>(), [20, 20]);
     assert_eq!(created_trades.len(), 2);
     assert_eq!(created_trades[0].trade_base.trade_id, 7_000_001);
     assert_eq!(created_trades[0].trade_base.price, dec!(90));
@@ -125,6 +125,7 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
     assert_eq!(created_trades[0].trade_base.maker_fee, dec!(0.36));
     assert_eq!(created_trades[0].kind, PerpTradeKind::Liquidation);
     assert_eq!(created_trades[0].reference_id.as_deref(), Some("7"));
+    assert!(created_trades.iter().all(|trade| trade.trade_base.version == 20));
 }
 
 #[test]
@@ -269,11 +270,17 @@ fn invalid_inputs_and_late_failures_are_atomic() {
     }
 
     let mut subject = taker(SpotOrderStatus::Pending);
-    subject.comon_order.lsn = u64::MAX;
+    subject.comon_order.lsn = 20;
     let before = subject.clone();
     assert_eq!(
-        subject.transition(PerpOrderV3Event::Cancel { timestamp: NOW, lsn: 1 }),
-        Err(PerpOrderV3Error::VersionOverflow { version: u64::MAX })
+        subject.transition(PerpOrderV3Event::Cancel { timestamp: NOW, lsn: 19 }),
+        Err(PerpOrderV3Error::StaleLsn { incoming_lsn: 19, current_lsn: 20 })
     );
     assert_eq!(subject, before);
+
+    let mut max = taker(SpotOrderStatus::Pending);
+    max.comon_order.lsn = u64::MAX;
+    max.transition(PerpOrderV3Event::Cancel { timestamp: NOW, lsn: u64::MAX })
+        .unwrap();
+    assert_eq!(max.comon_order.lsn, u64::MAX);
 }

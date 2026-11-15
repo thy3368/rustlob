@@ -64,8 +64,8 @@ pub enum PerpTradeV3Error {
     InvalidTrade,
     #[error("settlement timestamp precedes a trade timestamp")]
     TimestampRegression,
-    #[error("entity version overflow at {version}")]
-    VersionOverflow { version: u64 },
+    #[error("stale lsn {incoming_lsn}; current lsn is {current_lsn}")]
+    StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,22 +119,24 @@ impl Fsm for PerpTradeV3 {
                 taker_closed_pnl,
                 maker_closed_pnl,
                 timestamp,
-                ..
+                lsn,
             } => {
                 if timestamp < base.created_at || timestamp < base.updated_at {
                     return Err(PerpTradeV3Error::TimestampRegression);
                 }
-                let version = base
-                    .version
-                    .checked_add(1)
-                    .ok_or(PerpTradeV3Error::VersionOverflow { version: base.version })?;
+                if lsn < base.version {
+                    return Err(PerpTradeV3Error::StaleLsn {
+                        incoming_lsn: lsn,
+                        current_lsn: base.version,
+                    });
+                }
 
                 self.taker_start_position = taker_start_position;
                 self.maker_start_position = maker_start_position;
                 self.taker_closed_pnl = taker_closed_pnl;
                 self.maker_closed_pnl = maker_closed_pnl;
                 self.trade_base.updated_at = timestamp;
-                self.trade_base.version = version;
+                self.trade_base.version = lsn;
                 self.state = PerpTradeV3State::Settled;
                 Ok((self.state, PerpTradeV3Output::Settled { taker_closed_pnl, maker_closed_pnl }))
             }
@@ -301,13 +303,17 @@ mod tests {
     }
 
     fn settle_event(timestamp: u64) -> PerpTradeV3Event {
+        settle_event_with_lsn(timestamp, 4)
+    }
+
+    fn settle_event_with_lsn(timestamp: u64, lsn: u64) -> PerpTradeV3Event {
         PerpTradeV3Event::Settle {
             taker_start_position: Decimal::from(2),
             maker_start_position: Decimal::from(-3),
             taker_closed_pnl: Decimal::from(4),
             maker_closed_pnl: Decimal::from(-5),
             timestamp,
-            lsn: 4,
+            lsn,
         }
     }
 
@@ -344,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_facts_timestamp_and_version_overflow_are_atomic() {
+    fn invalid_facts_timestamp_and_stale_lsn_are_atomic() {
         let mut invalid = trade();
         invalid.trade_base.price = Decimal::ZERO;
         let before = invalid.clone();
@@ -359,14 +365,14 @@ mod tests {
         );
         assert_eq!(regressed, before);
 
-        let mut overflow = trade();
-        overflow.trade_base.version = u64::MAX;
-        let before = overflow.clone();
+        let mut stale = trade();
+        stale.trade_base.version = 20;
+        let before = stale.clone();
         assert_eq!(
-            overflow.transition(settle_event(8)),
-            Err(PerpTradeV3Error::VersionOverflow { version: u64::MAX })
+            stale.transition(settle_event(8)),
+            Err(PerpTradeV3Error::StaleLsn { incoming_lsn: 4, current_lsn: 20 })
         );
-        assert_eq!(overflow, before);
+        assert_eq!(stale, before);
     }
 
     #[test]
@@ -377,5 +383,17 @@ mod tests {
             assert!(trade.transition(settle_event(8)).is_ok());
             assert_eq!(trade.state, PerpTradeV3State::Settled);
         }
+    }
+
+    #[test]
+    fn settlement_accepts_jump_and_max_lsn() {
+        let mut jumped = trade();
+        jumped.transition(settle_event_with_lsn(8, 20)).unwrap();
+        assert_eq!(jumped.trade_base.version, 20);
+
+        let mut max = trade();
+        max.trade_base.version = u64::MAX;
+        max.transition(settle_event_with_lsn(8, u64::MAX)).unwrap();
+        assert_eq!(max.trade_base.version, u64::MAX);
     }
 }

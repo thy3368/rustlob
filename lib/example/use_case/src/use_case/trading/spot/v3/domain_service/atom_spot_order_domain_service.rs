@@ -110,6 +110,7 @@ impl SpotOrderDomainService {
         order_after: &SpotOrderV7,
         mut settled_balance: BalanceV2,
         frozen_before_command: Decimal,
+        lsn: u64,
         timestamp: u64,
     ) -> Result<BalanceV2, ReconcileSpotOrderHoldError> {
         let required = order_after
@@ -130,13 +131,13 @@ impl SpotOrderDomainService {
                 unfreeze_amount: current - target,
                 payment_amount: Decimal::ZERO,
                 timestamp,
-                lsn: settled_balance.version() + 1,
+                lsn,
             })?;
         } else if current < target {
             settled_balance.apply(BalanceV2Event::Freeze {
                 amount: target - current,
                 timestamp,
-                lsn: settled_balance.version() + 1,
+                lsn,
             })?;
         }
         Ok(settled_balance)

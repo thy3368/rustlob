@@ -63,6 +63,8 @@ impl LogAttr for SpotTradeEvent {
 pub enum SpotTradeStateError {
     #[error("spot trade settlement was already completed")]
     AlreadySettled,
+    #[error("stale lsn {incoming_lsn}; current lsn is {current_lsn}")]
+    StaleLsn { incoming_lsn: u64, current_lsn: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,8 +226,19 @@ impl Fsm for SpotTradeV3 {
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match (self.settlement_status, event) {
-            (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle { .. }) => {
+            (
+                SpotTradeSettlementStatus::Unsettled,
+                SpotTradeEvent::Settle { lsn, logical_ts },
+            ) => {
+                if lsn < self.comon_trade.version {
+                    return Err(SpotTradeStateError::StaleLsn {
+                        incoming_lsn: lsn,
+                        current_lsn: self.comon_trade.version,
+                    });
+                }
                 self.settlement_status = SpotTradeSettlementStatus::Settled;
+                self.comon_trade.version = lsn;
+                self.comon_trade.updated_at = logical_ts;
                 Ok((self.settlement_status, ()))
             }
             (SpotTradeSettlementStatus::Settled, SpotTradeEvent::Settle { .. }) => {
@@ -309,13 +322,32 @@ mod tests {
     fn apply_transitions_directly_and_preserves_state_on_error() {
         let mut trade = trade(OrderSide::Buy, 1, 2);
 
-        Fsm::apply(&mut trade, SpotTradeEvent::Settle { lsn: 1, logical_ts: 1 }).unwrap();
+        Fsm::apply(&mut trade, SpotTradeEvent::Settle { lsn: 20, logical_ts: 7 }).unwrap();
         assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
+        assert_eq!(trade.comon_trade.version, 20);
+        assert_eq!(trade.comon_trade.updated_at, 7);
 
         assert_eq!(
             Fsm::apply(&mut trade, SpotTradeEvent::Settle { lsn: 1, logical_ts: 1 }),
             Err(SpotTradeStateError::AlreadySettled)
         );
         assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
+    }
+
+    #[test]
+    fn stale_lsn_is_rejected_atomically_and_max_is_accepted() {
+        let mut stale = trade(OrderSide::Buy, 1, 2);
+        stale.comon_trade.version = 20;
+        let before = stale.clone();
+        assert_eq!(
+            stale.transition(SpotTradeEvent::Settle { lsn: 19, logical_ts: 7 }),
+            Err(SpotTradeStateError::StaleLsn { incoming_lsn: 19, current_lsn: 20 })
+        );
+        assert_eq!(stale, before);
+
+        let mut max = trade(OrderSide::Buy, 1, 2);
+        max.comon_trade.version = u64::MAX;
+        max.apply(SpotTradeEvent::Settle { lsn: u64::MAX, logical_ts: 7 }).unwrap();
+        assert_eq!(max.comon_trade.version, u64::MAX);
     }
 }

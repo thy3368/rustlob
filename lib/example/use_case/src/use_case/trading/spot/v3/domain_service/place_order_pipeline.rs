@@ -181,6 +181,7 @@ impl PlaceOrderPipeline {
                 balances.working[buyer_quote].clone(),
                 balances.working[seller_base].clone(),
                 balances.working[seller_quote].clone(),
+                input.lsn,
                 input.timestamp,
             )?;
             balances.working[buyer_base] = settled.buyer_base_balance_after;
@@ -193,6 +194,7 @@ impl PlaceOrderPipeline {
             &taker_after,
             balances.working[held_index].clone(),
             frozen_before_command,
+            input.lsn,
             input.timestamp,
         )?;
         let updated_balances_after = balances.into_updated_after();
