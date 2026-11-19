@@ -19,7 +19,10 @@ pub(crate) fn event_u64_field(event: &EntityReplayableEvent, field_name: &str) -
             return None;
         }
 
-        std::str::from_utf8(change.new_value_bytes()).ok()?.parse::<u64>().ok()
+        std::str::from_utf8(change.new_value_bytes())
+            .ok()?
+            .parse::<u64>()
+            .ok()
     })
 }
 

@@ -138,7 +138,11 @@ impl Entity for SpotTradeV3 {
         AggregateRole::AggregateRoot
     }
     fn replay_field_type(name: &str) -> u8 {
-        if matches!(name, "created_at" | "updated_at") { 1 } else { 0 }
+        if matches!(name, "created_at" | "updated_at") {
+            1
+        } else {
+            0
+        }
     }
 
     fn owner_id(&self) -> String {
@@ -264,7 +268,10 @@ mod tests {
 
     #[test]
     fn settle_event_exposes_log_metadata_and_default_route() {
-        let event = SpotTradeEvent::Settle { lsn: 9, logical_ts: 7 };
+        let event = SpotTradeEvent::Settle {
+            lsn: 9,
+            logical_ts: 7,
+        };
         assert_eq!(event.lsn(), 9);
         assert_eq!(event.logical_ts(), 7);
         assert_eq!(event.topic(), 0);
@@ -308,7 +315,10 @@ mod tests {
     #[test]
     fn seller_fee_equal_to_or_greater_than_proceeds_is_handled() {
         assert_eq!(
-            trade(OrderSide::Buy, 1, 6).settlement_amounts().unwrap().seller_quote_receipt,
+            trade(OrderSide::Buy, 1, 6)
+                .settlement_amounts()
+                .unwrap()
+                .seller_quote_receipt,
             Decimal::ZERO
         );
         assert_eq!(
@@ -321,13 +331,26 @@ mod tests {
     fn apply_transitions_directly_and_preserves_state_on_error() {
         let mut trade = trade(OrderSide::Buy, 1, 2);
 
-        Fsm::apply(&mut trade, SpotTradeEvent::Settle { lsn: 20, logical_ts: 7 }).unwrap();
+        Fsm::apply(
+            &mut trade,
+            SpotTradeEvent::Settle {
+                lsn: 20,
+                logical_ts: 7,
+            },
+        )
+        .unwrap();
         assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
         assert_eq!(trade.comon_trade.version, 20);
         assert_eq!(trade.comon_trade.updated_at, 7);
 
         assert_eq!(
-            Fsm::apply(&mut trade, SpotTradeEvent::Settle { lsn: 1, logical_ts: 1 }),
+            Fsm::apply(
+                &mut trade,
+                SpotTradeEvent::Settle {
+                    lsn: 1,
+                    logical_ts: 1
+                }
+            ),
             Err(SpotTradeStateError::AlreadySettled)
         );
         assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
@@ -339,14 +362,24 @@ mod tests {
         stale.comon_trade.version = 20;
         let before = stale.clone();
         assert_eq!(
-            stale.transition(SpotTradeEvent::Settle { lsn: 19, logical_ts: 7 }),
-            Err(SpotTradeStateError::StaleLsn { incoming_lsn: 19, current_lsn: 20 })
+            stale.transition(SpotTradeEvent::Settle {
+                lsn: 19,
+                logical_ts: 7
+            }),
+            Err(SpotTradeStateError::StaleLsn {
+                incoming_lsn: 19,
+                current_lsn: 20
+            })
         );
         assert_eq!(stale, before);
 
         let mut max = trade(OrderSide::Buy, 1, 2);
         max.comon_trade.version = u64::MAX;
-        max.apply(SpotTradeEvent::Settle { lsn: u64::MAX, logical_ts: 7 }).unwrap();
+        max.apply(SpotTradeEvent::Settle {
+            lsn: u64::MAX,
+            logical_ts: 7,
+        })
+        .unwrap();
         assert_eq!(max.comon_trade.version, u64::MAX);
     }
 }

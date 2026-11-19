@@ -45,7 +45,9 @@ mod tests {
 
     #[test]
     fn append_delegates_to_append_batch_for_non_copy_payload() {
-        let mut repo = RecordingRepo { batches: Vec::new() };
+        let mut repo = RecordingRepo {
+            batches: Vec::new(),
+        };
         let entry = crate::LogEntrySequencer::from_metadata(
             7,
             11,

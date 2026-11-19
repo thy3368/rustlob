@@ -20,7 +20,11 @@ async fn async_main() -> Result<(), Box<dyn Error>> {
     // 创建 libp2p Swarm
     let mut swarm = SwarmBuilder::with_new_identity()
         .with_tokio()
-        .with_tcp(tcp::Config::default(), noise::Config::new, yamux::Config::default)?
+        .with_tcp(
+            tcp::Config::default(),
+            noise::Config::new,
+            yamux::Config::default,
+        )?
         .with_behaviour(|key| {
             // 创建 Kademlia 行为
             let peer_id = key.public().to_peer_id();
@@ -70,8 +74,12 @@ fn handle_command(swarm: &mut libp2p::Swarm<kad::Behaviour<kad::store::MemorySto
             let key = parts[1].as_bytes().to_vec();
             let value = parts[2].as_bytes().to_vec();
 
-            let record =
-                Record { key: RecordKey::new(&key), value, publisher: None, expires: None };
+            let record = Record {
+                key: RecordKey::new(&key),
+                value,
+                publisher: None,
+                expires: None,
+            };
 
             match swarm.behaviour_mut().put_record(record, kad::Quorum::One) {
                 Ok(_) => println!("✓ 存储记录: {}", parts[1]),
@@ -121,15 +129,24 @@ fn handle_event(event: libp2p::swarm::SwarmEvent<kad::Event>) {
                 eprintln!("✗ 查询失败: {:?}", e);
             }
             kad::QueryResult::PutRecord(Ok(kad::PutRecordOk { key })) => {
-                println!("✓ 记录已发布到网络: {}", String::from_utf8_lossy(key.as_ref()));
+                println!(
+                    "✓ 记录已发布到网络: {}",
+                    String::from_utf8_lossy(key.as_ref())
+                );
             }
             kad::QueryResult::PutRecord(Err(e)) => {
                 eprintln!("✗ 发布失败: {:?}", e);
             }
             _ => {}
         },
-        libp2p::swarm::SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
-            println!("🤝 已连接节点: {} ({})", peer_id, endpoint.get_remote_address());
+        libp2p::swarm::SwarmEvent::ConnectionEstablished {
+            peer_id, endpoint, ..
+        } => {
+            println!(
+                "🤝 已连接节点: {} ({})",
+                peer_id,
+                endpoint.get_remote_address()
+            );
             // 自动添加到路由表
         }
         libp2p::swarm::SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {

@@ -53,7 +53,10 @@ impl LogAttr for PerpTradeV3Event {
 /// 永续成交结算产生的稳定业务事实。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PerpTradeV3Output {
-    Settled { taker_closed_pnl: Decimal, maker_closed_pnl: Decimal },
+    Settled {
+        taker_closed_pnl: Decimal,
+        maker_closed_pnl: Decimal,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -139,7 +142,13 @@ impl Fsm for PerpTradeV3 {
                 self.trade_base.updated_at = timestamp;
                 self.trade_base.version = lsn;
                 self.state = PerpTradeV3State::Settled;
-                Ok((self.state, PerpTradeV3Output::Settled { taker_closed_pnl, maker_closed_pnl }))
+                Ok((
+                    self.state,
+                    PerpTradeV3Output::Settled {
+                        taker_closed_pnl,
+                        maker_closed_pnl,
+                    },
+                ))
             }
         }
     }
@@ -175,8 +184,14 @@ fn trade_values(trade: &PerpTradeV3) -> Vec<(&'static str, String)> {
         ("maker_fee", base.maker_fee.to_string()),
         ("kind", format!("{:?}", trade.kind)),
         ("state", format!("{:?}", trade.state)),
-        ("taker_start_position", trade.taker_start_position.to_string()),
-        ("maker_start_position", trade.maker_start_position.to_string()),
+        (
+            "taker_start_position",
+            trade.taker_start_position.to_string(),
+        ),
+        (
+            "maker_start_position",
+            trade.maker_start_position.to_string(),
+        ),
         ("taker_closed_pnl", trade.taker_closed_pnl.to_string()),
         ("maker_closed_pnl", trade.maker_closed_pnl.to_string()),
         ("created_at", base.created_at.to_string()),
@@ -346,7 +361,10 @@ mod tests {
         trade.transition(settle_event(8)).unwrap();
         let settled = trade.clone();
 
-        assert_eq!(trade.transition(settle_event(9)), Err(PerpTradeV3Error::AlreadySettled));
+        assert_eq!(
+            trade.transition(settle_event(9)),
+            Err(PerpTradeV3Error::AlreadySettled)
+        );
         assert_eq!(trade, settled);
     }
 
@@ -355,7 +373,10 @@ mod tests {
         let mut invalid = trade();
         invalid.trade_base.price = Decimal::ZERO;
         let before = invalid.clone();
-        assert_eq!(invalid.transition(settle_event(8)), Err(PerpTradeV3Error::InvalidTrade));
+        assert_eq!(
+            invalid.transition(settle_event(8)),
+            Err(PerpTradeV3Error::InvalidTrade)
+        );
         assert_eq!(invalid, before);
 
         let mut regressed = trade();
@@ -371,14 +392,21 @@ mod tests {
         let before = stale.clone();
         assert_eq!(
             stale.transition(settle_event(8)),
-            Err(PerpTradeV3Error::StaleLsn { incoming_lsn: 4, current_lsn: 20 })
+            Err(PerpTradeV3Error::StaleLsn {
+                incoming_lsn: 4,
+                current_lsn: 20
+            })
         );
         assert_eq!(stale, before);
     }
 
     #[test]
     fn trade_kind_does_not_change_settlement_lifecycle() {
-        for kind in [PerpTradeKind::Normal, PerpTradeKind::Liquidation, PerpTradeKind::Adl] {
+        for kind in [
+            PerpTradeKind::Normal,
+            PerpTradeKind::Liquidation,
+            PerpTradeKind::Adl,
+        ] {
             let mut trade = trade();
             trade.kind = kind;
             assert!(trade.transition(settle_event(8)).is_ok());

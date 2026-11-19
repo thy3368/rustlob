@@ -51,7 +51,10 @@ impl<T> CmdResp<T> {
     where
         F: FnOnce(T) -> U,
     {
-        CmdResp { metadata: self.metadata, result: f(self.result) }
+        CmdResp {
+            metadata: self.metadata,
+            result: f(self.result),
+        }
     }
 }
 
@@ -103,6 +106,11 @@ impl<C> Cmd<C> {
 
     /// 创建带时间戳的命令
     pub fn with_timestamp(user_id: UserId, nonce: Nonce, timestamp_ms: u64, payload: C) -> Self {
-        Self { user_id, nonce, timestamp_ms, payload }
+        Self {
+            user_id,
+            nonce,
+            timestamp_ms,
+            payload,
+        }
     }
 }

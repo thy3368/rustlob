@@ -171,7 +171,10 @@ mod tests {
             1,
             1,
             "trader-1".to_owned(),
-            WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 0 },
+            WithdrawQuoteCmd {
+                party_id: "trader-1".to_string(),
+                amount: 0,
+            },
         ));
 
         assert_eq!(result, Err(WithdrawQuoteError::InvalidAmount));
@@ -186,7 +189,10 @@ mod tests {
             1,
             1,
             "trader-1".to_owned(),
-            WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 2_000 },
+            WithdrawQuoteCmd {
+                party_id: "trader-1".to_string(),
+                amount: 2_000,
+            },
         );
         let result = use_case.validate_state_given(&command, &sample_state());
 
@@ -202,11 +208,15 @@ mod tests {
             1,
             1,
             "trader-1".to_owned(),
-            WithdrawQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
+            WithdrawQuoteCmd {
+                party_id: "trader-1".to_string(),
+                amount: 200,
+            },
         );
         let changes = use_case.compute_state_diff(&command, sample_state())?;
-        let events =
-            changes.to_replayable_events().map_err(|_| WithdrawQuoteError::ArithmeticOverflow)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| WithdrawQuoteError::ArithmeticOverflow)?;
 
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());

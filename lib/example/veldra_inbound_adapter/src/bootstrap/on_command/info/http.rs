@@ -24,7 +24,9 @@ fn parse_query_type_probe(body: &[u8]) -> Result<InfoRequestTypeProbe, InfoHttpE
 }
 
 fn reply_to_http(reply: InfoQueryReply) -> Result<HttpResponse, InfoHttpError> {
-    let value = reply.into_json_value().map_err(InfoHttpError::SerializeReply)?;
+    let value = reply
+        .into_json_value()
+        .map_err(InfoHttpError::SerializeReply)?;
     Ok(HttpResponse::Ok().json(value))
 }
 
@@ -209,8 +211,14 @@ mod tests {
         let place_response = actix_test::call_service(&app, place).await;
         assert_eq!(place_response.status(), StatusCode::OK);
         let place_body: Value = actix_test::read_body_json(place_response).await;
-        assert_eq!(place_body["response"]["data"]["statuses"][0]["resting"]["oid"], first_oid);
-        assert_eq!(place_body["response"]["data"]["statuses"][1]["resting"]["oid"], second_oid);
+        assert_eq!(
+            place_body["response"]["data"]["statuses"][0]["resting"]["oid"],
+            first_oid
+        );
+        assert_eq!(
+            place_body["response"]["data"]["statuses"][1]["resting"]["oid"],
+            second_oid
+        );
 
         let batch_modify = actix_test::TestRequest::post()
             .uri("/exchange")
@@ -261,12 +269,22 @@ mod tests {
         let open_orders: Value = actix_test::call_and_read_body_json(&app, open_orders).await;
         let orders = open_orders.as_array().expect("open orders 应为数组");
         assert_eq!(orders.len(), 2);
-        let first =
-            orders.iter().find(|order| order["oid"] == first_oid).expect("应查询到第一笔订单");
-        let second =
-            orders.iter().find(|order| order["oid"] == second_oid).expect("应查询到第二笔订单");
-        assert_eq!((first["limitPx"].as_str(), first["sz"].as_str()), (Some("105"), Some("3")));
-        assert_eq!((second["limitPx"].as_str(), second["sz"].as_str()), (Some("115"), Some("5")));
+        let first = orders
+            .iter()
+            .find(|order| order["oid"] == first_oid)
+            .expect("应查询到第一笔订单");
+        let second = orders
+            .iter()
+            .find(|order| order["oid"] == second_oid)
+            .expect("应查询到第二笔订单");
+        assert_eq!(
+            (first["limitPx"].as_str(), first["sz"].as_str()),
+            (Some("105"), Some("3"))
+        );
+        assert_eq!(
+            (second["limitPx"].as_str(), second["sz"].as_str()),
+            (Some("115"), Some("5"))
+        );
 
         let history = actix_test::TestRequest::post()
             .uri("/info")
@@ -501,7 +519,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let body: Value = actix_test::read_body_json(response).await;
-        assert_eq!(body, json!({ "status": "err", "error": "Malformed JSON body." }));
+        assert_eq!(
+            body,
+            json!({ "status": "err", "error": "Malformed JSON body." })
+        );
     }
 
     #[actix_web::test]
@@ -530,10 +551,17 @@ mod tests {
         let app = actix_test::init_service(App::new().service(build_info_scope())).await;
 
         for case in query_contract_cases() {
-            let request =
-                actix_test::TestRequest::post().uri("/info").set_json(case.request).to_request();
+            let request = actix_test::TestRequest::post()
+                .uri("/info")
+                .set_json(case.request)
+                .to_request();
             let response = actix_test::call_service(&app, request).await;
-            assert_eq!(response.status(), StatusCode::OK, "case `{}`", case.query_type);
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "case `{}`",
+                case.query_type
+            );
             let body: Value = actix_test::read_body_json(response).await;
             assert_eq!(body, case.expected_response, "case `{}`", case.query_type);
         }

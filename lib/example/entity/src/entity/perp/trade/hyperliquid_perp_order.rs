@@ -446,11 +446,31 @@ impl TrackDiff for HyperliquidPerpOrder {
             option_u64_value(self.exchange_oid),
             option_u64_value(other.exchange_oid),
         );
-        push_change(&mut changes, "asset", self.asset.to_string(), other.asset.to_string());
-        push_change(&mut changes, "account_id", &self.account_id, &other.account_id);
+        push_change(
+            &mut changes,
+            "asset",
+            self.asset.to_string(),
+            other.asset.to_string(),
+        );
+        push_change(
+            &mut changes,
+            "account_id",
+            &self.account_id,
+            &other.account_id,
+        );
         push_change(&mut changes, "symbol", &self.symbol, &other.symbol);
-        push_change(&mut changes, "side", self.side.as_str(), other.side.as_str());
-        push_change(&mut changes, "execution", self.execution.as_str(), other.execution.as_str());
+        push_change(
+            &mut changes,
+            "side",
+            self.side.as_str(),
+            other.side.as_str(),
+        );
+        push_change(
+            &mut changes,
+            "execution",
+            self.execution.as_str(),
+            other.execution.as_str(),
+        );
         push_change(
             &mut changes,
             "time_in_force",
@@ -463,14 +483,24 @@ impl TrackDiff for HyperliquidPerpOrder {
             self.order_price().to_string(),
             other.order_price().to_string(),
         );
-        push_change(&mut changes, "qty", self.sz.to_string(), other.sz.to_string());
+        push_change(
+            &mut changes,
+            "qty",
+            self.sz.to_string(),
+            other.sz.to_string(),
+        );
         push_change(
             &mut changes,
             "filled_qty",
             self.filled_sz.to_string(),
             other.filled_sz.to_string(),
         );
-        push_change(&mut changes, "status", self.status.as_str(), other.status.as_str());
+        push_change(
+            &mut changes,
+            "status",
+            self.status.as_str(),
+            other.status.as_str(),
+        );
         push_change(
             &mut changes,
             "reduce_only",

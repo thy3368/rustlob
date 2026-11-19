@@ -79,7 +79,9 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ));
     }
     if !matches!(request.action.role.as_str(), "technical" | "treasury") {
-        return Err(ExchangeHttpError::contract(AuthorizeAqav2RoleContractError::InvalidRole));
+        return Err(ExchangeHttpError::contract(
+            AuthorizeAqav2RoleContractError::InvalidRole,
+        ));
     }
     Ok(())
 }
@@ -114,7 +116,10 @@ mod tests {
         )
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(error.to_string(), "Invalid `action.role`. Expected `technical` or `treasury`.");
+        assert_eq!(
+            error.to_string(),
+            "Invalid `action.role`. Expected `technical` or `treasury`."
+        );
     }
 
     #[actix_web::test]

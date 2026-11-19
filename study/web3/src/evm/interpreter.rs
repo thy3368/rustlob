@@ -34,7 +34,10 @@ pub struct Stack {
 
 impl Stack {
     pub fn new() -> Self {
-        Self { data: Vec::with_capacity(1024), max_depth: 1024 }
+        Self {
+            data: Vec::with_capacity(1024),
+            max_depth: 1024,
+        }
     }
 
     pub fn push(&mut self, value: Word) -> Result<(), ExecError> {
@@ -147,7 +150,9 @@ pub struct Storage {
 
 impl Storage {
     pub fn new() -> Self {
-        Self { data: HashMap::new() }
+        Self {
+            data: HashMap::new(),
+        }
     }
 
     pub fn read(&self, key: &Word) -> Word {
@@ -187,7 +192,12 @@ pub struct Context {
 
 impl Context {
     pub fn new(gas_limit: u64) -> Self {
-        Self { pc: 0, gas_used: 0, gas_limit, call_depth: 0 }
+        Self {
+            pc: 0,
+            gas_used: 0,
+            gas_limit,
+            call_depth: 0,
+        }
     }
 
     pub fn consume_gas(&mut self, amount: u64) -> Result<(), ExecError> {
@@ -333,7 +343,11 @@ impl Interpreter {
             OpCode::LT => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
-                let result = if word_lt(&a, &b) { word_from_u64(1) } else { [0u8; 32] };
+                let result = if word_lt(&a, &b) {
+                    word_from_u64(1)
+                } else {
+                    [0u8; 32]
+                };
                 self.stack.push(result)?;
                 Ok(ExecutionResult::Continue)
             }
@@ -341,7 +355,11 @@ impl Interpreter {
             OpCode::GT => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
-                let result = if word_lt(&b, &a) { word_from_u64(1) } else { [0u8; 32] };
+                let result = if word_lt(&b, &a) {
+                    word_from_u64(1)
+                } else {
+                    [0u8; 32]
+                };
                 self.stack.push(result)?;
                 Ok(ExecutionResult::Continue)
             }
@@ -356,7 +374,11 @@ impl Interpreter {
 
             OpCode::ISZERO => {
                 let a = self.stack.pop()?;
-                let result = if word_is_zero(&a) { word_from_u64(1) } else { [0u8; 32] };
+                let result = if word_is_zero(&a) {
+                    word_from_u64(1)
+                } else {
+                    [0u8; 32]
+                };
                 self.stack.push(result)?;
                 Ok(ExecutionResult::Continue)
             }

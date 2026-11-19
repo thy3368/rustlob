@@ -100,10 +100,14 @@ fn validate(request: &UsdClassTransferRequestWire) -> Result<(), ExchangeHttpErr
         ExchangeHttpError::contract(UsdClassTransferContractError::InvalidSignatureChainId)
     })?;
     if request.action.amount.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(UsdClassTransferContractError::InvalidAmount));
+        return Err(ExchangeHttpError::contract(
+            UsdClassTransferContractError::InvalidAmount,
+        ));
     }
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(UsdClassTransferContractError::NonceMismatch));
+        return Err(ExchangeHttpError::contract(
+            UsdClassTransferContractError::NonceMismatch,
+        ));
     }
     Ok(())
 }

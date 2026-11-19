@@ -19,7 +19,10 @@ pub struct BalanceId {
 
 impl BalanceId {
     pub fn new(account_id: AccountId, asset_id: AssetId) -> Self {
-        Self { account_id, asset_id }
+        Self {
+            account_id,
+            asset_id,
+        }
     }
 }
 
@@ -31,7 +34,10 @@ impl fmt::Display for BalanceId {
 
 impl Default for BalanceId {
     fn default() -> Self {
-        Self { account_id: AccountId(0), asset_id: AssetId::default() }
+        Self {
+            account_id: AccountId(0),
+            asset_id: AssetId::default(),
+        }
     }
 }
 
@@ -206,7 +212,10 @@ impl Balance {
     /// 当冻结余额不足时返回 `BalanceError::InsufficientFrozen`
     pub fn frozen2pay(&mut self, amount: Quantity, now: Timestamp) -> Result<(), BalanceError> {
         if self.frozen < amount {
-            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: self.frozen,
+            });
         }
 
         self.frozen = self.frozen - amount;
@@ -228,7 +237,10 @@ impl Balance {
         let frozen_before = self.frozen;
 
         if self.frozen < amount {
-            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: self.frozen,
+            });
         }
 
         self.frozen = self.frozen - amount;
@@ -255,7 +267,10 @@ impl Balance {
     /// 当冻结余额不足时返回 `BalanceError::InsufficientFrozen`
     pub fn un_frozen(&mut self, amount: Quantity, now: Timestamp) -> Result<(), BalanceError> {
         if self.frozen < amount {
-            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: self.frozen,
+            });
         }
 
         self.available = self.available + amount;
@@ -278,7 +293,10 @@ impl Balance {
         let frozen_before = self.frozen;
 
         if self.frozen < amount {
-            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: self.frozen,
+            });
         }
 
         self.available = self.available + amount;

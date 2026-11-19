@@ -24,9 +24,16 @@ pub struct LiquidationCmd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceOnlySpotOrderV3AfterChanges {
     NoAction,
-    Backstop { liquidation_id: String },
-    Adl { liquidation_id: String },
-    Orders { liquidation_id: String, orders: Vec<PlaceHyperliquidPerpOrderChanges> },
+    Backstop {
+        liquidation_id: String,
+    },
+    Adl {
+        liquidation_id: String,
+    },
+    Orders {
+        liquidation_id: String,
+        orders: Vec<PlaceHyperliquidPerpOrderChanges>,
+    },
 }
 
 /// 现货改单所需的 authoritative 状态快照。
@@ -77,7 +84,10 @@ impl UseCase for PerpLiquidation {
             let mut orders = Vec::new();
             for (symbol, state) in &given_state.order_states {
                 let position = &state.position;
-                let mark = cmd.mark_prices.get(symbol).ok_or(LiquidationError::MissingMarkPrice)?;
+                let mark = cmd
+                    .mark_prices
+                    .get(symbol)
+                    .ok_or(LiquidationError::MissingMarkPrice)?;
                 let aggressive_price = *mark;
                 let size = position.signed_size().abs();
                 if size.is_zero() {
@@ -100,7 +110,10 @@ impl UseCase for PerpLiquidation {
                 let child_log = common_entity::LogEntrySequencer::derive(cmd, child);
                 let changes = PlaceHyperliquidPerpOrderUseCase
                     .compute_state_changed(&child_log, state)
-                    .map_err(|source| LiquidationError::Order { symbol: symbol.clone(), source })?;
+                    .map_err(|source| LiquidationError::Order {
+                        symbol: symbol.clone(),
+                        source,
+                    })?;
                 orders.push(changes);
             }
             return Ok(PlaceOnlySpotOrderV3AfterChanges::Orders {
@@ -123,7 +136,10 @@ pub enum LiquidationError {
     #[error("mark price cannot be represented as an order price")]
     InvalidMarkPrice,
     #[error("liquidation order for {symbol} failed: {source}")]
-    Order { symbol: String, source: PlaceHyperliquidPerpOrderError },
+    Order {
+        symbol: String,
+        source: PlaceHyperliquidPerpOrderError,
+    },
 }
 
 impl ReplayableChanges for PlaceOnlySpotOrderV3AfterChanges {

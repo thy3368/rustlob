@@ -378,7 +378,11 @@ pub struct Log {
 impl Log {
     /// 创建新日志
     pub fn new(address: [u8; 20], topics: Vec<[u8; 32]>, data: Vec<u8>) -> Self {
-        Self { address, topics, data }
+        Self {
+            address,
+            topics,
+            data,
+        }
     }
 
     /// 序列化日志
@@ -422,7 +426,12 @@ pub struct Block {
 impl Block {
     /// 创建新区块
     pub fn new(header: BlockHeader) -> Self {
-        Self { header, transactions: Vec::new(), receipts: Vec::new(), uncles: Vec::new() }
+        Self {
+            header,
+            transactions: Vec::new(),
+            receipts: Vec::new(),
+            uncles: Vec::new(),
+        }
     }
 
     /// 添加交易

@@ -61,9 +61,9 @@ impl ExchangeActionHandler for VaultTransferAction {
 
 fn validate(request: &VaultTransferRequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "vaultTransfer" {
-        return Err(ExchangeHttpError::contract(VaultTransferContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            VaultTransferContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -86,7 +86,9 @@ fn validate(request: &VaultTransferRequestWire) -> Result<(), ExchangeHttpError>
         && request.action.usd.as_u64().is_none()
         && request.action.usd.as_f64().is_none()
     {
-        return Err(ExchangeHttpError::contract(VaultTransferContractError::InvalidUsd));
+        return Err(ExchangeHttpError::contract(
+            VaultTransferContractError::InvalidUsd,
+        ));
     }
     Ok(())
 }

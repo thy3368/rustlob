@@ -77,7 +77,11 @@ impl LogAttr for UserFundingEvent {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserFundingOutput {
-    BalanceImpact { party_id: u64, quote_coin_idx: u64, signed_usdc_delta: Decimal },
+    BalanceImpact {
+        party_id: u64,
+        quote_coin_idx: u64,
+        signed_usdc_delta: Decimal,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum UserFundingError {
@@ -231,7 +235,9 @@ impl TrackDiff for UserFunding {
             EntityFieldChange::new(
                 "n_samples",
                 "",
-                self.n_samples.map(|value| value.to_string()).unwrap_or_default(),
+                self.n_samples
+                    .map(|value| value.to_string())
+                    .unwrap_or_default(),
             ),
             EntityFieldChange::new("state", "", self.state.as_str()),
             EntityFieldChange::new("version", "", self.version.to_string()),
@@ -242,11 +248,31 @@ impl TrackDiff for UserFunding {
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         let fields = [
-            ("party_id", self.party_id.to_string(), other.party_id.to_string()),
-            ("state", self.state.as_str().to_owned(), other.state.as_str().to_owned()),
-            ("version", self.version.to_string(), other.version.to_string()),
-            ("created_at", self.created_at.to_string(), other.created_at.to_string()),
-            ("updated_at", self.updated_at.to_string(), other.updated_at.to_string()),
+            (
+                "party_id",
+                self.party_id.to_string(),
+                other.party_id.to_string(),
+            ),
+            (
+                "state",
+                self.state.as_str().to_owned(),
+                other.state.as_str().to_owned(),
+            ),
+            (
+                "version",
+                self.version.to_string(),
+                other.version.to_string(),
+            ),
+            (
+                "created_at",
+                self.created_at.to_string(),
+                other.created_at.to_string(),
+            ),
+            (
+                "updated_at",
+                self.updated_at.to_string(),
+                other.updated_at.to_string(),
+            ),
         ];
         fields
             .into_iter()

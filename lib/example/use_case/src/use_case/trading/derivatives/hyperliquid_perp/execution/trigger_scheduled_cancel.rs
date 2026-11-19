@@ -151,7 +151,9 @@ impl UseCase for TriggerScheduledCancelUseCase {
             let mut matching = balances_after.iter_mut().filter(|balance| {
                 balance.party_id() == cmd.user_id.0 && balance.coin_idx() == coin_idx
             });
-            let balance = matching.next().ok_or(TriggerScheduledCancelError::MissingSpotBalance)?;
+            let balance = matching
+                .next()
+                .ok_or(TriggerScheduledCancelError::MissingSpotBalance)?;
             if matching.next().is_some() {
                 return Err(TriggerScheduledCancelError::AmbiguousSpotBalance);
             }
@@ -225,13 +227,18 @@ mod tests {
             7,
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
-            TriggerScheduledCancelCmd { user_id: USER, now_ms: NOW_MS },
+            TriggerScheduledCancelCmd {
+                user_id: USER,
+                now_ms: NOW_MS,
+            },
         )
     }
 
     fn armed_schedule() -> ScheduledCancel {
         let mut schedule = ScheduledCancel::new(USER.0);
-        schedule.replace(Some(NOW_MS), NOW_MS - 5_000).expect("fixture should arm");
+        schedule
+            .replace(Some(NOW_MS), NOW_MS - 5_000)
+            .expect("fixture should arm");
         schedule
     }
 
@@ -257,9 +264,14 @@ mod tests {
         let release = {
             let mut canceled = spot.clone();
             canceled
-                .transition(SpotOrderV7Event::Cancel { lsn: 9, timestamp: LOGICAL_TS })
+                .transition(SpotOrderV7Event::Cancel {
+                    lsn: 9,
+                    timestamp: LOGICAL_TS,
+                })
                 .expect("fixture should cancel");
-            canceled.release_requirement().expect("fixture should release")
+            canceled
+                .release_requirement()
+                .expect("fixture should release")
         };
         let balance = BalanceV2::new(
             USER.0,
@@ -293,14 +305,26 @@ mod tests {
 
         assert_eq!(changes.changed_schedule.after.cancel_at_ms(), None);
         assert_eq!(changes.trigger_count_today, 1);
-        assert_eq!(changes.canceled_spot_orders[0].after.status(), SpotOrderStatus::Canceled);
+        assert_eq!(
+            changes.canceled_spot_orders[0].after.status(),
+            SpotOrderStatus::Canceled
+        );
         assert_eq!(
             changes.canceled_perp_orders[0].after.comon_order.status,
             SpotOrderStatus::Canceled
         );
-        assert_eq!(changes.changed_spot_balances[0].after.frozen(), Decimal::ZERO);
+        assert_eq!(
+            changes.changed_spot_balances[0].after.frozen(),
+            Decimal::ZERO
+        );
         assert!(changes.changed_spot_balances[0].after.available() > Decimal::ZERO);
-        assert_eq!(changes.to_replayable_events().expect("events should project").len(), 4);
+        assert_eq!(
+            changes
+                .to_replayable_events()
+                .expect("events should project")
+                .len(),
+            4
+        );
     }
 
     #[test]
@@ -313,7 +337,9 @@ mod tests {
 
         assert_eq!(
             TriggerScheduledCancelUseCase.compute_state_changed(&command(), &state),
-            Err(TriggerScheduledCancelError::Schedule(ScheduledCancelError::NotDue))
+            Err(TriggerScheduledCancelError::Schedule(
+                ScheduledCancelError::NotDue
+            ))
         );
     }
 

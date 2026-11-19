@@ -158,10 +158,19 @@ impl HyperliquidPerpTrade {
     }
 }
 fn parse_user(s: &str) -> Result<UserId, HyperliquidPerpTradeError> {
-    s.parse().map(UserId).map_err(|_| HyperliquidPerpTradeError::InvalidAccountId)
+    s.parse()
+        .map(UserId)
+        .map_err(|_| HyperliquidPerpTradeError::InvalidAccountId)
 }
 fn parse_coin(s: &str) -> Result<Coin, HyperliquidPerpTradeError> {
-    match s.split('/').next().unwrap_or(s).split('-').next().unwrap_or(s) {
+    match s
+        .split('/')
+        .next()
+        .unwrap_or(s)
+        .split('-')
+        .next()
+        .unwrap_or(s)
+    {
         "BTC" => Ok(Coin::BTC),
         "ETH" => Ok(Coin::ETH),
         "SOL" => Ok(Coin::SOL),

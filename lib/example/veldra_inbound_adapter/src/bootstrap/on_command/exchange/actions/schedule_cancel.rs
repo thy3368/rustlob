@@ -145,10 +145,14 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if let Some(time) = request.action.time {
         let Some(earliest) = request.common.nonce.checked_add(5_000) else {
-            return Err(ExchangeHttpError::contract(ScheduleCancelContractError::InvalidTime));
+            return Err(ExchangeHttpError::contract(
+                ScheduleCancelContractError::InvalidTime,
+            ));
         };
         if time < earliest {
-            return Err(ExchangeHttpError::contract(ScheduleCancelContractError::InvalidTime));
+            return Err(ExchangeHttpError::contract(
+                ScheduleCancelContractError::InvalidTime,
+            ));
         }
     }
     Ok(())
@@ -180,24 +184,35 @@ where
         payload,
     );
 
-    use_case.check_command(&cmd).map_err(ScheduleCancelExecutionError::Business)?;
+    use_case
+        .check_command(&cmd)
+        .map_err(ScheduleCancelExecutionError::Business)?;
     let state = outbound
         .load_given_state(cmd.payload())
         .map_err(ScheduleCancelExecutionError::LoadState)?;
-    use_case.validate_state_given(&cmd, &state).map_err(ScheduleCancelExecutionError::Business)?;
+    use_case
+        .validate_state_given(&cmd, &state)
+        .map_err(ScheduleCancelExecutionError::Business)?;
     let changes = use_case
         .compute_state_changed_only(&cmd, &state)
         .map_err(ScheduleCancelExecutionError::Business)?;
-    let mut events =
-        changes.to_replayable_events().map_err(ScheduleCancelExecutionError::ProjectEvents)?;
+    let mut events = changes
+        .to_replayable_events()
+        .map_err(ScheduleCancelExecutionError::ProjectEvents)?;
     for event in &mut events {
         event.lsn = cmd.lsn();
         event.logical_ts = cmd.logical_ts();
     }
 
-    outbound.persist(&events).map_err(ScheduleCancelExecutionError::Persist)?;
-    outbound.replay(&events).map_err(ScheduleCancelExecutionError::Replay)?;
-    outbound.publish(&events).map_err(ScheduleCancelExecutionError::Publish)?;
+    outbound
+        .persist(&events)
+        .map_err(ScheduleCancelExecutionError::Persist)?;
+    outbound
+        .replay(&events)
+        .map_err(ScheduleCancelExecutionError::Replay)?;
+    outbound
+        .publish(&events)
+        .map_err(ScheduleCancelExecutionError::Publish)?;
     Ok(changes)
 }
 
@@ -281,12 +296,25 @@ mod tests {
         let changes =
             execute_schedule_cancel(&request, 9, 11, 2, 3, &outbound).expect("计划撤单应执行成功");
 
-        let seen = outbound.seen_cmd.borrow().clone().expect("应观察到 core command");
-        assert_eq!(seen.user_id, UserId(common_entity::stable_string_entity_id("trader-1")));
+        let seen = outbound
+            .seen_cmd
+            .borrow()
+            .clone()
+            .expect("应观察到 core command");
+        assert_eq!(
+            seen.user_id,
+            UserId(common_entity::stable_string_entity_id("trader-1"))
+        );
         assert_eq!(seen.cancel_at_ms, request.cancel_at_ms);
         assert_eq!(seen.now_ms, request.now_ms);
-        assert_eq!(changes.changed_schedule.after.cancel_at_ms(), request.cancel_at_ms);
-        assert_eq!(outbound.steps.borrow().as_slice(), ["load", "persist", "replay", "publish"]);
+        assert_eq!(
+            changes.changed_schedule.after.cancel_at_ms(),
+            request.cancel_at_ms
+        );
+        assert_eq!(
+            outbound.steps.borrow().as_slice(),
+            ["load", "persist", "replay", "publish"]
+        );
         let batches = outbound.batches.borrow();
         assert_eq!(batches.len(), 3);
         assert_eq!(batches[0], batches[1]);
@@ -302,7 +330,10 @@ mod tests {
             cancel_at_ms: Some(1_710_000_006_000),
             now_ms: 1_710_000_000_000,
         };
-        let outbound = ObservingOutbound { at_daily_limit: true, ..Default::default() };
+        let outbound = ObservingOutbound {
+            at_daily_limit: true,
+            ..Default::default()
+        };
 
         let error = execute_schedule_cancel(&request, 1, 1, 1, 1, &outbound)
             .expect_err("日触发上限应拒绝新计划");
@@ -362,7 +393,9 @@ mod tests {
                     scheduled_cancel
                         .replace(Some(cmd.now_ms), cmd.now_ms)
                         .expect("fixture should arm");
-                    scheduled_cancel.trigger(cmd.now_ms).expect("fixture should trigger");
+                    scheduled_cancel
+                        .trigger(cmd.now_ms)
+                        .expect("fixture should trigger");
                 }
             }
             Ok(ScheduleHyperliquidCancelState { scheduled_cancel })

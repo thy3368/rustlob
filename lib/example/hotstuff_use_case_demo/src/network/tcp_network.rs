@@ -68,7 +68,10 @@ impl TcpNetwork {
         let my_verifying_key = self.my_verifying_key;
 
         std::thread::spawn(move || {
-            let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+            let runtime = match tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+            {
                 Ok(runtime) => runtime,
                 Err(error) => {
                     eprintln!("[hotstuff_tcp_network] runtime 启动失败: {error}");
@@ -163,7 +166,10 @@ async fn outbound_loop(
     let mut last_error_logs = HashMap::new();
 
     while let Some(outbound) = outbound_receiver.recv().await {
-        let peer_addr = peer_addrs.lock().ok().and_then(|peers| peers.get(&outbound.peer).copied());
+        let peer_addr = peer_addrs
+            .lock()
+            .ok()
+            .and_then(|peers| peers.get(&outbound.peer).copied());
         let Some(peer_addr) = peer_addr else {
             continue;
         };
@@ -193,7 +199,10 @@ async fn write_message(
 
     let write_result = match streams.get_mut(&peer_addr) {
         Some(stream) => write_frame(stream, &frame).await,
-        None => Err(io::Error::new(io::ErrorKind::NotConnected, "missing peer stream")),
+        None => Err(io::Error::new(
+            io::ErrorKind::NotConnected,
+            "missing peer stream",
+        )),
     };
     if write_result.is_ok() {
         return Ok(());

@@ -113,7 +113,11 @@ impl UseCase for SettleHyperliquidPerpTradeUseCase {
         {
             return Err(SettleHyperliquidPerpTradeError::TradeIdsMismatch);
         }
-        if state.trades.iter().any(|trade| trade.state == PerpTradeV3State::Settled) {
+        if state
+            .trades
+            .iter()
+            .any(|trade| trade.state == PerpTradeV3State::Settled)
+        {
             return Err(SettleHyperliquidPerpTradeError::TradeAlreadySettled);
         }
         derive_changes(cmd, state).map(|_| ())
@@ -271,7 +275,11 @@ mod tests {
             UserId(user),
             Coin::BTC,
             Decimal::from(size),
-            if size == 0 { Decimal::ZERO } else { Decimal::from(price) },
+            if size == 0 {
+                Decimal::ZERO
+            } else {
+                Decimal::from(price)
+            },
             Decimal::from(10),
             MarginModeV3::Cross,
             None,

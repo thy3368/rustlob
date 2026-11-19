@@ -66,7 +66,11 @@ pub struct ThreadAffinity {
 
 impl ThreadAffinity {
     pub fn new(preferred_threads: Vec<usize>) -> Self {
-        Self { preferred_threads, fallback_threads: Vec::new(), strict: true }
+        Self {
+            preferred_threads,
+            fallback_threads: Vec::new(),
+            strict: true,
+        }
     }
 
     pub fn with_fallback(mut self, fallback_threads: Vec<usize>) -> Self {
@@ -271,7 +275,11 @@ impl ThreadBindingManager {
         let binding_policy = Arc::new(RwLock::new(ThreadBindingPolicy::new()));
         let binding_validator = BindingValidator::new();
 
-        Self { thread_pool, binding_policy, binding_validator }
+        Self {
+            thread_pool,
+            binding_policy,
+            binding_validator,
+        }
     }
 
     // 启动 Actor 并绑定到线程
@@ -317,7 +325,11 @@ impl ThreadPool {
             let arbiter = Arbiter::new();
 
             // 尝试为每个线程设置 CPU 亲和性
-            let core_id = if core_ids.len() > i { Some(core_ids[i]) } else { None };
+            let core_id = if core_ids.len() > i {
+                Some(core_ids[i])
+            } else {
+                None
+            };
 
             // 在新创建的线程上设置 CPU 亲和性
             let core_id_clone = core_id;
@@ -331,7 +343,10 @@ impl ThreadPool {
             cpu_affinity.push(core_id);
         }
 
-        Self { arbiters, cpu_affinity }
+        Self {
+            arbiters,
+            cpu_affinity,
+        }
     }
 
     pub fn spawn_on_thread<A>(
@@ -354,8 +369,9 @@ impl ThreadPool {
                 }
             });
 
-            let addr =
-                rx.recv().map_err(|err| ThreadBindingError::BindingFailed(err.to_string()))?;
+            let addr = rx
+                .recv()
+                .map_err(|err| ThreadBindingError::BindingFailed(err.to_string()))?;
             Ok(addr)
         } else {
             Err(ThreadBindingError::InvalidThreadIndex(thread_id))
@@ -375,7 +391,10 @@ struct BindingValidator {
 impl BindingValidator {
     pub fn new() -> Self {
         Self {
-            validation_rules: vec![ValidationRule::ThreadConsistency, ValidationRule::CpuAffinity],
+            validation_rules: vec![
+                ValidationRule::ThreadConsistency,
+                ValidationRule::CpuAffinity,
+            ],
         }
     }
 
@@ -395,7 +414,11 @@ impl BindingValidator {
             }
         }
 
-        if errors.is_empty() { Ok(()) } else { Err(ThreadBindingError::Multiple(errors)) }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(ThreadBindingError::Multiple(errors))
+        }
     }
 
     fn check_rule(
@@ -449,7 +472,10 @@ impl ThreadBoundActorSystem {
 
         let binding_manager = Arc::new(ThreadBindingManager::new(thread_count));
 
-        Self { binding_manager, config }
+        Self {
+            binding_manager,
+            config,
+        }
     }
 
     // 启动系统
@@ -484,7 +510,10 @@ pub struct SystemConfig {
 
 impl Default for SystemConfig {
     fn default() -> Self {
-        Self { thread_count: num_cpus::get(), binding_rules: None }
+        Self {
+            thread_count: num_cpus::get(),
+            binding_rules: None,
+        }
     }
 }
 
@@ -526,7 +555,10 @@ pub struct CpuAffinityActor {
 
 impl CpuAffinityActor {
     pub fn with_affinity(core_id: CoreId) -> Self {
-        Self { core_id: Some(core_id), pinned: std::sync::atomic::AtomicBool::new(false) }
+        Self {
+            core_id: Some(core_id),
+            pinned: std::sync::atomic::AtomicBool::new(false),
+        }
     }
 
     // 设置 CPU 亲和性

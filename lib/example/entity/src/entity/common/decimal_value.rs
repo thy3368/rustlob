@@ -58,12 +58,18 @@ mod tests {
         assert_eq!(value.to_string(), "0.0000216606");
         assert_eq!(FundingRate::from_scaled_i128(216_606), value);
         assert!(FundingRate::new(Decimal::new(1, 11)).is_err());
-        assert_eq!(std::mem::size_of::<FundingRate>(), std::mem::size_of::<Decimal>());
+        assert_eq!(
+            std::mem::size_of::<FundingRate>(),
+            std::mem::size_of::<Decimal>()
+        );
     }
     #[test]
     fn funding_rate2_uses_scale_nine() {
         assert_eq!(FundingRate2::tick(), Decimal::new(1, 9));
-        assert_eq!(FundingRate2::from_scaled_i128(21_660_600).to_string(), "0.0216606");
+        assert_eq!(
+            FundingRate2::from_scaled_i128(21_660_600).to_string(),
+            "0.0216606"
+        );
         assert!(FundingRate2::new(Decimal::new(1, 10)).is_err());
     }
 }

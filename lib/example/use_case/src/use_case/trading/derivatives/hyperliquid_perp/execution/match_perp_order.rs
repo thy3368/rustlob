@@ -118,19 +118,26 @@ impl UseCase for MatchHyperliquidPerpOrderUseCase {
             timestamp: cmd.executed_at,
             lsn: cmd.lsn(),
         })?;
-        let (taker_after, maker_orders_after, created_trades) =
-            outcome.ok_or(MatchHyperliquidPerpOrderError::MissingOutcome)?.into_parts();
+        let (taker_after, maker_orders_after, created_trades) = outcome
+            .ok_or(MatchHyperliquidPerpOrderError::MissingOutcome)?
+            .into_parts();
         let updated_maker_orders = state
             .maker_orders
             .iter()
             .zip(maker_orders_after)
             .filter(|(before, after)| *before != after)
-            .map(|(before, after)| UpdatedEntityPair { before: before.clone(), after })
+            .map(|(before, after)| UpdatedEntityPair {
+                before: before.clone(),
+                after,
+            })
             .collect();
         Ok(MatchHyperliquidPerpOrderChanges {
             created_trades,
             updated_maker_orders,
-            updated_taker_order: UpdatedEntityPair { before: taker_before, after: taker_after },
+            updated_taker_order: UpdatedEntityPair {
+                before: taker_before,
+                after: taker_after,
+            },
         })
     }
 }

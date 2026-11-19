@@ -28,7 +28,10 @@ pub struct SpotKline {
 
 impl SpotKline {
     /// 从已校验的聚合事实构造完整周期快照。
-    #[expect(clippy::too_many_arguments, reason = "K 线需要完整保留 OHLCV 与来源成交事实")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "K 线需要完整保留 OHLCV 与来源成交事实"
+    )]
     pub fn new(
         symbol: Symbol,
         interval_ns: u64,
@@ -46,7 +49,11 @@ impl SpotKline {
     ) -> Self {
         let id = crate::support::derived_entity_id(
             SPOT_KLINE_ENTITY_TYPE,
-            &[&symbol.id().to_le_bytes(), &interval_ns.to_le_bytes(), &open_time_ns.to_le_bytes()],
+            &[
+                &symbol.id().to_le_bytes(),
+                &interval_ns.to_le_bytes(),
+                &open_time_ns.to_le_bytes(),
+            ],
         );
         Self {
             id,
@@ -175,15 +182,19 @@ mod tests {
             event
                 .field_changes
                 .iter()
-                .any(|change| change.field_name_as_str().ok() == Some("volume_quote")
-                    && change.new_value_bytes() == b"520.25")
+                .any(
+                    |change| change.field_name_as_str().ok() == Some("volume_quote")
+                        && change.new_value_bytes() == b"520.25"
+                )
         );
         assert!(
             event
                 .field_changes
                 .iter()
-                .any(|change| change.field_name_as_str().ok() == Some("open_time_ns")
-                    && change.new_value_bytes() == b"120")
+                .any(
+                    |change| change.field_name_as_str().ok() == Some("open_time_ns")
+                        && change.new_value_bytes() == b"120"
+                )
         );
     }
 }

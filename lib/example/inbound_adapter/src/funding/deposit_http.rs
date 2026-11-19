@@ -39,7 +39,10 @@ impl DepositQuoteHttpRequest {
             1,
             1,
             user_id,
-            DepositQuoteCmd { party_id: self.trader_id, amount: self.amount },
+            DepositQuoteCmd {
+                party_id: self.trader_id,
+                amount: self.amount,
+            },
         )
     }
 }
@@ -84,7 +87,9 @@ where
         + StateSink<DepositQuoteUseCase, Error = <OB as StateSource<DepositQuoteUseCase>>::Error>,
     <OB as StateSource<DepositQuoteUseCase>>::Error: 'static,
 {
-    let mapper = DepositQuoteHttpReplyMapper { account_id: request.trader_id.clone() };
+    let mapper = DepositQuoteHttpReplyMapper {
+        account_id: request.trader_id.clone(),
+    };
     execute_deposit_quote_with_mapper(request.into_log_entry(), outbound, &mapper)
 }
 
@@ -120,8 +125,10 @@ async fn create_deposit_actix<S>(
 where
     S: Send + Sync + 'static + DepositQuoteOutboundAccess,
 {
-    let response =
-        handle_deposit_quote_http(payload.into_inner(), state.get_ref().deposit_quote_outbound())?;
+    let response = handle_deposit_quote_http(
+        payload.into_inner(),
+        state.get_ref().deposit_quote_outbound(),
+    )?;
     Ok(HttpResponse::Ok().json(response))
 }
 

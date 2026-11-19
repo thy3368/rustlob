@@ -19,12 +19,15 @@ pub fn make_funding_rate_tick(
         return None;
     }
 
-    let sum =
-        samples.iter().try_fold(Decimal::ZERO, |sum, sample| sum.checked_add(sample.value()))?;
+    let sum = samples
+        .iter()
+        .try_fold(Decimal::ZERO, |sum, sample| sum.checked_add(sample.value()))?;
     let avg_premium = sum.checked_div(Decimal::from(sample_count))?;
     let fixed_rate = Decimal::new(1, 4).checked_div(Decimal::from(8u32))?;
-    let correction =
-        fixed_rate.checked_sub(avg_premium)?.max(Decimal::new(-5, 4)).min(Decimal::new(5, 4));
+    let correction = fixed_rate
+        .checked_sub(avg_premium)?
+        .max(Decimal::new(-5, 4))
+        .min(Decimal::new(5, 4));
     let hourly_rate = avg_premium
         .checked_add(correction)?
         .checked_div(Decimal::from(8u32))?

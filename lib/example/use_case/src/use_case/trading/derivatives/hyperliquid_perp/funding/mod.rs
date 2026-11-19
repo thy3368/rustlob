@@ -15,8 +15,7 @@
 //!   `HyperliquidPerpFundingSettlement`。
 //! - `BalanceV2` 承载资金费结算的副作用，是相邻被推进的实体，不是本组主语。
 //! - `HyperliquidPerpFundingSettlement` 记录的是单仓位 funding 应收/应付事实，不是
-//!   对手方资金腿凭证；当前也不要求显式建模 `from_account_id /
-//!   to_account_id`。
+//!   对手方资金腿凭证；当前也不要求显式建模 `from_account_id / to_account_id`。
 //! - 余额更新与 `BalanceLedgerEntry` 只是围绕该 funding 事实产生的副作用审计，不替代
 //!   `HyperliquidPerpFundingSettlement` 作为本组 `business_truth_center` 的地位。
 //! - `Trade` / `Order` / `Liquidation` 分别属于执行、风险或订单生命周期边界，即使影响 funding

@@ -30,7 +30,9 @@ pub struct ScheduleHyperliquidCancelChanges {
 impl ReplayableChanges for ScheduleHyperliquidCancelChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         Ok(vec![
-            self.changed_schedule.after.track_update_event_from(&self.changed_schedule.before)?,
+            self.changed_schedule
+                .after
+                .track_update_event_from(&self.changed_schedule.before)?,
         ])
     }
 }
@@ -129,19 +131,29 @@ mod tests {
             7,
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
-            ScheduleHyperliquidCancelCmd { user_id: UserId(7), cancel_at_ms, now_ms: NOW_MS },
+            ScheduleHyperliquidCancelCmd {
+                user_id: UserId(7),
+                cancel_at_ms,
+                now_ms: NOW_MS,
+            },
         )
     }
 
     fn state() -> ScheduleHyperliquidCancelState {
-        ScheduleHyperliquidCancelState { scheduled_cancel: ScheduledCancel::new(7) }
+        ScheduleHyperliquidCancelState {
+            scheduled_cancel: ScheduledCancel::new(7),
+        }
     }
 
     fn state_at_daily_limit() -> ScheduleHyperliquidCancelState {
         let mut scheduled_cancel = ScheduledCancel::new(7);
         for _ in 0..10 {
-            scheduled_cancel.replace(Some(NOW_MS), NOW_MS).expect("fixture should arm");
-            scheduled_cancel.trigger(NOW_MS).expect("fixture should trigger");
+            scheduled_cancel
+                .replace(Some(NOW_MS), NOW_MS)
+                .expect("fixture should arm");
+            scheduled_cancel
+                .trigger(NOW_MS)
+                .expect("fixture should trigger");
         }
         ScheduleHyperliquidCancelState { scheduled_cancel }
     }
@@ -155,9 +167,18 @@ mod tests {
             .compute_state_changed(&command(Some(cancel_at_ms)), &state())
             .expect("至少提前五秒的计划撤单应成功");
 
-        assert_eq!(changes.changed_schedule.after.cancel_at_ms(), Some(cancel_at_ms));
+        assert_eq!(
+            changes.changed_schedule.after.cancel_at_ms(),
+            Some(cancel_at_ms)
+        );
         assert_eq!(changes.changed_schedule.after.version(), 1);
-        assert_eq!(changes.to_replayable_events().expect("应生成回放事件").len(), 1);
+        assert_eq!(
+            changes
+                .to_replayable_events()
+                .expect("应生成回放事件")
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -188,13 +209,18 @@ mod tests {
         existing
             .replace(Some(NOW_MS + 10_000), NOW_MS - 1_000)
             .expect("fixture schedule should be valid");
-        let state = ScheduleHyperliquidCancelState { scheduled_cancel: existing };
+        let state = ScheduleHyperliquidCancelState {
+            scheduled_cancel: existing,
+        };
 
         let changes = ScheduleHyperliquidCancelUseCase
             .compute_state_changed(&command(Some(NOW_MS + 20_000)), &state)
             .expect("替换现有计划应成功");
 
         assert_eq!(changes.replaced_cancel_at_ms, Some(NOW_MS + 10_000));
-        assert_eq!(changes.changed_schedule.after.cancel_at_ms(), Some(NOW_MS + 20_000));
+        assert_eq!(
+            changes.changed_schedule.after.cancel_at_ms(),
+            Some(NOW_MS + 20_000)
+        );
     }
 }

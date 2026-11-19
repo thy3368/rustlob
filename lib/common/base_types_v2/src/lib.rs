@@ -75,7 +75,11 @@ pub struct Symbol {
 
 impl Symbol {
     pub fn new(id: u32, base: Coin, quote: Coin) -> Self {
-        Self { id: SymbolId(id), base, quote }
+        Self {
+            id: SymbolId(id),
+            base,
+            quote,
+        }
     }
 
     pub fn id(self) -> u32 {
@@ -117,7 +121,15 @@ mod tests {
 
     #[test]
     fn coin_metadata_is_stable() {
-        let coins = [Coin::BTC, Coin::ETH, Coin::USDT, Coin::USDC, Coin::USD, Coin::JPY, Coin::SOL];
+        let coins = [
+            Coin::BTC,
+            Coin::ETH,
+            Coin::USDT,
+            Coin::USDC,
+            Coin::USD,
+            Coin::JPY,
+            Coin::SOL,
+        ];
         let expected_scales = [8, 18, 6, 6, 2, 0, 9];
 
         for (index, coin) in coins.into_iter().enumerate() {

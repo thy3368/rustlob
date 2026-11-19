@@ -32,7 +32,9 @@ impl<O: LobOrder + serde::Serialize + for<'de> serde::Deserialize<'de>> LobRepo
         let mut temporary = NamedTempFile::new_in(parent)?;
         temporary.write_all(&bytes)?;
         temporary.as_file().sync_all()?;
-        temporary.persist(path).map_err(|error| LobError::Io(error.error))?;
+        temporary
+            .persist(path)
+            .map_err(|error| LobError::Io(error.error))?;
         Ok(())
     }
 
@@ -83,7 +85,13 @@ mod tests {
 
     impl TestOrder {
         fn new(id: u64, symbol: Symbol, side: Side, price: Decimal) -> Self {
-            Self { id, symbol, side, price, size: Decimal::ONE }
+            Self {
+                id,
+                symbol,
+                side,
+                price,
+                size: Decimal::ONE,
+            }
         }
     }
 
@@ -205,7 +213,10 @@ mod tests {
         let path = directory.path().join("lob.bin");
         fs::write(&path, b"not a lob snapshot").unwrap();
 
-        assert!(matches!(Repository::load_from_snapshot(path), Err(LobError::Codec(_))));
+        assert!(matches!(
+            Repository::load_from_snapshot(path),
+            Err(LobError::Codec(_))
+        ));
     }
 
     #[test]

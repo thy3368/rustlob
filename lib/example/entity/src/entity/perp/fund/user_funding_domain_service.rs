@@ -259,20 +259,34 @@ pub fn settle_user_funding_batch(
         }
         let mut after = before.clone();
         let event = if delta.is_sign_positive() {
-            BalanceV2Event::CreditAvailable { amount: delta, timestamp: settled_at, lsn }
+            BalanceV2Event::CreditAvailable {
+                amount: delta,
+                timestamp: settled_at,
+                lsn,
+            }
         } else {
             let amount = Decimal::ZERO.checked_sub(delta).ok_or(
                 SettleUserFundingBatchError::BalanceArithmeticOverflow {
                     account_id: before.account_id(),
                 },
             )?;
-            BalanceV2Event::DebitAvailable { amount, timestamp: settled_at, lsn }
+            BalanceV2Event::DebitAvailable {
+                amount,
+                timestamp: settled_at,
+                lsn,
+            }
         };
-        after.apply(event).map_err(|error| map_balance_error(error, before.account_id()))?;
+        after
+            .apply(event)
+            .map_err(|error| map_balance_error(error, before.account_id()))?;
         changed_balances.push(UpdatedEntityPair::new(before.clone(), after));
     }
 
-    Ok(SettleUserFundingBatchOutput { changed_fundings, changed_positions, changed_balances })
+    Ok(SettleUserFundingBatchOutput {
+        changed_fundings,
+        changed_positions,
+        changed_balances,
+    })
 }
 
 fn map_user_funding_error(error: UserFundingError, funding_id: u64) -> SettleUserFundingBatchError {
@@ -295,7 +309,9 @@ fn map_user_funding_error(error: UserFundingError, funding_id: u64) -> SettleUse
 fn map_position_error(error: PerpPositionV3Error, position_id: u64) -> SettleUserFundingBatchError {
     match error {
         PerpPositionV3Error::InvalidFundingSettlementTime => {
-            SettleUserFundingBatchError::InvalidSettlementTime { funding_id: position_id }
+            SettleUserFundingBatchError::InvalidSettlementTime {
+                funding_id: position_id,
+            }
         }
         PerpPositionV3Error::InvalidQuantity
         | PerpPositionV3Error::InvalidPrice
@@ -405,7 +421,10 @@ mod settle_user_funding_batch_tests {
 
     #[test]
     fn aggregates_shared_entities_once_and_preserves_input_order() {
-        let fundings = vec![funding(20, Decimal::from(3)), funding(10, Decimal::from(-1))];
+        let fundings = vec![
+            funding(20, Decimal::from(3)),
+            funding(10, Decimal::from(-1)),
+        ];
         let positions = vec![valid_position()];
         let balances = vec![balance(Decimal::TEN, 4)];
         let before = (fundings.clone(), positions.clone(), balances.clone());
@@ -416,7 +435,11 @@ mod settle_user_funding_batch_tests {
 
         assert_eq!((fundings, positions, balances), before);
         assert_eq!(
-            output.changed_fundings.iter().map(|pair| pair.before.funding_id()).collect::<Vec<_>>(),
+            output
+                .changed_fundings
+                .iter()
+                .map(|pair| pair.before.funding_id())
+                .collect::<Vec<_>>(),
             vec![20, 10]
         );
         assert!(
@@ -426,10 +449,16 @@ mod settle_user_funding_batch_tests {
                 .all(|pair| pair.after.state() == UserFundingState::Settled)
         );
         assert_eq!(output.changed_positions.len(), 1);
-        assert_eq!(output.changed_positions[0].after.cum_funding().all_time, Decimal::from(2));
+        assert_eq!(
+            output.changed_positions[0].after.cum_funding().all_time,
+            Decimal::from(2)
+        );
         assert_eq!(output.changed_positions[0].after.version(), COMMAND_LSN);
         assert_eq!(output.changed_balances.len(), 1);
-        assert_eq!(output.changed_balances[0].after.available(), Decimal::from(12));
+        assert_eq!(
+            output.changed_balances[0].after.available(),
+            Decimal::from(12)
+        );
         assert_eq!(output.changed_balances[0].after.version(), COMMAND_LSN);
     }
 
@@ -495,7 +524,11 @@ mod settle_user_funding_batch_tests {
         assert_eq!(
             settle_user_funding_batch(
                 &[funding(1, Decimal::ONE)],
-                &[position(MarginModeV3::Isolated, FundingAccumulatorV3::default(), 3)],
+                &[position(
+                    MarginModeV3::Isolated,
+                    FundingAccumulatorV3::default(),
+                    3
+                )],
                 &[balance(Decimal::TEN, 4)],
                 SETTLED_AT,
                 COMMAND_LSN,
@@ -580,7 +613,12 @@ mod settle_user_funding_batch_tests {
         assert_eq!((fundings, positions, balances), before);
 
         let mut closed = balance(Decimal::ZERO, 4);
-        closed.apply(BalanceV2Event::Close { timestamp: 110, lsn: COMMAND_LSN }).unwrap();
+        closed
+            .apply(BalanceV2Event::Close {
+                timestamp: 110,
+                lsn: COMMAND_LSN,
+            })
+            .unwrap();
         assert_eq!(
             settle_user_funding_batch(
                 &[funding(1, Decimal::ONE)],
@@ -589,7 +627,9 @@ mod settle_user_funding_batch_tests {
                 SETTLED_AT,
                 COMMAND_LSN,
             ),
-            Err(SettleUserFundingBatchError::BalanceClosed { account_id: ACCOUNT_ID })
+            Err(SettleUserFundingBatchError::BalanceClosed {
+                account_id: ACCOUNT_ID
+            })
         );
     }
 
@@ -632,12 +672,18 @@ mod settle_user_funding_batch_tests {
                 SETTLED_AT,
                 COMMAND_LSN,
             ),
-            Err(SettleUserFundingBatchError::BalanceArithmeticOverflow { account_id: ACCOUNT_ID })
+            Err(SettleUserFundingBatchError::BalanceArithmeticOverflow {
+                account_id: ACCOUNT_ID
+            })
         );
         assert_eq!(
             settle_user_funding_batch(
                 &[funding(1, Decimal::ONE)],
-                &[position(MarginModeV3::Cross, FundingAccumulatorV3::default(), u64::MAX)],
+                &[position(
+                    MarginModeV3::Cross,
+                    FundingAccumulatorV3::default(),
+                    u64::MAX
+                )],
                 &[balance(Decimal::TEN, 4)],
                 SETTLED_AT,
                 COMMAND_LSN,
@@ -652,7 +698,9 @@ mod settle_user_funding_batch_tests {
                 SETTLED_AT,
                 COMMAND_LSN,
             ),
-            Err(SettleUserFundingBatchError::StaleBalanceLsn { account_id: ACCOUNT_ID })
+            Err(SettleUserFundingBatchError::StaleBalanceLsn {
+                account_id: ACCOUNT_ID
+            })
         );
     }
 }

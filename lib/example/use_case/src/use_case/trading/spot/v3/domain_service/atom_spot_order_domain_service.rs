@@ -177,7 +177,9 @@ impl SpotOrderDomainService {
                 release_requirement: Some(release_requirement),
             }) = output
             else {
-                return Err(match_error("rejected taker event produced mismatched output"));
+                return Err(match_error(
+                    "rejected taker event produced mismatched output",
+                ));
             };
             return Ok(MatchSpotOrderV3Outcome::Rejected {
                 rejected_taker_order_after: order_after,
@@ -219,14 +221,26 @@ impl SpotOrderDomainService {
                 .trade_id_start
                 .checked_add(fills.len() as u64)
                 .ok_or_else(|| match_error("trade id overflow"))?;
-            remaining = remaining.checked_sub(size).ok_or_else(|| match_error("size underflow"))?;
-            fills.push(PlannedFill { maker_index, size, taker_fee, maker_fee, trade_id });
+            remaining = remaining
+                .checked_sub(size)
+                .ok_or_else(|| match_error("size underflow"))?;
+            fills.push(PlannedFill {
+                maker_index,
+                size,
+                taker_fee,
+                maker_fee,
+                trade_id,
+            });
         }
 
-        let filled_size =
-            t.size.checked_sub(remaining).ok_or_else(|| match_error("size underflow"))?;
+        let filled_size = t
+            .size
+            .checked_sub(remaining)
+            .ok_or_else(|| match_error("size underflow"))?;
         if filled_size == Decimal::ZERO && t.effective_tif() != OrderTif::Ioc {
-            return Ok(MatchSpotOrderV3Outcome::Resting { taker_order_after: taker });
+            return Ok(MatchSpotOrderV3Outcome::Resting {
+                taker_order_after: taker,
+            });
         }
 
         let mut trades = Vec::with_capacity(fills.len());
@@ -272,7 +286,9 @@ impl SpotOrderDomainService {
             release_requirement,
         }) = output
         else {
-            return Err(match_error("matched taker event produced mismatched output"));
+            return Err(match_error(
+                "matched taker event produced mismatched output",
+            ));
         };
 
         match (taker_order_after.status(), release_requirement) {
@@ -319,13 +335,21 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ModifySpotOrderV7Error> {
-        let (_, output) =
-            order.apply(SpotOrderV7Event::Modify { price, size, tif, cloid, lsn, timestamp })?;
-        let SpotOrderV7Output::Modified(ModifySpotOrderV7Output { order_after, hold_adjustment }) =
-            output
+        let (_, output) = order.apply(SpotOrderV7Event::Modify {
+            price,
+            size,
+            tif,
+            cloid,
+            lsn,
+            timestamp,
+        })?;
+        let SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
+            order_after,
+            hold_adjustment,
+        }) = output
         else {
             return Err(
-                EntityError::Custom("modify event produced mismatched output".into()).into()
+                EntityError::Custom("modify event produced mismatched output".into()).into(),
             );
         };
 
@@ -364,7 +388,7 @@ impl SpotOrderDomainService {
         let SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }) = output
         else {
             return Err(
-                EntityError::Custom("activate event produced mismatched output".into()).into()
+                EntityError::Custom("activate event produced mismatched output".into()).into(),
             );
         };
 
@@ -387,11 +411,13 @@ impl SpotOrderDomainService {
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), CancelSpotOrderV7Error> {
         let (_, output) = order.apply(SpotOrderV7Event::Cancel { lsn, timestamp })?;
-        let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output { release_requirement, .. }) =
-            output
+        let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
+            release_requirement,
+            ..
+        }) = output
         else {
             return Err(
-                EntityError::Custom("cancel event produced mismatched output".into()).into()
+                EntityError::Custom("cancel event produced mismatched output".into()).into(),
             );
         };
 
@@ -465,7 +491,15 @@ mod tests {
     }
 
     fn balance(coin: Coin, available: i64, frozen: i64) -> BalanceV2 {
-        BalanceV2::new(OWNER_ID, ACCOUNT_ID, u64::from(coin.index()), available, frozen, 9, 50)
+        BalanceV2::new(
+            OWNER_ID,
+            ACCOUNT_ID,
+            u64::from(coin.index()),
+            available,
+            frozen,
+            9,
+            50,
+        )
     }
 
     #[test]
@@ -490,7 +524,10 @@ mod tests {
         assert_eq!(order_after.order_base().size, Decimal::from(4));
         assert_eq!(order_after.order_base().orig_size, Decimal::from(4));
         assert_eq!(order_after.order_base().tif, OrderTif::Alo);
-        assert_eq!(order_after.order_base().cloid.as_deref(), Some("replacement"));
+        assert_eq!(
+            order_after.order_base().cloid.as_deref(),
+            Some("replacement")
+        );
         assert_eq!(order_after.order_base().lsn, 10);
         assert_eq!(order_after.order_base().updated_at, TIMESTAMP);
         assert_eq!(balance_after, balance_before);
@@ -646,7 +683,9 @@ mod tests {
         );
         assert_eq!(
             insufficient_available,
-            Err(ModifySpotOrderV7Error::Balance(BalanceV2Error::InsufficientAvailableBalance))
+            Err(ModifySpotOrderV7Error::Balance(
+                BalanceV2Error::InsufficientAvailableBalance
+            ))
         );
 
         let insufficient_frozen = SpotOrderDomainService::modify(
@@ -661,7 +700,9 @@ mod tests {
         );
         assert_eq!(
             insufficient_frozen,
-            Err(ModifySpotOrderV7Error::Balance(BalanceV2Error::InsufficientFrozenBalance))
+            Err(ModifySpotOrderV7Error::Balance(
+                BalanceV2Error::InsufficientFrozenBalance
+            ))
         );
     }
 
@@ -755,7 +796,9 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(CancelSpotOrderV7Error::Balance(BalanceV2Error::InsufficientFrozenBalance))
+            Err(CancelSpotOrderV7Error::Balance(
+                BalanceV2Error::InsufficientFrozenBalance
+            ))
         );
     }
 
@@ -832,7 +875,9 @@ mod tests {
         };
         assert_eq!(filled_taker_order_after.order_base().lsn, 20);
         assert_eq!(
-            filled_taker_order_after.order_base().buy_quote_fee_reserve_consumed,
+            filled_taker_order_after
+                .order_base()
+                .buy_quote_fee_reserve_consumed,
             Decimal::from(6)
         );
         assert_eq!(maker_orders_after[0], skipped);
@@ -852,16 +897,25 @@ mod tests {
         let taker = match_order(1, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 7);
         let maker = match_order(2, OrderSide::Buy, OrderTif::Gtc, 100, 1, 2, 4);
         let MatchSpotOrderV3Outcome::Filled {
-            filled_taker_order_after, maker_orders_after, ..
+            filled_taker_order_after,
+            maker_orders_after,
+            ..
         } = SpotOrderDomainService::match_order(taker, vec![maker], match_input()).unwrap()
         else {
             panic!("expected fill")
         };
         assert_eq!(
-            filled_taker_order_after.order_base().buy_quote_fee_reserve_consumed,
+            filled_taker_order_after
+                .order_base()
+                .buy_quote_fee_reserve_consumed,
             Decimal::ZERO
         );
-        assert_eq!(maker_orders_after[0].order_base().buy_quote_fee_reserve_consumed, Decimal::ONE);
+        assert_eq!(
+            maker_orders_after[0]
+                .order_base()
+                .buy_quote_fee_reserve_consumed,
+            Decimal::ONE
+        );
     }
 
     #[test]
@@ -875,8 +929,10 @@ mod tests {
 
         let ioc = match_order(3, OrderSide::Buy, OrderTif::Ioc, 90, 1, 2, 9);
         let non_crossing = match_order(4, OrderSide::Sell, OrderTif::Gtc, 99, 1, 0, 2);
-        let MatchSpotOrderV3Outcome::Rejected { rejected_taker_order_after, .. } =
-            SpotOrderDomainService::match_order(ioc, vec![non_crossing], match_input()).unwrap()
+        let MatchSpotOrderV3Outcome::Rejected {
+            rejected_taker_order_after,
+            ..
+        } = SpotOrderDomainService::match_order(ioc, vec![non_crossing], match_input()).unwrap()
         else {
             panic!("expected IOC rejection")
         };

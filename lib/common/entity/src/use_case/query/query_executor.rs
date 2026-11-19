@@ -33,10 +33,15 @@ impl QueryExecutor {
         S: ReadModelSource<Q>,
         C: QueryUseCase<Q, S::ReadModel>,
     {
-        use_case.validate_query(query).map_err(QueryExecutionError::Business)?;
-        let read_model =
-            source.load_read_model(query).map_err(QueryExecutionError::LoadReadModel)?;
-        use_case.compute_query(query, read_model).map_err(QueryExecutionError::Business)
+        use_case
+            .validate_query(query)
+            .map_err(QueryExecutionError::Business)?;
+        let read_model = source
+            .load_read_model(query)
+            .map_err(QueryExecutionError::LoadReadModel)?;
+        use_case
+            .compute_query(query, read_model)
+            .map_err(QueryExecutionError::Business)
     }
 }
 
@@ -133,10 +138,18 @@ mod tests {
     #[test]
     fn invalid_query_is_mapped_without_loading_or_computing() {
         let compute_calls = AtomicUsize::new(0);
-        let source = TestSource { result: Ok(TestReadModel(40)), calls: AtomicUsize::new(0) };
+        let source = TestSource {
+            result: Ok(TestReadModel(40)),
+            calls: AtomicUsize::new(0),
+        };
 
-        let result =
-            QueryExecutor.execute(&0, &source, &AddQueryValue { compute_calls: &compute_calls });
+        let result = QueryExecutor.execute(
+            &0,
+            &source,
+            &AddQueryValue {
+                compute_calls: &compute_calls,
+            },
+        );
 
         assert_eq!(result, Err(QueryExecutionError::Business(TestError)));
         assert_eq!(source.calls.load(Ordering::Relaxed), 0);
@@ -148,8 +161,13 @@ mod tests {
         let compute_calls = AtomicUsize::new(0);
         let result = QueryExecutor.execute(
             &2,
-            &TestSource { result: Err(TestError), calls: AtomicUsize::new(0) },
-            &AddQueryValue { compute_calls: &compute_calls },
+            &TestSource {
+                result: Err(TestError),
+                calls: AtomicUsize::new(0),
+            },
+            &AddQueryValue {
+                compute_calls: &compute_calls,
+            },
         );
 
         assert_eq!(result, Err(QueryExecutionError::LoadReadModel(TestError)));

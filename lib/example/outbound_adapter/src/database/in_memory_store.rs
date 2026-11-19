@@ -49,7 +49,9 @@ impl Default for InMemoryStore {
 
 impl InMemoryStore {
     pub fn new(symbol: Symbol) -> Self {
-        Self { state: Arc::new(Mutex::new(StoreState::new(symbol))) }
+        Self {
+            state: Arc::new(Mutex::new(StoreState::new(symbol))),
+        }
     }
 
     pub fn seed_balances(
@@ -66,7 +68,10 @@ impl InMemoryStore {
 
     pub fn seed_balance(&self, balance: BalanceV2) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state.balances.insert(balance_key(balance.account_id(), balance.coin_idx()), balance);
+        state.balances.insert(
+            balance_key(balance.account_id(), balance.coin_idx()),
+            balance,
+        );
         Ok(())
     }
 
@@ -81,20 +86,28 @@ impl InMemoryStore {
 
     pub fn seed_market_rules(&self, market_rules: MarketRules) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state.market_rules_by_symbol.insert(market_rules.symbol.clone(), market_rules);
+        state
+            .market_rules_by_symbol
+            .insert(market_rules.symbol.clone(), market_rules);
         Ok(())
     }
 
     pub fn ensure_market_rules(&self, market_rules: MarketRules) -> Result<(), StoreError> {
         let mut state = self.lock_state()?;
-        state.market_rules_by_symbol.entry(market_rules.symbol.clone()).or_insert(market_rules);
+        state
+            .market_rules_by_symbol
+            .entry(market_rules.symbol.clone())
+            .or_insert(market_rules);
         Ok(())
     }
 
     pub fn seed_order(&self, order: SpotOrderV7) -> Result<(), StoreError> {
         let order_id = order.entity_id();
         let mut state = self.lock_state()?;
-        state.lob.insert_order(order.clone()).map_err(|_| StoreError::StoreUnavailable)?;
+        state
+            .lob
+            .insert_order(order.clone())
+            .map_err(|_| StoreError::StoreUnavailable)?;
         state.orders.insert(order_id, order);
         Ok(())
     }

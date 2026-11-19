@@ -467,7 +467,11 @@ impl OpCode {
 
     /// 获取 PUSH 指令压入的字节数
     pub fn push_bytes(&self) -> Option<u8> {
-        if self.is_push() { Some((*self as u8) - 0x5f) } else { None }
+        if self.is_push() {
+            Some((*self as u8) - 0x5f)
+        } else {
+            None
+        }
     }
 
     /// 检查是否是 PUSH 指令

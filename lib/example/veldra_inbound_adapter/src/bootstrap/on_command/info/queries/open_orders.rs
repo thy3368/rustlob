@@ -56,19 +56,19 @@ pub async fn handle(
 ) -> Result<reply::ResponseWire, InfoHttpError> {
     let request: RequestWire = crate::common::parse::parse_json_request(body)?;
     ensure_type(&request.type_, "openOrders")?;
-    let query = OpenSpotOrdersQuery { user: request.user, dex: request.dex };
+    let query = OpenSpotOrdersQuery {
+        user: request.user,
+        dex: request.dex,
+    };
     let source =
         ScheduleCancelSpotOrderSource::new(crate::bootstrap::runtime::schedule_cancel_outbound());
 
-    let orders =
-        QueryExecutor.execute(&query, &source, &OpenSpotOrdersQueryUseCase).map_err(|error| {
-            match error {
-                QueryExecutionError::Business(error) => {
-                    InfoHttpError::validation(error.to_string())
-                }
-                QueryExecutionError::LoadReadModel(error) => {
-                    InfoHttpError::validation(format!("spot order store unavailable: {error}"))
-                }
+    let orders = QueryExecutor
+        .execute(&query, &source, &OpenSpotOrdersQueryUseCase)
+        .map_err(|error| match error {
+            QueryExecutionError::Business(error) => InfoHttpError::validation(error.to_string()),
+            QueryExecutionError::LoadReadModel(error) => {
+                InfoHttpError::validation(format!("spot order store unavailable: {error}"))
             }
         })?;
 
@@ -90,7 +90,10 @@ mod tests {
     const OTHER_USER: &str = "0x2222222222222222222222222222222222222222";
 
     fn query(user: &str, dex: Option<&str>) -> OpenSpotOrdersQuery {
-        OpenSpotOrdersQuery { user: user.to_string(), dex: dex.map(str::to_string) }
+        OpenSpotOrdersQuery {
+            user: user.to_string(),
+            dex: dex.map(str::to_string),
+        }
     }
 
     fn order(
@@ -141,10 +144,22 @@ mod tests {
             .into_iter()
             .enumerate()
             .map(|(index, status)| {
-                order(USER, 100 + index as u64, status, OrderSide::Buy, 20 + index as u64)
+                order(
+                    USER,
+                    100 + index as u64,
+                    status,
+                    OrderSide::Buy,
+                    20 + index as u64,
+                )
             })
             .collect::<Vec<_>>();
-        orders.push(order(OTHER_USER, 1, SpotOrderStatus::Open, OrderSide::Sell, 1));
+        orders.push(order(
+            OTHER_USER,
+            1,
+            SpotOrderStatus::Open,
+            OrderSide::Sell,
+            1,
+        ));
         orders.push(order(USER, 99, SpotOrderStatus::Open, OrderSide::Sell, 10));
         orders.push(order(USER, 98, SpotOrderStatus::Open, OrderSide::Buy, 10));
 
@@ -153,7 +168,10 @@ mod tests {
             .expect("应计算开放订单结果");
 
         assert_eq!(
-            result.iter().map(|order| order.order_base().order_id).collect::<Vec<_>>(),
+            result
+                .iter()
+                .map(|order| order.order_base().order_id)
+                .collect::<Vec<_>>(),
             [98, 99, 100, 101, 102]
         );
     }
@@ -228,11 +246,19 @@ mod tests {
         }
 
         assert!(matches!(
-            QueryExecutor.execute(&query("", None), &FailingSource, &OpenSpotOrdersQueryUseCase),
+            QueryExecutor.execute(
+                &query("", None),
+                &FailingSource,
+                &OpenSpotOrdersQueryUseCase
+            ),
             Err(QueryExecutionError::Business(_))
         ));
         assert!(matches!(
-            QueryExecutor.execute(&query(USER, None), &FailingSource, &OpenSpotOrdersQueryUseCase),
+            QueryExecutor.execute(
+                &query(USER, None),
+                &FailingSource,
+                &OpenSpotOrdersQueryUseCase
+            ),
             Err(QueryExecutionError::LoadReadModel(LoadError))
         ));
     }

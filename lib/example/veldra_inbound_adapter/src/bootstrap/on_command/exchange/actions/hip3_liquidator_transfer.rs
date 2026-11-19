@@ -66,7 +66,9 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
         ));
     }
     if request.action.dex.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(Hip3LiquidatorTransferContractError::InvalidDex));
+        return Err(ExchangeHttpError::contract(
+            Hip3LiquidatorTransferContractError::InvalidDex,
+        ));
     }
     Ok(())
 }
@@ -106,7 +108,10 @@ mod tests {
         )
         .expect("request parses");
         let error = validate(&request).expect_err("validation should fail");
-        assert_eq!(error.to_string(), "Invalid `action.dex`. Expected a non-empty DEX identifier.");
+        assert_eq!(
+            error.to_string(),
+            "Invalid `action.dex`. Expected a non-empty DEX identifier."
+        );
     }
 
     #[actix_web::test]

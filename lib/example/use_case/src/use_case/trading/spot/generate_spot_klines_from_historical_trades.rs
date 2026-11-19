@@ -57,7 +57,10 @@ impl ReplayableChanges for GenerateSpotKlinesFromHistoricalTradesChanges {
     fn to_replayable_events(
         &self,
     ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
-        self.created_klines.iter().map(TrackDiff::track_create_event).collect()
+        self.created_klines
+            .iter()
+            .map(TrackDiff::track_create_event)
+            .collect()
     }
 }
 
@@ -88,7 +91,9 @@ impl UseCase for GenerateSpotKlinesFromHistoricalTradesUseCase {
         for trade in &state.trades {
             let fact = &trade.comon_trade;
             if fact.symbol != cmd.symbol {
-                return Err(Self::Error::TradeSymbolMismatch { trade_id: fact.trade_id });
+                return Err(Self::Error::TradeSymbolMismatch {
+                    trade_id: fact.trade_id,
+                });
             }
             if !(cmd.range_start_ns..cmd.range_end_ns).contains(&fact.created_at) {
                 return Err(Self::Error::TradeOutsideRange {
@@ -97,10 +102,14 @@ impl UseCase for GenerateSpotKlinesFromHistoricalTradesUseCase {
                 });
             }
             if fact.price <= Decimal::ZERO {
-                return Err(Self::Error::InvalidTradePrice { trade_id: fact.trade_id });
+                return Err(Self::Error::InvalidTradePrice {
+                    trade_id: fact.trade_id,
+                });
             }
             if fact.size <= Decimal::ZERO {
-                return Err(Self::Error::InvalidTradeAmount { trade_id: fact.trade_id });
+                return Err(Self::Error::InvalidTradeAmount {
+                    trade_id: fact.trade_id,
+                });
             }
         }
         Ok(())
@@ -111,15 +120,21 @@ impl UseCase for GenerateSpotKlinesFromHistoricalTradesUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let mut trades: Vec<_> = state.trades.iter().map(|trade| &trade.comon_trade).collect();
+        let mut trades: Vec<_> = state
+            .trades
+            .iter()
+            .map(|trade| &trade.comon_trade)
+            .collect();
         trades.sort_unstable_by_key(|trade| (trade.created_at, trade.trade_id));
         let mut buckets = BTreeMap::<u64, KlineAccumulator>::new();
         for trade in trades {
             let open_time_ns = (trade.created_at / cmd.interval_ns)
                 .checked_mul(cmd.interval_ns)
                 .ok_or(Self::Error::ArithmeticOverflow)?;
-            let notional =
-                trade.price.checked_mul(trade.size).ok_or(Self::Error::ArithmeticOverflow)?;
+            let notional = trade
+                .price
+                .checked_mul(trade.size)
+                .ok_or(Self::Error::ArithmeticOverflow)?;
             match buckets.get_mut(&open_time_ns) {
                 Some(bucket) => bucket.add(trade, notional)?,
                 None => {
@@ -298,7 +313,12 @@ mod tests {
         let first = &changes.created_klines[0];
         assert_eq!((first.open_time_ns, first.close_time_ns), (60, 119));
         assert_eq!(
-            (first.open_price, first.high_price, first.low_price, first.close_price),
+            (
+                first.open_price,
+                first.high_price,
+                first.low_price,
+                first.close_price
+            ),
             (
                 Decimal::new(1005, 1),
                 Decimal::new(1105, 1),
@@ -310,7 +330,10 @@ mod tests {
         assert_eq!(first.volume_quote, Decimal::new(39910, 2));
         assert_eq!((first.first_trade_id, first.last_trade_id), (1, 3));
         assert_eq!(
-            (changes.created_klines[1].open_time_ns, changes.created_klines[1].close_time_ns),
+            (
+                changes.created_klines[1].open_time_ns,
+                changes.created_klines[1].close_time_ns
+            ),
             (180, 239)
         );
 
@@ -342,7 +365,10 @@ mod tests {
     #[test]
     fn empty_trades_produce_no_changes() {
         assert!(
-            compute(&command(1, 2, 1), vec![]).expect("empty is valid").created_klines.is_empty()
+            compute(&command(1, 2, 1), vec![])
+                .expect("empty is valid")
+                .created_klines
+                .is_empty()
         );
     }
 
@@ -357,10 +383,12 @@ mod tests {
         );
         assert_eq!(
             compute(&cmd, vec![trade(2, 20, Decimal::ONE, Decimal::ONE)]),
-            Err(GenerateSpotKlinesFromHistoricalTradesError::TradeOutsideRange {
-                trade_id: 2,
-                created_at_ns: 20
-            })
+            Err(
+                GenerateSpotKlinesFromHistoricalTradesError::TradeOutsideRange {
+                    trade_id: 2,
+                    created_at_ns: 20
+                }
+            )
         );
         assert_eq!(
             compute(&cmd, vec![trade(3, 10, Decimal::ZERO, Decimal::ONE)]),
@@ -376,13 +404,19 @@ mod tests {
     fn rejects_decimal_and_close_time_overflow() {
         let decimal_cmd = command(0, 2, 1);
         assert_eq!(
-            compute(&decimal_cmd, vec![trade(1, 0, Decimal::MAX, Decimal::new(2, 0))]),
+            compute(
+                &decimal_cmd,
+                vec![trade(1, 0, Decimal::MAX, Decimal::new(2, 0))]
+            ),
             Err(GenerateSpotKlinesFromHistoricalTradesError::ArithmeticOverflow)
         );
 
         let time_cmd = command(u64::MAX - 1, u64::MAX, u64::MAX - 1);
         assert_eq!(
-            compute(&time_cmd, vec![trade(2, u64::MAX - 1, Decimal::ONE, Decimal::ONE)]),
+            compute(
+                &time_cmd,
+                vec![trade(2, u64::MAX - 1, Decimal::ONE, Decimal::ONE)]
+            ),
             Err(GenerateSpotKlinesFromHistoricalTradesError::ArithmeticOverflow)
         );
     }

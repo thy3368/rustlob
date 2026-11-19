@@ -69,9 +69,9 @@ impl ExchangeActionHandler for Withdraw3Action {
 
 fn validate(request: &Withdraw3RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "withdraw3" {
-        return Err(ExchangeHttpError::contract(Withdraw3ContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            Withdraw3ContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -83,7 +83,9 @@ fn validate(request: &Withdraw3RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.expires_after.is_some() {
-        return Err(ExchangeHttpError::contract(Withdraw3ContractError::ExpiresAfterNotSupported));
+        return Err(ExchangeHttpError::contract(
+            Withdraw3ContractError::ExpiresAfterNotSupported,
+        ));
     }
     validate_hyperliquid_chain(&request.action.hyperliquid_chain).map_err(|_| {
         ExchangeHttpError::contract(Withdraw3ContractError::InvalidHyperliquidChain)
@@ -94,10 +96,14 @@ fn validate(request: &Withdraw3RequestWire) -> Result<(), ExchangeHttpError> {
     validate_hex_address(&request.action.destination)
         .map_err(|_| ExchangeHttpError::contract(Withdraw3ContractError::InvalidDestination))?;
     if request.action.amount.trim().is_empty() {
-        return Err(ExchangeHttpError::contract(Withdraw3ContractError::InvalidAmount));
+        return Err(ExchangeHttpError::contract(
+            Withdraw3ContractError::InvalidAmount,
+        ));
     }
     if request.action.time != request.common.nonce {
-        return Err(ExchangeHttpError::contract(Withdraw3ContractError::NonceMismatch));
+        return Err(ExchangeHttpError::contract(
+            Withdraw3ContractError::NonceMismatch,
+        ));
     }
     Ok(())
 }

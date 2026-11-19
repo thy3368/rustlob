@@ -45,7 +45,12 @@ impl LogEntrySequencer {
             Some((lsn, ts)) => (lsn, ts),
             None => (0, 0),
         };
-        Self { t, p, next_lsn, last_logical_ts }
+        Self {
+            t,
+            p,
+            next_lsn,
+            last_logical_ts,
+        }
     }
 
     /// 使用已有权威元数据创建日志，不改变定序器检查点。
@@ -71,7 +76,9 @@ impl LogEntrySequencer {
         user_id: String,
         payload: P,
     ) -> LogEntry<P> {
-        LogEntry::new_with_topic(t, p, lsn, logical_ts, client_id, request_id, user_id, payload)
+        LogEntry::new_with_topic(
+            t, p, lsn, logical_ts, client_id, request_id, user_id, payload,
+        )
     }
 
     /// 为子命令复用父日志的元数据，不分配新的序号。
@@ -94,12 +101,21 @@ impl LogEntrySequencer {
             Some((lsn, logical_ts)) => (lsn, logical_ts),
             None => (0, 0),
         };
-        Self { t: 0, p: 0, next_lsn, last_logical_ts }
+        Self {
+            t: 0,
+            p: 0,
+            next_lsn,
+            last_logical_ts,
+        }
     }
 
     /// 返回最后一次分配的检查点；尚未分配日志时返回 `None`。
     pub const fn last_committed(&self) -> Option<(u64, u64)> {
-        if self.next_lsn == 0 { None } else { Some((self.next_lsn, self.last_logical_ts)) }
+        if self.next_lsn == 0 {
+            None
+        } else {
+            Some((self.next_lsn, self.last_logical_ts))
+        }
     }
 
     pub const fn topic(&self) -> u8 {
@@ -139,11 +155,16 @@ impl LogEntrySequencer {
                 .checked_add(1)
                 .ok_or(LogEntrySequenceError::LogicalTimestampOverflow)?,
         );
-        let lsn = self.next_lsn.checked_add(1).ok_or(LogEntrySequenceError::LsnOverflow)?;
+        let lsn = self
+            .next_lsn
+            .checked_add(1)
+            .ok_or(LogEntrySequenceError::LsnOverflow)?;
 
         self.next_lsn = lsn;
         self.last_logical_ts = logical_ts;
-        Ok(Self::from_metadata(lsn, logical_ts, client_id, request_id, user_id, payload))
+        Ok(Self::from_metadata(
+            lsn, logical_ts, client_id, request_id, user_id, payload,
+        ))
     }
 }
 
@@ -160,8 +181,12 @@ mod tests {
     #[test]
     fn first_and_continuous_allocations_are_ordered() {
         let mut sequencer = LogEntrySequencer::new(None);
-        let first = sequencer.sequence_at(at(10), 1, 2, "alice".into(), "a").unwrap();
-        let second = sequencer.sequence_at(at(10), 3, 4, "bob".into(), "b").unwrap();
+        let first = sequencer
+            .sequence_at(at(10), 1, 2, "alice".into(), "a")
+            .unwrap();
+        let second = sequencer
+            .sequence_at(at(10), 3, 4, "bob".into(), "b")
+            .unwrap();
         assert_eq!((first.lsn(), first.logical_ts()), (1, 10));
         assert_eq!((second.lsn(), second.logical_ts()), (2, 11));
     }
@@ -170,11 +195,17 @@ mod tests {
     fn clock_stall_or_regression_still_advances_logical_time() {
         let mut sequencer = LogEntrySequencer::new(None);
         assert_eq!(
-            sequencer.sequence_at(at(100), 0, 0, SYSTEM_USER_ID.into(), ()).unwrap().logical_ts(),
+            sequencer
+                .sequence_at(at(100), 0, 0, SYSTEM_USER_ID.into(), ())
+                .unwrap()
+                .logical_ts(),
             100
         );
         assert_eq!(
-            sequencer.sequence_at(at(90), 0, 1, SYSTEM_USER_ID.into(), ()).unwrap().logical_ts(),
+            sequencer
+                .sequence_at(at(90), 0, 1, SYSTEM_USER_ID.into(), ())
+                .unwrap()
+                .logical_ts(),
             101
         );
     }
@@ -182,7 +213,9 @@ mod tests {
     #[test]
     fn recovers_from_last_committed_entry() {
         let mut sequencer = LogEntrySequencer::new(Some((41, 900)));
-        let entry = sequencer.sequence_at(at(800), 1, 1, SYSTEM_USER_ID.into(), ()).unwrap();
+        let entry = sequencer
+            .sequence_at(at(800), 1, 1, SYSTEM_USER_ID.into(), ())
+            .unwrap();
         assert_eq!((entry.lsn(), entry.logical_ts()), (42, 901));
     }
 
@@ -200,7 +233,10 @@ mod tests {
             Err(LogEntrySequenceError::ClockBeforeUnixEpoch)
         );
         assert_eq!(
-            sequencer.sequence_at(at(21), 0, 0, SYSTEM_USER_ID.into(), ()).unwrap().lsn(),
+            sequencer
+                .sequence_at(at(21), 0, 0, SYSTEM_USER_ID.into(), ())
+                .unwrap()
+                .lsn(),
             8
         );
     }
@@ -225,7 +261,12 @@ mod tests {
         let parent = LogEntrySequencer::from_metadata(42, 123, 3, 4, "alice".into(), "parent");
         let child = LogEntrySequencer::derive(&parent, String::from("child"));
         assert_eq!(
-            (child.lsn(), child.logical_ts(), child.client_id(), child.request_id()),
+            (
+                child.lsn(),
+                child.logical_ts(),
+                child.client_id(),
+                child.request_id()
+            ),
             (42, 123, 3, 4)
         );
         assert_eq!(child.into_payload(), "child");

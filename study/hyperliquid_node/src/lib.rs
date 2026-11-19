@@ -5,11 +5,8 @@
 //!
 //! ```no_run
 //! # async fn example() -> Result<(), hyperliquid_node::replica_rpc::RpcError> {
-//! let fetched = hyperliquid_node::replica_rpc::get_block(
-//!     "http://127.0.0.1:3000/replica_cmds",
-//!     0,
-//! )
-//! .await?;
+//! let fetched =
+//!     hyperliquid_node::replica_rpc::get_block("http://127.0.0.1:3000/replica_cmds", 0).await?;
 //! assert_eq!(fetched.block().height, Some(0));
 //! # Ok(())
 //! # }

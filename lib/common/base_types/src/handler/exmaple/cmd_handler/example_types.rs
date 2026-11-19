@@ -48,18 +48,31 @@ pub struct HandlerError(pub String);
 
 impl Default for AccountBalance {
     fn default() -> Self {
-        Self { user_id: String::new(), asset: String::new(), free: 0, locked: 0 }
+        Self {
+            user_id: String::new(),
+            asset: String::new(),
+            free: 0,
+            locked: 0,
+        }
     }
 }
 
 impl Default for OrderBookSnapshot {
     fn default() -> Self {
-        Self { symbol: String::new(), best_bid: None, best_ask: None, last_price: None }
+        Self {
+            symbol: String::new(),
+            best_bid: None,
+            best_ask: None,
+            last_price: None,
+        }
     }
 }
 
 impl Default for Order {
     fn default() -> Self {
-        Self { order_id: String::new(), status: OrderStatus::Pending }
+        Self {
+            order_id: String::new(),
+            status: OrderStatus::Pending,
+        }
     }
 }

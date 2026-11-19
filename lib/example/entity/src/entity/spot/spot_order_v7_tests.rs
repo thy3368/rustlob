@@ -47,9 +47,15 @@ fn admission_rejects_non_matchable_statuses_and_market_maker() {
         SpotOrderStatus::Canceled,
         SpotOrderStatus::Rejected,
     ] {
-        assert!(order(OrderSide::Buy, status).validate_matchable_as_taker().is_err());
+        assert!(
+            order(OrderSide::Buy, status)
+                .validate_matchable_as_taker()
+                .is_err()
+        );
     }
-    let mut record = order(OrderSide::Sell, SpotOrderStatus::Open).order_base().clone();
+    let mut record = order(OrderSide::Sell, SpotOrderStatus::Open)
+        .order_base()
+        .clone();
     record.execution = PriceType::Market;
     let market = SpotOrderV7::from_record(record).unwrap();
     assert_eq!(market.validate_matchable_as_taker(), Ok(()));
@@ -67,7 +73,10 @@ fn buy_match_consumes_fee_reserve_and_sell_match_does_not() {
             timestamp: TIMESTAMP,
         })
         .unwrap();
-    assert_eq!(buyer.order_base().buy_quote_fee_reserve_consumed, Decimal::from(2));
+    assert_eq!(
+        buyer.order_base().buy_quote_fee_reserve_consumed,
+        Decimal::from(2)
+    );
 
     let mut seller = order(OrderSide::Sell, SpotOrderStatus::Open);
     seller
@@ -78,7 +87,10 @@ fn buy_match_consumes_fee_reserve_and_sell_match_does_not() {
             timestamp: TIMESTAMP,
         })
         .unwrap();
-    assert_eq!(seller.order_base().buy_quote_fee_reserve_consumed, Decimal::ZERO);
+    assert_eq!(
+        seller.order_base().buy_quote_fee_reserve_consumed,
+        Decimal::ZERO
+    );
 }
 
 #[test]
@@ -118,7 +130,12 @@ fn stale_lsn_keeps_order_unchanged() {
 #[test]
 fn command_lsn_can_jump_and_be_reused_within_one_command() {
     let mut subject = order(OrderSide::Buy, SpotOrderStatus::Pending);
-    subject.apply(SpotOrderV7Event::Activate { lsn: 20, timestamp: TIMESTAMP }).unwrap();
+    subject
+        .apply(SpotOrderV7Event::Activate {
+            lsn: 20,
+            timestamp: TIMESTAMP,
+        })
+        .unwrap();
     subject
         .apply(SpotOrderV7Event::MatchedAsTaker {
             lsn: 20,
@@ -149,7 +166,9 @@ fn taker_tif_controls_final_state() {
     assert_eq!(output.order_after, gtc);
     assert_eq!(output.release_requirement, None);
 
-    let mut ioc_record = order(OrderSide::Buy, SpotOrderStatus::Open).order_base().clone();
+    let mut ioc_record = order(OrderSide::Buy, SpotOrderStatus::Open)
+        .order_base()
+        .clone();
     ioc_record.tif = OrderTif::Ioc;
     let mut ioc = SpotOrderV7::from_record(ioc_record).unwrap();
     let (_, output) = ioc
@@ -171,11 +190,17 @@ fn taker_tif_controls_final_state() {
             if quote_amount.amount() == Decimal::from(103)
     ));
 
-    let mut alo_record = order(OrderSide::Buy, SpotOrderStatus::Open).order_base().clone();
+    let mut alo_record = order(OrderSide::Buy, SpotOrderStatus::Open)
+        .order_base()
+        .clone();
     alo_record.tif = OrderTif::Alo;
     let mut alo = SpotOrderV7::from_record(alo_record).unwrap();
-    let (_, output) =
-        alo.apply(SpotOrderV7Event::RejectedAsTaker { lsn: 10, timestamp: TIMESTAMP }).unwrap();
+    let (_, output) = alo
+        .apply(SpotOrderV7Event::RejectedAsTaker {
+            lsn: 10,
+            timestamp: TIMESTAMP,
+        })
+        .unwrap();
     assert_eq!(alo.status(), SpotOrderStatus::Rejected);
     let SpotOrderV7Output::RejectedAsTaker(output) = output else {
         panic!("expected rejected taker output")

@@ -88,7 +88,10 @@ mod tests {
 
     #[test]
     fn transition_commits_successfully_and_apply_discards_output() {
-        let mut machine = Machine { state: State::Ready, ver: 0 };
+        let mut machine = Machine {
+            state: State::Ready,
+            ver: 0,
+        };
         assert_eq!(machine.transition(Event::Inc), Ok((State::Done, 1)));
         assert_eq!(machine.state, State::Done);
 

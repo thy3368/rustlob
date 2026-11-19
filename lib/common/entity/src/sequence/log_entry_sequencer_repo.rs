@@ -52,20 +52,30 @@ mod tests {
         assert_eq!(sequencer, LogEntrySequencer::new(None));
         assert_eq!(sequencer.last_committed(), None);
 
-        let first = sequencer.sequence(1, 2, crate::SYSTEM_USER_ID.to_owned(), ()).unwrap();
+        let first = sequencer
+            .sequence(1, 2, crate::SYSTEM_USER_ID.to_owned(), ())
+            .unwrap();
         repo.save(&sequencer).unwrap();
         let mut restored = repo.load().unwrap();
         assert_eq!(restored.last_committed(), sequencer.last_committed());
 
-        let second = restored.sequence(1, 3, crate::SYSTEM_USER_ID.to_owned(), ()).unwrap();
+        let second = restored
+            .sequence(1, 3, crate::SYSTEM_USER_ID.to_owned(), ())
+            .unwrap();
         assert_eq!(second.lsn(), first.lsn() + 1);
         assert!(second.logical_ts() > first.logical_ts());
     }
 
     #[test]
     fn propagates_repository_errors() {
-        let mut repo = MemoryRepo { unavailable: true, ..MemoryRepo::default() };
+        let mut repo = MemoryRepo {
+            unavailable: true,
+            ..MemoryRepo::default()
+        };
         assert_eq!(repo.load(), Err(RepoError::Unavailable));
-        assert_eq!(repo.save(&LogEntrySequencer::new(None)), Err(RepoError::Unavailable));
+        assert_eq!(
+            repo.save(&LogEntrySequencer::new(None)),
+            Err(RepoError::Unavailable)
+        );
     }
 }

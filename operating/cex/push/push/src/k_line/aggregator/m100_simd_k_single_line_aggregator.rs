@@ -70,7 +70,11 @@ impl M100SimdKSingleLineAggregator {
 
     #[inline(always)]
     fn send_event(&self, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent { window: self.window_type, ohlc, is_new_window };
+        let event = KLineUpdateEvent {
+            window: self.window_type,
+            ohlc,
+            is_new_window,
+        };
 
         let handler_count = self.event_handler_count;
         let handlers = &self.event_handlers;
@@ -210,7 +214,15 @@ impl M100SimdKSingleLineAggregator {
 
     #[inline(always)]
     fn update_window_with_stats(&mut self, update: WindowStatsUpdate) -> Result<(), String> {
-        let WindowStatsUpdate { window_start, open, high, low, close, volume, .. } = update;
+        let WindowStatsUpdate {
+            window_start,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            ..
+        } = update;
         let updated_ohlc = match &mut self.current_window {
             Some(current_ohlc) if current_ohlc.timestamp == window_start => {
                 current_ohlc.high = current_ohlc.high.max(high);
@@ -393,7 +405,11 @@ impl KLineAggMut for M100SimdKSingleLineAggregator {
 
     #[inline(always)]
     fn get_current_ohlc(&self, window: TimeWindow) -> Option<OHLC> {
-        if window == self.window_type { self.current_window } else { None }
+        if window == self.window_type {
+            self.current_window
+        } else {
+            None
+        }
     }
 
     #[inline(always)]

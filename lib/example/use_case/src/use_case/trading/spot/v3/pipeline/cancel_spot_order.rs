@@ -153,7 +153,10 @@ impl UseCase for CancelSpotOrderV3UseCase {
         )
         .map_err(map_cancel_error)?;
         let balance_after = (balance_after != state.balance).then_some(balance_after);
-        Ok(CancelSpotOrderV3AfterChanges { order_after, balance_after })
+        Ok(CancelSpotOrderV3AfterChanges {
+            order_after,
+            balance_after,
+        })
     }
 }
 
@@ -272,18 +275,38 @@ mod tests {
     fn oid_and_cloid_both_locate_and_cancel_open_buy() {
         for lookup in [OrderId::Oid(OID), OrderId::Cloid("client-7".into())] {
             let given = state(
-                order(OrderSide::Buy, SpotOrderStatus::Open, 2, 5, 2, Some("client-7")),
-                balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 7, 23),
+                order(
+                    OrderSide::Buy,
+                    SpotOrderStatus::Open,
+                    2,
+                    5,
+                    2,
+                    Some("client-7"),
+                ),
+                balance(
+                    Coin::USDT,
+                    common_entity::stable_string_entity_id(USER_ID),
+                    7,
+                    23,
+                ),
             );
 
             let changes = CancelSpotOrderV3UseCase
                 .compute_state_diff(&command(lookup), given)
                 .expect("cancel must succeed");
 
-            assert_eq!(changes.updated_order.after.status(), SpotOrderStatus::Canceled);
+            assert_eq!(
+                changes.updated_order.after.status(),
+                SpotOrderStatus::Canceled
+            );
             assert_eq!(changes.updated_order.after.order_base().lsn, 9);
-            assert_eq!(changes.updated_order.after.order_base().updated_at, LOGICAL_TS);
-            let balance = changes.updated_balance.expect("open order must release its hold");
+            assert_eq!(
+                changes.updated_order.after.order_base().updated_at,
+                LOGICAL_TS
+            );
+            let balance = changes
+                .updated_balance
+                .expect("open order must release its hold");
             assert_eq!(balance.after.available(), Decimal::from(30));
             assert_eq!(balance.after.frozen(), Decimal::ZERO);
             assert_eq!(balance.after.version(), 9);
@@ -295,7 +318,10 @@ mod tests {
             .to_replayable_events()
             .expect("pairs must project");
             assert_eq!(events.len(), 2);
-            assert_eq!(events[0].entity_type, <SpotOrderV7 as Entity>::entity_type());
+            assert_eq!(
+                events[0].entity_type,
+                <SpotOrderV7 as Entity>::entity_type()
+            );
             assert_eq!(events[1].entity_type, <BalanceV2 as Entity>::entity_type());
         }
     }
@@ -303,8 +329,20 @@ mod tests {
     #[test]
     fn partially_filled_sell_releases_only_remaining_base() {
         let given = state(
-            order(OrderSide::Sell, SpotOrderStatus::PartiallyFilled, 1, 0, 0, Some("client-7")),
-            balance(Coin::BTC, common_entity::stable_string_entity_id(USER_ID), 4, 1),
+            order(
+                OrderSide::Sell,
+                SpotOrderStatus::PartiallyFilled,
+                1,
+                0,
+                0,
+                Some("client-7"),
+            ),
+            balance(
+                Coin::BTC,
+                common_entity::stable_string_entity_id(USER_ID),
+                4,
+                1,
+            ),
         );
 
         let changed = CancelSpotOrderV3UseCase
@@ -318,8 +356,20 @@ mod tests {
     #[test]
     fn pending_order_projects_only_order_and_keeps_balance_version() {
         let given = state(
-            order(OrderSide::Buy, SpotOrderStatus::Pending, 3, 2, 0, Some("client-7")),
-            balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 20, 32),
+            order(
+                OrderSide::Buy,
+                SpotOrderStatus::Pending,
+                3,
+                2,
+                0,
+                Some("client-7"),
+            ),
+            balance(
+                Coin::USDT,
+                common_entity::stable_string_entity_id(USER_ID),
+                20,
+                32,
+            ),
         );
         let balance_before = given.balance.clone();
 
@@ -329,15 +379,33 @@ mod tests {
 
         assert!(changed.updated_balance.is_none());
         assert_eq!(balance_before.version(), 9);
-        assert_eq!(changed.to_replayable_events().expect("order pair must project").len(), 1);
+        assert_eq!(
+            changed
+                .to_replayable_events()
+                .expect("order pair must project")
+                .len(),
+            1
+        );
     }
 
     #[test]
     fn rejects_invalid_lookup_state_and_balance_identity() {
         let valid = || {
             state(
-                order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7")),
-                balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 20),
+                order(
+                    OrderSide::Buy,
+                    SpotOrderStatus::Open,
+                    2,
+                    0,
+                    0,
+                    Some("client-7"),
+                ),
+                balance(
+                    Coin::USDT,
+                    common_entity::stable_string_entity_id(USER_ID),
+                    0,
+                    20,
+                ),
             )
         };
         assert_eq!(
@@ -349,28 +417,60 @@ mod tests {
             Err(CancelSpotOrderV3Error::EmptyCloid)
         );
         for (lookup, given, expected) in [
-            (OrderId::Oid(99), valid(), CancelSpotOrderV3Error::OrderLookupMismatch),
-            (OrderId::Cloid("wrong".into()), valid(), CancelSpotOrderV3Error::OrderLookupMismatch),
+            (
+                OrderId::Oid(99),
+                valid(),
+                CancelSpotOrderV3Error::OrderLookupMismatch,
+            ),
+            (
+                OrderId::Cloid("wrong".into()),
+                valid(),
+                CancelSpotOrderV3Error::OrderLookupMismatch,
+            ),
             (
                 OrderId::Cloid("client-7".into()),
                 state(
                     order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, None),
-                    balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 20),
+                    balance(
+                        Coin::USDT,
+                        common_entity::stable_string_entity_id(USER_ID),
+                        0,
+                        20,
+                    ),
                 ),
                 CancelSpotOrderV3Error::OrderCloidMissing,
             ),
             (
                 OrderId::Oid(OID),
                 state(
-                    order(OrderSide::Buy, SpotOrderStatus::Filled, 0, 0, 0, Some("client-7")),
-                    balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 0),
+                    order(
+                        OrderSide::Buy,
+                        SpotOrderStatus::Filled,
+                        0,
+                        0,
+                        0,
+                        Some("client-7"),
+                    ),
+                    balance(
+                        Coin::USDT,
+                        common_entity::stable_string_entity_id(USER_ID),
+                        0,
+                        0,
+                    ),
                 ),
                 CancelSpotOrderV3Error::OrderNotCancelable,
             ),
             (
                 OrderId::Oid(OID),
                 state(
-                    order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7")),
+                    order(
+                        OrderSide::Buy,
+                        SpotOrderStatus::Open,
+                        2,
+                        0,
+                        0,
+                        Some("client-7"),
+                    ),
                     balance(Coin::USDT, 99, 0, 20),
                 ),
                 CancelSpotOrderV3Error::PartyMismatch,
@@ -378,8 +478,20 @@ mod tests {
             (
                 OrderId::Oid(OID),
                 state(
-                    order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7")),
-                    balance(Coin::BTC, common_entity::stable_string_entity_id(USER_ID), 0, 20),
+                    order(
+                        OrderSide::Buy,
+                        SpotOrderStatus::Open,
+                        2,
+                        0,
+                        0,
+                        Some("client-7"),
+                    ),
+                    balance(
+                        Coin::BTC,
+                        common_entity::stable_string_entity_id(USER_ID),
+                        0,
+                        20,
+                    ),
                 ),
                 CancelSpotOrderV3Error::CoinMismatch,
             ),
@@ -394,8 +506,20 @@ mod tests {
     #[test]
     fn rejects_order_owned_by_a_different_command_user() {
         let given = state(
-            order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7")),
-            balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 20),
+            order(
+                OrderSide::Buy,
+                SpotOrderStatus::Open,
+                2,
+                0,
+                0,
+                Some("client-7"),
+            ),
+            balance(
+                Coin::USDT,
+                common_entity::stable_string_entity_id(USER_ID),
+                0,
+                20,
+            ),
         );
         let command = LogEntrySequencer::from_metadata(
             9,
@@ -403,7 +527,9 @@ mod tests {
             1,
             2,
             "other-user".to_owned(),
-            CancelSpotOrderV3Cmd { order_id: OrderId::Oid(OID) },
+            CancelSpotOrderV3Cmd {
+                order_id: OrderId::Oid(OID),
+            },
         );
 
         assert_eq!(
@@ -415,8 +541,20 @@ mod tests {
     #[test]
     fn insufficient_frozen_balance_returns_error_without_mutating_input() {
         let given = state(
-            order(OrderSide::Buy, SpotOrderStatus::Open, 2, 5, 2, Some("client-7")),
-            balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 7, 22),
+            order(
+                OrderSide::Buy,
+                SpotOrderStatus::Open,
+                2,
+                5,
+                2,
+                Some("client-7"),
+            ),
+            balance(
+                Coin::USDT,
+                common_entity::stable_string_entity_id(USER_ID),
+                7,
+                22,
+            ),
         );
         let before = given.clone();
 
@@ -429,13 +567,25 @@ mod tests {
 
     #[test]
     fn rejects_loaded_order_at_or_after_command_lsn() {
-        let mut record = order(OrderSide::Buy, SpotOrderStatus::Open, 2, 0, 0, Some("client-7"))
-            .order_base()
-            .clone();
+        let mut record = order(
+            OrderSide::Buy,
+            SpotOrderStatus::Open,
+            2,
+            0,
+            0,
+            Some("client-7"),
+        )
+        .order_base()
+        .clone();
         record.lsn = 9;
         let given = state(
             SpotOrderV7::from_record(record).unwrap(),
-            balance(Coin::USDT, common_entity::stable_string_entity_id(USER_ID), 0, 20),
+            balance(
+                Coin::USDT,
+                common_entity::stable_string_entity_id(USER_ID),
+                0,
+                20,
+            ),
         );
 
         assert_eq!(

@@ -39,7 +39,10 @@ impl WithdrawQuoteHttpRequest {
             1,
             1,
             user_id,
-            WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
+            WithdrawQuoteCmd {
+                party_id: self.trader_id,
+                amount: self.amount,
+            },
         )
     }
 }
@@ -84,7 +87,9 @@ where
         + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
     <OB as StateSource<WithdrawQuoteUseCase>>::Error: 'static,
 {
-    let mapper = WithdrawQuoteHttpReplyMapper { account_id: request.trader_id.clone() };
+    let mapper = WithdrawQuoteHttpReplyMapper {
+        account_id: request.trader_id.clone(),
+    };
     execute_withdraw_quote_with_mapper(request.into_log_entry(), outbound, &mapper)
 }
 
@@ -99,7 +104,10 @@ pub fn build_withdraw_actix_scope<S>() -> Scope
 where
     S: Send + Sync + 'static + WithdrawQuoteOutboundAccess,
 {
-    web::scope("").route("/withdrawals/quote", web::post().to(create_withdraw_actix::<S>))
+    web::scope("").route(
+        "/withdrawals/quote",
+        web::post().to(create_withdraw_actix::<S>),
+    )
 }
 
 async fn create_withdraw<S>(

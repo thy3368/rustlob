@@ -90,7 +90,10 @@ impl PositionId {
     /// 生成新的持仓ID（简化实现，实际应使用雪花算法等）
     pub fn generate() -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64;
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64;
         Self(nanos)
     }
 
@@ -148,7 +151,10 @@ impl TradeId {
     /// 生成随机成交ID
     pub fn generate() -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         Self(format!("TRD-{}", timestamp))
     }
 
@@ -284,7 +290,12 @@ impl TradingPair {
 
     /// 获取所有 TradingPair 变体的数组
     pub const fn all() -> &'static [TradingPair] {
-        &[TradingPair::BtcUsdt, TradingPair::EthUsdt, TradingPair::BtcEth, TradingPair::UsdtUsdt]
+        &[
+            TradingPair::BtcUsdt,
+            TradingPair::EthUsdt,
+            TradingPair::BtcEth,
+            TradingPair::UsdtUsdt,
+        ]
     }
 
     /// 从交易对符号字符串创建 TradingPair

@@ -36,7 +36,15 @@ impl LobSnapshot {
         best_ask: Option<Price>,
         last_price: Option<Price>,
     ) -> Self {
-        Self { symbol, timestamp, sequence, data, best_bid, best_ask, last_price }
+        Self {
+            symbol,
+            timestamp,
+            sequence,
+            data,
+            best_bid,
+            best_ask,
+            last_price,
+        }
     }
 }
 

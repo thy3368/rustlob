@@ -52,7 +52,9 @@ impl Default for SpotSettlementCenter {
 
 impl SpotSettlementCenter {
     pub const fn new() -> Self {
-        Self { state: SpotSettlementState::Unsettled }
+        Self {
+            state: SpotSettlementState::Unsettled,
+        }
     }
 
     pub const fn state(self) -> SpotSettlementState {
@@ -205,7 +207,10 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
         let mut trade_after = given_state.trade.clone();
         Fsm::apply(
             &mut trade_after,
-            SpotTradeEvent::Settle { lsn: cmd.lsn(), logical_ts: cmd.logical_ts() },
+            SpotTradeEvent::Settle {
+                lsn: cmd.lsn(),
+                logical_ts: cmd.logical_ts(),
+            },
         )
         .map_err(|_| UnFreezeSpotOrderV2Error::DuplicateSettlement)?;
         let mut buyer_base_balance_after = given_state.buyer_base_balance.clone();
@@ -338,15 +343,31 @@ mod tests {
     fn settles_taker_buy_and_preserves_inputs() {
         let given = state(OrderSide::Buy, 2);
         let original = given.clone();
-        let changed =
-            UnFreeze4SpotOrderV2UseCase.compute_state_changed_only(&command(), &given).unwrap();
+        let changed = UnFreeze4SpotOrderV2UseCase
+            .compute_state_changed_only(&command(), &given)
+            .unwrap();
 
         assert_eq!(given, original);
-        assert_eq!(changed.trade_after.settlement_status, SpotTradeSettlementStatus::Settled);
-        assert_eq!(changed.buyer_quote_balance_after.frozen(), Decimal::from(13));
-        assert_eq!(changed.buyer_base_balance_after.available(), Decimal::from(13));
-        assert_eq!(changed.seller_base_balance_after.frozen(), Decimal::from(17));
-        assert_eq!(changed.seller_quote_balance_after.available(), Decimal::from(14));
+        assert_eq!(
+            changed.trade_after.settlement_status,
+            SpotTradeSettlementStatus::Settled
+        );
+        assert_eq!(
+            changed.buyer_quote_balance_after.frozen(),
+            Decimal::from(13)
+        );
+        assert_eq!(
+            changed.buyer_base_balance_after.available(),
+            Decimal::from(13)
+        );
+        assert_eq!(
+            changed.seller_base_balance_after.frozen(),
+            Decimal::from(17)
+        );
+        assert_eq!(
+            changed.seller_quote_balance_after.available(),
+            Decimal::from(14)
+        );
         for balance in [
             &changed.buyer_quote_balance_after,
             &changed.buyer_base_balance_after,
@@ -361,13 +382,20 @@ mod tests {
     #[test]
     fn taker_sell_maps_parties_and_zero_receipt_does_not_touch_seller_quote() {
         let given = state(OrderSide::Sell, 6);
-        let changed =
-            UnFreeze4SpotOrderV2UseCase.compute_state_changed_only(&command(), &given).unwrap();
+        let changed = UnFreeze4SpotOrderV2UseCase
+            .compute_state_changed_only(&command(), &given)
+            .unwrap();
 
         assert_eq!(changed.buyer_base_balance_after.party_id(), 20);
         assert_eq!(changed.seller_base_balance_after.party_id(), 10);
-        assert_eq!(changed.buyer_quote_balance_after.frozen(), Decimal::from(12));
-        assert_eq!(changed.seller_quote_balance_after.available(), Decimal::from(10));
+        assert_eq!(
+            changed.buyer_quote_balance_after.frozen(),
+            Decimal::from(12)
+        );
+        assert_eq!(
+            changed.seller_quote_balance_after.available(),
+            Decimal::from(10)
+        );
         assert_eq!(changed.seller_quote_balance_after.version(), 4);
         assert_eq!(changed.seller_quote_balance_after.updated_at(), 100);
     }

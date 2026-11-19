@@ -64,5 +64,8 @@ where
 {
     let config =
         AeronListenerConfig::spot_trade_from_env().map_err(AeronListenerError::Configuration)?;
-    run_aeron_listener(config, TriggerPendingSpotOrdersOnTradeHandler::new(outbound))
+    run_aeron_listener(
+        config,
+        TriggerPendingSpotOrdersOnTradeHandler::new(outbound),
+    )
 }

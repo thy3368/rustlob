@@ -20,7 +20,10 @@ pub use crate::use_case::trading::spot::v3::domain_service::place_order_pipeline
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceSpotOrderV3Cmd {
     Single(PlaceSpotOrderV3OrderCmd),
-    NormalTpsl { parent: PlaceSpotOrderV3OrderCmd, children: Vec<PlaceSpotOrderV3OrderCmd> },
+    NormalTpsl {
+        parent: PlaceSpotOrderV3OrderCmd,
+        children: Vec<PlaceSpotOrderV3OrderCmd>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,7 +122,13 @@ impl UseCase for PlaceSpotOrderV3UseCase {
             if order.price <= Decimal::ZERO || order.size <= Decimal::ZERO {
                 return Err(Self::Error::InvalidAmount);
             }
-            if matches!(order.order_type, OrderType::Trigger { trigger_price: 0, .. }) {
+            if matches!(
+                order.order_type,
+                OrderType::Trigger {
+                    trigger_price: 0,
+                    ..
+                }
+            ) {
                 return Err(Self::Error::InvalidAmount);
             }
         }
@@ -157,13 +166,20 @@ impl UseCase for PlaceSpotOrderV3UseCase {
             if !order_ids.insert(value.order_id)
                 || value.symbol != parent.symbol
                 || value.side == parent.side
-                || !matches!(value.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
+                || !matches!(
+                    value.status,
+                    SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+                )
                 || value.size <= Decimal::ZERO
             {
                 return Err(Self::Error::InvalidMaker);
             }
         }
-        if state.trade_id_start.checked_add(state.maker_orders.len() as u64).is_none() {
+        if state
+            .trade_id_start
+            .checked_add(state.maker_orders.len() as u64)
+            .is_none()
+        {
             return Err(Self::Error::TradeIdOverflow);
         }
         validate_normal_bindings(parent, state)?;
@@ -321,7 +337,10 @@ fn validate_normal_bindings(
         }
         for balance in [&binding.base, &binding.quote] {
             let identity = (balance.account_id(), balance.coin_idx());
-            if snapshots.insert(identity, balance).is_some_and(|old| old != balance) {
+            if snapshots
+                .insert(identity, balance)
+                .is_some_and(|old| old != balance)
+            {
                 return Err(PlaceSpotOrderV3Error::InvalidBalances);
             }
         }
@@ -376,7 +395,9 @@ fn flatten_normal(
     normal: PlaceNormalSpotOrderV3AfterChanges,
     children: Vec<PlaceTriggerSpotOrderV3AfterChanges>,
 ) -> FlattenedAfter {
-    let child_orders = children.into_iter().map(|child| child.created_trigger_order);
+    let child_orders = children
+        .into_iter()
+        .map(|child| child.created_trigger_order);
     let (parent, makers, trades, balances, result) = match normal {
         PlaceNormalSpotOrderV3AfterChanges::Resting {
             created_taker_order,
@@ -424,7 +445,9 @@ fn flatten_normal(
             updated_balances_after,
             PlaceSpotOrderV3Result::Canceled,
         ),
-        PlaceNormalSpotOrderV3AfterChanges::Rejected { created_taker_order } => (
+        PlaceNormalSpotOrderV3AfterChanges::Rejected {
+            created_taker_order,
+        } => (
             created_taker_order,
             Vec::new(),
             Vec::new(),
@@ -599,7 +622,9 @@ mod tests {
                 updated_at: lsn,
                 lsn,
             },
-            OrderType::Limit { tif: example_core_entity::OrderTif::Gtc },
+            OrderType::Limit {
+                tif: example_core_entity::OrderTif::Gtc,
+            },
             OrderGroupRelation::Standalone,
             0,
             lsn,
@@ -611,11 +636,16 @@ mod tests {
     #[test]
     fn single_trigger_is_pending_without_balances() {
         let cmd = command(PlaceSpotOrderV3Cmd::Single(trigger(2)));
-        let changed = PlaceSpotOrderV3UseCase.compute_state_changed(&cmd, &state(false)).unwrap();
+        let changed = PlaceSpotOrderV3UseCase
+            .compute_state_changed(&cmd, &state(false))
+            .unwrap();
         let PlaceSpotOrderV3AfterChanges::Trigger(after) = changed else {
             panic!("expected trigger branch");
         };
-        assert_eq!(after.created_trigger_order.order_base().status, SpotOrderStatus::Pending);
+        assert_eq!(
+            after.created_trigger_order.order_base().status,
+            SpotOrderStatus::Pending
+        );
         assert_eq!(
             after.created_trigger_order.order_base().group_relation,
             OrderGroupRelation::Standalone
@@ -628,18 +658,25 @@ mod tests {
             parent: order(
                 1,
                 OrderSide::Buy,
-                OrderType::Limit { tif: example_core_entity::OrderTif::Gtc },
+                OrderType::Limit {
+                    tif: example_core_entity::OrderTif::Gtc,
+                },
             ),
             children: vec![trigger(2)],
         });
-        let changed = PlaceSpotOrderV3UseCase.compute_state_changed(&cmd, &state(true)).unwrap();
+        let changed = PlaceSpotOrderV3UseCase
+            .compute_state_changed(&cmd, &state(true))
+            .unwrap();
         let PlaceSpotOrderV3AfterChanges::NormalTpsl { parent, children } = changed else {
             panic!("expected normal TP/SL branch");
         };
         assert!(!normal_is_rejected(&parent));
         assert_eq!(children.len(), 1);
         assert_eq!(
-            children[0].created_trigger_order.order_base().group_relation,
+            children[0]
+                .created_trigger_order
+                .order_base()
+                .group_relation,
             OrderGroupRelation::NormalTpslChild { parent_order_id: 1 }
         );
     }
@@ -650,11 +687,15 @@ mod tests {
             parent: order(
                 1,
                 OrderSide::Buy,
-                OrderType::Limit { tif: example_core_entity::OrderTif::Gtc },
+                OrderType::Limit {
+                    tif: example_core_entity::OrderTif::Gtc,
+                },
             ),
             children: vec![trigger(2)],
         });
-        let changes = PlaceSpotOrderV3UseCase.compute_state_diff(&cmd, state(true)).unwrap();
+        let changes = PlaceSpotOrderV3UseCase
+            .compute_state_diff(&cmd, state(true))
+            .unwrap();
         assert_eq!(changes.created_orders.len(), 2);
         assert_eq!(changes.created_orders[0].order_base().order_id, 1);
         assert_eq!(changes.created_orders[1].order_base().order_id, 2);
@@ -698,21 +739,28 @@ mod tests {
         let cmd = command(PlaceSpotOrderV3Cmd::Single(order(
             1,
             OrderSide::Buy,
-            OrderType::Limit { tif: example_core_entity::OrderTif::Alo },
+            OrderType::Limit {
+                tif: example_core_entity::OrderTif::Alo,
+            },
         )));
 
-        let changed =
-            PlaceSpotOrderV3UseCase.compute_state_changed(&cmd, &rejection_state(true)).unwrap();
+        let changed = PlaceSpotOrderV3UseCase
+            .compute_state_changed(&cmd, &rejection_state(true))
+            .unwrap();
         let PlaceSpotOrderV3AfterChanges::Normal(PlaceNormalSpotOrderV3AfterChanges::Rejected {
             created_taker_order,
         }) = changed
         else {
             panic!("expected ALO rejection")
         };
-        assert_eq!(created_taker_order.order_base().status, SpotOrderStatus::Rejected);
+        assert_eq!(
+            created_taker_order.order_base().status,
+            SpotOrderStatus::Rejected
+        );
 
-        let changes =
-            PlaceSpotOrderV3UseCase.compute_state_diff(&cmd, rejection_state(true)).unwrap();
+        let changes = PlaceSpotOrderV3UseCase
+            .compute_state_diff(&cmd, rejection_state(true))
+            .unwrap();
         assert_eq!(changes.created_orders.len(), 1);
         assert!(changes.updated_maker_orders.is_empty());
         assert!(changes.settled_trades.is_empty());
@@ -725,12 +773,16 @@ mod tests {
         let cmd = command(PlaceSpotOrderV3Cmd::Single(order(
             1,
             OrderSide::Buy,
-            OrderType::Limit { tif: example_core_entity::OrderTif::Ioc },
+            OrderType::Limit {
+                tif: example_core_entity::OrderTif::Ioc,
+            },
         )));
         let before = rejection_state(false);
         let authoritative_balance = before.balances_by_order_id[&1].quote.clone();
 
-        let changes = PlaceSpotOrderV3UseCase.compute_state_diff(&cmd, before).unwrap();
+        let changes = PlaceSpotOrderV3UseCase
+            .compute_state_diff(&cmd, before)
+            .unwrap();
 
         assert_eq!(changes.result, PlaceSpotOrderV3Result::Rejected);
         assert!(changes.updated_maker_orders.is_empty());
@@ -746,21 +798,28 @@ mod tests {
             parent: order(
                 1,
                 OrderSide::Buy,
-                OrderType::Limit { tif: example_core_entity::OrderTif::Alo },
+                OrderType::Limit {
+                    tif: example_core_entity::OrderTif::Alo,
+                },
             ),
             children: vec![trigger(2)],
         });
 
-        let changed =
-            PlaceSpotOrderV3UseCase.compute_state_changed(&cmd, &rejection_state(true)).unwrap();
+        let changed = PlaceSpotOrderV3UseCase
+            .compute_state_changed(&cmd, &rejection_state(true))
+            .unwrap();
         let PlaceSpotOrderV3AfterChanges::NormalTpsl { parent, children } = changed else {
             panic!("expected normal TP/SL rejection")
         };
-        assert!(matches!(parent, PlaceNormalSpotOrderV3AfterChanges::Rejected { .. }));
+        assert!(matches!(
+            parent,
+            PlaceNormalSpotOrderV3AfterChanges::Rejected { .. }
+        ));
         assert!(children.is_empty());
 
-        let changes =
-            PlaceSpotOrderV3UseCase.compute_state_diff(&cmd, rejection_state(true)).unwrap();
+        let changes = PlaceSpotOrderV3UseCase
+            .compute_state_diff(&cmd, rejection_state(true))
+            .unwrap();
         assert_eq!(changes.created_orders.len(), 1);
         assert!(changes.updated_balances.is_empty());
         assert_eq!(changes.to_replayable_events().unwrap().len(), 1);

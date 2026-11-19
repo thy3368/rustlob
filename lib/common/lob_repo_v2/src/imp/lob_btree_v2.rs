@@ -42,7 +42,10 @@ struct OrderNode<O: LobOrder> {
 
 impl<O: LobOrder> OrderNode<O> {
     fn new(order: O) -> Self {
-        Self { order, next_idx: None }
+        Self {
+            order,
+            next_idx: None,
+        }
     }
 }
 

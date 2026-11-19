@@ -9,5 +9,8 @@ fn main() {
         }
     };
     let hash = Keccak256::digest(source.as_bytes());
-    println!("cargo:rustc-env=SETTLEMENT_ESCROW_SOURCE_HASH={}", hex::encode(hash));
+    println!(
+        "cargo:rustc-env=SETTLEMENT_ESCROW_SOURCE_HASH={}",
+        hex::encode(hash)
+    );
 }

@@ -122,7 +122,10 @@ impl Balance {
     #[inline]
     pub fn unfreeze(&mut self, amount: Quantity, now: u64) -> Result<(), BalanceError> {
         if self.frozen < amount {
-            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: self.frozen,
+            });
         }
         self.frozen -= amount;
         self.available += amount;
@@ -135,7 +138,10 @@ impl Balance {
     #[inline]
     pub fn debit_frozen(&mut self, amount: Quantity, now: u64) -> Result<(), BalanceError> {
         if self.frozen < amount {
-            return Err(BalanceError::InsufficientFrozen { required: amount, frozen: self.frozen });
+            return Err(BalanceError::InsufficientFrozen {
+                required: amount,
+                frozen: self.frozen,
+            });
         }
         self.frozen -= amount;
         self.version += 1;

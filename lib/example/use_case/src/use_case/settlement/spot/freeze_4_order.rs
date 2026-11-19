@@ -153,8 +153,15 @@ mod tests {
     }
 
     fn state(side: OrderSide, status: SpotOrderStatus) -> FreezeSpotOrderV2State {
-        let coin = if side == OrderSide::Buy { Coin::USDT } else { Coin::BTC };
-        FreezeSpotOrderV2State { order: order(side, status), balance: balance(OWNER_ID, coin, 100) }
+        let coin = if side == OrderSide::Buy {
+            Coin::USDT
+        } else {
+            Coin::BTC
+        };
+        FreezeSpotOrderV2State {
+            order: order(side, status),
+            balance: balance(OWNER_ID, coin, 100),
+        }
     }
 
     #[test]
@@ -216,8 +223,9 @@ mod tests {
     fn buy_freezes_quote_notional_and_fee_reserve() {
         let given = state(OrderSide::Buy, SpotOrderStatus::Pending);
 
-        let changed =
-            Freeze4SpotOrderV2UseCase.compute_state_changed(&command(ORDER_ID), &given).unwrap();
+        let changed = Freeze4SpotOrderV2UseCase
+            .compute_state_changed(&command(ORDER_ID), &given)
+            .unwrap();
 
         assert_eq!(changed.balance_after.available(), Decimal::from(68));
         assert_eq!(changed.balance_after.frozen(), Decimal::from(37));
@@ -229,8 +237,9 @@ mod tests {
     fn sell_freezes_original_base_quantity() {
         let given = state(OrderSide::Sell, SpotOrderStatus::Pending);
 
-        let changed =
-            Freeze4SpotOrderV2UseCase.compute_state_changed(&command(ORDER_ID), &given).unwrap();
+        let changed = Freeze4SpotOrderV2UseCase
+            .compute_state_changed(&command(ORDER_ID), &given)
+            .unwrap();
 
         assert_eq!(changed.balance_after.available(), Decimal::from(97));
         assert_eq!(changed.balance_after.frozen(), Decimal::from(8));
@@ -245,7 +254,9 @@ mod tests {
 
         assert_eq!(
             Freeze4SpotOrderV2UseCase.compute_state_changed(&command(ORDER_ID), &given),
-            Err(FreezeSpotOrderV2Error::BalanceV2(BalanceV2Error::InsufficientAvailableBalance))
+            Err(FreezeSpotOrderV2Error::BalanceV2(
+                BalanceV2Error::InsufficientAvailableBalance
+            ))
         );
     }
 }

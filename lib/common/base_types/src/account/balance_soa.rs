@@ -111,7 +111,10 @@ impl BalanceSoa {
     /// 批量计算总余额。
     #[inline]
     pub fn batch_total(&self, indices: &[usize]) -> Vec<Quantity> {
-        indices.iter().map(|&idx| self.availables[idx] + self.frozens[idx]).collect()
+        indices
+            .iter()
+            .map(|&idx| self.availables[idx] + self.frozens[idx])
+            .collect()
     }
 
     /// 批量检查可用余额是否充足。

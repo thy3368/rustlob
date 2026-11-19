@@ -72,7 +72,12 @@ impl BlockDatabase {
 
         let blocks_processed = metadata.map(|m| m.blocks_processed).unwrap_or(0);
 
-        Ok(Self { data_dir: data_dir_str, tx_trie, receipt_trie, blocks_processed })
+        Ok(Self {
+            data_dir: data_dir_str,
+            tx_trie,
+            receipt_trie,
+            blocks_processed,
+        })
     }
 
     /// 加载元数据
@@ -96,14 +101,21 @@ impl BlockDatabase {
             buffer[71],
         ]);
 
-        Some(DatabaseMetadata { tx_root, receipt_root, blocks_processed })
+        Some(DatabaseMetadata {
+            tx_root,
+            receipt_root,
+            blocks_processed,
+        })
     }
 
     /// 保存元数据
     fn save_metadata(&self) -> Result<(), Box<dyn std::error::Error>> {
         let metadata_path = Path::new(&self.data_dir).join("metadata");
-        let mut file =
-            OpenOptions::new().write(true).create(true).truncate(true).open(metadata_path)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(metadata_path)?;
 
         let tx_root = self.tx_trie.root_hash();
         let receipt_root = self.receipt_trie.root_hash();
@@ -275,7 +287,10 @@ pub fn run_block_persistence_example() -> Result<(), Box<dyn std::error::Error>>
     let block_count = 10;
     let tx_per_block = 100;
 
-    println!("   生成 {} 个区块，每个区块 {} 笔交易", block_count, tx_per_block);
+    println!(
+        "   生成 {} 个区块，每个区块 {} 笔交易",
+        block_count, tx_per_block
+    );
     println!();
 
     let mut total_tx_duration = std::time::Duration::ZERO;
@@ -284,7 +299,11 @@ pub fn run_block_persistence_example() -> Result<(), Box<dyn std::error::Error>>
 
     for block_num in 0..block_count {
         // 创建区块头
-        let parent_hash = if block_num == 0 { [0u8; 32] } else { [block_num as u8; 32] };
+        let parent_hash = if block_num == 0 {
+            [0u8; 32]
+        } else {
+            [block_num as u8; 32]
+        };
 
         let mut header = BlockHeader::new(block_num, parent_hash);
         header.timestamp = 1700000000 + block_num * 12; // 12s 区块时间
@@ -334,7 +353,10 @@ pub fn run_block_persistence_example() -> Result<(), Box<dyn std::error::Error>>
     println!("      - 总交易数: {}", block_count * tx_per_block);
     println!("      - 交易写入总耗时: {:.2?}", total_tx_duration);
     println!("      - 收据写入总耗时: {:.2?}", total_receipt_duration);
-    println!("      - 平均每区块耗时: {:.2?}", total_blocks_duration / block_count as u32);
+    println!(
+        "      - 平均每区块耗时: {:.2?}",
+        total_blocks_duration / block_count as u32
+    );
     println!(
         "      - 平均每笔交易耗时: {:.2?}",
         total_blocks_duration / (block_count * tx_per_block) as u32
@@ -376,7 +398,10 @@ pub fn run_block_persistence_example() -> Result<(), Box<dyn std::error::Error>>
     println!("   📊 读取统计:");
     println!("      - 成功读取: {}/{}", read_count, sample_indices.len());
     println!("      - 总耗时: {:.2?}", read_duration);
-    println!("      - 平均每次读取: {:.2?}", read_duration / sample_indices.len() as u32);
+    println!(
+        "      - 平均每次读取: {:.2?}",
+        read_duration / sample_indices.len() as u32
+    );
     println!();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -399,8 +424,14 @@ pub fn run_block_persistence_example() -> Result<(), Box<dyn std::error::Error>>
     // 计算磁盘使用
     let dir_size = calculate_dir_size(&temp_dir);
     println!("   💾 磁盘使用:");
-    println!("      - 总大小: {:.2} MB", dir_size as f64 / 1024.0 / 1024.0);
-    println!("      - 平均每区块: {:.2} KB", dir_size as f64 / block_count as f64 / 1024.0);
+    println!(
+        "      - 总大小: {:.2} MB",
+        dir_size as f64 / 1024.0 / 1024.0
+    );
+    println!(
+        "      - 平均每区块: {:.2} KB",
+        dir_size as f64 / block_count as f64 / 1024.0
+    );
     println!(
         "      - 平均每笔交易: {:.2} bytes",
         dir_size as f64 / (block_count * tx_per_block) as f64
@@ -459,7 +490,10 @@ pub fn run_block_persistence_example() -> Result<(), Box<dyn std::error::Error>>
         "   • 平均写入延迟: {:.2?} per tx",
         total_blocks_duration / (block_count * tx_per_block) as u32
     );
-    println!("   • 平均读取延迟: {:.2?}", read_duration / sample_indices.len() as u32);
+    println!(
+        "   • 平均读取延迟: {:.2?}",
+        read_duration / sample_indices.len() as u32
+    );
     println!("   • 磁盘使用: {:.2} MB", dir_size as f64 / 1024.0 / 1024.0);
     println!();
     println!("💡 Geth 兼容特性:");

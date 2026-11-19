@@ -32,11 +32,18 @@ impl QueryUseCase<OpenSpotOrdersQuery, SpotOrderV7ReadModel> for OpenSpotOrdersQ
     type Error = OpenSpotOrdersError;
 
     fn validate_query(&self, query: &OpenSpotOrdersQuery) -> Result<(), Self::Error> {
-        let address = query.user.strip_prefix("0x").ok_or(OpenSpotOrdersError::InvalidUser)?;
+        let address = query
+            .user
+            .strip_prefix("0x")
+            .ok_or(OpenSpotOrdersError::InvalidUser)?;
         if address.len() != 40 || !address.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(OpenSpotOrdersError::InvalidUser);
         }
-        if query.dex.as_deref().is_some_and(|dex| dex.trim().is_empty()) {
+        if query
+            .dex
+            .as_deref()
+            .is_some_and(|dex| dex.trim().is_empty())
+        {
             return Err(OpenSpotOrdersError::InvalidDex);
         }
         Ok(())

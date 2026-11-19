@@ -66,7 +66,11 @@ impl ScheduledCancel {
     }
 
     pub fn trigger_count_at(&self, now_ms: u64) -> u8 {
-        if self.trigger_day_utc == Some(now_ms / UTC_DAY_MS) { self.trigger_count } else { 0 }
+        if self.trigger_day_utc == Some(now_ms / UTC_DAY_MS) {
+            self.trigger_count
+        } else {
+            0
+        }
     }
 
     pub const fn updated_at_ms(&self) -> u64 {
@@ -79,7 +83,10 @@ impl ScheduledCancel {
         updated_at_ms: u64,
     ) -> Result<Option<u64>, ScheduledCancelError> {
         let previous = self.cancel_at_ms;
-        let version = self.version.checked_add(1).ok_or(ScheduledCancelError::VersionOverflow)?;
+        let version = self
+            .version
+            .checked_add(1)
+            .ok_or(ScheduledCancelError::VersionOverflow)?;
         self.cancel_at_ms = cancel_at_ms;
         self.version = version;
         self.updated_at_ms = updated_at_ms;
@@ -93,12 +100,21 @@ impl ScheduledCancel {
             return Err(ScheduledCancelError::NotDue);
         }
         let day = now_ms / UTC_DAY_MS;
-        let count = if self.trigger_day_utc == Some(day) { self.trigger_count } else { 0 };
+        let count = if self.trigger_day_utc == Some(day) {
+            self.trigger_count
+        } else {
+            0
+        };
         if count >= MAX_DAILY_TRIGGERS {
             return Err(ScheduledCancelError::DailyTriggerLimitReached);
         }
-        let next_count = count.checked_add(1).ok_or(ScheduledCancelError::TriggerCountOverflow)?;
-        let version = self.version.checked_add(1).ok_or(ScheduledCancelError::VersionOverflow)?;
+        let next_count = count
+            .checked_add(1)
+            .ok_or(ScheduledCancelError::TriggerCountOverflow)?;
+        let version = self
+            .version
+            .checked_add(1)
+            .ok_or(ScheduledCancelError::VersionOverflow)?;
         self.cancel_at_ms = None;
         self.trigger_day_utc = Some(day);
         self.trigger_count = next_count;
@@ -121,14 +137,26 @@ impl TrackDiff for ScheduledCancel {
 
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
         [
-            ("cancel_at_ms", optional_ms(self.cancel_at_ms), optional_ms(other.cancel_at_ms)),
+            (
+                "cancel_at_ms",
+                optional_ms(self.cancel_at_ms),
+                optional_ms(other.cancel_at_ms),
+            ),
             (
                 "trigger_day_utc",
                 optional_ms(self.trigger_day_utc),
                 optional_ms(other.trigger_day_utc),
             ),
-            ("trigger_count", self.trigger_count.to_string(), other.trigger_count.to_string()),
-            ("updated_at_ms", self.updated_at_ms.to_string(), other.updated_at_ms.to_string()),
+            (
+                "trigger_count",
+                self.trigger_count.to_string(),
+                other.trigger_count.to_string(),
+            ),
+            (
+                "updated_at_ms",
+                self.updated_at_ms.to_string(),
+                other.updated_at_ms.to_string(),
+            ),
         ]
         .into_iter()
         .filter(|(_, before, after)| before != after)
@@ -227,7 +255,9 @@ mod tests {
     fn trigger_clears_deadline_and_increments_same_utc_day_count() {
         let day_start = 20 * UTC_DAY_MS;
         let mut schedule = ScheduledCancel::new(7);
-        schedule.replace(Some(day_start + 5_000), day_start).expect("arming should succeed");
+        schedule
+            .replace(Some(day_start + 5_000), day_start)
+            .expect("arming should succeed");
 
         assert_eq!(schedule.trigger(day_start + 5_000), Ok(1));
         assert_eq!(schedule.cancel_at_ms(), None);
@@ -241,7 +271,9 @@ mod tests {
         assert_eq!(unarmed.trigger(1_000), Err(ScheduledCancelError::NotArmed));
 
         let mut armed = ScheduledCancel::new(7);
-        armed.replace(Some(10_000), 1_000).expect("arming should succeed");
+        armed
+            .replace(Some(10_000), 1_000)
+            .expect("arming should succeed");
         let before = armed.clone();
         assert_eq!(armed.trigger(9_999), Err(ScheduledCancelError::NotDue));
         assert_eq!(armed, before);
@@ -251,11 +283,18 @@ mod tests {
     fn trigger_count_resets_at_utc_day_boundary() {
         let mut schedule = ScheduledCancel::new(7);
         for count in 1..=MAX_DAILY_TRIGGERS {
-            schedule.replace(Some(5_000), 0).expect("arming should succeed");
+            schedule
+                .replace(Some(5_000), 0)
+                .expect("arming should succeed");
             assert_eq!(schedule.trigger(5_000), Ok(count));
         }
-        schedule.replace(Some(6_000), 5_000).expect("arming should succeed");
-        assert_eq!(schedule.trigger(6_000), Err(ScheduledCancelError::DailyTriggerLimitReached));
+        schedule
+            .replace(Some(6_000), 5_000)
+            .expect("arming should succeed");
+        assert_eq!(
+            schedule.trigger(6_000),
+            Err(ScheduledCancelError::DailyTriggerLimitReached)
+        );
 
         let next_day = UTC_DAY_MS;
         assert_eq!(schedule.trigger(next_day), Ok(1));

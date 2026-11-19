@@ -65,9 +65,9 @@ impl ExchangeActionHandler for CDepositAction {
 
 fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     if request.action.type_ != "cDeposit" {
-        return Err(ExchangeHttpError::contract(CDepositContractError::UnexpectedActionType(
-            request.action.type_.clone(),
-        )));
+        return Err(ExchangeHttpError::contract(
+            CDepositContractError::UnexpectedActionType(request.action.type_.clone()),
+        ));
     }
     validate_common_fields(
         request.common.nonce,
@@ -79,17 +79,23 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     )
     .map_err(ExchangeHttpError::SharedFields)?;
     if request.common.vault_address.is_some() {
-        return Err(ExchangeHttpError::contract(CDepositContractError::VaultAddressNotSupported));
+        return Err(ExchangeHttpError::contract(
+            CDepositContractError::VaultAddressNotSupported,
+        ));
     }
     if request.common.expires_after.is_some() {
-        return Err(ExchangeHttpError::contract(CDepositContractError::ExpiresAfterNotSupported));
+        return Err(ExchangeHttpError::contract(
+            CDepositContractError::ExpiresAfterNotSupported,
+        ));
     }
     validate_hyperliquid_chain(&request.action.hyperliquid_chain)
         .map_err(|_| ExchangeHttpError::contract(CDepositContractError::InvalidHyperliquidChain))?;
     validate_signature_chain_id(&request.action.signature_chain_id)
         .map_err(|_| ExchangeHttpError::contract(CDepositContractError::InvalidSignatureChainId))?;
     if request.action.nonce != request.common.nonce {
-        return Err(ExchangeHttpError::contract(CDepositContractError::NonceMismatch));
+        return Err(ExchangeHttpError::contract(
+            CDepositContractError::NonceMismatch,
+        ));
     }
     Ok(())
 }

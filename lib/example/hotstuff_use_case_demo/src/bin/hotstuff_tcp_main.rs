@@ -28,5 +28,9 @@ fn main() -> DemoResult<()> {
         .unwrap_or_else(|_| DEFAULT_HTTP_ADDRS[node_index].to_string())
         .parse::<SocketAddr>()?;
 
-    run_tcp_node(TcpNodeConfig { node_index, http_addr, peer_addrs })
+    run_tcp_node(TcpNodeConfig {
+        node_index,
+        http_addr,
+        peer_addrs,
+    })
 }

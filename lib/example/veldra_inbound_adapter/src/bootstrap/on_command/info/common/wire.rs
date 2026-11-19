@@ -132,7 +132,10 @@ pub enum OrderLookupStatusWire {
 #[serde(untagged)]
 pub enum OrderStatusResponseWire {
     /// 成功查到订单。
-    KnownOrder { status: OrderLookupStatusWire, order: Box<OrderStatusEnvelopeWire> },
+    KnownOrder {
+        status: OrderLookupStatusWire,
+        order: Box<OrderStatusEnvelopeWire>,
+    },
     /// 查不到订单。
     UnknownOid { status: OrderLookupStatusWire },
 }
@@ -283,7 +286,11 @@ pub struct VaultFollowerWire {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct VaultRelationshipDataWire {
     /// 当当前 vault 是 parent 时，它管理的子地址列表。
-    #[serde(rename = "childAddresses", default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "childAddresses",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub child_addresses: Vec<String>,
     /// 官方未来可能追加的关系数据字段。
     #[serde(flatten, default)]
@@ -321,7 +328,11 @@ pub struct VaultDetailsWire {
     /// 年化收益率，官方当前返回 JSON number。
     pub apr: f64,
     /// 当前用户对该 vault 的 follower state；无数据时为 `null`。
-    #[serde(rename = "followerState", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "followerState",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub follower_state: Option<VaultFollowerStateWire>,
     /// Leader 分润比例。
     #[serde(rename = "leaderFraction")]
@@ -434,7 +445,11 @@ pub struct ReferrerStateEnvelopeWire {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReferralWire {
     /// 当前用户的上级推荐人信息；没有绑定时可能为 `null`。
-    #[serde(rename = "referredBy", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "referredBy",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub referred_by: Option<ReferralReferredByWire>,
     /// 用户累计成交量。
     #[serde(rename = "cumVlm")]
@@ -728,7 +743,11 @@ pub struct BorrowLendUserStateWire {
     /// 账户整体健康状态文本，例如 `healthy`。
     pub health: String,
     /// 健康因子；当前样例可能为 `null`，因此使用 `Option<String>`。
-    #[serde(rename = "healthFactor", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "healthFactor",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub health_factor: Option<String>,
     /// 官方未来可能追加的字段。
     #[serde(flatten, default)]

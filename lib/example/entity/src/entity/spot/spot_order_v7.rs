@@ -84,8 +84,14 @@ impl LogAttr for SpotOrderV7Event {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpotOrderV7FreezeRequirement {
-    Buy { quote_principal: CoinAmount, quote_fee_reserve: CoinAmount, total_quote: CoinAmount },
-    Sell { base_quantity: CoinAmount },
+    Buy {
+        quote_principal: CoinAmount,
+        quote_fee_reserve: CoinAmount,
+        total_quote: CoinAmount,
+    },
+    Sell {
+        base_quantity: CoinAmount,
+    },
 }
 
 impl SpotOrderV7FreezeRequirement {
@@ -139,7 +145,9 @@ impl SpotOrderV7ReleaseRequirement {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpotOrderV7HoldAdjustment {
     /// 冻结额不变；`currency` 仍明确指出订单占用的资产。
-    Unchanged { currency: crate::account::coin::Coin },
+    Unchanged {
+        currency: crate::account::coin::Coin,
+    },
     /// 需要额外冻结资产。
     Increase { amount: CoinAmount },
     /// 需要释放已冻结资产。
@@ -179,7 +187,8 @@ pub enum SpotOrderV7Output {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 
-///todo 增加累计 冻结金额，解冻金额，支付金额（fill,fee);增加增量资金变化 1，创建冻结，2，fill, 3,cancel, 4.modify 用以创建balance的event
+///todo 增加累计 冻结金额，解冻金额，支付金额（fill,fee);增加增量资金变化 1，创建冻结，2，fill,
+/// 3,cancel, 4.modify 用以创建balance的event
 pub struct SpotOrderV7 {
     order_base: OrderBase,
 }
@@ -195,9 +204,21 @@ impl SpotOrderV7 {
     ) -> Result<Self, EntityError> {
         let (execution, tif, trigger, trigger_px) = match order_type {
             OrderType::Limit { tif } => (PriceType::Limit, tif, OrderTrigger::None, None),
-            OrderType::Trigger { is_market, trigger_price, tpsl } => (
-                if is_market { PriceType::Market } else { PriceType::Limit },
-                if is_market { OrderTif::Ioc } else { OrderTif::Gtc },
+            OrderType::Trigger {
+                is_market,
+                trigger_price,
+                tpsl,
+            } => (
+                if is_market {
+                    PriceType::Market
+                } else {
+                    PriceType::Limit
+                },
+                if is_market {
+                    OrderTif::Ioc
+                } else {
+                    OrderTif::Gtc
+                },
                 match tpsl {
                     OrderTriggerRole::TakeProfit => OrderTrigger::TakeProfit,
                     OrderTriggerRole::StopLoss => OrderTrigger::StopLoss,
@@ -248,7 +269,9 @@ impl SpotOrderV7 {
             .into_iter()
             .map(|mut child| {
                 child.status = SpotOrderStatus::Pending;
-                child.group_relation = OrderGroupRelation::NormalTpslChild { parent_order_id: id };
+                child.group_relation = OrderGroupRelation::NormalTpslChild {
+                    parent_order_id: id,
+                };
                 Self { order_base: child }
             })
             .collect();
@@ -272,9 +295,16 @@ impl SpotOrderV7 {
     }
     pub fn hold_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
         let o = self.order_base();
-        if !matches!(o.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled) {
+        if !matches!(
+            o.status,
+            SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+        ) {
             return coin_amount(
-                if o.side == OrderSide::Buy { o.symbol.quote } else { o.symbol.base },
+                if o.side == OrderSide::Buy {
+                    o.symbol.quote
+                } else {
+                    o.symbol.base
+                },
                 Decimal::ZERO,
             );
         }
@@ -287,7 +317,14 @@ impl SpotOrderV7 {
                 .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
             OrderSide::Sell => o.size,
         };
-        coin_amount(if o.side == OrderSide::Buy { o.symbol.quote } else { o.symbol.base }, amount)
+        coin_amount(
+            if o.side == OrderSide::Buy {
+                o.symbol.quote
+            } else {
+                o.symbol.base
+            },
+            amount,
+        )
     }
     pub fn release_requirement(&self) -> Result<CoinAmount, SpotAmountConversionError> {
         if !matches!(
@@ -300,8 +337,8 @@ impl SpotOrderV7 {
         release_requirement(&self.order_base, original)
     }
 
-    // pub fn track_create_event(&self) -> Result<common_entity::EntityReplayableEvent, EntityError> {
-    //     Entity::track_create_event(self)
+    // pub fn track_create_event(&self) -> Result<common_entity::EntityReplayableEvent, EntityError>
+    // {     Entity::track_create_event(self)
     // }
 
     /// 校验订单作为 taker 参与撮合所需的单聚合事实。
@@ -326,8 +363,15 @@ impl SpotOrderV7 {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(), EntityError> {
-        self.apply(SpotOrderV7Event::Modify { price, size, tif: None, cloid: None, lsn, timestamp })
-            .map(|_| ())
+        self.apply(SpotOrderV7Event::Modify {
+            price,
+            size,
+            tif: None,
+            cloid: None,
+            lsn,
+            timestamp,
+        })
+        .map(|_| ())
     }
 }
 
@@ -367,7 +411,12 @@ impl Fsm for SpotOrderV7 {
                     SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
                 )
             }
-            SpotOrderV7Event::MatchedAsTaker { lsn, filled_size, quote_fee, timestamp } => {
+            SpotOrderV7Event::MatchedAsTaker {
+                lsn,
+                filled_size,
+                quote_fee,
+                timestamp,
+            } => {
                 self.validate_matchable_as_taker()?;
                 let next = matched_order(
                     &self.order_base,
@@ -377,7 +426,9 @@ impl Fsm for SpotOrderV7 {
                     timestamp,
                     MatchRole::Taker,
                 )?;
-                let order_after = SpotOrderV7 { order_base: next.clone() };
+                let order_after = SpotOrderV7 {
+                    order_base: next.clone(),
+                };
                 let release_requirement = match order_after.status() {
                     SpotOrderStatus::Filled
                     | SpotOrderStatus::Canceled
@@ -392,7 +443,12 @@ impl Fsm for SpotOrderV7 {
                     }),
                 )
             }
-            SpotOrderV7Event::MatchedAsMaker { lsn, filled_size, quote_fee, timestamp } => {
+            SpotOrderV7Event::MatchedAsMaker {
+                lsn,
+                filled_size,
+                quote_fee,
+                timestamp,
+            } => {
                 self.validate_matchable_as_maker()?;
                 let next = matched_order(
                     &self.order_base,
@@ -402,7 +458,9 @@ impl Fsm for SpotOrderV7 {
                     timestamp,
                     MatchRole::Maker,
                 )?;
-                let order_after = SpotOrderV7 { order_base: next.clone() };
+                let order_after = SpotOrderV7 {
+                    order_base: next.clone(),
+                };
                 (
                     next,
                     SpotOrderV7Output::MatchedAsMaker(ApplySpotOrderV7MatchOutput {
@@ -420,7 +478,9 @@ impl Fsm for SpotOrderV7 {
                 next.status = SpotOrderStatus::Rejected;
                 next.updated_at = timestamp;
                 next.lsn = lsn;
-                let order_after = SpotOrderV7 { order_base: next.clone() };
+                let order_after = SpotOrderV7 {
+                    order_base: next.clone(),
+                };
                 let release_requirement = Some(match_release_requirement(&order_after)?);
                 (
                     next,
@@ -430,7 +490,14 @@ impl Fsm for SpotOrderV7 {
                     }),
                 )
             }
-            SpotOrderV7Event::Modify { lsn, price, size, tif, cloid, timestamp } => {
+            SpotOrderV7Event::Modify {
+                lsn,
+                price,
+                size,
+                tif,
+                cloid,
+                timestamp,
+            } => {
                 let hold_before = active_hold_requirement(&self.order_base)?;
                 let mut next = modified_order(&self.order_base, price, size, lsn, timestamp)?;
                 if let Some(tif) = tif {
@@ -441,7 +508,9 @@ impl Fsm for SpotOrderV7 {
                 }
                 let hold_after = active_hold_requirement(&next)?;
                 let hold_adjustment = hold_adjustment(&self.order_base, hold_before, hold_after)?;
-                let order_after = SpotOrderV7 { order_base: next.clone() };
+                let order_after = SpotOrderV7 {
+                    order_base: next.clone(),
+                };
                 (
                     next,
                     SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
@@ -453,7 +522,9 @@ impl Fsm for SpotOrderV7 {
             SpotOrderV7Event::Cancel { lsn, timestamp } => {
                 let was_pending = self.status() == SpotOrderStatus::Pending;
                 let next = canceled_order(&self.order_base, lsn, timestamp)?;
-                let order_after = SpotOrderV7 { order_base: next.clone() };
+                let order_after = SpotOrderV7 {
+                    order_base: next.clone(),
+                };
                 let release_requirement = if was_pending {
                     zero_release_requirement(&order_after)?
                 } else {
@@ -508,7 +579,10 @@ fn matched_order(
     }
 
     let mut next = current.clone();
-    next.size = next.size.checked_sub(filled_size).ok_or_else(|| err("size underflow"))?;
+    next.size = next
+        .size
+        .checked_sub(filled_size)
+        .ok_or_else(|| err("size underflow"))?;
     if next.side == OrderSide::Buy {
         next.buy_quote_fee_reserve_consumed = next
             .buy_quote_fee_reserve_consumed
@@ -548,15 +622,19 @@ fn modified_order(
     lsn: u64,
     timestamp: u64,
 ) -> Result<OrderBase, EntityError> {
-    let filled =
-        current.orig_size.checked_sub(current.size).ok_or_else(|| err("invalid filled size"))?;
+    let filled = current
+        .orig_size
+        .checked_sub(current.size)
+        .ok_or_else(|| err("invalid filled size"))?;
     if price <= Decimal::ZERO || size <= Decimal::ZERO || size < filled {
         return Err(err("invalid modified order"));
     }
     let mut next = current.clone();
     next.limit_px = price;
     next.orig_size = size;
-    next.size = size.checked_sub(filled).ok_or_else(|| err("size overflow"))?;
+    next.size = size
+        .checked_sub(filled)
+        .ok_or_else(|| err("size overflow"))?;
     next.updated_at = timestamp;
     next.lsn = lsn;
     Ok(next)
@@ -585,9 +663,21 @@ impl TrackDiff for SpotOrderV7 {
         for (n, x, y) in [
             ("limit_px", a.limit_px.to_string(), b.limit_px.to_string()),
             ("size", a.size.to_string(), b.size.to_string()),
-            ("orig_size", a.orig_size.to_string(), b.orig_size.to_string()),
-            ("status", format!("{:?}", a.status), format!("{:?}", b.status)),
-            ("updated_at", a.updated_at.to_string(), b.updated_at.to_string()),
+            (
+                "orig_size",
+                a.orig_size.to_string(),
+                b.orig_size.to_string(),
+            ),
+            (
+                "status",
+                format!("{:?}", a.status),
+                format!("{:?}", b.status),
+            ),
+            (
+                "updated_at",
+                a.updated_at.to_string(),
+                b.updated_at.to_string(),
+            ),
             ("version", a.lsn.to_string(), b.lsn.to_string()),
         ] {
             if x != y {
@@ -621,7 +711,11 @@ impl Entity for SpotOrderV7 {
         common_entity::AggregateRole::AggregateRoot
     }
     fn replay_field_type(name: &str) -> u8 {
-        if matches!(name, "updated_at" | "version") { 1 } else { 0 }
+        if matches!(name, "updated_at" | "version") {
+            1
+        } else {
+            0
+        }
     }
 
     fn owner_id(&self) -> String {
@@ -688,13 +782,17 @@ impl LobOrder for SpotOrderV7 {
         _: &common_entity::EntityReplayableEvent,
         _: u64,
     ) -> Result<Self, lob_repo_v2::LobError> {
-        Err(lob_repo_v2::LobError::Event("SpotOrderV7 replay construction is not wired".into()))
+        Err(lob_repo_v2::LobError::Event(
+            "SpotOrderV7 replay construction is not wired".into(),
+        ))
     }
     fn apply_replay_event(
         self,
         _: &common_entity::EntityReplayableEvent,
     ) -> Result<Self, lob_repo_v2::LobError> {
-        Err(lob_repo_v2::LobError::Event("SpotOrderV7 replay update is not wired".into()))
+        Err(lob_repo_v2::LobError::Event(
+            "SpotOrderV7 replay update is not wired".into(),
+        ))
     }
 }
 
@@ -714,8 +812,10 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
 }
 fn validate_matchable(o: &OrderBase) -> Result<(), EntityError> {
     validate_record(o)?;
-    if !matches!(o.status, SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled)
-        || o.size <= Decimal::ZERO
+    if !matches!(
+        o.status,
+        SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+    ) || o.size <= Decimal::ZERO
     {
         return Err(err("order is not matchable"));
     }
@@ -775,19 +875,34 @@ fn release_requirement(
             .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
         OrderSide::Sell => size,
     };
-    CoinAmount::new(if o.side == OrderSide::Buy { o.symbol.quote } else { o.symbol.base }, amount)
-        .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
+    CoinAmount::new(
+        if o.side == OrderSide::Buy {
+            o.symbol.quote
+        } else {
+            o.symbol.base
+        },
+        amount,
+    )
+    .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
 }
 fn entity_release_requirement(order: &SpotOrderV7) -> Result<CoinAmount, EntityError> {
-    order.release_requirement().map_err(|error| err(&error.to_string()))
+    order
+        .release_requirement()
+        .map_err(|error| err(&error.to_string()))
 }
 fn match_release_requirement(
     order: &SpotOrderV7,
 ) -> Result<SpotOrderV7ReleaseRequirement, EntityError> {
-    let amount = order.release_requirement().map_err(|error| err(&error.to_string()))?;
+    let amount = order
+        .release_requirement()
+        .map_err(|error| err(&error.to_string()))?;
     Ok(match order.order_base.side {
-        OrderSide::Buy => SpotOrderV7ReleaseRequirement::Buy { quote_amount: amount },
-        OrderSide::Sell => SpotOrderV7ReleaseRequirement::Sell { base_quantity: amount },
+        OrderSide::Buy => SpotOrderV7ReleaseRequirement::Buy {
+            quote_amount: amount,
+        },
+        OrderSide::Sell => SpotOrderV7ReleaseRequirement::Sell {
+            base_quantity: amount,
+        },
     })
 }
 fn held_currency(o: &OrderBase) -> crate::account::coin::Coin {
@@ -825,14 +940,18 @@ fn hold_adjustment(
         std::cmp::Ordering::Greater => Ok(SpotOrderV7HoldAdjustment::Increase {
             amount: coin_amount(
                 currency,
-                after.checked_sub(before).ok_or_else(|| err("modify freeze delta overflow"))?,
+                after
+                    .checked_sub(before)
+                    .ok_or_else(|| err("modify freeze delta overflow"))?,
             )
             .map_err(|error| err(&error.to_string()))?,
         }),
         std::cmp::Ordering::Less => Ok(SpotOrderV7HoldAdjustment::Decrease {
             amount: coin_amount(
                 currency,
-                before.checked_sub(after).ok_or_else(|| err("modify release delta overflow"))?,
+                before
+                    .checked_sub(after)
+                    .ok_or_else(|| err("modify release delta overflow"))?,
             )
             .map_err(|error| err(&error.to_string()))?,
         }),

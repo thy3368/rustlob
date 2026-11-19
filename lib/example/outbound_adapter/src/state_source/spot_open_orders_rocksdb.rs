@@ -27,13 +27,29 @@ pub enum CancelSpotOrderV3RocksDbError {
     #[error("balance {coin_idx} not found for user {user_id}")]
     BalanceNotFound { user_id: String, coin_idx: u64 },
     #[error("cloid index {cloid} for user {user_id} points to missing order {oid}")]
-    DanglingCloidIndex { user_id: String, cloid: String, oid: u64 },
+    DanglingCloidIndex {
+        user_id: String,
+        cloid: String,
+        oid: u64,
+    },
     #[error("order owner {actual} does not match user {user_id} ({expected})")]
-    OrderOwnerMismatch { user_id: String, expected: u64, actual: u64 },
+    OrderOwnerMismatch {
+        user_id: String,
+        expected: u64,
+        actual: u64,
+    },
     #[error("balance party {actual} does not match user {user_id} ({expected})")]
-    BalancePartyMismatch { user_id: String, expected: u64, actual: u64 },
+    BalancePartyMismatch {
+        user_id: String,
+        expected: u64,
+        actual: u64,
+    },
     #[error("cloid {cloid} for user {user_id} already belongs to order {existing_oid}")]
-    CloidConflict { user_id: String, cloid: String, existing_oid: u64 },
+    CloidConflict {
+        user_id: String,
+        cloid: String,
+        existing_oid: u64,
+    },
     #[error("stored order is invalid: {0}")]
     InvalidOrder(#[from] common_entity::EntityError),
 }
@@ -46,7 +62,9 @@ impl CancelSpotOrderV3UseCaseRocksDB {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, CancelSpotOrderV3RocksDbError> {
         let mut options = Options::default();
         options.create_if_missing(true);
-        Ok(Self { db: DB::open(&options, path)? })
+        Ok(Self {
+            db: DB::open(&options, path)?,
+        })
     }
 
     pub fn upsert_order(
@@ -111,7 +129,10 @@ impl CancelSpotOrderV3UseCaseRocksDB {
                 actual: balance.party_id(),
             });
         }
-        self.db.put(balance_key(user_id, balance.coin_idx()), bincode::serialize(balance)?)?;
+        self.db.put(
+            balance_key(user_id, balance.coin_idx()),
+            bincode::serialize(balance)?,
+        )?;
         Ok(())
     }
 }
@@ -128,13 +149,17 @@ impl StateSource<CancelSpotOrderV3UseCase> for CancelSpotOrderV3UseCaseRocksDB {
         let (oid, from_cloid) = match &cmd.payload().order_id {
             OrderId::Oid(oid) => {
                 let bytes = snapshot.get(oid_key(user_id, *oid))?.ok_or_else(|| {
-                    CancelSpotOrderV3RocksDbError::OrderNotFound { user_id: user_id.to_owned() }
+                    CancelSpotOrderV3RocksDbError::OrderNotFound {
+                        user_id: user_id.to_owned(),
+                    }
                 })?;
                 (bincode::deserialize(&bytes)?, None)
             }
             OrderId::Cloid(cloid) => {
                 let bytes = snapshot.get(cloid_key(user_id, cloid))?.ok_or_else(|| {
-                    CancelSpotOrderV3RocksDbError::OrderNotFound { user_id: user_id.to_owned() }
+                    CancelSpotOrderV3RocksDbError::OrderNotFound {
+                        user_id: user_id.to_owned(),
+                    }
                 })?;
                 (bincode::deserialize(&bytes)?, Some(cloid.as_str()))
             }
@@ -147,7 +172,9 @@ impl StateSource<CancelSpotOrderV3UseCase> for CancelSpotOrderV3UseCaseRocksDB {
                     oid,
                 }
             } else {
-                CancelSpotOrderV3RocksDbError::OrderNotFound { user_id: user_id.to_owned() }
+                CancelSpotOrderV3RocksDbError::OrderNotFound {
+                    user_id: user_id.to_owned(),
+                }
             }
         })?;
         let record: OrderBase = bincode::deserialize(&order_bytes)?;
@@ -164,9 +191,12 @@ impl StateSource<CancelSpotOrderV3UseCase> for CancelSpotOrderV3UseCaseRocksDB {
             OrderSide::Sell => record.symbol.base.index(),
         });
         let order = SpotOrderV7::from_record(record)?;
-        let balance_bytes = snapshot.get(balance_key(user_id, coin_idx))?.ok_or_else(|| {
-            CancelSpotOrderV3RocksDbError::BalanceNotFound { user_id: user_id.to_owned(), coin_idx }
-        })?;
+        let balance_bytes = snapshot
+            .get(balance_key(user_id, coin_idx))?
+            .ok_or_else(|| CancelSpotOrderV3RocksDbError::BalanceNotFound {
+                user_id: user_id.to_owned(),
+                coin_idx,
+            })?;
         let balance: BalanceV2 = bincode::deserialize(&balance_bytes)?;
         if balance.party_id() != expected {
             return Err(CancelSpotOrderV3RocksDbError::BalancePartyMismatch {
@@ -282,12 +312,19 @@ mod tests {
     fn oid_and_cloid_load_the_same_buy_order_and_quote_balance() {
         let dir = tempfile::tempdir().unwrap();
         let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
-        source.upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("c-7"))).unwrap();
-        source.upsert_balance(USER, &balance(USER, Coin::USDT)).unwrap();
+        source
+            .upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("c-7")))
+            .unwrap();
+        source
+            .upsert_balance(USER, &balance(USER, Coin::USDT))
+            .unwrap();
 
-        let by_oid = source.load_given_state(&command(USER, OrderId::Oid(7))).unwrap();
-        let by_cloid =
-            source.load_given_state(&command(USER, OrderId::Cloid("c-7".into()))).unwrap();
+        let by_oid = source
+            .load_given_state(&command(USER, OrderId::Oid(7)))
+            .unwrap();
+        let by_cloid = source
+            .load_given_state(&command(USER, OrderId::Cloid("c-7".into())))
+            .unwrap();
 
         assert_eq!(by_oid, by_cloid);
         assert_eq!(by_oid.balance.coin_idx(), u64::from(Coin::USDT.index()));
@@ -298,10 +335,15 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
         for (user, oid) in [("alice", 7), ("bob", 8)] {
-            source.upsert_order(user, &order(user, oid, OrderSide::Sell, Some("shared"))).unwrap();
-            source.upsert_balance(user, &balance(user, Coin::BTC)).unwrap();
-            let state =
-                source.load_given_state(&command(user, OrderId::Cloid("shared".into()))).unwrap();
+            source
+                .upsert_order(user, &order(user, oid, OrderSide::Sell, Some("shared")))
+                .unwrap();
+            source
+                .upsert_balance(user, &balance(user, Coin::BTC))
+                .unwrap();
+            let state = source
+                .load_given_state(&command(user, OrderId::Cloid("shared".into())))
+                .unwrap();
             assert_eq!(state.order.order_base().order_id, oid);
             assert_eq!(state.balance.coin_idx(), u64::from(Coin::BTC.index()));
         }
@@ -311,8 +353,12 @@ mod tests {
     fn cloid_change_removes_old_index_and_conflict_is_rejected() {
         let dir = tempfile::tempdir().unwrap();
         let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
-        source.upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("old"))).unwrap();
-        source.upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("new"))).unwrap();
+        source
+            .upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("old")))
+            .unwrap();
+        source
+            .upsert_order(USER, &order(USER, 7, OrderSide::Buy, Some("new")))
+            .unwrap();
 
         assert!(matches!(
             source.load_given_state(&command(USER, OrderId::Cloid("old".into()))),
@@ -320,7 +366,10 @@ mod tests {
         ));
         assert!(matches!(
             source.upsert_order(USER, &order(USER, 8, OrderSide::Buy, Some("new"))),
-            Err(CancelSpotOrderV3RocksDbError::CloidConflict { existing_oid: 7, .. })
+            Err(CancelSpotOrderV3RocksDbError::CloidConflict {
+                existing_oid: 7,
+                ..
+            })
         ));
     }
 
@@ -333,7 +382,9 @@ mod tests {
             Err(CancelSpotOrderV3RocksDbError::OrderNotFound { .. })
         ));
 
-        source.upsert_order(USER, &order(USER, 7, OrderSide::Buy, None)).unwrap();
+        source
+            .upsert_order(USER, &order(USER, 7, OrderSide::Buy, None))
+            .unwrap();
         assert!(matches!(
             source.load_given_state(&command(USER, OrderId::Oid(7))),
             Err(CancelSpotOrderV3RocksDbError::BalanceNotFound { .. })
@@ -349,17 +400,29 @@ mod tests {
     fn dangling_index_and_identity_mismatches_are_rejected() {
         let dir = tempfile::tempdir().unwrap();
         let source = CancelSpotOrderV3UseCaseRocksDB::open(dir.path()).unwrap();
-        source.db.put(cloid_key(USER, "dangling"), bincode::serialize(&99u64).unwrap()).unwrap();
+        source
+            .db
+            .put(
+                cloid_key(USER, "dangling"),
+                bincode::serialize(&99u64).unwrap(),
+            )
+            .unwrap();
         assert!(matches!(
             source.load_given_state(&command(USER, OrderId::Cloid("dangling".into()))),
             Err(CancelSpotOrderV3RocksDbError::DanglingCloidIndex { oid: 99, .. })
         ));
 
         let foreign_order = order("someone-else", 7, OrderSide::Buy, None);
-        source.db.put(oid_key(USER, 7), bincode::serialize(&7u64).unwrap()).unwrap();
         source
             .db
-            .put(order_key(USER, 7), bincode::serialize(foreign_order.order_base()).unwrap())
+            .put(oid_key(USER, 7), bincode::serialize(&7u64).unwrap())
+            .unwrap();
+        source
+            .db
+            .put(
+                order_key(USER, 7),
+                bincode::serialize(foreign_order.order_base()).unwrap(),
+            )
             .unwrap();
         assert!(matches!(
             source.load_given_state(&command(USER, OrderId::Oid(7))),
@@ -369,7 +432,10 @@ mod tests {
         let valid_order = order(USER, 7, OrderSide::Buy, None);
         source
             .db
-            .put(order_key(USER, 7), bincode::serialize(valid_order.order_base()).unwrap())
+            .put(
+                order_key(USER, 7),
+                bincode::serialize(valid_order.order_base()).unwrap(),
+            )
             .unwrap();
         source
             .db

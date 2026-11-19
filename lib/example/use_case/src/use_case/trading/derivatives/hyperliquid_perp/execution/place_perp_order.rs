@@ -14,8 +14,13 @@ use crate::entity::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaceHyperliquidPerpOrderExecution {
-    Limit { price: Decimal, time_in_force: OrderTif },
-    Market { aggressive_price: Decimal },
+    Limit {
+        price: Decimal,
+        time_in_force: OrderTif,
+    },
+    Market {
+        aggressive_price: Decimal,
+    },
 }
 
 impl PlaceHyperliquidPerpOrderExecution {
@@ -195,7 +200,10 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
             } else {
                 None
             };
-        Ok(PlaceHyperliquidPerpOrderChanges { created_order, updated_margin_balance })
+        Ok(PlaceHyperliquidPerpOrderChanges {
+            created_order,
+            updated_margin_balance,
+        })
     }
 }
 

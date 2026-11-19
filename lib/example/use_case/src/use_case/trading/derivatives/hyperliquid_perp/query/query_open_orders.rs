@@ -58,7 +58,10 @@ pub enum QueryHyperliquidPerpOpenOrdersError {
     OrderNotOwned { order_id: u64 },
     /// 读模型中包含非开放状态的订单。
     #[error("order {order_id} is not open; actual status is {status:?}")]
-    OrderNotOpen { order_id: u64, status: HyperliquidPerpOrderStatus },
+    OrderNotOpen {
+        order_id: u64,
+        status: HyperliquidPerpOrderStatus,
+    },
     /// 读模型中包含不符合 symbol 过滤的订单。
     #[error("order {order_id} does not match query filter")]
     OrderFilterMismatch { order_id: u64 },
@@ -81,7 +84,11 @@ impl QueryUseCase<QueryHyperliquidPerpOpenOrders, QueryHyperliquidPerpOpenOrders
         if query.party_id.trim().is_empty() {
             return Err(QueryHyperliquidPerpOpenOrdersError::InvalidPartyId);
         }
-        if query.symbol.as_deref().is_some_and(|symbol| symbol.trim().is_empty()) {
+        if query
+            .symbol
+            .as_deref()
+            .is_some_and(|symbol| symbol.trim().is_empty())
+        {
             return Err(QueryHyperliquidPerpOpenOrdersError::InvalidSymbol);
         }
         Ok(())
@@ -99,9 +106,11 @@ impl QueryUseCase<QueryHyperliquidPerpOpenOrders, QueryHyperliquidPerpOpenOrders
                 });
             }
             if !order.has_consistent_execution_state() {
-                return Err(QueryHyperliquidPerpOpenOrdersError::InconsistentOrderState {
-                    order_id: order.order_id,
-                });
+                return Err(
+                    QueryHyperliquidPerpOpenOrdersError::InconsistentOrderState {
+                        order_id: order.order_id,
+                    },
+                );
             }
             if !matches!(
                 order.status,
@@ -112,7 +121,11 @@ impl QueryUseCase<QueryHyperliquidPerpOpenOrders, QueryHyperliquidPerpOpenOrders
                     status: order.status,
                 });
             }
-            if query.symbol.as_deref().is_some_and(|symbol| !order.trades_symbol(symbol)) {
+            if query
+                .symbol
+                .as_deref()
+                .is_some_and(|symbol| !order.trades_symbol(symbol))
+            {
                 return Err(QueryHyperliquidPerpOpenOrdersError::OrderFilterMismatch {
                     order_id: order.order_id,
                 });
@@ -207,7 +220,10 @@ mod compute_query_tests {
                 Err(QueryHyperliquidPerpOpenOrdersError::InvalidSymbol)
             );
         }
-        assert_eq!(QueryHyperliquidPerpOpenOrdersUseCase.validate_query(&query(None)), Ok(()));
+        assert_eq!(
+            QueryHyperliquidPerpOpenOrdersUseCase.validate_query(&query(None)),
+            Ok(())
+        );
         assert_eq!(
             QueryHyperliquidPerpOpenOrdersUseCase.validate_query(&query(Some("BTC-PERP"))),
             Ok(())
@@ -217,7 +233,11 @@ mod compute_query_tests {
     #[test]
     fn ownership_open_status_and_filter_are_decided_by_the_use_case() {
         let non_owner = QueryHyperliquidPerpOpenOrdersReadModel {
-            orders: vec![order("trader-2", "BTC-PERP", HyperliquidPerpOrderStatus::Open)],
+            orders: vec![order(
+                "trader-2",
+                "BTC-PERP",
+                HyperliquidPerpOrderStatus::Open,
+            )],
         };
         assert_eq!(
             QueryHyperliquidPerpOpenOrdersUseCase.compute_query(&query(None), non_owner),
@@ -225,7 +245,11 @@ mod compute_query_tests {
         );
 
         let closed = QueryHyperliquidPerpOpenOrdersReadModel {
-            orders: vec![order("trader-1", "BTC-PERP", HyperliquidPerpOrderStatus::Canceled)],
+            orders: vec![order(
+                "trader-1",
+                "BTC-PERP",
+                HyperliquidPerpOrderStatus::Canceled,
+            )],
         };
         assert!(matches!(
             QueryHyperliquidPerpOpenOrdersUseCase.compute_query(&query(None), closed),
@@ -233,7 +257,11 @@ mod compute_query_tests {
         ));
 
         let mismatch = QueryHyperliquidPerpOpenOrdersReadModel {
-            orders: vec![order("trader-1", "BTC-PERP", HyperliquidPerpOrderStatus::Open)],
+            orders: vec![order(
+                "trader-1",
+                "BTC-PERP",
+                HyperliquidPerpOrderStatus::Open,
+            )],
         };
         assert_eq!(
             QueryHyperliquidPerpOpenOrdersUseCase.compute_query(&query(Some("ETH-PERP")), mismatch),
@@ -244,7 +272,11 @@ mod compute_query_tests {
     #[test]
     fn accepted_orders_are_mapped_to_views() {
         let read_model = QueryHyperliquidPerpOpenOrdersReadModel {
-            orders: vec![order("trader-1", "BTC-PERP", HyperliquidPerpOrderStatus::Open)],
+            orders: vec![order(
+                "trader-1",
+                "BTC-PERP",
+                HyperliquidPerpOrderStatus::Open,
+            )],
         };
 
         let result = QueryHyperliquidPerpOpenOrdersUseCase.compute_query(&query(None), read_model);

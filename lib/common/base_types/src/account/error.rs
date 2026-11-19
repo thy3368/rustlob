@@ -6,15 +6,24 @@ use crate::{AccountId, AssetId, Quantity};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceError {
     /// 可用余额不足
-    InsufficientAvailable { required: Quantity, available: Quantity },
+    InsufficientAvailable {
+        required: Quantity,
+        available: Quantity,
+    },
     /// 冻结余额不足
-    InsufficientFrozen { required: Quantity, frozen: Quantity },
+    InsufficientFrozen {
+        required: Quantity,
+        frozen: Quantity,
+    },
     /// 余额溢出
     Overflow,
     /// 账户不存在
     AccountNotFound { account_id: AccountId },
     /// 余额记录不存在
-    BalanceNotFound { account_id: AccountId, asset_id: AssetId },
+    BalanceNotFound {
+        account_id: AccountId,
+        asset_id: AssetId,
+    },
     /// 账户已冻结（禁止交易）
     AccountFrozen { account_id: AccountId },
     /// 账户已注销
@@ -26,7 +35,10 @@ pub enum BalanceError {
 impl std::fmt::Display for BalanceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BalanceError::InsufficientAvailable { required, available } => {
+            BalanceError::InsufficientAvailable {
+                required,
+                available,
+            } => {
                 write!(
                     f,
                     "Insufficient available balance: required {}, available {}",
@@ -34,14 +46,25 @@ impl std::fmt::Display for BalanceError {
                 )
             }
             BalanceError::InsufficientFrozen { required, frozen } => {
-                write!(f, "Insufficient frozen balance: required {}, frozen {}", required, frozen)
+                write!(
+                    f,
+                    "Insufficient frozen balance: required {}, frozen {}",
+                    required, frozen
+                )
             }
             BalanceError::Overflow => write!(f, "Balance overflow"),
             BalanceError::AccountNotFound { account_id } => {
                 write!(f, "Account not found: {:?}", account_id)
             }
-            BalanceError::BalanceNotFound { account_id, asset_id } => {
-                write!(f, "Balance not found: account {:?}, asset {:?}", account_id, asset_id)
+            BalanceError::BalanceNotFound {
+                account_id,
+                asset_id,
+            } => {
+                write!(
+                    f,
+                    "Balance not found: account {:?}, asset {:?}",
+                    account_id, asset_id
+                )
             }
             BalanceError::AccountFrozen { account_id } => {
                 write!(f, "Account frozen: {:?}", account_id)
@@ -50,7 +73,11 @@ impl std::fmt::Display for BalanceError {
                 write!(f, "Account closed: {:?}", account_id)
             }
             BalanceError::VersionConflict { expected, actual } => {
-                write!(f, "Version conflict: expected {}, actual {}", expected, actual)
+                write!(
+                    f,
+                    "Version conflict: expected {}, actual {}",
+                    expected, actual
+                )
             }
         }
     }

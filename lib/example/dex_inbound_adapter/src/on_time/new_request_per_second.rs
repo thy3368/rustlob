@@ -31,7 +31,9 @@ pub fn build_request(sequence: u64) -> PlaceOnlySpotOrderV3Cmd {
 pub fn run_request_per_second() -> Result<(), reqwest::Error> {
     let url =
         std::env::var("DEX_HOTSTUFF_URL").unwrap_or_else(|_| DEFAULT_HOTSTUFF_URL.to_string());
-    let client = reqwest::blocking::Client::builder().timeout(REQUEST_TIMEOUT).build()?;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()?;
     let mut sequence = 0_u64;
 
     loop {
@@ -76,7 +78,10 @@ mod tests {
         assert_eq!(order_fields(&first).0, 8);
         assert_eq!(order_fields(&second).0, 9);
         assert_eq!(order_fields(&first).1, "0x00000000000000000000000000000007");
-        assert_eq!(order_fields(&second).1, "0x00000000000000000000000000000008");
+        assert_eq!(
+            order_fields(&second).1,
+            "0x00000000000000000000000000000008"
+        );
     }
 
     #[test]

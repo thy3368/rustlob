@@ -93,17 +93,26 @@ mod tests {
         type Error = FakeOutboundError;
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
-            self.persisted.lock().map_err(|_| FakeOutboundError)?.extend_from_slice(events);
+            self.persisted
+                .lock()
+                .map_err(|_| FakeOutboundError)?
+                .extend_from_slice(events);
             Ok(())
         }
 
         fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
-            self.replayed.lock().map_err(|_| FakeOutboundError)?.extend_from_slice(events);
+            self.replayed
+                .lock()
+                .map_err(|_| FakeOutboundError)?
+                .extend_from_slice(events);
             Ok(())
         }
 
         fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
-            self.published.lock().map_err(|_| FakeOutboundError)?.extend_from_slice(events);
+            self.published
+                .lock()
+                .map_err(|_| FakeOutboundError)?
+                .extend_from_slice(events);
             Ok(())
         }
     }
@@ -154,13 +163,19 @@ mod tests {
         )
         .expect("cancel should execute");
 
-        assert_eq!(result.changes.updated_order.before.order_base().status, SpotOrderStatus::Open);
+        assert_eq!(
+            result.changes.updated_order.before.order_base().status,
+            SpotOrderStatus::Open
+        );
         assert_eq!(
             result.changes.updated_order.after.order_base().status,
             SpotOrderStatus::Canceled
         );
         assert_eq!(result.changes.updated_balance.after.frozen(), Decimal::ZERO);
-        assert_eq!(result.changes.updated_balance.after.available(), Decimal::from(100));
+        assert_eq!(
+            result.changes.updated_balance.after.available(),
+            Decimal::from(100)
+        );
         assert_eq!(result.events.len(), 2);
         assert_eq!(outbound.persisted.lock().expect("persist lock").len(), 2);
         assert_eq!(outbound.replayed.lock().expect("replay lock").len(), 2);

@@ -18,7 +18,11 @@ pub enum BalanceLedgerV3State {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceLedgerV3Event {
-    BalanceApplied { balance_update: UpdatedEntityPair<BalanceV2>, applied_at: u64, lsn: u64 },
+    BalanceApplied {
+        balance_update: UpdatedEntityPair<BalanceV2>,
+        applied_at: u64,
+        lsn: u64,
+    },
 }
 
 impl Shard for BalanceLedgerV3Event {
@@ -39,7 +43,9 @@ impl LogAttr for BalanceLedgerV3Event {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceLedgerV3Output {
-    Applied { balance_update: UpdatedEntityPair<BalanceV2> },
+    Applied {
+        balance_update: UpdatedEntityPair<BalanceV2>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -107,7 +113,12 @@ impl BalanceLedgerV3 {
     }
 
     pub fn state(&self) -> Result<BalanceLedgerV3State, BalanceLedgerV3Error> {
-        match (self.before_available, self.before_frozen, self.after_available, self.after_frozen) {
+        match (
+            self.before_available,
+            self.before_frozen,
+            self.after_available,
+            self.after_frozen,
+        ) {
             (None, None, None, None) => Ok(BalanceLedgerV3State::Pending),
             (Some(_), Some(_), Some(_), Some(_)) => Ok(BalanceLedgerV3State::Applied),
             _ => Err(BalanceLedgerV3Error::IncompleteSnapshots),
@@ -133,7 +144,11 @@ impl Fsm for BalanceLedgerV3 {
             return Err(BalanceLedgerV3Error::InvalidAmount);
         }
 
-        let BalanceLedgerV3Event::BalanceApplied { balance_update, applied_at, lsn } = event;
+        let BalanceLedgerV3Event::BalanceApplied {
+            balance_update,
+            applied_at,
+            lsn,
+        } = event;
         if lsn < self.version {
             return Err(BalanceLedgerV3Error::StaleLsn {
                 incoming_lsn: lsn,
@@ -170,7 +185,10 @@ impl Fsm for BalanceLedgerV3 {
         self.version = lsn;
         self.updated_at = applied_at;
 
-        Ok((BalanceLedgerV3State::Applied, BalanceLedgerV3Output::Applied { balance_update }))
+        Ok((
+            BalanceLedgerV3State::Applied,
+            BalanceLedgerV3Output::Applied { balance_update },
+        ))
     }
 }
 
@@ -267,7 +285,13 @@ mod tests {
     fn update(balance: &BalanceV2, timestamp: u64) -> common_entity::UpdatedEntityPair<BalanceV2> {
         let before = balance.clone();
         let mut after = before.clone();
-        after.apply(BalanceV2Event::Freeze { amount: Decimal::TEN, timestamp, lsn: 20 }).unwrap();
+        after
+            .apply(BalanceV2Event::Freeze {
+                amount: Decimal::TEN,
+                timestamp,
+                lsn: 20,
+            })
+            .unwrap();
         common_entity::UpdatedEntityPair { before, after }
     }
 
@@ -279,7 +303,11 @@ mod tests {
         update: common_entity::UpdatedEntityPair<BalanceV2>,
         applied_at: u64,
     ) -> BalanceLedgerV3Event {
-        BalanceLedgerV3Event::BalanceApplied { balance_update: update, applied_at, lsn: 20 }
+        BalanceLedgerV3Event::BalanceApplied {
+            balance_update: update,
+            applied_at,
+            lsn: 20,
+        }
     }
 
     #[test]
@@ -291,7 +319,12 @@ mod tests {
         let result = ledger.transition(event(update.clone(), 12)).unwrap();
 
         assert_eq!(result.0, super::BalanceLedgerV3State::Applied);
-        assert_eq!(result.1, super::BalanceLedgerV3Output::Applied { balance_update: update });
+        assert_eq!(
+            result.1,
+            super::BalanceLedgerV3Output::Applied {
+                balance_update: update
+            }
+        );
         assert_eq!(ledger.before_available, Some(Decimal::from(100)));
         assert_eq!(ledger.before_frozen, Some(Decimal::from(20)));
         assert_eq!(ledger.after_available, Some(Decimal::from(90)));
@@ -378,7 +411,10 @@ mod tests {
         let before = stale.clone();
         assert_eq!(
             stale.apply(event(update, 12)),
-            Err(BalanceLedgerV3Error::StaleLsn { incoming_lsn: 20, current_lsn: 21 })
+            Err(BalanceLedgerV3Error::StaleLsn {
+                incoming_lsn: 20,
+                current_lsn: 21
+            })
         );
         assert_eq!(stale, before);
     }
@@ -390,7 +426,9 @@ mod tests {
         let mut via_transition = ledger(&balance);
         let mut via_apply = via_transition.clone();
 
-        via_transition.transition(event(update.clone(), 12)).unwrap();
+        via_transition
+            .transition(event(update.clone(), 12))
+            .unwrap();
         via_apply.apply(event(update, 12)).unwrap();
 
         assert_eq!(via_apply, via_transition);

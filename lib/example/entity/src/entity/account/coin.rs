@@ -7,7 +7,11 @@ use thiserror::Error;
 pub enum CoinAmountError {
     /// 金额的小数位数超过币种允许的精度。
     #[error("{currency} amount supports {currency_scale} decimal places, got {amount_scale}")]
-    ExcessPrecision { currency: Coin, currency_scale: u32, amount_scale: u32 },
+    ExcessPrecision {
+        currency: Coin,
+        currency_scale: u32,
+        amount_scale: u32,
+    },
 }
 
 /// 带币种语义并符合该币种精度的金额值。

@@ -72,7 +72,10 @@ impl WithdrawQuoteCliCommand {
             1,
             1,
             user_id,
-            WithdrawQuoteCmd { party_id: self.trader_id, amount: self.amount },
+            WithdrawQuoteCmd {
+                party_id: self.trader_id,
+                amount: self.amount,
+            },
         )
     }
 }
@@ -90,11 +93,13 @@ where
 {
     let mut args = args.into_iter().map(Into::into);
 
-    let trader_id = args.next().unwrap_or_else(|| WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID.to_string());
+    let trader_id = args
+        .next()
+        .unwrap_or_else(|| WITHDRAW_QUOTE_CLI_DEFAULT_TRADER_ID.to_string());
     let amount = match args.next() {
-        Some(raw) => {
-            raw.parse::<u64>().map_err(|_| ParseWithdrawQuoteCliArgsError::InvalidAmount(raw))?
-        }
+        Some(raw) => raw
+            .parse::<u64>()
+            .map_err(|_| ParseWithdrawQuoteCliArgsError::InvalidAmount(raw))?,
         None => WITHDRAW_QUOTE_CLI_DEFAULT_AMOUNT,
     };
 
@@ -147,7 +152,9 @@ where
         + StateSink<WithdrawQuoteUseCase, Error = <OB as StateSource<WithdrawQuoteUseCase>>::Error>,
     <OB as StateSource<WithdrawQuoteUseCase>>::Error: 'static,
 {
-    let mapper = WithdrawQuoteCliReplyMapper { account_id: command.trader_id.clone() };
+    let mapper = WithdrawQuoteCliReplyMapper {
+        account_id: command.trader_id.clone(),
+    };
     execute_withdraw_quote_with_mapper(command.into_log_entry(), outbound, &mapper)
 }
 
@@ -161,7 +168,10 @@ mod tests {
     fn cli_adapter_translates_withdraw_command_and_maps_text_response()
     -> Result<(), Box<dyn std::error::Error>> {
         let outbound = WithdrawQuoteTestOutbound::default();
-        let command = WithdrawQuoteCliCommand { trader_id: "trader-1".to_string(), amount: 250 };
+        let command = WithdrawQuoteCliCommand {
+            trader_id: "trader-1".to_string(),
+            amount: 250,
+        };
 
         let response = run_withdraw_quote_cli(command, &outbound)
             .map_err(CliInboundError::from_execution_error)?;

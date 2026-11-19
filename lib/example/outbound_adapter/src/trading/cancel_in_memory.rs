@@ -63,7 +63,10 @@ impl StateSink<CancelSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
     fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
-        self.store.lock_state()?.persisted_events.extend(events.iter().cloned());
+        self.store
+            .lock_state()?
+            .persisted_events
+            .extend(events.iter().cloned());
         Ok(())
     }
 
@@ -72,7 +75,10 @@ impl StateSink<CancelSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
     }
 
     fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
-        self.store.lock_state()?.published_events.extend(events.iter().cloned());
+        self.store
+            .lock_state()?
+            .published_events
+            .extend(events.iter().cloned());
         Ok(())
     }
 }

@@ -116,8 +116,11 @@ impl UpdateLeverageOutbound for DefaultUpdateLeverageOutbound {
         &self,
         cmd: &UpdateHyperliquidPerpLeverageCmd,
     ) -> Result<UpdateHyperliquidPerpLeverageState, Self::Error> {
-        let before_leverage =
-            if cmd.leverage == Decimal::ONE { Decimal::from(2) } else { Decimal::ONE };
+        let before_leverage = if cmd.leverage == Decimal::ONE {
+            Decimal::from(2)
+        } else {
+            Decimal::ONE
+        };
         Ok(UpdateHyperliquidPerpLeverageState {
             position: position_for_command(cmd, before_leverage),
         })
@@ -159,7 +162,9 @@ fn validate(request: &RequestWire) -> Result<(), ExchangeHttpError> {
     }
     validate_envelope_common(&request.common).map_err(ExchangeHttpError::SharedFields)?;
     if request.action.leverage < 1 {
-        return Err(ExchangeHttpError::contract(UpdateLeverageContractError::InvalidLeverage));
+        return Err(ExchangeHttpError::contract(
+            UpdateLeverageContractError::InvalidLeverage,
+        ));
     }
     Ok(())
 }
@@ -179,7 +184,11 @@ where
     let payload = UpdateHyperliquidPerpLeverageCmd {
         user_id: UserId(common_entity::stable_string_entity_id(&request.party_id)),
         symbol: Symbol::new(request.asset, Coin::BTC, Coin::USDC),
-        margin_mode: if request.is_cross { MarginModeV3::Cross } else { MarginModeV3::Isolated },
+        margin_mode: if request.is_cross {
+            MarginModeV3::Cross
+        } else {
+            MarginModeV3::Isolated
+        },
         leverage: Decimal::from(request.leverage),
     };
     let cmd = common_entity::LogEntrySequencer::from_metadata(
@@ -191,24 +200,35 @@ where
         payload,
     );
 
-    use_case.check_command(&cmd).map_err(UpdateLeverageExecutionError::Business)?;
+    use_case
+        .check_command(&cmd)
+        .map_err(UpdateLeverageExecutionError::Business)?;
     let state = outbound
         .load_given_state(cmd.payload())
         .map_err(UpdateLeverageExecutionError::LoadState)?;
-    use_case.validate_state_given(&cmd, &state).map_err(UpdateLeverageExecutionError::Business)?;
+    use_case
+        .validate_state_given(&cmd, &state)
+        .map_err(UpdateLeverageExecutionError::Business)?;
     let changes = use_case
         .compute_state_changed_only(&cmd, &state)
         .map_err(UpdateLeverageExecutionError::Business)?;
-    let mut events =
-        changes.to_replayable_events().map_err(UpdateLeverageExecutionError::ProjectEvents)?;
+    let mut events = changes
+        .to_replayable_events()
+        .map_err(UpdateLeverageExecutionError::ProjectEvents)?;
     for event in &mut events {
         event.lsn = cmd.lsn();
         event.logical_ts = cmd.logical_ts();
     }
 
-    outbound.persist(&events).map_err(UpdateLeverageExecutionError::Persist)?;
-    outbound.replay(&events).map_err(UpdateLeverageExecutionError::Replay)?;
-    outbound.publish(&events).map_err(UpdateLeverageExecutionError::Publish)?;
+    outbound
+        .persist(&events)
+        .map_err(UpdateLeverageExecutionError::Persist)?;
+    outbound
+        .replay(&events)
+        .map_err(UpdateLeverageExecutionError::Replay)?;
+    outbound
+        .publish(&events)
+        .map_err(UpdateLeverageExecutionError::Publish)?;
 
     Ok(changes)
 }
@@ -356,7 +376,11 @@ mod tests {
         let changes = execute_update_perp_leverage(&request, 1, 1, 0, 1, &outbound)
             .expect("cross leverage update should execute");
 
-        let seen_cmd = outbound.seen_cmd.borrow().clone().expect("on_command should be observed");
+        let seen_cmd = outbound
+            .seen_cmd
+            .borrow()
+            .clone()
+            .expect("on_command should be observed");
         assert_eq!(
             seen_cmd,
             UpdateHyperliquidPerpLeverageCmd {
@@ -371,7 +395,9 @@ mod tests {
         assert_eq!(changes.changed_position.before.version(), 0);
         assert_eq!(changes.changed_position.after.version(), 1);
 
-        let events = changes.to_replayable_events().expect("events should project");
+        let events = changes
+            .to_replayable_events()
+            .expect("events should project");
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());
         assert_eq!(events[0].field_changes.len(), 2);
@@ -490,19 +516,25 @@ mod tests {
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("persist");
-            self.event_batches.borrow_mut().push(("persist", events.to_vec()));
+            self.event_batches
+                .borrow_mut()
+                .push(("persist", events.to_vec()));
             Ok(())
         }
 
         fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("replay");
-            self.event_batches.borrow_mut().push(("replay", events.to_vec()));
+            self.event_batches
+                .borrow_mut()
+                .push(("replay", events.to_vec()));
             Ok(())
         }
 
         fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("publish");
-            self.event_batches.borrow_mut().push(("publish", events.to_vec()));
+            self.event_batches
+                .borrow_mut()
+                .push(("publish", events.to_vec()));
             Ok(())
         }
     }

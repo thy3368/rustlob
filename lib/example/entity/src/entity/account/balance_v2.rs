@@ -121,7 +121,11 @@ pub struct BalanceV2 {
 impl BalanceV2 {
     /// 返回账户与币种组成的稳定业务身份。
     pub fn business_entity_id(&self) -> String {
-        concat3(&self.account_id.to_string(), ":", &self.coin_idx.to_string())
+        concat3(
+            &self.account_id.to_string(),
+            ":",
+            &self.coin_idx.to_string(),
+        )
     }
     pub fn belongs_to_account(&self, account_id: u64) -> bool {
         self.account_id == account_id
@@ -210,10 +214,15 @@ impl Fsm for BalanceV2 {
             | BalanceV2Event::Close { lsn, .. } => *lsn,
         };
         if lsn < self.version {
-            return Err(BalanceV2Error::StaleLsn { incoming_lsn: lsn, current_lsn: self.version });
+            return Err(BalanceV2Error::StaleLsn {
+                incoming_lsn: lsn,
+                current_lsn: self.version,
+            });
         }
         let (available, frozen, status, timestamp) = match event {
-            BalanceV2Event::Freeze { amount, timestamp, .. } => {
+            BalanceV2Event::Freeze {
+                amount, timestamp, ..
+            } => {
                 positive(amount)?;
                 if self.available() < amount {
                     return Err(BalanceV2Error::InsufficientAvailableBalance);
@@ -226,7 +235,10 @@ impl Fsm for BalanceV2 {
                 )
             }
             BalanceV2Event::UnfreezeAndPay {
-                unfreeze_amount, payment_amount, timestamp, ..
+                unfreeze_amount,
+                payment_amount,
+                timestamp,
+                ..
             } => {
                 positive(unfreeze_amount)?;
                 if payment_amount < Decimal::ZERO {
@@ -243,29 +255,55 @@ impl Fsm for BalanceV2 {
                     timestamp,
                 )
             }
-            BalanceV2Event::DebitFrozen { amount, timestamp, .. } => {
+            BalanceV2Event::DebitFrozen {
+                amount, timestamp, ..
+            } => {
                 positive(amount)?;
                 if self.frozen() < amount {
                     return Err(BalanceV2Error::InsufficientFrozenBalance);
                 };
-                (self.available(), checked_sub(self.frozen(), amount)?, self.status(), timestamp)
+                (
+                    self.available(),
+                    checked_sub(self.frozen(), amount)?,
+                    self.status(),
+                    timestamp,
+                )
             }
-            BalanceV2Event::CreditAvailable { amount, timestamp, .. } => {
+            BalanceV2Event::CreditAvailable {
+                amount, timestamp, ..
+            } => {
                 positive(amount)?;
-                (checked_add(self.available(), amount)?, self.frozen(), self.status(), timestamp)
+                (
+                    checked_add(self.available(), amount)?,
+                    self.frozen(),
+                    self.status(),
+                    timestamp,
+                )
             }
-            BalanceV2Event::DebitAvailable { amount, timestamp, .. } => {
+            BalanceV2Event::DebitAvailable {
+                amount, timestamp, ..
+            } => {
                 positive(amount)?;
                 if self.available() < amount {
                     return Err(BalanceV2Error::InsufficientAvailableBalance);
                 };
-                (checked_sub(self.available(), amount)?, self.frozen(), self.status(), timestamp)
+                (
+                    checked_sub(self.available(), amount)?,
+                    self.frozen(),
+                    self.status(),
+                    timestamp,
+                )
             }
             BalanceV2Event::Close { timestamp, .. } => {
                 if self.available() != Decimal::ZERO || self.frozen() != Decimal::ZERO {
                     return Err(BalanceV2Error::CannotCloseNonZeroBalance);
                 };
-                (self.available(), self.frozen(), BalanceV2Status::Closed, timestamp)
+                (
+                    self.available(),
+                    self.frozen(),
+                    BalanceV2Status::Closed,
+                    timestamp,
+                )
             }
         };
         self.available = available;
@@ -277,7 +315,11 @@ impl Fsm for BalanceV2 {
     }
 }
 fn positive(amount: Decimal) -> Result<(), BalanceV2Error> {
-    if amount <= Decimal::ZERO { Err(BalanceV2Error::InvalidAmount) } else { Ok(()) }
+    if amount <= Decimal::ZERO {
+        Err(BalanceV2Error::InvalidAmount)
+    } else {
+        Ok(())
+    }
 }
 fn checked_add(a: Decimal, b: Decimal) -> Result<Decimal, BalanceV2Error> {
     a.checked_add(b).ok_or(BalanceV2Error::ArithmeticOverflow)
@@ -301,14 +343,42 @@ impl TrackDiff for BalanceV2 {
     }
     fn diff(&self, o: &Self) -> Vec<EntityFieldChange> {
         let f = [
-            ("party_id", self.party_id.to_string(), o.party_id.to_string()),
-            ("account_id", self.account_id.to_string(), o.account_id.to_string()),
-            ("coin_idx", self.coin_idx.to_string(), o.coin_idx.to_string()),
-            ("available", self.available.to_string(), o.available.to_string()),
+            (
+                "party_id",
+                self.party_id.to_string(),
+                o.party_id.to_string(),
+            ),
+            (
+                "account_id",
+                self.account_id.to_string(),
+                o.account_id.to_string(),
+            ),
+            (
+                "coin_idx",
+                self.coin_idx.to_string(),
+                o.coin_idx.to_string(),
+            ),
+            (
+                "available",
+                self.available.to_string(),
+                o.available.to_string(),
+            ),
             ("frozen", self.frozen.to_string(), o.frozen.to_string()),
-            ("status", self.status.as_str().into(), o.status.as_str().into()),
-            ("created_at", self.created_at.to_string(), o.created_at.to_string()),
-            ("updated_at", self.updated_at.to_string(), o.updated_at.to_string()),
+            (
+                "status",
+                self.status.as_str().into(),
+                o.status.as_str().into(),
+            ),
+            (
+                "created_at",
+                self.created_at.to_string(),
+                o.created_at.to_string(),
+            ),
+            (
+                "updated_at",
+                self.updated_at.to_string(),
+                o.updated_at.to_string(),
+            ),
         ];
         f.into_iter()
             .filter(|(_, a, b)| a != b)
@@ -375,17 +445,36 @@ mod tests {
     #[test]
     fn every_event_exposes_log_metadata_and_default_route() {
         let events = [
-            BalanceV2Event::Freeze { amount: Decimal::ONE, timestamp: 7, lsn: 9 },
+            BalanceV2Event::Freeze {
+                amount: Decimal::ONE,
+                timestamp: 7,
+                lsn: 9,
+            },
             BalanceV2Event::UnfreezeAndPay {
                 unfreeze_amount: Decimal::ONE,
                 payment_amount: Decimal::ZERO,
                 timestamp: 7,
                 lsn: 9,
             },
-            BalanceV2Event::DebitFrozen { amount: Decimal::ONE, timestamp: 7, lsn: 9 },
-            BalanceV2Event::CreditAvailable { amount: Decimal::ONE, timestamp: 7, lsn: 9 },
-            BalanceV2Event::DebitAvailable { amount: Decimal::ONE, timestamp: 7, lsn: 9 },
-            BalanceV2Event::Close { timestamp: 7, lsn: 9 },
+            BalanceV2Event::DebitFrozen {
+                amount: Decimal::ONE,
+                timestamp: 7,
+                lsn: 9,
+            },
+            BalanceV2Event::CreditAvailable {
+                amount: Decimal::ONE,
+                timestamp: 7,
+                lsn: 9,
+            },
+            BalanceV2Event::DebitAvailable {
+                amount: Decimal::ONE,
+                timestamp: 7,
+                lsn: 9,
+            },
+            BalanceV2Event::Close {
+                timestamp: 7,
+                lsn: 9,
+            },
         ];
         for event in events {
             assert_eq!(event.lsn(), 9);
@@ -418,7 +507,11 @@ mod tests {
         let cases = [
             (
                 balance(10, 2, 3),
-                BalanceV2Event::Freeze { amount: decimal(4), timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::Freeze {
+                    amount: decimal(4),
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
                 decimal(6),
                 decimal(6),
                 BalanceV2Status::Open,
@@ -437,7 +530,11 @@ mod tests {
             ),
             (
                 balance(1, 10, 3),
-                BalanceV2Event::DebitFrozen { amount: decimal(4), timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::DebitFrozen {
+                    amount: decimal(4),
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
                 decimal(1),
                 decimal(6),
                 BalanceV2Status::Open,
@@ -466,7 +563,10 @@ mod tests {
             ),
             (
                 balance(0, 0, 3),
-                BalanceV2Event::Close { timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::Close {
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
                 Decimal::ZERO,
                 Decimal::ZERO,
                 BalanceV2Status::Closed,
@@ -490,16 +590,32 @@ mod tests {
     fn open_state_rejects_non_positive_amounts_without_mutation() {
         for amount in [decimal(-1), Decimal::ZERO] {
             for event in [
-                BalanceV2Event::Freeze { amount, timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::Freeze {
+                    amount,
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
                 BalanceV2Event::UnfreezeAndPay {
                     unfreeze_amount: amount,
                     payment_amount: Decimal::ZERO,
                     timestamp: TIMESTAMP,
                     lsn: LSN,
                 },
-                BalanceV2Event::DebitFrozen { amount, timestamp: TIMESTAMP, lsn: LSN },
-                BalanceV2Event::CreditAvailable { amount, timestamp: TIMESTAMP, lsn: LSN },
-                BalanceV2Event::DebitAvailable { amount, timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::DebitFrozen {
+                    amount,
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
+                BalanceV2Event::CreditAvailable {
+                    amount,
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
+                BalanceV2Event::DebitAvailable {
+                    amount,
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
             ] {
                 assert_rejected_without_mutation(
                     balance(10, 10, 3),
@@ -526,7 +642,11 @@ mod tests {
         let cases = [
             (
                 balance(1, 10, 3),
-                BalanceV2Event::Freeze { amount: decimal(2), timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::Freeze {
+                    amount: decimal(2),
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
                 BalanceV2Error::InsufficientAvailableBalance,
             ),
             (
@@ -540,7 +660,11 @@ mod tests {
             ),
             (
                 balance(10, 1, 3),
-                BalanceV2Event::DebitFrozen { amount: decimal(2), timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::DebitFrozen {
+                    amount: decimal(2),
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
                 BalanceV2Error::InsufficientFrozenBalance,
             ),
             (
@@ -555,12 +679,18 @@ mod tests {
             ),
             (
                 balance(1, 0, 3),
-                BalanceV2Event::Close { timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::Close {
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
                 BalanceV2Error::CannotCloseNonZeroBalance,
             ),
             (
                 balance(0, 1, 3),
-                BalanceV2Event::Close { timestamp: TIMESTAMP, lsn: LSN },
+                BalanceV2Event::Close {
+                    timestamp: TIMESTAMP,
+                    lsn: LSN,
+                },
                 BalanceV2Error::CannotCloseNonZeroBalance,
             ),
         ];
@@ -573,24 +703,44 @@ mod tests {
     #[test]
     fn closed_state_rejects_every_event_without_mutation() {
         let mut closed = balance(0, 0, 3);
-        closed.transition(BalanceV2Event::Close { timestamp: 8, lsn: LSN }).unwrap();
+        closed
+            .transition(BalanceV2Event::Close {
+                timestamp: 8,
+                lsn: LSN,
+            })
+            .unwrap();
 
         for event in [
-            BalanceV2Event::Close { timestamp: TIMESTAMP, lsn: LSN },
-            BalanceV2Event::Freeze { amount: Decimal::ONE, timestamp: TIMESTAMP, lsn: LSN },
+            BalanceV2Event::Close {
+                timestamp: TIMESTAMP,
+                lsn: LSN,
+            },
+            BalanceV2Event::Freeze {
+                amount: Decimal::ONE,
+                timestamp: TIMESTAMP,
+                lsn: LSN,
+            },
             BalanceV2Event::UnfreezeAndPay {
                 unfreeze_amount: Decimal::ONE,
                 payment_amount: Decimal::ZERO,
                 timestamp: TIMESTAMP,
                 lsn: LSN,
             },
-            BalanceV2Event::DebitFrozen { amount: Decimal::ONE, timestamp: TIMESTAMP, lsn: LSN },
+            BalanceV2Event::DebitFrozen {
+                amount: Decimal::ONE,
+                timestamp: TIMESTAMP,
+                lsn: LSN,
+            },
             BalanceV2Event::CreditAvailable {
                 amount: Decimal::ONE,
                 timestamp: TIMESTAMP,
                 lsn: LSN,
             },
-            BalanceV2Event::DebitAvailable { amount: Decimal::ONE, timestamp: TIMESTAMP, lsn: LSN },
+            BalanceV2Event::DebitAvailable {
+                amount: Decimal::ONE,
+                timestamp: TIMESTAMP,
+                lsn: LSN,
+            },
         ] {
             assert_rejected_without_mutation(closed.clone(), event, BalanceV2Error::BalanceClosed);
         }
@@ -605,7 +755,10 @@ mod tests {
                 timestamp: TIMESTAMP,
                 lsn: LSN,
             },
-            BalanceV2Error::StaleLsn { incoming_lsn: LSN, current_lsn: u64::MAX },
+            BalanceV2Error::StaleLsn {
+                incoming_lsn: LSN,
+                current_lsn: u64::MAX,
+            },
         );
 
         let mut decimal_max = balance(0, 0, 3);
@@ -623,7 +776,11 @@ mod tests {
 
     #[test]
     fn apply_commits_the_same_transition_while_discarding_output() {
-        let event = BalanceV2Event::Freeze { amount: decimal(4), timestamp: TIMESTAMP, lsn: LSN };
+        let event = BalanceV2Event::Freeze {
+            amount: decimal(4),
+            timestamp: TIMESTAMP,
+            lsn: LSN,
+        };
         let mut transitioned = balance(10, 2, 3);
         let mut applied = transitioned.clone();
 

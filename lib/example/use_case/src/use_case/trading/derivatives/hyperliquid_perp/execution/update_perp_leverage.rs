@@ -48,7 +48,9 @@ pub struct UpdateHyperliquidPerpLeverageChanges {
 impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
     fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
         Ok(vec![
-            self.changed_position.after.track_update_event_from(&self.changed_position.before)?,
+            self.changed_position
+                .after
+                .track_update_event_from(&self.changed_position.before)?,
         ])
     }
 }
@@ -155,7 +157,9 @@ mod tests {
         let state = UpdateHyperliquidPerpLeverageState {
             position: PerpPositionV3::empty(9, UserId(7), Coin::BTC),
         };
-        let changes = use_case.compute_state_changed(&command(Decimal::from(5)), &state).unwrap();
+        let changes = use_case
+            .compute_state_changed(&command(Decimal::from(5)), &state)
+            .unwrap();
 
         assert_eq!(changes.changed_position.before.leverage(), Decimal::ONE);
         assert_eq!(changes.changed_position.after.leverage(), Decimal::from(5));

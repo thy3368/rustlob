@@ -25,7 +25,12 @@ pub struct ExampleHttpErrorResponse {
 
 impl ExampleHttpErrorResponse {
     fn new(code: &'static str, message: impl Into<String>) -> Self {
-        Self { error: ExampleHttpErrorBody { code: code.to_string(), message: message.into() } }
+        Self {
+            error: ExampleHttpErrorBody {
+                code: code.to_string(),
+                message: message.into(),
+            },
+        }
     }
 }
 
@@ -119,7 +124,11 @@ impl IntoResponse for HttpInboundError {
     fn into_response(self) -> Response {
         let status = axum::http::StatusCode::from_u16(self.status_code)
             .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-        (status, Json(ExampleHttpErrorResponse::new(self.code, self.message))).into_response()
+        (
+            status,
+            Json(ExampleHttpErrorResponse::new(self.code, self.message)),
+        )
+            .into_response()
     }
 }
 
@@ -130,8 +139,10 @@ impl ResponseError for HttpInboundError {
     }
 
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(ResponseError::status_code(self))
-            .json(ExampleHttpErrorResponse::new(self.code, self.message.clone()))
+        HttpResponse::build(ResponseError::status_code(self)).json(ExampleHttpErrorResponse::new(
+            self.code,
+            self.message.clone(),
+        ))
     }
 }
 
@@ -325,7 +336,10 @@ pub(crate) fn find_u64_field(events: &[EntityReplayableEvent], field_name: &str)
                 return None;
             }
 
-            std::str::from_utf8(change.new_value_bytes()).ok()?.parse::<u64>().ok()
+            std::str::from_utf8(change.new_value_bytes())
+                .ok()?
+                .parse::<u64>()
+                .ok()
         })
     })
 }
@@ -340,7 +354,10 @@ pub(crate) fn find_last_u64_field(
                 return None;
             }
 
-            std::str::from_utf8(change.new_value_bytes()).ok()?.parse::<u64>().ok()
+            std::str::from_utf8(change.new_value_bytes())
+                .ok()?
+                .parse::<u64>()
+                .ok()
         })
     })
 }
@@ -394,7 +411,9 @@ pub(crate) mod tests {
         fn lock_events(
             mutex: &Mutex<Vec<EntityReplayableEvent>>,
         ) -> Result<MutexGuard<'_, Vec<EntityReplayableEvent>>, TestOutboundError> {
-            mutex.lock().map_err(|_| TestOutboundError::StoreUnavailable)
+            mutex
+                .lock()
+                .map_err(|_| TestOutboundError::StoreUnavailable)
         }
 
         fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), TestOutboundError> {

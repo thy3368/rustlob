@@ -33,7 +33,11 @@ pub struct FundingAccumulatorV3 {
 }
 impl Default for FundingAccumulatorV3 {
     fn default() -> Self {
-        Self { all_time: Decimal::ZERO, since_open: Decimal::ZERO, since_change: Decimal::ZERO }
+        Self {
+            all_time: Decimal::ZERO,
+            since_open: Decimal::ZERO,
+            since_change: Decimal::ZERO,
+        }
     }
 }
 
@@ -293,7 +297,11 @@ impl PerpPositionV3 {
             .and_then(|value| value.checked_mul(funding_rate.value()))
             .and_then(|value| Decimal::ZERO.checked_sub(value))
             .ok_or(PerpPositionV3Error::ArithmeticOverflow)?;
-        if amount.is_zero() { Ok(None) } else { Ok(Some(amount)) }
+        if amount.is_zero() {
+            Ok(None)
+        } else {
+            Ok(Some(amount))
+        }
     }
 
     /// 现值
@@ -336,13 +344,25 @@ fn position_field_values(position: &PerpPositionV3) -> Vec<(&'static str, String
         ("margin_mode", format!("{:?}", position.margin_mode)),
         (
             "isolated_margin",
-            position.isolated_margin.map(|value| value.to_string()).unwrap_or_default(),
+            position
+                .isolated_margin
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
         ),
         ("realized_pnl", position.realized_pnl.to_string()),
         ("cum_fee", position.cum_fee.to_string()),
-        ("funding_all_time", position.cum_funding.all_time.to_string()),
-        ("funding_since_open", position.cum_funding.since_open.to_string()),
-        ("funding_since_change", position.cum_funding.since_change.to_string()),
+        (
+            "funding_all_time",
+            position.cum_funding.all_time.to_string(),
+        ),
+        (
+            "funding_since_open",
+            position.cum_funding.since_open.to_string(),
+        ),
+        (
+            "funding_since_change",
+            position.cum_funding.since_change.to_string(),
+        ),
         ("created_at", position.created_at.to_string()),
         ("updated_at", position.updated_at.to_string()),
     ]
@@ -438,10 +458,16 @@ impl Fsm for PerpPositionV3 {
         event: Self::BizEvent,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match event {
-            PerpPositionV3Event::TradeFilled { trade, logical_ts, .. } => {
+            PerpPositionV3Event::TradeFilled {
+                trade, logical_ts, ..
+            } => {
                 todo!()
             }
-            PerpPositionV3Event::FundingSettled { payment, logical_ts, .. } => {
+            PerpPositionV3Event::FundingSettled {
+                payment,
+                logical_ts,
+                ..
+            } => {
                 todo!()
             }
             PerpPositionV3Event::FundingAmountSettled {
@@ -492,10 +518,17 @@ impl Fsm for PerpPositionV3 {
                     PerpPositionV3Output::FundingApplied { signed_amount },
                 ))
             }
-            PerpPositionV3Event::LeverageUpdated { leverage, margin_mode, logical_ts, .. } => {
+            PerpPositionV3Event::LeverageUpdated {
+                leverage,
+                margin_mode,
+                logical_ts,
+                ..
+            } => {
                 todo!()
             }
-            PerpPositionV3Event::IsolatedMarginAdjusted { delta, logical_ts, .. } => {
+            PerpPositionV3Event::IsolatedMarginAdjusted {
+                delta, logical_ts, ..
+            } => {
                 todo!()
             }
         }
@@ -567,7 +600,12 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(output, PerpPositionV3Output::TradeApplied { closed_pnl: Decimal::TEN });
+        assert_eq!(
+            output,
+            PerpPositionV3Output::TradeApplied {
+                closed_pnl: Decimal::TEN
+            }
+        );
         assert_eq!(position.realized_pnl(), Decimal::TEN);
         assert_eq!(position.cum_fee(), Decimal::new(25, 2));
         assert_eq!(position.version(), 5);
@@ -606,7 +644,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(state, PerpPositionV3State::Active);
-        assert_eq!(output, PerpPositionV3Output::FundingApplied { signed_amount: -Decimal::ONE });
+        assert_eq!(
+            output,
+            PerpPositionV3Output::FundingApplied {
+                signed_amount: -Decimal::ONE
+            }
+        );
         assert_eq!(
             position.cum_funding(),
             FundingAccumulatorV3 {

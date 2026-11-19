@@ -42,16 +42,20 @@ mod tests {
 
     async fn post_exchange_json(payload: Value) -> Value {
         let app = actix_test::init_service(App::new().service(build_exchange_scope())).await;
-        let request =
-            actix_test::TestRequest::post().uri("/exchange").set_json(payload).to_request();
+        let request = actix_test::TestRequest::post()
+            .uri("/exchange")
+            .set_json(payload)
+            .to_request();
         let response = actix_test::call_service(&app, request).await;
         actix_test::read_body_json(response).await
     }
 
     async fn post_exchange_status_and_json(payload: Value) -> (StatusCode, Value) {
         let app = actix_test::init_service(App::new().service(build_exchange_scope())).await;
-        let request =
-            actix_test::TestRequest::post().uri("/exchange").set_json(payload).to_request();
+        let request = actix_test::TestRequest::post()
+            .uri("/exchange")
+            .set_json(payload)
+            .to_request();
         let response = actix_test::call_service(&app, request).await;
         let status = response.status();
         let body = actix_test::read_body_json(response).await;
@@ -60,8 +64,10 @@ mod tests {
 
     #[test]
     fn registry_action_types_match_supported_action_types() {
-        let registry_action_types: Vec<_> =
-            ACTION_REGISTRY.iter().map(|registration| registration.action_type).collect();
+        let registry_action_types: Vec<_> = ACTION_REGISTRY
+            .iter()
+            .map(|registration| registration.action_type)
+            .collect();
         assert_eq!(registry_action_types, SUPPORTED_ACTION_TYPES);
     }
 
@@ -79,7 +85,10 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], "ok");
         assert_eq!(body["response"]["type"], "order");
-        assert_eq!(body["response"]["data"]["statuses"][0]["resting"]["oid"], 1710000000000u64);
+        assert_eq!(
+            body["response"]["data"]["statuses"][0]["resting"]["oid"],
+            1710000000000u64
+        );
     }
 
     #[actix_web::test]
@@ -142,7 +151,10 @@ mod tests {
         }))
         .await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body, json!({ "status": "ok", "response": { "type": "default" } }));
+        assert_eq!(
+            body,
+            json!({ "status": "ok", "response": { "type": "default" } })
+        );
     }
 
     #[actix_web::test]
@@ -165,7 +177,10 @@ mod tests {
         }))
         .await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body, json!({ "status": "ok", "response": { "type": "default" } }));
+        assert_eq!(
+            body,
+            json!({ "status": "ok", "response": { "type": "default" } })
+        );
     }
 
     #[actix_web::test]
@@ -185,7 +200,10 @@ mod tests {
         }))
         .await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body, json!({ "status": "ok", "response": { "type": "default" } }));
+        assert_eq!(
+            body,
+            json!({ "status": "ok", "response": { "type": "default" } })
+        );
     }
 
     // competitor: hyperliquid; feature: order -> cancel; state: GREEN; target: adapter.inbound
@@ -236,10 +254,14 @@ mod tests {
         .await;
 
         assert_eq!(cancel_status, StatusCode::OK);
-        assert_eq!(cancel_body["response"]["data"]["statuses"][0], json!("success"));
+        assert_eq!(
+            cancel_body["response"]["data"]["statuses"][0],
+            json!("success")
+        );
     }
 
-    // competitor: hyperliquid; feature: order -> cancelByCloid; state: GREEN; target: adapter.inbound
+    // competitor: hyperliquid; feature: order -> cancelByCloid; state: GREEN; target:
+    // adapter.inbound
     #[actix_web::test]
     async fn resting_order_can_be_cancelled_by_cloid_through_the_default_http_path() {
         let vault_address = "0x6666666666666666666666666666666666666666";
@@ -285,7 +307,10 @@ mod tests {
         }))
         .await;
         assert_eq!(cancel_status, StatusCode::OK);
-        assert_eq!(cancel_body["response"]["data"]["statuses"][0], json!("success"));
+        assert_eq!(
+            cancel_body["response"]["data"]["statuses"][0],
+            json!("success")
+        );
     }
 
     #[actix_web::test]
@@ -512,6 +537,11 @@ mod tests {
             }
         }))
         .await;
-        assert_eq!(body["response"]["data"]["statuses"].as_array().map(Vec::len), Some(2));
+        assert_eq!(
+            body["response"]["data"]["statuses"]
+                .as_array()
+                .map(Vec::len),
+            Some(2)
+        );
     }
 }

@@ -80,7 +80,9 @@ mod tests {
     impl FakeOutbound {
         fn due() -> Self {
             let mut schedule = ScheduledCancel::new(USER.0);
-            schedule.replace(Some(NOW_MS), NOW_MS - 5_000).expect("fixture should arm");
+            schedule
+                .replace(Some(NOW_MS), NOW_MS - 5_000)
+                .expect("fixture should arm");
             Self {
                 state: TriggerScheduledCancelState {
                     scheduled_cancel: schedule,
@@ -93,7 +95,10 @@ mod tests {
         }
 
         fn record(&self, events: &[EntityReplayableEvent]) -> Result<(), FakeError> {
-            self.batches.lock().map_err(|_| FakeError)?.push(events.to_vec());
+            self.batches
+                .lock()
+                .map_err(|_| FakeError)?
+                .push(events.to_vec());
             Ok(())
         }
     }
@@ -106,7 +111,10 @@ mod tests {
             1,
             2,
             common_entity::SYSTEM_USER_ID.to_owned(),
-            TriggerScheduledCancelCmd { user_id: USER, now_ms: NOW_MS },
+            TriggerScheduledCancelCmd {
+                user_id: USER,
+                now_ms: NOW_MS,
+            },
         );
         let outbound = FakeOutbound::due();
 
@@ -117,7 +125,10 @@ mod tests {
         assert_eq!(result.events.len(), 1);
         assert_eq!(result.events[0].lsn, 9);
         assert_eq!(result.events[0].logical_ts, NOW_MS);
-        let batches = outbound.batches.lock().expect("test mutex should remain healthy");
+        let batches = outbound
+            .batches
+            .lock()
+            .expect("test mutex should remain healthy");
         assert_eq!(batches.len(), 3);
         assert!(batches.windows(2).all(|pair| pair[0] == pair[1]));
     }

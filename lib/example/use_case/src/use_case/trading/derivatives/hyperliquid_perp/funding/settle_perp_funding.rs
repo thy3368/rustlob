@@ -123,7 +123,10 @@ impl UseCase for SettleHyperliquidPerpFundingUseCase {
             return Err(SettleHyperliquidPerpFundingError::PositionIdsMismatch);
         }
         if state.margin_mode != MarginModeV3::Cross
-            || state.positions.iter().any(|position| position.margin_mode() != MarginModeV3::Cross)
+            || state
+                .positions
+                .iter()
+                .any(|position| position.margin_mode() != MarginModeV3::Cross)
         {
             return Err(SettleHyperliquidPerpFundingError::UnsupportedMarginMode);
         }
@@ -156,7 +159,11 @@ impl UseCase for SettleHyperliquidPerpFundingUseCase {
             cmd.lsn(),
         )?;
         Ok(SettleHyperliquidPerpFundingChanges {
-            created_fundings: output.changed_fundings.into_iter().map(|pair| pair.after).collect(),
+            created_fundings: output
+                .changed_fundings
+                .into_iter()
+                .map(|pair| pair.after)
+                .collect(),
             changed_positions: output.changed_positions,
             changed_margin_balances: output.changed_balances,
         })
@@ -253,15 +260,20 @@ mod tests {
         assert_eq!(changes.created_fundings.len(), 1);
         assert_eq!(changes.created_fundings[0].version(), COMMAND_LSN);
         assert_eq!(changes.changed_positions[0].after.version(), COMMAND_LSN);
-        assert_eq!(changes.changed_margin_balances[0].after.version(), COMMAND_LSN);
+        assert_eq!(
+            changes.changed_margin_balances[0].after.version(),
+            COMMAND_LSN
+        );
 
         let events = changes.to_replayable_events().unwrap();
         assert_eq!(events.len(), 3);
         assert_eq!(events[0].entity_type, UserFunding::entity_type());
         assert_eq!(events[0].previous_lsn, 0);
         assert!(events.iter().all(|event| event.lsn == COMMAND_LSN));
-        let keys =
-            events.iter().map(|event| (event.entity_type, event.entity_id)).collect::<HashSet<_>>();
+        let keys = events
+            .iter()
+            .map(|event| (event.entity_type, event.entity_id))
+            .collect::<HashSet<_>>();
         assert_eq!(keys.len(), events.len());
     }
 

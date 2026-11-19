@@ -188,7 +188,10 @@ mod tests {
     #[test]
     fn records_round_trip_and_use_discriminator() {
         let records = vec![
-            HlNodeRecord::Trade(TradeRecord { coin: Some("BTC".into()), ..Default::default() }),
+            HlNodeRecord::Trade(TradeRecord {
+                coin: Some("BTC".into()),
+                ..Default::default()
+            }),
             HlNodeRecord::Fill(FillRecord {
                 closed_pnl: Some(Decimal::new(12, 1)),
                 ..Default::default()
@@ -206,7 +209,10 @@ mod tests {
         for record in records {
             let encoded = serde_json::to_string(&record).expect("serialize DTO");
             assert!(encoded.contains("\"type\""));
-            assert_eq!(record, serde_json::from_str(&encoded).expect("deserialize DTO"));
+            assert_eq!(
+                record,
+                serde_json::from_str(&encoded).expect("deserialize DTO")
+            );
         }
     }
 

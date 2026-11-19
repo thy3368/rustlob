@@ -64,12 +64,18 @@ impl LogAttr for SpotAccountEvent {
 pub enum SpotAccountError {
     /// 当前状态不接受指定事件，包括已经关闭的终态。
     #[error("account state {state:?} does not accept event {event:?}")]
-    InvalidTransition { state: AccountStatus, event: SpotAccountEvent },
+    InvalidTransition {
+        state: AccountStatus,
+        event: SpotAccountEvent,
+    },
     /// 事件时间早于账户已有时间事实。
     #[error(
         "event timestamp {timestamp} is earlier than the earliest allowed timestamp {earliest_allowed}"
     )]
-    TimestampRegression { timestamp: u64, earliest_allowed: u64 },
+    TimestampRegression {
+        timestamp: u64,
+        earliest_allowed: u64,
+    },
     /// 事件 LSN 早于账户已经应用的全局 command LSN。
     #[error("stale lsn {incoming_lsn}; current lsn is {current_lsn}")]
     StaleLsn { incoming_lsn: u64, current_lsn: u64 },
@@ -99,7 +105,14 @@ impl SpotAccount {
     ///
     /// 该构造器只装配事实，不承担业务校验；风控冻结/解冻应通过 FSM 事件完成。
     pub fn new(account_id: u64, party_id: u64, status: AccountStatus, version: u64) -> Self {
-        Self { account_id, party_id, status, created_at: 0, updated_at: 0, version }
+        Self {
+            account_id,
+            party_id,
+            status,
+            created_at: 0,
+            updated_at: 0,
+            version,
+        }
     }
 
     /// 返回账户当前是否处于可交易、可资金操作的激活状态。
@@ -154,7 +167,10 @@ impl Fsm for SpotAccount {
 
         let earliest_allowed = self.created_at.max(self.updated_at);
         if timestamp < earliest_allowed {
-            return Err(SpotAccountError::TimestampRegression { timestamp, earliest_allowed });
+            return Err(SpotAccountError::TimestampRegression {
+                timestamp,
+                earliest_allowed,
+            });
         }
         if lsn < self.version {
             return Err(SpotAccountError::StaleLsn {
@@ -301,15 +317,24 @@ mod tests {
         assert!(closed.is_closed());
         assert!(!closed.allows_trading_and_funding());
         assert_eq!((active.created_at, active.updated_at), (0, 0));
-        assert_eq!(SpotAccount::four_color_archetype(), FourColorArchetype::PartyPlaceThing);
+        assert_eq!(
+            SpotAccount::four_color_archetype(),
+            FourColorArchetype::PartyPlaceThing
+        );
         assert_eq!(SpotAccount::aggregate_role(), AggregateRole::AggregateRoot);
     }
 
     #[test]
     fn every_event_exposes_log_metadata_and_default_route() {
         for event in [
-            SpotAccountEvent::FreezeForRisk { timestamp: 7, lsn: 9 },
-            SpotAccountEvent::UnfreezeFromRisk { timestamp: 7, lsn: 9 },
+            SpotAccountEvent::FreezeForRisk {
+                timestamp: 7,
+                lsn: 9,
+            },
+            SpotAccountEvent::UnfreezeFromRisk {
+                timestamp: 7,
+                lsn: 9,
+            },
         ] {
             assert_eq!(event.lsn(), 9);
             assert_eq!(event.logical_ts(), 7);
@@ -324,14 +349,20 @@ mod tests {
         let identity_before = (account.account_id, account.party_id, account.created_at);
 
         assert_eq!(
-            account.transition(SpotAccountEvent::FreezeForRisk { timestamp: 25, lsn: 8 }),
+            account.transition(SpotAccountEvent::FreezeForRisk {
+                timestamp: 25,
+                lsn: 8
+            }),
             Ok((AccountStatus::Frozen, ()))
         );
         assert_eq!(
             (account.status, account.updated_at, account.version),
             (AccountStatus::Frozen, 25, 8)
         );
-        assert_eq!((account.account_id, account.party_id, account.created_at), identity_before);
+        assert_eq!(
+            (account.account_id, account.party_id, account.created_at),
+            identity_before
+        );
     }
 
     #[test]
@@ -340,23 +371,53 @@ mod tests {
         let identity_before = (account.account_id, account.party_id, account.created_at);
 
         assert_eq!(
-            account.transition(SpotAccountEvent::UnfreezeFromRisk { timestamp: 30, lsn: 10 }),
+            account.transition(SpotAccountEvent::UnfreezeFromRisk {
+                timestamp: 30,
+                lsn: 10
+            }),
             Ok((AccountStatus::Active, ()))
         );
         assert_eq!(
             (account.status, account.updated_at, account.version),
             (AccountStatus::Active, 30, 10)
         );
-        assert_eq!((account.account_id, account.party_id, account.created_at), identity_before);
+        assert_eq!(
+            (account.account_id, account.party_id, account.created_at),
+            identity_before
+        );
     }
 
     #[test]
     fn invalid_state_event_matrix_is_rejected_without_mutation() {
         let cases = [
-            (AccountStatus::Active, SpotAccountEvent::UnfreezeFromRisk { timestamp: 20, lsn: 4 }),
-            (AccountStatus::Frozen, SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 4 }),
-            (AccountStatus::Closed, SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 4 }),
-            (AccountStatus::Closed, SpotAccountEvent::UnfreezeFromRisk { timestamp: 20, lsn: 4 }),
+            (
+                AccountStatus::Active,
+                SpotAccountEvent::UnfreezeFromRisk {
+                    timestamp: 20,
+                    lsn: 4,
+                },
+            ),
+            (
+                AccountStatus::Frozen,
+                SpotAccountEvent::FreezeForRisk {
+                    timestamp: 20,
+                    lsn: 4,
+                },
+            ),
+            (
+                AccountStatus::Closed,
+                SpotAccountEvent::FreezeForRisk {
+                    timestamp: 20,
+                    lsn: 4,
+                },
+            ),
+            (
+                AccountStatus::Closed,
+                SpotAccountEvent::UnfreezeFromRisk {
+                    timestamp: 20,
+                    lsn: 4,
+                },
+            ),
         ];
 
         for (state, event) in cases {
@@ -375,32 +436,64 @@ mod tests {
         created_at_is_latest.updated_at = 20;
         assert_rejected_without_mutation(
             created_at_is_latest,
-            SpotAccountEvent::FreezeForRisk { timestamp: 29, lsn: 4 },
-            SpotAccountError::TimestampRegression { timestamp: 29, earliest_allowed: 30 },
+            SpotAccountEvent::FreezeForRisk {
+                timestamp: 29,
+                lsn: 4,
+            },
+            SpotAccountError::TimestampRegression {
+                timestamp: 29,
+                earliest_allowed: 30,
+            },
         );
 
         assert_rejected_without_mutation(
             account(AccountStatus::Frozen, 3),
-            SpotAccountEvent::UnfreezeFromRisk { timestamp: 19, lsn: 4 },
-            SpotAccountError::TimestampRegression { timestamp: 19, earliest_allowed: 20 },
+            SpotAccountEvent::UnfreezeFromRisk {
+                timestamp: 19,
+                lsn: 4,
+            },
+            SpotAccountError::TimestampRegression {
+                timestamp: 19,
+                earliest_allowed: 20,
+            },
         );
     }
 
     #[test]
     fn command_lsn_can_jump_repeat_and_reach_max_while_stale_is_atomic() {
         let mut subject = account(AccountStatus::Active, 4);
-        subject.apply(SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 20 }).unwrap();
-        subject.apply(SpotAccountEvent::UnfreezeFromRisk { timestamp: 20, lsn: 20 }).unwrap();
+        subject
+            .apply(SpotAccountEvent::FreezeForRisk {
+                timestamp: 20,
+                lsn: 20,
+            })
+            .unwrap();
+        subject
+            .apply(SpotAccountEvent::UnfreezeFromRisk {
+                timestamp: 20,
+                lsn: 20,
+            })
+            .unwrap();
         assert_eq!(subject.version, 20);
 
         assert_rejected_without_mutation(
             subject,
-            SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: 19 },
-            SpotAccountError::StaleLsn { incoming_lsn: 19, current_lsn: 20 },
+            SpotAccountEvent::FreezeForRisk {
+                timestamp: 20,
+                lsn: 19,
+            },
+            SpotAccountError::StaleLsn {
+                incoming_lsn: 19,
+                current_lsn: 20,
+            },
         );
 
         let mut max = account(AccountStatus::Active, u64::MAX);
-        max.apply(SpotAccountEvent::FreezeForRisk { timestamp: 20, lsn: u64::MAX }).unwrap();
+        max.apply(SpotAccountEvent::FreezeForRisk {
+            timestamp: 20,
+            lsn: u64::MAX,
+        })
+        .unwrap();
         assert_eq!(max.version, u64::MAX);
     }
 
@@ -408,9 +501,15 @@ mod tests {
     fn apply_reuses_transition_and_only_discards_output() {
         let mut transitioned = account(AccountStatus::Active, 7);
         let mut applied = transitioned.clone();
-        let event = SpotAccountEvent::FreezeForRisk { timestamp: 25, lsn: 8 };
+        let event = SpotAccountEvent::FreezeForRisk {
+            timestamp: 25,
+            lsn: 8,
+        };
 
-        assert_eq!(transitioned.transition(event), Ok((AccountStatus::Frozen, ())));
+        assert_eq!(
+            transitioned.transition(event),
+            Ok((AccountStatus::Frozen, ()))
+        );
         applied.apply(event).unwrap();
         assert_eq!(applied, transitioned);
     }

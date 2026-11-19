@@ -163,7 +163,10 @@ mod tests {
             1,
             1,
             "trader-1".to_owned(),
-            DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 0 },
+            DepositQuoteCmd {
+                party_id: "trader-1".to_string(),
+                amount: 0,
+            },
         ));
 
         assert_eq!(result, Err(DepositQuoteError::InvalidAmount));
@@ -178,11 +181,15 @@ mod tests {
             1,
             1,
             "trader-1".to_owned(),
-            DepositQuoteCmd { party_id: "trader-1".to_string(), amount: 200 },
+            DepositQuoteCmd {
+                party_id: "trader-1".to_string(),
+                amount: 200,
+            },
         );
         let changes = use_case.compute_state_diff(&command, sample_state())?;
-        let events =
-            changes.to_replayable_events().map_err(|_| DepositQuoteError::ArithmeticOverflow)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(|_| DepositQuoteError::ArithmeticOverflow)?;
 
         assert_eq!(events.len(), 1);
         assert!(events[0].is_updated());
@@ -190,7 +197,10 @@ mod tests {
         assert_eq!(event_field(&events[0], "coin_idx"), None);
         assert_eq!(field_as_u64(&events[0], "available"), Some(1_200));
         assert_eq!(field_as_u64(&events[0], "frozen"), None);
-        assert_eq!(changes.updated_quote_balance.after.available(), 1_200.into());
+        assert_eq!(
+            changes.updated_quote_balance.after.available(),
+            1_200.into()
+        );
 
         Ok(())
     }

@@ -141,7 +141,10 @@ mod compute_query_tests {
     }
 
     fn query() -> QueryHyperliquidPerpOrderDetail {
-        QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 1 }
+        QueryHyperliquidPerpOrderDetail {
+            party_id: "trader-1".to_string(),
+            order_id: 1,
+        }
     }
 
     fn sample_order() -> HyperliquidPerpOrder {
@@ -175,11 +178,17 @@ mod compute_query_tests {
         }
         assert_eq!(
             QueryHyperliquidPerpOrderDetailUseCase.validate_query(
-                &QueryHyperliquidPerpOrderDetail { party_id: "trader-1".to_string(), order_id: 0 },
+                &QueryHyperliquidPerpOrderDetail {
+                    party_id: "trader-1".to_string(),
+                    order_id: 0
+                },
             ),
             Err(QueryHyperliquidPerpOrderDetailError::InvalidOrderId)
         );
-        assert_eq!(QueryHyperliquidPerpOrderDetailUseCase.validate_query(&query()), Ok(()));
+        assert_eq!(
+            QueryHyperliquidPerpOrderDetailUseCase.validate_query(&query()),
+            Ok(())
+        );
     }
 
     #[test]
@@ -190,7 +199,9 @@ mod compute_query_tests {
                 &NotFoundSource,
                 &QueryHyperliquidPerpOrderDetailUseCase,
             ),
-            Err(QueryExecutionError::Business(QueryHyperliquidPerpOrderDetailError::OrderNotFound))
+            Err(QueryExecutionError::Business(
+                QueryHyperliquidPerpOrderDetailError::OrderNotFound
+            ))
         );
     }
 
@@ -200,8 +211,10 @@ mod compute_query_tests {
         order.account_id = "trader-2".to_string();
 
         assert_eq!(
-            QueryHyperliquidPerpOrderDetailUseCase
-                .compute_query(&query(), QueryHyperliquidPerpOrderDetailReadModel::Found(order),),
+            QueryHyperliquidPerpOrderDetailUseCase.compute_query(
+                &query(),
+                QueryHyperliquidPerpOrderDetailReadModel::Found(order),
+            ),
             Err(QueryHyperliquidPerpOrderDetailError::NotOrderOwner)
         );
     }
@@ -212,8 +225,10 @@ mod compute_query_tests {
         order.order_id = 2;
 
         assert_eq!(
-            QueryHyperliquidPerpOrderDetailUseCase
-                .compute_query(&query(), QueryHyperliquidPerpOrderDetailReadModel::Found(order),),
+            QueryHyperliquidPerpOrderDetailUseCase.compute_query(
+                &query(),
+                QueryHyperliquidPerpOrderDetailReadModel::Found(order),
+            ),
             Err(QueryHyperliquidPerpOrderDetailError::InconsistentOrderState)
         );
     }

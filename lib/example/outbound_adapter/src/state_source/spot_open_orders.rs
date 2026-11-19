@@ -46,7 +46,10 @@ mod tests {
         let source = ScheduleCancelSpotOrderSource::new(&outbound);
 
         let loaded = source
-            .load_read_model(&OpenSpotOrdersQuery { user: USER.to_string(), dex: None })
+            .load_read_model(&OpenSpotOrdersQuery {
+                user: USER.to_string(),
+                dex: None,
+            })
             .expect("应加载快照");
 
         assert_eq!(loaded.0.len(), 1);

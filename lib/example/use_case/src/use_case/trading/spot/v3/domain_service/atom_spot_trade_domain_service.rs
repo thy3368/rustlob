@@ -119,15 +119,37 @@ fn validate_balances(
         OrderSide::Sell => (trade.maker_user.0, trade.taker_user.0),
     };
     let expected = [
-        (buyer_base, buyer_party, u64::from(trade.symbol.base.index())),
-        (buyer_quote, buyer_party, u64::from(trade.symbol.quote.index())),
-        (seller_base, seller_party, u64::from(trade.symbol.base.index())),
-        (seller_quote, seller_party, u64::from(trade.symbol.quote.index())),
+        (
+            buyer_base,
+            buyer_party,
+            u64::from(trade.symbol.base.index()),
+        ),
+        (
+            buyer_quote,
+            buyer_party,
+            u64::from(trade.symbol.quote.index()),
+        ),
+        (
+            seller_base,
+            seller_party,
+            u64::from(trade.symbol.base.index()),
+        ),
+        (
+            seller_quote,
+            seller_party,
+            u64::from(trade.symbol.quote.index()),
+        ),
     ];
-    if expected.iter().any(|(balance, party, _)| balance.party_id() != *party) {
+    if expected
+        .iter()
+        .any(|(balance, party, _)| balance.party_id() != *party)
+    {
         return Err(SpotTradeDomainServiceError::BalancePartyMismatch);
     }
-    if expected.iter().any(|(balance, _, coin)| balance.coin_idx() != *coin) {
+    if expected
+        .iter()
+        .any(|(balance, _, coin)| balance.coin_idx() != *coin)
+    {
         return Err(SpotTradeDomainServiceError::BalanceCoinMismatch);
     }
     if buyer_base.account_id() != buyer_quote.account_id()
@@ -161,7 +183,15 @@ mod tests {
     const LSN: u64 = 20;
 
     fn balance(party: u64, account: u64, coin: Coin, available: i64, frozen: i64) -> BalanceV2 {
-        BalanceV2::new(party, account, u64::from(coin.index()), available, frozen, 4, 100)
+        BalanceV2::new(
+            party,
+            account,
+            u64::from(coin.index()),
+            available,
+            frozen,
+            4,
+            100,
+        )
     }
 
     fn inputs(
@@ -229,11 +259,26 @@ mod tests {
         let outcome = settle(&values).unwrap();
 
         assert_eq!(values, before);
-        assert_eq!(outcome.trade_after.settlement_status, SpotTradeSettlementStatus::Settled);
-        assert_eq!(outcome.buyer_quote_balance_after.frozen(), Decimal::from(13));
-        assert_eq!(outcome.buyer_base_balance_after.available(), Decimal::from(13));
-        assert_eq!(outcome.seller_base_balance_after.frozen(), Decimal::from(17));
-        assert_eq!(outcome.seller_quote_balance_after.available(), Decimal::from(14));
+        assert_eq!(
+            outcome.trade_after.settlement_status,
+            SpotTradeSettlementStatus::Settled
+        );
+        assert_eq!(
+            outcome.buyer_quote_balance_after.frozen(),
+            Decimal::from(13)
+        );
+        assert_eq!(
+            outcome.buyer_base_balance_after.available(),
+            Decimal::from(13)
+        );
+        assert_eq!(
+            outcome.seller_base_balance_after.frozen(),
+            Decimal::from(17)
+        );
+        assert_eq!(
+            outcome.seller_quote_balance_after.available(),
+            Decimal::from(14)
+        );
         for balance in [
             &outcome.buyer_quote_balance_after,
             &outcome.buyer_base_balance_after,
@@ -254,8 +299,14 @@ mod tests {
 
         assert_eq!(outcome.buyer_base_balance_after.party_id(), 20);
         assert_eq!(outcome.seller_base_balance_after.party_id(), 10);
-        assert_eq!(outcome.buyer_quote_balance_after.frozen(), Decimal::from(12));
-        assert_eq!(outcome.seller_quote_balance_after.available(), Decimal::from(15));
+        assert_eq!(
+            outcome.buyer_quote_balance_after.frozen(),
+            Decimal::from(12)
+        );
+        assert_eq!(
+            outcome.seller_quote_balance_after.available(),
+            Decimal::from(15)
+        );
     }
 
     #[test]
@@ -273,7 +324,9 @@ mod tests {
         let before = settled.clone();
         assert_eq!(
             settle(&settled),
-            Err(SpotTradeDomainServiceError::TradeState(SpotTradeStateError::AlreadySettled))
+            Err(SpotTradeDomainServiceError::TradeState(
+                SpotTradeStateError::AlreadySettled
+            ))
         );
         assert_eq!(settled, before);
 
@@ -282,17 +335,27 @@ mod tests {
         let before = insufficient.clone();
         assert_eq!(
             settle(&insufficient),
-            Err(SpotTradeDomainServiceError::Balance(BalanceV2Error::InsufficientFrozenBalance))
+            Err(SpotTradeDomainServiceError::Balance(
+                BalanceV2Error::InsufficientFrozenBalance
+            ))
         );
         assert_eq!(insufficient, before);
 
         let mut closed = inputs(OrderSide::Buy, 2);
         closed.1 = BalanceV2::new(10, 10, u64::from(Coin::BTC.index()), 0, 0, 4, 100);
-        closed.1.apply(BalanceV2Event::Close { timestamp: 200, lsn: 200 }).unwrap();
+        closed
+            .1
+            .apply(BalanceV2Event::Close {
+                timestamp: 200,
+                lsn: 200,
+            })
+            .unwrap();
         let before = closed.clone();
         assert_eq!(
             settle(&closed),
-            Err(SpotTradeDomainServiceError::Balance(BalanceV2Error::BalanceClosed))
+            Err(SpotTradeDomainServiceError::Balance(
+                BalanceV2Error::BalanceClosed
+            ))
         );
         assert_eq!(closed, before);
     }
@@ -301,21 +364,33 @@ mod tests {
     fn rejects_identity_coin_account_and_duplicate_balances_without_mutation() {
         let mut party = inputs(OrderSide::Buy, 2);
         party.1 = balance(99, 10, Coin::BTC, 10, 0);
-        assert_eq!(settle(&party), Err(SpotTradeDomainServiceError::BalancePartyMismatch));
+        assert_eq!(
+            settle(&party),
+            Err(SpotTradeDomainServiceError::BalancePartyMismatch)
+        );
 
         let mut coin = inputs(OrderSide::Buy, 2);
         coin.1 = balance(10, 10, Coin::USDT, 10, 0);
-        assert_eq!(settle(&coin), Err(SpotTradeDomainServiceError::BalanceCoinMismatch));
+        assert_eq!(
+            settle(&coin),
+            Err(SpotTradeDomainServiceError::BalanceCoinMismatch)
+        );
 
         let mut account = inputs(OrderSide::Buy, 2);
         account.2 = balance(10, 11, Coin::USDT, 10, 20);
-        assert_eq!(settle(&account), Err(SpotTradeDomainServiceError::AccountMismatch));
+        assert_eq!(
+            settle(&account),
+            Err(SpotTradeDomainServiceError::AccountMismatch)
+        );
 
         let mut duplicate = inputs(OrderSide::Buy, 2);
         duplicate.3 = balance(20, 10, Coin::BTC, 10, 20);
         duplicate.4 = balance(20, 10, Coin::USDT, 10, 0);
         let before = duplicate.clone();
-        assert_eq!(settle(&duplicate), Err(SpotTradeDomainServiceError::DuplicateBalance));
+        assert_eq!(
+            settle(&duplicate),
+            Err(SpotTradeDomainServiceError::DuplicateBalance)
+        );
         assert_eq!(duplicate, before);
     }
 }

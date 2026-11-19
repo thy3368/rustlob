@@ -74,7 +74,11 @@ pub enum AeronMatchSpotOrderError {
     #[error(
         "Aeron fragment is outside its buffer: offset={offset}, length={length}, capacity={capacity}"
     )]
-    InvalidFragmentBounds { offset: Index, length: Index, capacity: Index },
+    InvalidFragmentBounds {
+        offset: Index,
+        length: Index,
+        capacity: Index,
+    },
     #[error("failed to decode Aeron fragment as EntityReplayableEvent: {0}")]
     Decode(#[source] serde_json::Error),
     #[error("failed to handle spot order event: {0:?}")]
@@ -112,9 +116,15 @@ impl From<AeronListenerError<DefaultMatchSpotOrderCreatedEventError>> for AeronM
             AeronListenerError::Aeron(error) => Self::Aeron(error),
             AeronListenerError::Subscription(error) => Self::Subscription(error),
             AeronListenerError::SubscriptionLock => Self::SubscriptionLock,
-            AeronListenerError::InvalidFragmentBounds { offset, length, capacity } => {
-                Self::InvalidFragmentBounds { offset, length, capacity }
-            }
+            AeronListenerError::InvalidFragmentBounds {
+                offset,
+                length,
+                capacity,
+            } => Self::InvalidFragmentBounds {
+                offset,
+                length,
+                capacity,
+            },
             AeronListenerError::Decode(error) => Self::Decode(error),
             AeronListenerError::EventHandler(error) => Self::from(error),
         }

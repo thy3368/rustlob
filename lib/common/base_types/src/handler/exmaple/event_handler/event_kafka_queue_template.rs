@@ -47,7 +47,9 @@ pub struct MockKafkaBroker {
 
 impl MockKafkaBroker {
     pub fn new() -> Self {
-        Self { records: VecDeque::new() }
+        Self {
+            records: VecDeque::new(),
+        }
     }
 
     pub fn publish(&mut self, record: KafkaRecord) {
@@ -125,7 +127,9 @@ pub fn run_full_event_chain_via_kafka_queue() -> Result<SettlementResult, EventH
         }
     }
 
-    Err(EventHandlerError("kafka queue ended without settlement result".into()))
+    Err(EventHandlerError(
+        "kafka queue ended without settlement result".into(),
+    ))
 }
 
 #[cfg(test)]

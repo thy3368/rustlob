@@ -101,16 +101,20 @@ pub enum PriceCalculationError {
 }
 // checked arithmetic keeps decimal overflow as a domain error instead of panicking.
 fn add(a: Decimal, b: Decimal) -> Result<Decimal, PriceCalculationError> {
-    a.checked_add(b).ok_or(PriceCalculationError::ArithmeticOverflow)
+    a.checked_add(b)
+        .ok_or(PriceCalculationError::ArithmeticOverflow)
 }
 fn sub(a: Decimal, b: Decimal) -> Result<Decimal, PriceCalculationError> {
-    a.checked_sub(b).ok_or(PriceCalculationError::ArithmeticOverflow)
+    a.checked_sub(b)
+        .ok_or(PriceCalculationError::ArithmeticOverflow)
 }
 fn mul(a: Decimal, b: Decimal) -> Result<Decimal, PriceCalculationError> {
-    a.checked_mul(b).ok_or(PriceCalculationError::ArithmeticOverflow)
+    a.checked_mul(b)
+        .ok_or(PriceCalculationError::ArithmeticOverflow)
 }
 fn div(a: Decimal, b: Decimal) -> Result<Decimal, PriceCalculationError> {
-    a.checked_div(b).ok_or(PriceCalculationError::ArithmeticOverflow)
+    a.checked_div(b)
+        .ok_or(PriceCalculationError::ArithmeticOverflow)
 }
 fn weighted_median(
     items: &[(Decimal, Decimal)],
@@ -130,7 +134,9 @@ fn weighted_median(
     }
     // Sort by price, then return the first value whose cumulative weight reaches half.
     sorted.sort_by_key(|a| a.0);
-    let total = sorted.iter().try_fold(Decimal::ZERO, |s, (_, w)| add(s, *w))?;
+    let total = sorted
+        .iter()
+        .try_fold(Decimal::ZERO, |s, (_, w)| add(s, *w))?;
     let half = div(total, Decimal::from(2u32))?;
     let mut cumulative = Decimal::ZERO;
     for (price, weight) in sorted {
@@ -143,7 +149,13 @@ fn weighted_median(
 }
 fn median(values: &[Decimal], label: &'static str) -> Result<Decimal, PriceCalculationError> {
     // Equal unit weights make even-sized inputs choose the upper middle candidate.
-    weighted_median(&values.iter().map(|p| (*p, Decimal::ONE)).collect::<Vec<_>>(), label)
+    weighted_median(
+        &values
+            .iter()
+            .map(|p| (*p, Decimal::ONE))
+            .collect::<Vec<_>>(),
+        label,
+    )
 }
 
 /// 计算外部现货与验证者共识形成的 `oraclePx`。
@@ -151,13 +163,21 @@ fn median(values: &[Decimal], label: &'static str) -> Result<Decimal, PriceCalcu
 /// 这是确定性的纯计算；行情快照必须由调用方传入。本函数不访问网络，也不修改
 /// funding、position 或 balance。`oraclePx` 用于现货/验证者共识与资金费结算。
 pub fn oracle_px(input: &OraclePriceInput) -> Result<Price, PriceCalculationError> {
-    let spot = input.cex_spot_mids.iter().map(|v| (v.price, v.weight)).collect::<Vec<_>>();
+    let spot = input
+        .cex_spot_mids
+        .iter()
+        .map(|v| (v.price, v.weight))
+        .collect::<Vec<_>>();
     let single = weighted_median(&spot, "spot mids")?;
     if input.validator_quotes.is_empty() {
         return Ok(single);
     }
     weighted_median(
-        &input.validator_quotes.iter().map(|v| (v.price, v.stake)).collect::<Vec<_>>(),
+        &input
+            .validator_quotes
+            .iter()
+            .map(|v| (v.price, v.stake))
+            .collect::<Vec<_>>(),
         "validator quotes",
     )
 }
@@ -191,17 +211,25 @@ pub fn mark_px(input: &MarkPriceInput) -> Result<Price, PriceCalculationError> {
             return Err(PriceCalculationError::NonPositivePrice("book mid"));
         }
         let basis = sub(mid, input.oracle)?;
-        candidates
-            .push(add(input.oracle, ema(input.previous_basis_ema, basis, input.basis_alpha)?)?);
+        candidates.push(add(
+            input.oracle,
+            ema(input.previous_basis_ema, basis, input.basis_alpha)?,
+        )?);
     }
-    let book_values =
-        [input.book.bid, input.book.ask, input.book.last].into_iter().flatten().collect::<Vec<_>>();
+    let book_values = [input.book.bid, input.book.ask, input.book.last]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
     if book_values.len() == 3 {
         candidates.push(median(&book_values, "book prices")?);
     }
     if !input.external_perp_mids.is_empty() {
         candidates.push(weighted_median(
-            &input.external_perp_mids.iter().map(|v| (v.price, v.weight)).collect::<Vec<_>>(),
+            &input
+                .external_perp_mids
+                .iter()
+                .map(|v| (v.price, v.weight))
+                .collect::<Vec<_>>(),
             "external perp mids",
         )?);
     }
@@ -210,10 +238,16 @@ pub fn mark_px(input: &MarkPriceInput) -> Result<Price, PriceCalculationError> {
             return Err(PriceCalculationError::NoMarkCandidate);
         }
         let average = div(
-            book_values.iter().try_fold(Decimal::ZERO, |s, p| add(s, *p))?,
+            book_values
+                .iter()
+                .try_fold(Decimal::ZERO, |s, p| add(s, *p))?,
             Decimal::from(book_values.len() as u32),
         )?;
-        candidates.push(ema(input.previous_book_ema_30s, average, input.book_ema_alpha_30s)?);
+        candidates.push(ema(
+            input.previous_book_ema_30s,
+            average,
+            input.book_ema_alpha_30s,
+        )?);
     }
     for candidate in &candidates {
         if *candidate <= Decimal::ZERO {
@@ -230,7 +264,11 @@ mod tests {
         Decimal::from(v)
     }
     fn venue(p: i64, w: i64) -> VenueMid {
-        VenueMid { venue: String::new(), price: d(p), weight: d(w) }
+        VenueMid {
+            venue: String::new(),
+            price: d(p),
+            weight: d(w),
+        }
     }
     fn mark() -> MarkPriceInput {
         MarkPriceInput {
@@ -267,8 +305,16 @@ mod tests {
             coin: "BTC".into(),
             cex_spot_mids: vec![venue(100, 1)],
             validator_quotes: vec![
-                ValidatorQuote { validator: String::new(), price: d(90), stake: d(1) },
-                ValidatorQuote { validator: String::new(), price: d(110), stake: d(3) },
+                ValidatorQuote {
+                    validator: String::new(),
+                    price: d(90),
+                    stake: d(1),
+                },
+                ValidatorQuote {
+                    validator: String::new(),
+                    price: d(110),
+                    stake: d(3),
+                },
             ],
         };
         assert_eq!(oracle_px(&i).unwrap(), d(110));

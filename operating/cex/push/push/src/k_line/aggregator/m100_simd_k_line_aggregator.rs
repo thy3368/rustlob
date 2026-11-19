@@ -93,7 +93,11 @@ impl M100SimdKLineAggregator {
 
     #[inline(always)]
     fn send_event(&self, window: TimeWindow, ohlc: OHLC, is_new_window: bool) {
-        let event = KLineUpdateEvent { window, ohlc, is_new_window };
+        let event = KLineUpdateEvent {
+            window,
+            ohlc,
+            is_new_window,
+        };
 
         let handler_count = self.event_handler_count;
         let handlers = &self.event_handlers;
@@ -349,7 +353,15 @@ impl M100SimdKLineAggregator {
 
     #[inline(always)]
     fn update_window_with_stats(&mut self, update: WindowStatsUpdate) -> Result<(), String> {
-        let WindowStatsUpdate { window_idx, window_start, open, high, low, close, volume } = update;
+        let WindowStatsUpdate {
+            window_idx,
+            window_start,
+            open,
+            high,
+            low,
+            close,
+            volume,
+        } = update;
         let window = match window_idx {
             0 => TimeWindow::Second,
             1 => TimeWindow::Minute,

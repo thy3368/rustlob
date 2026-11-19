@@ -60,7 +60,11 @@ impl<O: LobOrder> LocalLobBtree<O> {
         Ok(())
     }
     fn remove_idx(&mut self, o: &O, i: SlotIndex) {
-        let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
+        let map = if O::is_buy_side(o.side()) {
+            &mut self.bids
+        } else {
+            &mut self.asks
+        };
         let price = Px(o.px());
         if let Some(v) = map.get_mut(&price) {
             v.retain(|&x| x != i);
@@ -76,7 +80,11 @@ impl<O: LobOrder> LocalLobBtree<O> {
         let price = Px(o.px());
         let priority = (o.created_at(), o.entity_id());
         let position = {
-            let map = if O::is_buy_side(o.side()) { &self.bids } else { &self.asks };
+            let map = if O::is_buy_side(o.side()) {
+                &self.bids
+            } else {
+                &self.asks
+            };
             map.get(&price)
                 .map(|indices| {
                     indices
@@ -90,7 +98,11 @@ impl<O: LobOrder> LocalLobBtree<O> {
                 })
                 .unwrap_or(0)
         };
-        let map = if O::is_buy_side(o.side()) { &mut self.bids } else { &mut self.asks };
+        let map = if O::is_buy_side(o.side()) {
+            &mut self.bids
+        } else {
+            &mut self.asks
+        };
         map.entry(price).or_default().insert(position, i);
     }
     // 按订单 ID 插入或更新主存储，并同步维护对应的买卖盘价格索引。
@@ -138,7 +150,14 @@ impl<O: LobOrder> LocalLobBtree<O> {
             }
         }
 
-        (if orders.is_empty() { None } else { Some(orders) }, remaining)
+        (
+            if orders.is_empty() {
+                None
+            } else {
+                Some(orders)
+            },
+            remaining,
+        )
     }
 }
 impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
@@ -229,8 +248,9 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
                 self.put(order);
             }
             t if t == EntityChangeType::Deleted.as_tag() => {
-                let old =
-                    self.order(id).ok_or_else(|| LobError::Event("order does not exist".into()))?;
+                let old = self
+                    .order(id)
+                    .ok_or_else(|| LobError::Event("order does not exist".into()))?;
                 if old.entity_ver() != event.previous_lsn {
                     return Err(LobError::Event("invalid delete".into()));
                 }
@@ -273,7 +293,15 @@ mod tests {
 
     impl TestOrder {
         fn new(id: u64, price: Decimal, qty: Decimal, side: Side, created_at: u64) -> Self {
-            Self { id, price, qty, size: qty, side, created_at, symbol: test_symbol() }
+            Self {
+                id,
+                price,
+                qty,
+                size: qty,
+                side,
+                created_at,
+                symbol: test_symbol(),
+            }
         }
 
         fn with_symbol(mut self, symbol: Symbol) -> Self {
@@ -339,7 +367,10 @@ mod tests {
     fn price_key_bincode_matches_decimal() {
         let value = Decimal::new(4_212_345, 5);
 
-        assert_eq!(bincode::serialize(&Px(value)).unwrap(), bincode::serialize(&value).unwrap());
+        assert_eq!(
+            bincode::serialize(&Px(value)).unwrap(),
+            bincode::serialize(&value).unwrap()
+        );
     }
 
     #[test]
@@ -454,14 +485,26 @@ mod tests {
             lob.insert_order(order).unwrap();
         }
 
-        lob.insert_order(TestOrder::new(1, Decimal::new(100, 0), Decimal::ONE, Side::Sell, 40))
-            .unwrap();
+        lob.insert_order(TestOrder::new(
+            1,
+            Decimal::new(100, 0),
+            Decimal::ONE,
+            Side::Sell,
+            40,
+        ))
+        .unwrap();
         let (orders, _) = lob.maker_orders(Decimal::new(100, 0), Decimal::new(3, 0), Side::Buy);
         let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
         assert_eq!(ids, vec![2, 3, 1]);
 
-        lob.insert_order(TestOrder::new(3, Decimal::new(99, 0), Decimal::ONE, Side::Sell, 50))
-            .unwrap();
+        lob.insert_order(TestOrder::new(
+            3,
+            Decimal::new(99, 0),
+            Decimal::ONE,
+            Side::Sell,
+            50,
+        ))
+        .unwrap();
         let (orders, _) = lob.maker_orders(Decimal::new(100, 0), Decimal::new(3, 0), Side::Buy);
         let ids: Vec<_> = orders.unwrap().into_iter().map(|order| order.id).collect();
         assert_eq!(ids, vec![3, 2, 1]);
@@ -522,8 +565,14 @@ mod tests {
                 .with_size(Decimal::new(150, 2)),
         )
         .unwrap();
-        lob.insert_order(TestOrder::new(2, Decimal::ONE, Decimal::new(225, 2), Side::Sell, 2))
-            .unwrap();
+        lob.insert_order(TestOrder::new(
+            2,
+            Decimal::ONE,
+            Decimal::new(225, 2),
+            Side::Sell,
+            2,
+        ))
+        .unwrap();
 
         let (orders, remaining) = lob.maker_orders(Decimal::ONE, Decimal::new(375, 2), Side::Buy);
         assert_eq!(orders.unwrap().len(), 2);

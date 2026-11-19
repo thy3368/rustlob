@@ -139,7 +139,11 @@ pub struct JsonRpcError {
 #[derive(Debug)]
 pub enum RpcError {
     Http(reqwest::Error),
-    HttpStatus { url: String, status: StatusCode, body: String },
+    HttpStatus {
+        url: String,
+        status: StatusCode,
+        body: String,
+    },
     InvalidJson(serde_json::Error),
     JsonRpc(JsonRpcError),
     InvalidResponse(&'static str),
@@ -155,7 +159,11 @@ impl fmt::Display for RpcError {
             }
             Self::InvalidJson(error) => write!(formatter, "RPC returned invalid JSON: {error}"),
             Self::JsonRpc(error) => {
-                write!(formatter, "JSON-RPC error {}: {}", error.code, error.message)
+                write!(
+                    formatter,
+                    "JSON-RPC error {}: {}",
+                    error.code, error.message
+                )
             }
             Self::InvalidResponse(message) => {
                 write!(formatter, "invalid JSON-RPC response: {message}")
@@ -193,7 +201,10 @@ fn request(block_number: u64) -> JsonRpcRequest {
     JsonRpcRequest {
         jsonrpc: JSON_RPC_VERSION,
         method: METHOD,
-        params: [GetBlockParams { stream: STREAM, block_number }],
+        params: [GetBlockParams {
+            stream: STREAM,
+            block_number,
+        }],
         id: REQUEST_ID,
     }
 }
@@ -201,14 +212,22 @@ fn request(block_number: u64) -> JsonRpcRequest {
 /// 从调用方指定的 endpoint 获取 `replica_cmds` 块。
 #[allow(clippy::large_futures)] // nightly Clippy 无法计算 reqwest opaque future 的布局。
 pub async fn get_block(rpc_url: &str, block_number: u64) -> Result<FetchedBlock, RpcError> {
-    let response =
-        Box::pin(reqwest::Client::new().post(rpc_url).json(&request(block_number)).send())
-            .await
-            .map_err(RpcError::Http)?;
+    let response = Box::pin(
+        reqwest::Client::new()
+            .post(rpc_url)
+            .json(&request(block_number))
+            .send(),
+    )
+    .await
+    .map_err(RpcError::Http)?;
     let status = response.status();
     let body = Box::pin(response.text()).await.map_err(RpcError::Http)?;
     if !status.is_success() {
-        return Err(RpcError::HttpStatus { url: rpc_url.to_owned(), status, body });
+        return Err(RpcError::HttpStatus {
+            url: rpc_url.to_owned(),
+            status,
+            body,
+        });
     }
 
     let raw_response: Value = serde_json::from_str(&body).map_err(RpcError::InvalidJson)?;
@@ -226,7 +245,11 @@ pub async fn get_block(rpc_url: &str, block_number: u64) -> Result<FetchedBlock,
     }
     let block = serde_json::from_value(raw_block.clone()).map_err(RpcError::InvalidBlock)?;
 
-    Ok(FetchedBlock { raw_response, raw_block, block })
+    Ok(FetchedBlock {
+        raw_response,
+        raw_block,
+        block,
+    })
 }
 
 #[cfg(test)]

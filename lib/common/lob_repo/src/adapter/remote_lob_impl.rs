@@ -13,7 +13,10 @@ pub struct RemoteLob<O: LobOrder> {
 
 impl<O: LobOrder> RemoteLob<O> {
     pub fn new(symbol: TradingPair) -> Self {
-        Self { symbol, _phantom: std::marker::PhantomData }
+        Self {
+            symbol,
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     pub fn symbol(&self) -> &TradingPair {

@@ -45,10 +45,26 @@ pub struct PositionFill {
 }
 #[derive(Debug, Clone)]
 pub enum PositionEvent {
-    TradeFilled { fill: PositionFill, logical_ts: u64, lsn: u64 },
-    FundingSettled { signed_amount: Decimal, logical_ts: u64, lsn: u64 },
-    LeverageUpdated { leverage: Leverage, logical_ts: u64, lsn: u64 },
-    IsolatedMarginAdjusted { delta: Decimal, logical_ts: u64, lsn: u64 },
+    TradeFilled {
+        fill: PositionFill,
+        logical_ts: u64,
+        lsn: u64,
+    },
+    FundingSettled {
+        signed_amount: Decimal,
+        logical_ts: u64,
+        lsn: u64,
+    },
+    LeverageUpdated {
+        leverage: Leverage,
+        logical_ts: u64,
+        lsn: u64,
+    },
+    IsolatedMarginAdjusted {
+        delta: Decimal,
+        logical_ts: u64,
+        lsn: u64,
+    },
 }
 impl Shard for PositionEvent {
     fn partition(&self) -> u8 {
@@ -144,7 +160,11 @@ impl PositionV4 {
             state: PositionState::Empty,
             szi: Decimal::ZERO,
             entry_px: Decimal::ZERO,
-            leverage: Leverage { leverage_type: MarginMode::Cross, value: 1, raw_usd: None },
+            leverage: Leverage {
+                leverage_type: MarginMode::Cross,
+                value: 1,
+                raw_usd: None,
+            },
             cum_funding: FundingAccum::default(),
             version: 0,
             created_at: 0,
@@ -224,11 +244,16 @@ impl Fsm for PositionV4 {
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let lsn = event.lsn();
         if lsn < self.version {
-            return Err(PositionError::StaleLsn { incoming_lsn: lsn, current_lsn: self.version });
+            return Err(PositionError::StaleLsn {
+                incoming_lsn: lsn,
+                current_lsn: self.version,
+            });
         }
         let mut n = self.clone();
         let out = match event {
-            PositionEvent::TradeFilled { fill, logical_ts, .. } => {
+            PositionEvent::TradeFilled {
+                fill, logical_ts, ..
+            } => {
                 if fill.signed_quantity.is_zero() {
                     return Err(PositionError::InvalidQuantity);
                 }
@@ -245,9 +270,13 @@ impl Fsm for PositionV4 {
                 } else {
                     before.abs().min(fill.signed_quantity.abs())
                 };
-                let d =
-                    fill.price.checked_sub(n.entry_px).ok_or(PositionError::ArithmeticOverflow)?;
-                let mut pnl = closing.checked_mul(d).ok_or(PositionError::ArithmeticOverflow)?;
+                let d = fill
+                    .price
+                    .checked_sub(n.entry_px)
+                    .ok_or(PositionError::ArithmeticOverflow)?;
+                let mut pnl = closing
+                    .checked_mul(d)
+                    .ok_or(PositionError::ArithmeticOverflow)?;
                 if before.is_sign_negative() {
                     pnl = -pnl;
                 }
@@ -272,7 +301,11 @@ impl Fsm for PositionV4 {
                 };
                 n.szi = total;
                 n.entry_px = entry;
-                n.state = if total.is_zero() { PositionState::Flat } else { PositionState::Open };
+                n.state = if total.is_zero() {
+                    PositionState::Flat
+                } else {
+                    PositionState::Open
+                };
                 n.version = lsn;
                 n.updated_at = logical_ts;
                 n.cum_funding = if total.is_zero() {
@@ -288,7 +321,10 @@ impl Fsm for PositionV4 {
                         ..n.cum_funding
                     }
                 } else {
-                    FundingAccum { since_change: Decimal::ZERO, ..n.cum_funding }
+                    FundingAccum {
+                        since_change: Decimal::ZERO,
+                        ..n.cum_funding
+                    }
                 };
                 let change = if before.is_zero() {
                     TradeChange::Opened
@@ -309,7 +345,11 @@ impl Fsm for PositionV4 {
                     source: fill.source,
                 }
             }
-            PositionEvent::FundingSettled { signed_amount, logical_ts, .. } => {
+            PositionEvent::FundingSettled {
+                signed_amount,
+                logical_ts,
+                ..
+            } => {
                 if n.state != PositionState::Open {
                     return Err(PositionError::InvalidState);
                 }
@@ -332,7 +372,11 @@ impl Fsm for PositionV4 {
                 n.updated_at = logical_ts;
                 PositionOutput::FundingApplied { signed_amount }
             }
-            PositionEvent::LeverageUpdated { leverage, logical_ts, .. } => {
+            PositionEvent::LeverageUpdated {
+                leverage,
+                logical_ts,
+                ..
+            } => {
                 validate_leverage(leverage)?;
                 n.leverage = leverage;
                 n.cum_funding.since_change = Decimal::ZERO;
@@ -340,14 +384,21 @@ impl Fsm for PositionV4 {
                 n.updated_at = logical_ts;
                 PositionOutput::LeverageApplied
             }
-            PositionEvent::IsolatedMarginAdjusted { delta, logical_ts, .. } => {
+            PositionEvent::IsolatedMarginAdjusted {
+                delta, logical_ts, ..
+            } => {
                 if n.state != PositionState::Open
                     || n.leverage.leverage_type != MarginMode::Isolated
                 {
                     return Err(PositionError::InvalidMarginConfiguration);
                 }
-                let cur = n.leverage.raw_usd.ok_or(PositionError::InvalidMarginConfiguration)?;
-                let after = cur.checked_add(delta).ok_or(PositionError::ArithmeticOverflow)?;
+                let cur = n
+                    .leverage
+                    .raw_usd
+                    .ok_or(PositionError::InvalidMarginConfiguration)?;
+                let after = cur
+                    .checked_add(delta)
+                    .ok_or(PositionError::ArithmeticOverflow)?;
                 if after < Decimal::ZERO {
                     return Err(PositionError::InvalidIsolatedMargin);
                 }
@@ -355,7 +406,9 @@ impl Fsm for PositionV4 {
                 n.cum_funding.since_change = Decimal::ZERO;
                 n.version = lsn;
                 n.updated_at = logical_ts;
-                PositionOutput::IsolatedMarginApplied { margin_after: after }
+                PositionOutput::IsolatedMarginApplied {
+                    margin_after: after,
+                }
             }
         };
         *self = n;
@@ -404,8 +457,11 @@ impl PositionV4 {
             return Err(PositionError::InvalidLeverage);
         }
 
-        let notional =
-            self.szi.abs().checked_mul(mark_price).ok_or(PositionError::ArithmeticOverflow)?;
+        let notional = self
+            .szi
+            .abs()
+            .checked_mul(mark_price)
+            .ok_or(PositionError::ArithmeticOverflow)?;
         let unrealized_pnl = mark_price
             .checked_sub(self.entry_px)
             .and_then(|v| v.checked_mul(self.szi))
@@ -428,9 +484,17 @@ impl PositionV4 {
 impl TrackDiff for PositionV4 {
     fn diff(&self, o: &Self) -> Vec<EntityFieldChange> {
         [
-            ("state", format!("{:?}", self.state), format!("{:?}", o.state)),
+            (
+                "state",
+                format!("{:?}", self.state),
+                format!("{:?}", o.state),
+            ),
             ("szi", self.szi.to_string(), o.szi.to_string()),
-            ("entry_px", self.entry_px.to_string(), o.entry_px.to_string()),
+            (
+                "entry_px",
+                self.entry_px.to_string(),
+                o.entry_px.to_string(),
+            ),
             ("version", self.version.to_string(), o.version.to_string()),
         ]
         .into_iter()
@@ -503,7 +567,11 @@ mod tests {
             1,
             2,
             Coin::BTC,
-            Leverage { leverage_type: MarginMode::Cross, value: leverage, raw_usd: None },
+            Leverage {
+                leverage_type: MarginMode::Cross,
+                value: leverage,
+                raw_usd: None,
+            },
             1,
         )
         .unwrap();
@@ -530,7 +598,11 @@ mod tests {
             3,
             4,
             Coin::ETH,
-            Leverage { leverage_type: MarginMode::Cross, value: 5, raw_usd: None },
+            Leverage {
+                leverage_type: MarginMode::Cross,
+                value: 5,
+                raw_usd: None,
+            },
             10,
         )
         .expect("valid leverage should construct a position");
@@ -563,7 +635,10 @@ mod tests {
                 logical_ts: 22,
                 lsn: 19,
             }),
-            Err(PositionError::StaleLsn { incoming_lsn: 19, current_lsn: 20 })
+            Err(PositionError::StaleLsn {
+                incoming_lsn: 19,
+                current_lsn: 20
+            })
         );
         assert_eq!(position, before);
 
@@ -582,7 +657,9 @@ mod tests {
     fn calculates_long_and_short_cross_margin_risk_without_mutation() {
         let long = open_position(Decimal::from(2), Decimal::from(100), 10);
         let before = long.clone();
-        let risk = long.cross_margin_risk(Decimal::from(110), Decimal::new(5, 2)).unwrap();
+        let risk = long
+            .cross_margin_risk(Decimal::from(110), Decimal::new(5, 2))
+            .unwrap();
         assert_eq!(risk.notional, Decimal::from(220));
         assert_eq!(risk.unrealized_pnl, Decimal::from(20));
         assert_eq!(risk.initial_margin_used, Decimal::from(22));
@@ -590,7 +667,9 @@ mod tests {
         assert_eq!(long, before);
 
         let short = open_position(Decimal::from(-3), Decimal::from(50), 5);
-        let risk = short.cross_margin_risk(Decimal::from(60), Decimal::new(1, 1)).unwrap();
+        let risk = short
+            .cross_margin_risk(Decimal::from(60), Decimal::new(1, 1))
+            .unwrap();
         assert_eq!(risk.notional, Decimal::from(180));
         assert_eq!(risk.unrealized_pnl, Decimal::from(-30));
         assert_eq!(risk.initial_margin_used, Decimal::from(36));

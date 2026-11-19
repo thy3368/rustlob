@@ -120,8 +120,11 @@ impl PlaceOrderPipeline {
         if input.order.order_type.is_trigger() {
             return Err(PlaceDomainServiceError::ExpectedNormalOrder);
         }
-        let mut balances =
-            BalanceWorkspace::new(&input.order, &input.maker_orders, &input.balances_by_order_id)?;
+        let mut balances = BalanceWorkspace::new(
+            &input.order,
+            &input.maker_orders,
+            &input.balances_by_order_id,
+        )?;
         let order = build_order(
             &input.order,
             input.relation,
@@ -166,12 +169,14 @@ impl PlaceOrderPipeline {
         let mut settled_trades = Vec::with_capacity(trades.len());
         for trade in trades {
             let (buyer_order_id, seller_order_id) = match trade.comon_trade.taker_side {
-                OrderSide::Buy => {
-                    (trade.comon_trade.taker_order_id, trade.comon_trade.maker_order_id)
-                }
-                OrderSide::Sell => {
-                    (trade.comon_trade.maker_order_id, trade.comon_trade.taker_order_id)
-                }
+                OrderSide::Buy => (
+                    trade.comon_trade.taker_order_id,
+                    trade.comon_trade.maker_order_id,
+                ),
+                OrderSide::Sell => (
+                    trade.comon_trade.maker_order_id,
+                    trade.comon_trade.taker_order_id,
+                ),
             };
             let (buyer_base, buyer_quote) = balances.indices(buyer_order_id)?;
             let (seller_base, seller_quote) = balances.indices(seller_order_id)?;
@@ -225,9 +230,9 @@ impl PlaceOrderPipeline {
                     updated_balances_after,
                 }
             }
-            NormalOutcomeKind::Rejected => {
-                PlaceNormalSpotOrderV3AfterChanges::Rejected { created_taker_order: taker_after }
-            }
+            NormalOutcomeKind::Rejected => PlaceNormalSpotOrderV3AfterChanges::Rejected {
+                created_taker_order: taker_after,
+            },
         })
     }
 
@@ -274,8 +279,9 @@ impl BalanceWorkspace {
         let mut by_identity = HashMap::new();
         let mut indices_by_order_id = HashMap::with_capacity(orders.len());
         for (order_id, party_id, symbol) in orders {
-            let binding =
-                bindings.get(&order_id).ok_or(PlaceDomainServiceError::InvalidBalances)?;
+            let binding = bindings
+                .get(&order_id)
+                .ok_or(PlaceDomainServiceError::InvalidBalances)?;
             if binding.base.coin_idx() != u64::from(symbol.base.index())
                 || binding.quote.coin_idx() != u64::from(symbol.quote.index())
                 || binding.base.party_id() != party_id
@@ -288,7 +294,11 @@ impl BalanceWorkspace {
             let quote = insert_balance(&mut originals, &mut by_identity, &binding.quote)?;
             indices_by_order_id.insert(order_id, (base, quote));
         }
-        Ok(Self { working: originals.clone(), originals, indices_by_order_id })
+        Ok(Self {
+            working: originals.clone(),
+            originals,
+            indices_by_order_id,
+        })
     }
 
     fn indices(&self, order_id: u64) -> Result<(usize, usize), PlaceDomainServiceError> {
@@ -319,9 +329,15 @@ fn validate_all_bound_snapshots(
     bindings: &HashMap<u64, SpotOrderV3Balances>,
 ) -> Result<(), PlaceDomainServiceError> {
     let mut snapshots = HashMap::<BalanceIdentity, &BalanceV2>::new();
-    for balance in bindings.values().flat_map(|binding| [&binding.base, &binding.quote]) {
+    for balance in bindings
+        .values()
+        .flat_map(|binding| [&binding.base, &binding.quote])
+    {
         let identity = (balance.account_id(), balance.coin_idx());
-        if snapshots.insert(identity, balance).is_some_and(|previous| previous != balance) {
+        if snapshots
+            .insert(identity, balance)
+            .is_some_and(|previous| previous != balance)
+        {
             return Err(PlaceDomainServiceError::InvalidBalances);
         }
     }
@@ -395,11 +411,19 @@ enum NormalOutcomeKind {
 
 fn unpack_outcome(
     value: MatchSpotOrderV3Outcome,
-) -> (SpotOrderV7, Vec<SpotOrderV7>, Vec<SpotTradeV3>, NormalOutcomeKind) {
+) -> (
+    SpotOrderV7,
+    Vec<SpotOrderV7>,
+    Vec<SpotTradeV3>,
+    NormalOutcomeKind,
+) {
     match value {
-        MatchSpotOrderV3Outcome::Resting { taker_order_after } => {
-            (taker_order_after, vec![], vec![], NormalOutcomeKind::Resting)
-        }
+        MatchSpotOrderV3Outcome::Resting { taker_order_after } => (
+            taker_order_after,
+            vec![],
+            vec![],
+            NormalOutcomeKind::Resting,
+        ),
         MatchSpotOrderV3Outcome::PartiallyFilled {
             taker_order_after,
             maker_orders_after,
@@ -432,8 +456,14 @@ fn unpack_outcome(
             created_trades,
             NormalOutcomeKind::Canceled,
         ),
-        MatchSpotOrderV3Outcome::Rejected { rejected_taker_order_after, .. } => {
-            (rejected_taker_order_after, vec![], vec![], NormalOutcomeKind::Rejected)
-        }
+        MatchSpotOrderV3Outcome::Rejected {
+            rejected_taker_order_after,
+            ..
+        } => (
+            rejected_taker_order_after,
+            vec![],
+            vec![],
+            NormalOutcomeKind::Rejected,
+        ),
     }
 }

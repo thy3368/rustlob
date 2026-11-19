@@ -6,6 +6,13 @@ cd "$repo_root"
 
 echo "Running pre-commit quality gates..."
 cargo fmt --all -- --check
+format_diff_before="$(mktemp)"
+format_diff_after="$(mktemp)"
+trap 'rm -f "$format_diff_before" "$format_diff_after"' EXIT
+git diff --binary >"$format_diff_before"
+cargo fmt --all
+git diff --binary >"$format_diff_after"
+cmp -s "$format_diff_before" "$format_diff_after"
 cargo check --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings

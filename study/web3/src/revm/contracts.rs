@@ -51,7 +51,10 @@ pub fn settlement_id_word(settlement_id: &str) -> Result<FixedBytes<32>, String>
     let bytes =
         hex::decode(settlement_id).map_err(|err| format!("invalid settlement id hex: {err}"))?;
     if bytes.len() != 32 {
-        return Err(format!("expected 32-byte settlement id, got {} bytes", bytes.len()));
+        return Err(format!(
+            "expected 32-byte settlement id, got {} bytes",
+            bytes.len()
+        ));
     }
     let mut word = [0u8; 32];
     word.copy_from_slice(&bytes);
@@ -143,7 +146,10 @@ mod tests {
 
     #[test]
     fn settlement_source_hash_matches_build_env() {
-        assert_eq!(settlement_source_hash(), env!("SETTLEMENT_ESCROW_SOURCE_HASH"));
+        assert_eq!(
+            settlement_source_hash(),
+            env!("SETTLEMENT_ESCROW_SOURCE_HASH")
+        );
     }
 
     #[test]

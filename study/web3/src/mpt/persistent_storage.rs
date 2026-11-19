@@ -46,7 +46,11 @@ impl PersistentStorage {
                 .map_err(|e| MptError::StorageError(format!("Failed to create data dir: {}", e)))?;
         }
 
-        Ok(Self { data_dir, cache: HashMap::new(), cache_size_limit: cache_size })
+        Ok(Self {
+            data_dir,
+            cache: HashMap::new(),
+            cache_size_limit: cache_size,
+        })
     }
 
     /// 获取节点文件路径
@@ -69,7 +73,10 @@ impl PersistentStorage {
         // 生产环境应使用 RLP 编码（以太坊标准）或 Bincode
         match node {
             Node::Empty => vec![0],
-            Node::Leaf { partial_path, value } => {
+            Node::Leaf {
+                partial_path,
+                value,
+            } => {
                 let mut data = vec![1]; // 类型标记
                 data.extend_from_slice(&(partial_path.len() as u32).to_le_bytes());
                 data.extend_from_slice(partial_path);
@@ -77,7 +84,10 @@ impl PersistentStorage {
                 data.extend_from_slice(value);
                 data
             }
-            Node::Extension { partial_path, next_node_hash } => {
+            Node::Extension {
+                partial_path,
+                next_node_hash,
+            } => {
                 let mut data = vec![2]; // 类型标记
                 data.extend_from_slice(&(partial_path.len() as u32).to_le_bytes());
                 data.extend_from_slice(partial_path);
@@ -149,12 +159,17 @@ impl PersistentStorage {
 
                 let value = data[offset..offset + value_len].to_vec();
 
-                Ok(Node::Leaf { partial_path, value })
+                Ok(Node::Leaf {
+                    partial_path,
+                    value,
+                })
             }
             2 => {
                 // Extension
                 if data.len() < 37 {
-                    return Err(MptError::DecodingError("Invalid extension data".to_string()));
+                    return Err(MptError::DecodingError(
+                        "Invalid extension data".to_string(),
+                    ));
                 }
 
                 let path_len = u32::from_le_bytes([
@@ -171,7 +186,10 @@ impl PersistentStorage {
                 let mut next_node_hash = [0u8; 32];
                 next_node_hash.copy_from_slice(&data[offset..offset + 32]);
 
-                Ok(Node::Extension { partial_path, next_node_hash })
+                Ok(Node::Extension {
+                    partial_path,
+                    next_node_hash,
+                })
             }
             3 => {
                 // Branch
@@ -206,7 +224,10 @@ impl PersistentStorage {
 
                 Ok(Node::branch(children, value))
             }
-            _ => Err(MptError::DecodingError(format!("Unknown node type: {}", node_type))),
+            _ => Err(MptError::DecodingError(format!(
+                "Unknown node type: {}",
+                node_type
+            ))),
         }
     }
 
@@ -391,7 +412,11 @@ impl StorageStats {
 
     /// 获取缓存命中率（需要外部统计）
     pub fn cache_usage_ratio(&self) -> f64 {
-        if self.cache_limit == 0 { 0.0 } else { self.cache_size as f64 / self.cache_limit as f64 }
+        if self.cache_limit == 0 {
+            0.0
+        } else {
+            self.cache_size as f64 / self.cache_limit as f64
+        }
     }
 }
 

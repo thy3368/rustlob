@@ -78,8 +78,9 @@ impl PerpClearinghouseStateV3 {
             return Err(BuildClearinghouseStateError::StaleSnapshot);
         }
 
-        let total_raw_usd =
-            balance.total().ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
+        let total_raw_usd = balance
+            .total()
+            .ok_or(BuildClearinghouseStateError::ArithmeticOverflow)?;
         let mut total_notional = Decimal::ZERO;
         let mut unrealized_pnl = Decimal::ZERO;
         let mut initial_margin_used = Decimal::ZERO;
@@ -211,7 +212,15 @@ mod tests {
 
     const ACCOUNT: u64 = 7;
     fn balance(available: Decimal, frozen: Decimal, time: u64) -> BalanceV2 {
-        BalanceV2::new(1, ACCOUNT, u64::from(Coin::USDC.index()), available, frozen, 1, time)
+        BalanceV2::new(
+            1,
+            ACCOUNT,
+            u64::from(Coin::USDC.index()),
+            available,
+            frozen,
+            1,
+            time,
+        )
     }
     fn position(
         id: u64,
@@ -236,7 +245,11 @@ mod tests {
         )
         .unwrap();
         p.apply(PositionEvent::TradeFilled {
-            fill: PositionFill { signed_quantity: size, price: entry, source: FillSource::Regular },
+            fill: PositionFill {
+                signed_quantity: size,
+                price: entry,
+                source: FillSource::Regular,
+            },
             logical_ts: time,
             lsn: 1,
         })
@@ -244,7 +257,11 @@ mod tests {
         p
     }
     fn input(position: PositionV4, mark: Decimal, mmr: Decimal) -> CrossPositionInput {
-        CrossPositionInput { position, mark_price: mark, maintenance_margin_rate: mmr }
+        CrossPositionInput {
+            position,
+            mark_price: mark,
+            maintenance_margin_rate: mmr,
+        }
     }
 
     #[test]
@@ -266,9 +283,26 @@ mod tests {
 
     #[test]
     fn summarizes_long_short_profit_loss_and_margin() {
-        let long = position(1, ACCOUNT, Coin::BTC, 2.into(), 100.into(), 10, MarginMode::Cross, 4);
-        let short =
-            position(2, ACCOUNT, Coin::ETH, (-3).into(), 50.into(), 5, MarginMode::Cross, 4);
+        let long = position(
+            1,
+            ACCOUNT,
+            Coin::BTC,
+            2.into(),
+            100.into(),
+            10,
+            MarginMode::Cross,
+            4,
+        );
+        let short = position(
+            2,
+            ACCOUNT,
+            Coin::ETH,
+            (-3).into(),
+            50.into(),
+            5,
+            MarginMode::Cross,
+            4,
+        );
         let state = PerpClearinghouseStateV3::build(
             balance(100.into(), 20.into(), 4),
             vec![
@@ -287,7 +321,16 @@ mod tests {
 
     #[test]
     fn enforces_withdrawal_liquidation_and_backstop_boundaries() {
-        let p = position(1, ACCOUNT, Coin::BTC, Decimal::ONE, 100.into(), 1, MarginMode::Cross, 1);
+        let p = position(
+            1,
+            ACCOUNT,
+            Coin::BTC,
+            Decimal::ONE,
+            100.into(),
+            1,
+            MarginMode::Cross,
+            1,
+        );
         let state = PerpClearinghouseStateV3::build(
             balance(10.into(), Decimal::ZERO, 1),
             vec![input(p, 100.into(), Decimal::new(1, 1))],
@@ -299,7 +342,16 @@ mod tests {
         assert_eq!(state.withdrawable(), Decimal::ZERO);
         assert!(!state.can_withdraw(Decimal::NEGATIVE_ONE));
 
-        let p = position(2, ACCOUNT, Coin::ETH, Decimal::ONE, 100.into(), 1, MarginMode::Cross, 1);
+        let p = position(
+            2,
+            ACCOUNT,
+            Coin::ETH,
+            Decimal::ONE,
+            100.into(),
+            1,
+            MarginMode::Cross,
+            1,
+        );
         let state = PerpClearinghouseStateV3::build(
             balance(6.into(), Decimal::ZERO, 1),
             vec![input(p, 100.into(), Decimal::new(1, 1))],
@@ -330,8 +382,16 @@ mod tests {
                 .unwrap_err(),
             BuildClearinghouseStateError::StaleSnapshot
         );
-        let p =
-            position(1, ACCOUNT, Coin::BTC, Decimal::ONE, Decimal::ONE, 1, MarginMode::Cross, 1);
+        let p = position(
+            1,
+            ACCOUNT,
+            Coin::BTC,
+            Decimal::ONE,
+            Decimal::ONE,
+            1,
+            MarginMode::Cross,
+            1,
+        );
         assert_eq!(
             PerpClearinghouseStateV3::build(
                 balance(1.into(), 0.into(), 1),
@@ -350,8 +410,16 @@ mod tests {
             .unwrap_err(),
             BuildClearinghouseStateError::InvalidMaintenanceMarginRate
         );
-        let p =
-            position(2, ACCOUNT, Coin::ETH, Decimal::ONE, Decimal::ONE, 1, MarginMode::Cross, 1);
+        let p = position(
+            2,
+            ACCOUNT,
+            Coin::ETH,
+            Decimal::ONE,
+            Decimal::ONE,
+            1,
+            MarginMode::Cross,
+            1,
+        );
         assert_eq!(
             PerpClearinghouseStateV3::build(
                 balance(1.into(), 0.into(), 1),
@@ -365,10 +433,26 @@ mod tests {
 
     #[test]
     fn rejects_position_scope_duplicates_and_overflow() {
-        let a =
-            position(1, ACCOUNT, Coin::BTC, Decimal::ONE, Decimal::ONE, 1, MarginMode::Cross, 2);
-        let b =
-            position(2, ACCOUNT, Coin::BTC, Decimal::ONE, Decimal::ONE, 1, MarginMode::Cross, 2);
+        let a = position(
+            1,
+            ACCOUNT,
+            Coin::BTC,
+            Decimal::ONE,
+            Decimal::ONE,
+            1,
+            MarginMode::Cross,
+            2,
+        );
+        let b = position(
+            2,
+            ACCOUNT,
+            Coin::BTC,
+            Decimal::ONE,
+            Decimal::ONE,
+            1,
+            MarginMode::Cross,
+            2,
+        );
         assert_eq!(
             PerpClearinghouseStateV3::build(
                 balance(1.into(), 0.into(), 2),
@@ -397,8 +481,16 @@ mod tests {
             .unwrap_err(),
             BuildClearinghouseStateError::AccountMismatch
         );
-        let isolated =
-            position(4, ACCOUNT, Coin::SOL, Decimal::ONE, Decimal::ONE, 1, MarginMode::Isolated, 2);
+        let isolated = position(
+            4,
+            ACCOUNT,
+            Coin::SOL,
+            Decimal::ONE,
+            Decimal::ONE,
+            1,
+            MarginMode::Isolated,
+            2,
+        );
         assert_eq!(
             PerpClearinghouseStateV3::build(
                 balance(1.into(), 0.into(), 2),
@@ -418,8 +510,16 @@ mod tests {
             .unwrap_err(),
             BuildClearinghouseStateError::InactivePosition
         );
-        let stale =
-            position(6, ACCOUNT, Coin::SOL, Decimal::ONE, Decimal::ONE, 1, MarginMode::Cross, 3);
+        let stale = position(
+            6,
+            ACCOUNT,
+            Coin::SOL,
+            Decimal::ONE,
+            Decimal::ONE,
+            1,
+            MarginMode::Cross,
+            3,
+        );
         assert_eq!(
             PerpClearinghouseStateV3::build(
                 balance(1.into(), 0.into(), 2),
@@ -429,8 +529,16 @@ mod tests {
             .unwrap_err(),
             BuildClearinghouseStateError::StaleSnapshot
         );
-        let huge =
-            position(7, ACCOUNT, Coin::ETH, Decimal::MAX, Decimal::ONE, 1, MarginMode::Cross, 2);
+        let huge = position(
+            7,
+            ACCOUNT,
+            Coin::ETH,
+            Decimal::MAX,
+            Decimal::ONE,
+            1,
+            MarginMode::Cross,
+            2,
+        );
         assert_eq!(
             PerpClearinghouseStateV3::build(
                 balance(1.into(), 0.into(), 2),

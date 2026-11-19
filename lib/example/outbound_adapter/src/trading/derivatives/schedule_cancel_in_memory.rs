@@ -44,7 +44,9 @@ pub struct HyperliquidScheduleCancelInMemoryOutbound {
 
 impl Default for HyperliquidScheduleCancelInMemoryOutbound {
     fn default() -> Self {
-        Self { state: Arc::new(Mutex::new(State::new())) }
+        Self {
+            state: Arc::new(Mutex::new(State::new())),
+        }
     }
 }
 
@@ -65,7 +67,11 @@ pub enum HyperliquidScheduleCancelOutboundError {
     #[error("scheduled cancel state not found")]
     ScheduleNotFound,
     #[error("stale replay event for entity {entity_id}: expected version {expected}, got {actual}")]
-    StaleEvent { entity_id: u64, expected: u64, actual: u64 },
+    StaleEvent {
+        entity_id: u64,
+        expected: u64,
+        actual: u64,
+    },
     #[error("failed to decode schedule cancel replay event")]
     EventDecodeFailed,
     #[error("failed to replay schedule cancel event: {0}")]
@@ -77,7 +83,9 @@ impl HyperliquidScheduleCancelInMemoryOutbound {
         &self,
         order: SpotOrderV7,
     ) -> Result<(), HyperliquidScheduleCancelOutboundError> {
-        self.lock()?.spot_orders.insert(order.order_base().order_id, order);
+        self.lock()?
+            .spot_orders
+            .insert(order.order_base().order_id, order);
         Ok(())
     }
 
@@ -85,7 +93,9 @@ impl HyperliquidScheduleCancelInMemoryOutbound {
         &self,
         order: PerpOrderV3,
     ) -> Result<(), HyperliquidScheduleCancelOutboundError> {
-        self.lock()?.perp_orders.insert(order.comon_order.order_id, order);
+        self.lock()?
+            .perp_orders
+            .insert(order.comon_order.order_id, order);
         Ok(())
     }
 
@@ -112,7 +122,9 @@ impl HyperliquidScheduleCancelInMemoryOutbound {
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, State>, HyperliquidScheduleCancelOutboundError> {
-        self.state.lock().map_err(|_| HyperliquidScheduleCancelOutboundError::StoreUnavailable)
+        self.state
+            .lock()
+            .map_err(|_| HyperliquidScheduleCancelOutboundError::StoreUnavailable)
     }
 }
 
@@ -301,9 +313,11 @@ fn replay_schedule(
                     .map_err(|_| HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?,
             )
         };
-        schedule.replace(deadline, event.logical_ts).map_err(|error| {
-            HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
-        })?;
+        schedule
+            .replace(deadline, event.logical_ts)
+            .map_err(|error| {
+                HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
+            })?;
     }
     Ok(())
 }
@@ -397,11 +411,18 @@ mod tests {
         let release = {
             let mut canceled = spot.clone();
             canceled
-                .transition(SpotOrderV7Event::Cancel { lsn: 9, timestamp: DUE_MS })
+                .transition(SpotOrderV7Event::Cancel {
+                    lsn: 9,
+                    timestamp: DUE_MS,
+                })
                 .expect("fixture should cancel");
-            canceled.release_requirement().expect("fixture should release")
+            canceled
+                .release_requirement()
+                .expect("fixture should release")
         };
-        outbound.seed_spot_order(spot).expect("spot seed should succeed");
+        outbound
+            .seed_spot_order(spot)
+            .expect("spot seed should succeed");
         outbound
             .seed_balance(BalanceV2::new(
                 USER.0,
@@ -441,8 +462,16 @@ mod tests {
                 &outbound,
             )
             .expect("schedule should persist and replay");
-        assert_eq!(outbound.due_user_ids(DUE_MS - 1, 10).expect("scan should work"), vec![]);
-        assert_eq!(outbound.due_user_ids(DUE_MS, 10).expect("scan should work"), vec![USER]);
+        assert_eq!(
+            outbound
+                .due_user_ids(DUE_MS - 1, 10)
+                .expect("scan should work"),
+            vec![]
+        );
+        assert_eq!(
+            outbound.due_user_ids(DUE_MS, 10).expect("scan should work"),
+            vec![USER]
+        );
 
         let trigger = LogEntrySequencer::from_metadata(
             2,
@@ -450,7 +479,10 @@ mod tests {
             0,
             USER.0,
             common_entity::SYSTEM_USER_ID.to_owned(),
-            TriggerScheduledCancelCmd { user_id: USER, now_ms: DUE_MS },
+            TriggerScheduledCancelCmd {
+                user_id: USER,
+                now_ms: DUE_MS,
+            },
         );
         UseCaseExecutor
             .execute::<TriggerScheduledCancelUseCase, _, _>(
@@ -465,7 +497,10 @@ mod tests {
         assert_eq!(snapshot.schedules[0].cancel_at_ms(), None);
         assert_eq!(snapshot.schedules[0].trigger_count(), 1);
         assert_eq!(snapshot.spot_orders[0].status(), SpotOrderStatus::Canceled);
-        assert_eq!(snapshot.perp_orders[0].comon_order.status, SpotOrderStatus::Canceled);
+        assert_eq!(
+            snapshot.perp_orders[0].comon_order.status,
+            SpotOrderStatus::Canceled
+        );
         assert_eq!(snapshot.balances[0].frozen(), Decimal::ZERO);
         assert_eq!(snapshot.persisted_event_count, 5);
         assert_eq!(snapshot.published_event_count, 5);

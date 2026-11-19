@@ -13,8 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-08-22
           components: rustfmt, clippy
       - uses: actions/cache@v4
         with:
@@ -23,7 +24,16 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
       - name: Install cargo-deny and cargo-audit
         run: cargo install cargo-deny cargo-audit --locked
-      - run: cargo fmt --all -- --check
+      - name: Check rustfmt idempotence
+        run: |
+          cargo fmt --all -- --check
+          format_diff_before="$(mktemp)"
+          format_diff_after="$(mktemp)"
+          trap 'rm -f "$format_diff_before" "$format_diff_after"' EXIT
+          git diff --binary >"$format_diff_before"
+          cargo fmt --all
+          git diff --binary >"$format_diff_after"
+          cmp -s "$format_diff_before" "$format_diff_after"
       - run: cargo check --workspace
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
@@ -36,7 +46,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-08-22
       - name: Install merge-gate tools
         run: cargo install cargo-crap cargo-dupes cargo-mutants --locked
       - run: cargo crap --workspace --summary

@@ -102,20 +102,28 @@ impl MatchPerpOrderV3Output {
     pub fn into_parts(self) -> (PerpOrderV3, Vec<PerpOrderV3>, Vec<PerpTradeV3>) {
         match self {
             Self::Resting { taker_order_after } => (taker_order_after, Vec::new(), Vec::new()),
-            Self::Rejected { rejected_taker_order_after } => {
-                (rejected_taker_order_after, Vec::new(), Vec::new())
-            }
-            Self::PartiallyFilled { taker_order_after, maker_orders_after, created_trades } => {
-                (taker_order_after, maker_orders_after, created_trades)
-            }
-            Self::Filled { filled_taker_order_after, maker_orders_after, created_trades } => {
-                (filled_taker_order_after, maker_orders_after, created_trades)
-            }
+            Self::Rejected {
+                rejected_taker_order_after,
+            } => (rejected_taker_order_after, Vec::new(), Vec::new()),
+            Self::PartiallyFilled {
+                taker_order_after,
+                maker_orders_after,
+                created_trades,
+            } => (taker_order_after, maker_orders_after, created_trades),
+            Self::Filled {
+                filled_taker_order_after,
+                maker_orders_after,
+                created_trades,
+            } => (filled_taker_order_after, maker_orders_after, created_trades),
             Self::CanceledAfterPartialFill {
                 canceled_taker_order_after,
                 maker_orders_after,
                 created_trades,
-            } => (canceled_taker_order_after, maker_orders_after, created_trades),
+            } => (
+                canceled_taker_order_after,
+                maker_orders_after,
+                created_trades,
+            ),
         }
     }
 }
@@ -167,22 +175,35 @@ impl Fsm for PerpOrderV3 {
         let lsn = event.lsn();
         validate_lsn(&self.comon_order, lsn)?;
         let (next, output) = match event {
-            PerpOrderV3Event::Match { makers, mut input, timestamp, .. } => {
+            PerpOrderV3Event::Match {
+                makers,
+                mut input,
+                timestamp,
+                ..
+            } => {
                 input.timestamp = timestamp;
                 let (next, output) = compute_match(self, makers, input, lsn)?;
                 (next, Some(output))
             }
             PerpOrderV3Event::ReplaceOrFill {
-                price, size, makers, mut input, timestamp, ..
+                price,
+                size,
+                makers,
+                mut input,
+                timestamp,
+                ..
             } => {
                 let replaced = modified(self, price, size, timestamp, lsn, true)?;
                 input.timestamp = timestamp;
                 let (next, output) = compute_match(&replaced, makers, input, lsn)?;
                 (next, Some(output))
             }
-            PerpOrderV3Event::Modify { price, size, timestamp, .. } => {
-                (modified(self, price, size, timestamp, lsn, true)?, None)
-            }
+            PerpOrderV3Event::Modify {
+                price,
+                size,
+                timestamp,
+                ..
+            } => (modified(self, price, size, timestamp, lsn, true)?, None),
             PerpOrderV3Event::Cancel { timestamp, .. } => {
                 validate_timestamp(&self.comon_order, timestamp)?;
                 let mut next = self.clone();
@@ -218,13 +239,17 @@ fn compute_match(
 
     let mut taker = current.clone();
     if taker.comon_order.effective_tif() == OrderTif::Alo
-        && makers.iter().any(|maker| compatible(&taker, maker) && crosses(&taker, maker))
+        && makers
+            .iter()
+            .any(|maker| compatible(&taker, maker) && crosses(&taker, maker))
     {
         taker.comon_order.status = SpotOrderStatus::Rejected;
         advance(&mut taker.comon_order, input.timestamp, lsn);
         return Ok((
             taker.clone(),
-            MatchPerpOrderV3Output::Rejected { rejected_taker_order_after: taker },
+            MatchPerpOrderV3Output::Rejected {
+                rejected_taker_order_after: taker,
+            },
         ));
     }
 
@@ -248,10 +273,16 @@ fn compute_match(
         let maker_fee = notional
             .checked_mul(input.maker_fee_rate)
             .ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
-        taker.comon_order.size =
-            taker.comon_order.size.checked_sub(fill).ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
-        maker.comon_order.size =
-            maker.comon_order.size.checked_sub(fill).ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
+        taker.comon_order.size = taker
+            .comon_order
+            .size
+            .checked_sub(fill)
+            .ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
+        maker.comon_order.size = maker
+            .comon_order
+            .size
+            .checked_sub(fill)
+            .ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
         maker.comon_order.status = if maker.comon_order.size == Decimal::ZERO {
             SpotOrderStatus::Filled
         } else {
@@ -322,9 +353,9 @@ fn compute_match(
             maker_orders_after: makers,
             created_trades: trades,
         },
-        SpotOrderStatus::Rejected => {
-            MatchPerpOrderV3Output::Rejected { rejected_taker_order_after: taker.clone() }
-        }
+        SpotOrderStatus::Rejected => MatchPerpOrderV3Output::Rejected {
+            rejected_taker_order_after: taker.clone(),
+        },
         SpotOrderStatus::Canceled => MatchPerpOrderV3Output::CanceledAfterPartialFill {
             canceled_taker_order_after: taker.clone(),
             maker_orders_after: makers,
@@ -335,9 +366,9 @@ fn compute_match(
             maker_orders_after: makers,
             created_trades: trades,
         },
-        SpotOrderStatus::Pending | SpotOrderStatus::Open => {
-            MatchPerpOrderV3Output::Resting { taker_order_after: taker.clone() }
-        }
+        SpotOrderStatus::Pending | SpotOrderStatus::Open => MatchPerpOrderV3Output::Resting {
+            taker_order_after: taker.clone(),
+        },
     };
     Ok((taker, outcome))
 }
@@ -363,8 +394,9 @@ fn modified(
     let mut next = current.clone();
     next.comon_order.limit_px = price;
     next.comon_order.orig_size = total_size;
-    next.comon_order.size =
-        total_size.checked_sub(filled).ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
+    next.comon_order.size = total_size
+        .checked_sub(filled)
+        .ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
     next.comon_order.updated_at = timestamp;
     if apply_metadata {
         next.comon_order.lsn = lsn;
@@ -409,7 +441,10 @@ fn validate_timestamp(order: &OrderBase, timestamp: u64) -> Result<(), PerpOrder
 
 fn validate_lsn(order: &OrderBase, lsn: u64) -> Result<(), PerpOrderV3Error> {
     if lsn < order.lsn {
-        Err(PerpOrderV3Error::StaleLsn { incoming_lsn: lsn, current_lsn: order.lsn })
+        Err(PerpOrderV3Error::StaleLsn {
+            incoming_lsn: lsn,
+            current_lsn: order.lsn,
+        })
     } else {
         Ok(())
     }
