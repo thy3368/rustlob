@@ -1,7 +1,7 @@
 use common_entity::{
     ExecutionError, ExecutionResult, LogEntry, StateSink, StateSource, UseCaseExecutor,
 };
-use example_core_use_case::{
+use example_core_use_case::pipeline::cancel_spot_order::{
     CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd, CancelSpotOrderV3Error,
     CancelSpotOrderV3UseCase,
 };

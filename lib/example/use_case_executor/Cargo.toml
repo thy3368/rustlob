@@ -13,6 +13,7 @@ thiserror = "2"
 serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
+bumpalo = { version = "3.19", features = ["collections"] }
 example_core_entity = { path = "../entity" }
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }
 rstest = "0.23"

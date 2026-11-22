@@ -10001,6 +10001,7 @@ dependencies = [
 name = "use_case_executor"
 version = "0.1.0"
 dependencies = [
+ "bumpalo",
  "entity",
  "example_core_entity",
  "example_core_use_case",
