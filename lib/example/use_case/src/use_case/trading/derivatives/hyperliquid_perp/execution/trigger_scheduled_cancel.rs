@@ -7,11 +7,13 @@ use common_entity::{
 };
 use example_core_entity::spot::{SpotOrderV7, SpotOrderV7Command};
 use example_core_entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
+    BalanceV2, BalanceV2Command, BalanceV2Error, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
     ScheduledCancel, ScheduledCancelError, SpotAmountConversionError, UserId,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
+
+use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TriggerScheduledCancelCmd {
@@ -165,12 +167,15 @@ impl UseCase for TriggerScheduledCancelUseCase {
             if matching.next().is_some() {
                 return Err(TriggerScheduledCancelError::AmbiguousSpotBalance);
             }
-            balance.transition(BalanceV2Event::UnfreezeAndPay {
-                unfreeze_amount: release.amount(),
-                payment_amount: Decimal::ZERO,
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
-            })?;
+            transition_balance(
+                balance,
+                cmd.lsn(),
+                cmd.logical_ts(),
+                BalanceV2Command::UnfreezeAndPay {
+                    unfreeze_amount: release.amount(),
+                    payment_amount: Decimal::ZERO,
+                },
+            )?;
             canceled_spot_orders.push(UpdatedEntityPair::new(before.clone(), after));
         }
 

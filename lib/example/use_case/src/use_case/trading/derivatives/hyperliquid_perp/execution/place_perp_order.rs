@@ -8,9 +8,10 @@ use thiserror::Error;
 use crate::entity::account::symbol::Symbol;
 use crate::entity::common::{OrderBase, OrderTrigger, PriceType};
 use crate::entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, OrderGroupRelation, OrderSide, OrderTif,
+    BalanceV2, BalanceV2Command, BalanceV2Error, OrderGroupRelation, OrderSide, OrderTif,
     PerpOrderV3, PerpPositionV3, SpotOrderStatus, UserId,
 };
+use crate::support::transition_balance;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaceHyperliquidPerpOrderExecution {
@@ -189,13 +190,13 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
                     required_margin(cmd.size, cmd.execution.price(), state.position.leverage())?;
                 let before = state.margin_balance.clone();
                 let mut after = before.clone();
-                after
-                    .apply(BalanceV2Event::Freeze {
-                        amount,
-                        timestamp: cmd.logical_ts(),
-                        lsn: cmd.lsn(),
-                    })
-                    .map_err(map_balance_error)?;
+                transition_balance(
+                    &mut after,
+                    cmd.lsn(),
+                    cmd.logical_ts(),
+                    BalanceV2Command::Freeze { amount },
+                )
+                .map_err(map_balance_error)?;
                 Some(UpdatedEntityPair { before, after })
             } else {
                 None

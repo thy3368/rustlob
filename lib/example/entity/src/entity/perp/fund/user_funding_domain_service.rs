@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use common_entity::{Fsm, UpdatedEntityPair, stable_string_entity_id};
+use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::{Fsm, Shard, UpdatedEntityPair, stable_string_entity_id};
 use rust_decimal::Decimal;
 use thiserror::Error;
 
@@ -10,7 +11,7 @@ use crate::perp::fund::user_funding::{
     UserFunding, UserFundingError, UserFundingEvent, UserFundingState,
 };
 use crate::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, FundingRate, MarginModeV3, PerpPositionV3,
+    BalanceV2, BalanceV2Command, BalanceV2Error, FundingRate, MarginModeV3, PerpPositionV3,
     PerpPositionV3Error, PerpPositionV3Event,
 };
 
@@ -259,25 +260,23 @@ pub fn settle_user_funding_batch(
         }
         let mut after = before.clone();
         let event = if delta.is_sign_positive() {
-            BalanceV2Event::CreditAvailable {
-                amount: delta,
-                timestamp: settled_at,
-                lsn,
-            }
+            BalanceV2Command::CreditAvailable { amount: delta }
         } else {
             let amount = Decimal::ZERO.checked_sub(delta).ok_or(
                 SettleUserFundingBatchError::BalanceArithmeticOverflow {
                     account_id: before.account_id(),
                 },
             )?;
-            BalanceV2Event::DebitAvailable {
-                amount,
-                timestamp: settled_at,
-                lsn,
-            }
+            BalanceV2Command::DebitAvailable { amount }
         };
-        after
-            .apply(event)
+        let metadata = CommandMetadata::new(
+            lsn,
+            settled_at,
+            before.topic(),
+            before.partition(),
+            before.party_id().to_string(),
+        );
+        FsmV2::transition(&mut after, SequencedCommand::new(metadata, event))
             .map_err(|error| map_balance_error(error, before.account_id()))?;
         changed_balances.push(UpdatedEntityPair::new(before.clone(), after));
     }
@@ -615,12 +614,18 @@ mod settle_user_funding_batch_tests {
         assert_eq!((fundings, positions, balances), before);
 
         let mut closed = balance(Decimal::ZERO, 4);
-        closed
-            .apply(BalanceV2Event::Close {
-                timestamp: 110,
-                lsn: COMMAND_LSN,
-            })
-            .unwrap();
+        let metadata = CommandMetadata::new(
+            COMMAND_LSN,
+            110,
+            closed.topic(),
+            closed.partition(),
+            closed.party_id().to_string(),
+        );
+        FsmV2::transition(
+            &mut closed,
+            SequencedCommand::new(metadata, BalanceV2Command::Close),
+        )
+        .unwrap();
         assert_eq!(
             settle_user_funding_batch(
                 &[funding(1, Decimal::ONE)],

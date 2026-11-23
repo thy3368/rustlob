@@ -1,3 +1,23 @@
+use common_entity::Shard;
+use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand, Transition};
+use example_core_entity::{BalanceV2, BalanceV2Command, BalanceV2Error, BalanceV2Status};
+
+pub(crate) fn transition_balance(
+    balance: &mut BalanceV2,
+    lsn: u64,
+    logical_ts: u64,
+    command: BalanceV2Command,
+) -> Result<Transition<BalanceV2Status, ()>, BalanceV2Error> {
+    let metadata = CommandMetadata::new(
+        lsn,
+        logical_ts,
+        balance.topic(),
+        balance.partition(),
+        balance.party_id().to_string(),
+    );
+    FsmV2::transition(balance, SequencedCommand::new(metadata, command))
+}
+
 pub(crate) fn concat2(a: &str, b: &str) -> String {
     let mut out = String::with_capacity(a.len().saturating_add(b.len()));
     out.push_str(a);

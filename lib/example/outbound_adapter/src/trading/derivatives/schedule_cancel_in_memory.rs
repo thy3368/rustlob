@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{Entity, Fsm, LogEntry, ReplayableDomainEvent, Shard, StateSink, StateSource};
 use example_core_use_case::{
-    BalanceV2, BalanceV2Event, DueScheduledCancelSource, PerpOrderV3, PerpOrderV3Event,
+    BalanceV2, BalanceV2Command, DueScheduledCancelSource, PerpOrderV3, PerpOrderV3Event,
     ScheduleHyperliquidCancelCmd, ScheduleHyperliquidCancelState, ScheduleHyperliquidCancelUseCase,
     ScheduledCancel, SpotOrderStatus, SpotOrderV7, SpotOrderV7Command, TriggerScheduledCancelCmd,
     TriggerScheduledCancelState, TriggerScheduledCancelUseCase, UserId,
@@ -343,14 +343,24 @@ fn replay_balance(
     let unfreeze = available
         .checked_sub(balance.available())
         .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
-    balance
-        .transition(BalanceV2Event::UnfreezeAndPay {
-            unfreeze_amount: unfreeze,
-            payment_amount: Decimal::ZERO,
-            timestamp: event.logical_ts,
-            lsn: event.lsn,
-        })
-        .map_err(|error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()))?;
+    let metadata = CommandMetadata::new(
+        event.lsn,
+        event.logical_ts,
+        balance.topic(),
+        balance.partition(),
+        balance.party_id().to_string(),
+    );
+    FsmV2::transition(
+        balance,
+        SequencedCommand::new(
+            metadata,
+            BalanceV2Command::UnfreezeAndPay {
+                unfreeze_amount: unfreeze,
+                payment_amount: Decimal::ZERO,
+            },
+        ),
+    )
+    .map_err(|error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()))?;
     if balance.available() != available || balance.frozen() != frozen {
         return Err(HyperliquidScheduleCancelOutboundError::EventDecodeFailed);
     }

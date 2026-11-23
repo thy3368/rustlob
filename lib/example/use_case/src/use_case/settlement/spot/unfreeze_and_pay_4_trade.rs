@@ -3,9 +3,11 @@ use example_core_entity::entity::common::order_primitives::OrderSide;
 use example_core_entity::spot::spot_trade_v3::{
     SpotTradeEvent, SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3,
 };
-use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event};
+use example_core_entity::{BalanceV2, BalanceV2Command, BalanceV2Error};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::support::transition_balance;
 
 /// 现货成交结算在本次 use case 投影中的状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,37 +220,37 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
         let mut seller_base_balance_after = given_state.seller_base_balance.clone();
         let mut seller_quote_balance_after = given_state.seller_quote_balance.clone();
 
-        Fsm::apply(
+        transition_balance(
             &mut buyer_quote_balance_after,
-            BalanceV2Event::DebitFrozen {
+            cmd.lsn(),
+            cmd.logical_ts(),
+            BalanceV2Command::DebitFrozen {
                 amount: amounts.buyer_quote_payment,
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
             },
         )?;
-        Fsm::apply(
+        transition_balance(
             &mut buyer_base_balance_after,
-            BalanceV2Event::CreditAvailable {
+            cmd.lsn(),
+            cmd.logical_ts(),
+            BalanceV2Command::CreditAvailable {
                 amount: amounts.base_amount,
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
             },
         )?;
-        Fsm::apply(
+        transition_balance(
             &mut seller_base_balance_after,
-            BalanceV2Event::DebitFrozen {
+            cmd.lsn(),
+            cmd.logical_ts(),
+            BalanceV2Command::DebitFrozen {
                 amount: amounts.base_amount,
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
             },
         )?;
         if amounts.seller_quote_receipt > rust_decimal::Decimal::ZERO {
-            Fsm::apply(
+            transition_balance(
                 &mut seller_quote_balance_after,
-                BalanceV2Event::CreditAvailable {
+                cmd.lsn(),
+                cmd.logical_ts(),
+                BalanceV2Command::CreditAvailable {
                     amount: amounts.seller_quote_receipt,
-                    timestamp: cmd.logical_ts(),
-                    lsn: cmd.lsn(),
                 },
             )?;
         }

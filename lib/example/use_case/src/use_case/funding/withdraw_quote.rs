@@ -1,11 +1,12 @@
+use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{
-    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff, TrackDiff,
+    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, Shard, StateDiff, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::entity::{BalanceV2, BalanceV2Error, BalanceV2Event};
+use crate::entity::{BalanceV2, BalanceV2Command, BalanceV2Error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WithdrawQuoteCmd {
@@ -79,13 +80,23 @@ impl UseCase for WithdrawQuoteUseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let quote_balance_before = state.quote_balance.clone();
         let mut quote_balance_after = quote_balance_before.clone();
-        quote_balance_after
-            .apply(BalanceV2Event::DebitAvailable {
-                amount: cmd.amount.into(),
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
-            })
-            .map_err(map_balance_error)?;
+        let metadata = CommandMetadata::new(
+            cmd.lsn(),
+            cmd.logical_ts(),
+            quote_balance_before.topic(),
+            quote_balance_before.partition(),
+            quote_balance_before.party_id().to_string(),
+        );
+        FsmV2::transition(
+            &mut quote_balance_after,
+            SequencedCommand::new(
+                metadata,
+                BalanceV2Command::DebitAvailable {
+                    amount: cmd.amount.into(),
+                },
+            ),
+        )
+        .map_err(map_balance_error)?;
 
         Ok(WithdrawQuoteChanges {
             updated_quote_balance: UpdatedEntityPair {

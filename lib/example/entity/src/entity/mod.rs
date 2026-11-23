@@ -24,7 +24,7 @@ pub use account::balance_ledger_v3::{
     BalanceLedgerV3, BalanceLedgerV3Error, BalanceLedgerV3Event, BalanceLedgerV3Output,
     BalanceLedgerV3State,
 };
-pub use account::balance_v2::{BalanceV2, BalanceV2Error, BalanceV2Event, BalanceV2Status};
+pub use account::balance_v2::{BalanceV2, BalanceV2Command, BalanceV2Error, BalanceV2Status};
 pub use common::common_order::SpotAmountConversionError;
 pub use common::common_trade::TradeBase;
 pub use common::order_primitives::{

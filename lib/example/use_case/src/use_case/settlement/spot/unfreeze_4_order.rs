@@ -1,10 +1,12 @@
 use common_entity::{LogEntry, UseCase};
 use example_core_entity::spot::spot_order_v7::SpotOrderV7;
 use example_core_entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, SpotAmountConversionError, SpotOrderStatus,
+    BalanceV2, BalanceV2Command, BalanceV2Error, SpotAmountConversionError, SpotOrderStatus,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct UnFreezeSpotOrderV2Cmd {
@@ -85,12 +87,12 @@ impl UseCase for Freeze4SpotOrderV2UseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let requirement = given_state.order.freeze_requirement()?;
         let mut balance_after = given_state.balance.clone();
-        common_entity::Fsm::apply(
+        transition_balance(
             &mut balance_after,
-            BalanceV2Event::Freeze {
+            cmd.lsn(),
+            cmd.logical_ts(),
+            BalanceV2Command::Freeze {
                 amount: requirement.amount(),
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
             },
         )?;
         Ok(UnFreezeSpotOrderV2AfterChanges { balance_after })

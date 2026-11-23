@@ -8,10 +8,11 @@ use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, PerpPositionV3, PerpPositionV3Error,
+    BalanceV2, BalanceV2Command, BalanceV2Error, PerpPositionV3, PerpPositionV3Error,
     PerpPositionV3Event, PerpPositionV3Output, PerpTradeV3, PerpTradeV3Error, PerpTradeV3Event,
     PerpTradeV3Output, PerpTradeV3State, UserId,
 };
+use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpTradeCmd {
@@ -217,19 +218,14 @@ fn derive_changes(
             .ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
         let mut after = before.clone();
         let event = if delta.is_sign_positive() {
-            BalanceV2Event::CreditAvailable {
-                amount: delta,
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
-            }
+            BalanceV2Command::CreditAvailable { amount: delta }
         } else {
-            BalanceV2Event::DebitAvailable {
+            BalanceV2Command::DebitAvailable {
                 amount: delta.abs(),
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
             }
         };
-        after.apply(event).map_err(map_balance_error)?;
+        transition_balance(&mut after, cmd.lsn(), cmd.logical_ts(), event)
+            .map_err(map_balance_error)?;
         changed_margin_balances.push(UpdatedEntityPair { before, after });
     }
 

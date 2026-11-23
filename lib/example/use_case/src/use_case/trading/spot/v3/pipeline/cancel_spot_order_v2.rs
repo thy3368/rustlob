@@ -7,12 +7,14 @@ use common_entity::{
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, OrderSide, SpotOrderStatus, SpotOrderV7,
+    BalanceV2, BalanceV2Command, BalanceV2Error, OrderSide, SpotOrderStatus, SpotOrderV7,
     SpotOrderV7Command, SpotOrderV7Output,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderV2Cmd {
@@ -194,14 +196,16 @@ fn compute_changes(
     } else {
         let balance_before = state.balance.clone();
         let mut balance_after = balance_before.clone();
-        balance_after
-            .apply(BalanceV2Event::UnfreezeAndPay {
+        transition_balance(
+            &mut balance_after,
+            cmd.lsn(),
+            cmd.logical_ts(),
+            BalanceV2Command::UnfreezeAndPay {
                 unfreeze_amount: output.release_requirement.amount(),
                 payment_amount: Decimal::ZERO,
-                timestamp: cmd.logical_ts(),
-                lsn: cmd.lsn(),
-            })
-            .map_err(map_balance_error)?;
+            },
+        )
+        .map_err(map_balance_error)?;
         Some(UpdatedEntityPair::new(balance_before, balance_after))
     };
 

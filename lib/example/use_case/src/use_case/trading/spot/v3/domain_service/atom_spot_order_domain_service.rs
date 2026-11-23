@@ -9,11 +9,13 @@ use example_core_entity::spot::spot_order_v7::{
 };
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3};
 use example_core_entity::{
-    BalanceV2, BalanceV2Error, BalanceV2Event, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
+    BalanceV2, BalanceV2Command, BalanceV2Error, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
     SpotOrderV7Command, SpotOrderV7HoldAdjustment,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
+
+use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ActivateSpotOrderV7Error {
@@ -129,18 +131,24 @@ impl SpotOrderDomainService {
             .ok_or(ReconcileSpotOrderHoldError::ArithmeticOverflow)?;
         let current = settled_balance.frozen();
         if current > target {
-            settled_balance.apply(BalanceV2Event::UnfreezeAndPay {
-                unfreeze_amount: current - target,
-                payment_amount: Decimal::ZERO,
-                timestamp,
+            transition_balance(
+                &mut settled_balance,
                 lsn,
-            })?;
+                timestamp,
+                BalanceV2Command::UnfreezeAndPay {
+                    unfreeze_amount: current - target,
+                    payment_amount: Decimal::ZERO,
+                },
+            )?;
         } else if current < target {
-            settled_balance.apply(BalanceV2Event::Freeze {
-                amount: target - current,
-                timestamp,
+            transition_balance(
+                &mut settled_balance,
                 lsn,
-            })?;
+                timestamp,
+                BalanceV2Command::Freeze {
+                    amount: target - current,
+                },
+            )?;
         }
         Ok(settled_balance)
     }
@@ -172,10 +180,7 @@ impl SpotOrderDomainService {
             let metadata = command_metadata(input.lsn, input.timestamp, &taker);
             let output = FsmV2::transition(
                 &mut taker,
-                SequencedCommand::new(
-                    metadata,
-                    SpotOrderV7Command::RejectedAsTaker,
-                ),
+                SequencedCommand::new(metadata, SpotOrderV7Command::RejectedAsTaker),
             )?
             .output;
             let SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
@@ -381,19 +386,25 @@ impl SpotOrderDomainService {
         }
         match hold_adjustment {
             SpotOrderV7HoldAdjustment::Increase { amount } => {
-                balance.apply(BalanceV2Event::Freeze {
-                    amount: amount.amount(),
-                    timestamp,
+                transition_balance(
+                    &mut balance,
                     lsn,
-                })?;
+                    timestamp,
+                    BalanceV2Command::Freeze {
+                        amount: amount.amount(),
+                    },
+                )?;
             }
             SpotOrderV7HoldAdjustment::Decrease { amount } => {
-                balance.apply(BalanceV2Event::UnfreezeAndPay {
-                    unfreeze_amount: amount.amount(),
-                    payment_amount: Decimal::ZERO,
-                    timestamp,
+                transition_balance(
+                    &mut balance,
                     lsn,
-                })?;
+                    timestamp,
+                    BalanceV2Command::UnfreezeAndPay {
+                        unfreeze_amount: amount.amount(),
+                        payment_amount: Decimal::ZERO,
+                    },
+                )?;
             }
             SpotOrderV7HoldAdjustment::Unchanged { .. } => {}
         }
@@ -423,11 +434,14 @@ impl SpotOrderDomainService {
         if balance.coin_idx() != u64::from(freeze_requirement.currency().index()) {
             return Err(ActivateSpotOrderV7Error::CoinMismatch);
         }
-        balance.apply(BalanceV2Event::Freeze {
-            amount: freeze_requirement.amount(),
-            timestamp,
+        transition_balance(
+            &mut balance,
             lsn,
-        })?;
+            timestamp,
+            BalanceV2Command::Freeze {
+                amount: freeze_requirement.amount(),
+            },
+        )?;
 
         Ok((order, balance))
     }
@@ -458,12 +472,15 @@ impl SpotOrderDomainService {
             return Err(CancelSpotOrderV7Error::AssetMismatch);
         }
         if release_requirement.amount() > Decimal::ZERO {
-            balance.apply(BalanceV2Event::UnfreezeAndPay {
-                unfreeze_amount: release_requirement.amount(),
-                payment_amount: Decimal::ZERO,
-                timestamp,
+            transition_balance(
+                &mut balance,
                 lsn,
-            })?;
+                timestamp,
+                BalanceV2Command::UnfreezeAndPay {
+                    unfreeze_amount: release_requirement.amount(),
+                    payment_amount: Decimal::ZERO,
+                },
+            )?;
         }
 
         Ok((order, balance))

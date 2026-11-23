@@ -3,9 +3,11 @@ use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::spot::spot_trade_v3::{
     SpotTradeEvent, SpotTradeSettlementError, SpotTradeStateError,
 };
-use example_core_entity::{BalanceV2, BalanceV2Error, BalanceV2Event, OrderSide};
+use example_core_entity::{BalanceV2, BalanceV2Command, BalanceV2Error, OrderSide};
 use rust_decimal::Decimal;
 use thiserror::Error;
+
+use crate::support::transition_balance;
 
 /// 一笔现货成交成功结算后的聚合快照。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,27 +71,39 @@ impl SpotTradeDomainService {
         let mut seller_base_balance_after = seller_base_balance.clone();
         let mut seller_quote_balance_after = seller_quote_balance.clone();
 
-        buyer_quote_balance_after.apply(BalanceV2Event::DebitFrozen {
-            amount: amounts.buyer_quote_payment,
-            timestamp: logical_ts,
+        transition_balance(
+            &mut buyer_quote_balance_after,
             lsn,
-        })?;
-        buyer_base_balance_after.apply(BalanceV2Event::CreditAvailable {
-            amount: amounts.base_amount,
-            timestamp: logical_ts,
+            logical_ts,
+            BalanceV2Command::DebitFrozen {
+                amount: amounts.buyer_quote_payment,
+            },
+        )?;
+        transition_balance(
+            &mut buyer_base_balance_after,
             lsn,
-        })?;
-        seller_base_balance_after.apply(BalanceV2Event::DebitFrozen {
-            amount: amounts.base_amount,
-            timestamp: logical_ts,
+            logical_ts,
+            BalanceV2Command::CreditAvailable {
+                amount: amounts.base_amount,
+            },
+        )?;
+        transition_balance(
+            &mut seller_base_balance_after,
             lsn,
-        })?;
+            logical_ts,
+            BalanceV2Command::DebitFrozen {
+                amount: amounts.base_amount,
+            },
+        )?;
         if amounts.seller_quote_receipt > Decimal::ZERO {
-            seller_quote_balance_after.apply(BalanceV2Event::CreditAvailable {
-                amount: amounts.seller_quote_receipt,
-                timestamp: logical_ts,
+            transition_balance(
+                &mut seller_quote_balance_after,
                 lsn,
-            })?;
+                logical_ts,
+                BalanceV2Command::CreditAvailable {
+                    amount: amounts.seller_quote_receipt,
+                },
+            )?;
         }
         trade_after.apply(SpotTradeEvent::Settle { lsn, logical_ts })?;
 
