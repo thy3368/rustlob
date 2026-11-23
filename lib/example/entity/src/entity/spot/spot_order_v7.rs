@@ -235,9 +235,6 @@ impl SpotOrderV7 {
             amount,
         )
     }
-    // pub fn track_create_event(&self) -> Result<common_entity::EntityReplayableEvent, EntityError>
-    // {     Entity::track_create_event(self)
-    // }
 
     /// 校验订单作为 taker 参与撮合所需的单聚合事实。
     pub fn validate_matchable_as_taker(&self) -> Result<(), EntityError> {
@@ -764,34 +761,8 @@ fn coin_amount(
     CoinAmount::new(coin, amount)
         .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
 }
-pub(super) fn terminal_release_amount(
-    o: &OrderBase,
-    original: bool,
-) -> Result<CoinAmount, SpotAmountConversionError> {
-    let size = if original { o.orig_size } else { o.size };
-    let amount = match o.side {
-        OrderSide::Buy => o
-            .buy_quote_principal_released
-            .checked_add(o.buy_quote_fee_reserve_released)
-            .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
-        OrderSide::Sell => size,
-    };
-    CoinAmount::new(
-        if o.side == OrderSide::Buy {
-            o.symbol.quote
-        } else {
-            o.symbol.base
-        },
-        amount,
-    )
-    .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
-}
-pub(super) fn held_currency(o: &OrderBase) -> crate::account::coin::Coin {
-    match o.side {
-        OrderSide::Buy => o.symbol.quote,
-        OrderSide::Sell => o.symbol.base,
-    }
-}
+
+
 fn active_hold_requirement(o: &OrderBase) -> Result<Option<Decimal>, EntityError> {
     if o.status == SpotOrderStatus::Pending {
         return Ok(None);

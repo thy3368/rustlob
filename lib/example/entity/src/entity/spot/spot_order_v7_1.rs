@@ -1,7 +1,8 @@
-use crate::SpotOrderV7;
 use crate::account::coin::{CoinAmount, CoinAmountError};
+use crate::common::OrderBase;
 use crate::entity::common::common_order::SpotAmountConversionError;
 use crate::entity::common::order_primitives::{OrderSide, SpotOrderStatus};
+use crate::SpotOrderV7;
 
 impl SpotOrderV7 {
     /// 返回订单首次作为 taker 时应冻结的资产金额。
@@ -12,11 +13,6 @@ impl SpotOrderV7 {
     /// [`SpotAmountConversionError::InexactConversion`]。
     pub fn taker_freeze_amount(&self) -> Result<CoinAmount, SpotAmountConversionError> {
         let order = self.order_base();
-        if order.orig_size <= rust_decimal::Decimal::ZERO
-            || order.buy_quote_fee_reserve_limit < rust_decimal::Decimal::ZERO
-        {
-            return Err(SpotAmountConversionError::InvalidAmount);
-        }
         let (currency, amount) = match order.side {
             OrderSide::Buy => {
                 let amount = order
@@ -44,10 +40,33 @@ impl SpotOrderV7 {
         ) {
             return Err(SpotAmountConversionError::OrderNotCanceled);
         }
-        super::spot_order_v7::terminal_release_amount(
+        Self::terminal_release_amount2(
             self.order_base(),
             self.status() == SpotOrderStatus::Rejected,
         )
+    }
+
+    pub fn terminal_release_amount2(
+        o: &OrderBase,
+        original: bool,
+    ) -> Result<CoinAmount, SpotAmountConversionError> {
+        let size = if original { o.orig_size } else { o.size };
+        let amount = match o.side {
+            OrderSide::Buy => o
+                .buy_quote_principal_released
+                .checked_add(o.buy_quote_fee_reserve_released)
+                .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
+            OrderSide::Sell => size,
+        };
+        CoinAmount::new(
+            if o.side == OrderSide::Buy {
+                o.symbol.quote
+            } else {
+                o.symbol.base
+            },
+            amount,
+        )
+        .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
     }
 
     /// 返回改单导致的冻结金额有符号差额。
@@ -88,8 +107,15 @@ impl SpotOrderV7 {
         let delta = held(after)?
             .checked_sub(held(before)?)
             .ok_or(SpotAmountConversionError::ArithmeticOverflow)?;
-        CoinAmount::new(super::spot_order_v7::held_currency(after), delta)
+        CoinAmount::new(held_currency(after), delta)
             .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
+    }
+}
+
+pub fn held_currency(o: &OrderBase) -> crate::account::coin::Coin {
+    match o.side {
+        OrderSide::Buy => o.symbol.quote,
+        OrderSide::Sell => o.symbol.base,
     }
 }
 
@@ -100,8 +126,8 @@ mod tests {
     use super::*;
     use crate::account::coin::Coin;
     use crate::account::symbol::Symbol;
-    use crate::entity::common::UserId;
     use crate::entity::common::common_order::OrderBase;
+    use crate::entity::common::UserId;
 
     fn order(side: OrderSide) -> SpotOrderV7 {
         SpotOrderV7::from_record(OrderBase {
@@ -280,6 +306,24 @@ mod tests {
                 .unwrap()
                 .modify_freeze_delta(&before),
             Err(SpotAmountConversionError::InvalidAmount)
+        );
+
+        let mut wrong_symbol = before.order_base().clone();
+        wrong_symbol.symbol = Symbol::new(2, Coin::ETH, Coin::USDT);
+        assert_eq!(
+            SpotOrderV7::from_record(wrong_symbol)
+                .unwrap()
+                .modify_freeze_delta(&before),
+            Err(SpotAmountConversionError::SymbolMismatch)
+        );
+
+        let mut wrong_side = before.order_base().clone();
+        wrong_side.side = OrderSide::Sell;
+        assert_eq!(
+            SpotOrderV7::from_record(wrong_side)
+                .unwrap()
+                .modify_freeze_delta(&before),
+            Err(SpotAmountConversionError::SymbolMismatch)
         );
 
         let mut overflow = before.order_base().clone();
