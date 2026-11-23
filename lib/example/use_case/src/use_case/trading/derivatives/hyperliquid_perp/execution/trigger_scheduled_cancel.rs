@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{
-    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff,
+    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, Shard, StateDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::spot::{SpotOrderV7, SpotOrderV7Command};
@@ -143,12 +143,16 @@ impl UseCase for TriggerScheduledCancelUseCase {
         let mut canceled_spot_orders = Vec::with_capacity(state.spot_orders.len());
         for before in &state.spot_orders {
             let mut after = before.clone();
+            let metadata = CommandMetadata::new(
+                cmd.lsn(),
+                cmd.logical_ts(),
+                before.topic(),
+                before.partition(),
+                before.party_id(),
+            );
             let _ = FsmV2::transition(
                 &mut after,
-                SequencedCommand::new(
-                    CommandMetadata::new(cmd.lsn(), cmd.logical_ts()),
-                    SpotOrderV7Command::Cancel,
-                ),
+                SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )?;
             let release = after.release_requirement()?;
             let coin_idx = u64::from(release.currency().index());
@@ -267,12 +271,16 @@ mod tests {
             .expect("spot fixture should be valid");
         let release = {
             let mut canceled = spot.clone();
+            let metadata = CommandMetadata::new(
+                9,
+                LOGICAL_TS,
+                spot.topic(),
+                spot.partition(),
+                spot.party_id(),
+            );
             FsmV2::transition(
                 &mut canceled,
-                SequencedCommand::new(
-                    CommandMetadata::new(9, LOGICAL_TS),
-                    SpotOrderV7Command::Cancel,
-                ),
+                SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
             .expect("fixture should cancel");
             canceled

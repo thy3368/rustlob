@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-use common_entity::{Entity, Fsm, LogEntry, ReplayableDomainEvent, StateSink, StateSource};
+use common_entity::{Entity, Fsm, LogEntry, ReplayableDomainEvent, Shard, StateSink, StateSource};
 use example_core_use_case::{
     BalanceV2, BalanceV2Event, DueScheduledCancelSource, PerpOrderV3, PerpOrderV3Event,
     ScheduleHyperliquidCancelCmd, ScheduleHyperliquidCancelState, ScheduleHyperliquidCancelUseCase,
@@ -258,12 +258,16 @@ fn replay_events(
                 .get_mut(&event.entity_id)
                 .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
             check_version(event, order.order_base().lsn)?;
+            let metadata = CommandMetadata::new(
+                event.lsn,
+                event.logical_ts,
+                order.topic(),
+                order.partition(),
+                order.party_id(),
+            );
             FsmV2::transition(
                 order,
-                SequencedCommand::new(
-                    CommandMetadata::new(event.lsn, event.logical_ts),
-                    SpotOrderV7Command::Cancel,
-                ),
+                SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
             .map_err(|error| {
                 HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
@@ -413,9 +417,11 @@ mod tests {
             .expect("spot fixture should be valid");
         let release = {
             let mut canceled = spot.clone();
+            let metadata =
+                CommandMetadata::new(9, DUE_MS, spot.topic(), spot.partition(), spot.party_id());
             FsmV2::transition(
                 &mut canceled,
-                SequencedCommand::new(CommandMetadata::new(9, DUE_MS), SpotOrderV7Command::Cancel),
+                SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
             .expect("fixture should cancel");
             canceled

@@ -2,7 +2,7 @@ use common_entity::fsm_v2::{
     CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
 };
 use common_entity::{
-    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff,
+    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, Shard, StateDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
@@ -174,12 +174,16 @@ fn compute_changes(
 ) -> Result<CancelSpotOrderV2Changes, CancelSpotOrderV2Error> {
     let order_before = state.order.clone();
     let mut order_after = order_before.clone();
+    let metadata = FsmCommandMetadata::new(
+        cmd.lsn(),
+        cmd.logical_ts(),
+        order_before.topic(),
+        order_before.partition(),
+        order_before.party_id(),
+    );
     let transition = FsmV2::transition(
         &mut order_after,
-        SequencedCommand::new(
-            FsmCommandMetadata::new(cmd.lsn(), cmd.logical_ts()),
-            SpotOrderV7Command::Cancel,
-        ),
+        SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
     )?;
     let SpotOrderV7Output::Canceled(output) = transition.output else {
         return Err(CancelSpotOrderV2Error::UnexpectedOrderOutput);
