@@ -2,7 +2,8 @@ use common_entity::fsm_v2::{
     CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
 };
 use common_entity::{
-    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, Shard, StateDiff, UseCase,
+    EntityError, LogEntry, PositionedEntity, ReplayableDomainEvent, ReplayableEntityChanges, Shard,
+    UpdatedEntityEvents, UpdatedEntityEventsError, UseCaseV3,
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{
@@ -14,27 +15,25 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CancelSpotOrderV2Cmd {
+pub struct CancelSpotOrderFsmV3Cmd {
     pub order_id: OrderId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CancelSpotOrderV2State {
+pub struct CancelSpotOrderFsmV3State {
     pub order: SpotOrderV7,
     pub balance: BalanceV2,
 }
 
 /// 取消后的聚合状态与 FSM 原生 replay 事件。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CancelSpotOrderV2Changes {
-    pub order_after: SpotOrderV7,
-    pub balance_after: Option<BalanceV2>,
-    pub order_event: ReplayableDomainEvent,
-    pub balance_event: Option<ReplayableDomainEvent>,
+pub struct CancelSpotOrderFsmV3Changes {
+    pub order: UpdatedEntityEvents<SpotOrderV7>,
+    pub balance: Option<UpdatedEntityEvents<BalanceV2>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum CancelSpotOrderV2Error {
+pub enum CancelSpotOrderFsmV3Error {
     #[error("order oid must be greater than zero")]
     InvalidOid,
     #[error("order cloid must not be empty")]
@@ -63,35 +62,38 @@ pub enum CancelSpotOrderV2Error {
     ArithmeticOverflow,
     #[error("order FSM returned an unexpected cancel output")]
     UnexpectedOrderOutput,
+    #[error("invalid entity event chain: {0:?}")]
+    InvalidEntityEvents(UpdatedEntityEventsError),
     #[error(transparent)]
     Entity(#[from] EntityError),
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CancelSpotOrderV2UseCase;
+pub struct CancelSpotOrderFsmV3UseCase;
 
-impl ReplayableChanges for CancelSpotOrderV2Changes {
-    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
-        let mut events = Vec::with_capacity(1 + usize::from(self.balance_event.is_some()));
-        events.push(self.order_event.clone());
-        if let Some(balance_event) = &self.balance_event {
-            events.push(balance_event.clone());
+impl ReplayableEntityChanges for CancelSpotOrderFsmV3Changes {
+    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
+        let capacity = if self.balance.is_some() { 2 } else { 1 };
+        let mut events = Vec::with_capacity(capacity);
+        events.extend(self.order.events());
+        if let Some(balance) = &self.balance {
+            events.extend(balance.events());
         }
-        Ok(events)
+        events
     }
 }
 
-impl UseCase for CancelSpotOrderV2UseCase {
-    type Command = LogEntry<CancelSpotOrderV2Cmd>;
-    type StateGiven = CancelSpotOrderV2State;
-    type Error = CancelSpotOrderV2Error;
-    type StateChanged = CancelSpotOrderV2Changes;
+impl UseCaseV3 for CancelSpotOrderFsmV3UseCase {
+    type Command = LogEntry<CancelSpotOrderFsmV3Cmd>;
+    type StateGiven = CancelSpotOrderFsmV3State;
+    type Error = CancelSpotOrderFsmV3Error;
+    type StateChanged = CancelSpotOrderFsmV3Changes;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         match &cmd.payload().order_id {
-            OrderId::Oid(0) => Err(CancelSpotOrderV2Error::InvalidOid),
+            OrderId::Oid(0) => Err(CancelSpotOrderFsmV3Error::InvalidOid),
             OrderId::Cloid(cloid) if cloid.trim().is_empty() => {
-                Err(CancelSpotOrderV2Error::EmptyCloid)
+                Err(CancelSpotOrderFsmV3Error::EmptyCloid)
             }
             OrderId::Oid(_) | OrderId::Cloid(_) => Ok(()),
         }
@@ -114,33 +116,22 @@ impl UseCase for CancelSpotOrderV2UseCase {
     }
 }
 
-impl StateDiff for CancelSpotOrderV2UseCase {
-    type StateDiff = CancelSpotOrderV2Changes;
-
-    fn do_compute_state_diff(
-        _state: Self::StateGiven,
-        changed: Self::StateChanged,
-    ) -> Result<Self::StateDiff, Self::Error> {
-        Ok(changed)
-    }
-}
-
 fn validate_state(
-    cmd: &LogEntry<CancelSpotOrderV2Cmd>,
-    state: &CancelSpotOrderV2State,
-) -> Result<(), CancelSpotOrderV2Error> {
+    cmd: &LogEntry<CancelSpotOrderFsmV3Cmd>,
+    state: &CancelSpotOrderFsmV3State,
+) -> Result<(), CancelSpotOrderFsmV3Error> {
     let order = state.order.order_base();
     if order.owner.0 != common_entity::stable_string_entity_id(cmd.user_id()) {
-        return Err(CancelSpotOrderV2Error::OwnerMismatch);
+        return Err(CancelSpotOrderFsmV3Error::OwnerMismatch);
     }
     match &cmd.payload().order_id {
         OrderId::Oid(oid) if *oid != order.order_id => {
-            return Err(CancelSpotOrderV2Error::OrderLookupMismatch);
+            return Err(CancelSpotOrderFsmV3Error::OrderLookupMismatch);
         }
         OrderId::Cloid(cloid) => match order.cloid.as_deref() {
-            None => return Err(CancelSpotOrderV2Error::OrderCloidMissing),
+            None => return Err(CancelSpotOrderFsmV3Error::OrderCloidMissing),
             Some(loaded) if loaded != cloid => {
-                return Err(CancelSpotOrderV2Error::OrderLookupMismatch);
+                return Err(CancelSpotOrderFsmV3Error::OrderLookupMismatch);
             }
             Some(_) => {}
         },
@@ -150,29 +141,30 @@ fn validate_state(
         state.order.status(),
         SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
     ) {
-        return Err(CancelSpotOrderV2Error::OrderNotCancelable);
+        return Err(CancelSpotOrderFsmV3Error::OrderNotCancelable);
     }
     if cmd.lsn() <= order.lsn {
-        return Err(CancelSpotOrderV2Error::StaleOrder);
+        return Err(CancelSpotOrderFsmV3Error::StaleOrder);
     }
     if state.balance.party_id() != order.owner.0 {
-        return Err(CancelSpotOrderV2Error::PartyMismatch);
+        return Err(CancelSpotOrderFsmV3Error::PartyMismatch);
     }
     let held_coin = match order.side {
         OrderSide::Buy => order.symbol.quote,
         OrderSide::Sell => order.symbol.base,
     };
     if state.balance.coin_idx() != u64::from(held_coin.index()) {
-        return Err(CancelSpotOrderV2Error::CoinMismatch);
+        return Err(CancelSpotOrderFsmV3Error::CoinMismatch);
     }
     Ok(())
 }
 
 fn compute_changes(
-    cmd: &LogEntry<CancelSpotOrderV2Cmd>,
-    state: &CancelSpotOrderV2State,
-) -> Result<CancelSpotOrderV2Changes, CancelSpotOrderV2Error> {
+    cmd: &LogEntry<CancelSpotOrderFsmV3Cmd>,
+    state: &CancelSpotOrderFsmV3State,
+) -> Result<CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Error> {
     let order_before = state.order.clone();
+    let order_loaded_position = order_before.event_position();
     let mut order_after = order_before.clone();
     let metadata = FsmCommandMetadata::new(
         cmd.lsn(),
@@ -186,13 +178,14 @@ fn compute_changes(
         SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
     )?;
     let SpotOrderV7Output::Canceled(output) = transition.output else {
-        return Err(CancelSpotOrderV2Error::UnexpectedOrderOutput);
+        return Err(CancelSpotOrderFsmV3Error::UnexpectedOrderOutput);
     };
 
-    let (balance_after, balance_event) = if output.release_requirement.amount() == Decimal::ZERO {
-        (None, None)
+    let balance = if output.release_requirement.amount() == Decimal::ZERO {
+        None
     } else {
         let balance_before = state.balance.clone();
+        let balance_loaded_position = balance_before.event_position();
         let mut balance_after = balance_before.clone();
         let metadata = FsmCommandMetadata::new(
             cmd.lsn(),
@@ -212,30 +205,40 @@ fn compute_changes(
             ),
         )
         .map_err(map_balance_error)?;
-        (Some(balance_after), Some(balance_transition.event))
+        Some(
+            UpdatedEntityEvents::try_new(
+                balance_after,
+                balance_loaded_position,
+                vec![balance_transition.event],
+            )
+            .map_err(CancelSpotOrderFsmV3Error::InvalidEntityEvents)?,
+        )
     };
 
-    Ok(CancelSpotOrderV2Changes {
-        order_after,
-        balance_after,
-        order_event: transition.event,
-        balance_event,
+    Ok(CancelSpotOrderFsmV3Changes {
+        order: UpdatedEntityEvents::try_new(
+            order_after,
+            order_loaded_position,
+            vec![transition.event],
+        )
+        .map_err(CancelSpotOrderFsmV3Error::InvalidEntityEvents)?,
+        balance,
     })
 }
 
-fn map_balance_error(error: BalanceV2Error) -> CancelSpotOrderV2Error {
+fn map_balance_error(error: BalanceV2Error) -> CancelSpotOrderFsmV3Error {
     match error {
         BalanceV2Error::InsufficientFrozenBalance => {
-            CancelSpotOrderV2Error::InsufficientFrozenBalance
+            CancelSpotOrderFsmV3Error::InsufficientFrozenBalance
         }
-        BalanceV2Error::BalanceClosed => CancelSpotOrderV2Error::BalanceClosed,
+        BalanceV2Error::BalanceClosed => CancelSpotOrderFsmV3Error::BalanceClosed,
         BalanceV2Error::InvalidAmount | BalanceV2Error::InsufficientAvailableBalance => {
-            CancelSpotOrderV2Error::InvalidBalanceAmount
+            CancelSpotOrderFsmV3Error::InvalidBalanceAmount
         }
-        BalanceV2Error::Replay(error) => CancelSpotOrderV2Error::Entity(error),
+        BalanceV2Error::Replay(error) => CancelSpotOrderFsmV3Error::Entity(error),
         BalanceV2Error::ArithmeticOverflow
         | BalanceV2Error::CannotCloseNonZeroBalance
-        | BalanceV2Error::StaleLsn { .. } => CancelSpotOrderV2Error::ArithmeticOverflow,
+        | BalanceV2Error::StaleLsn { .. } => CancelSpotOrderFsmV3Error::ArithmeticOverflow,
     }
 }
 
@@ -244,7 +247,7 @@ mod tests {
     //! 业务矩阵：定位方式 OID/CLOID；状态 Pending/Open/PartiallyFilled；
     //! 非零释放产生 order+balance replay，零释放只产生 order replay；所有成功取消产生一个领域事件。
 
-    use common_entity::{Entity, LogEntrySequencer, ReplayableChanges, StateDiff, UseCase};
+    use common_entity::{Entity, LogEntrySequencer, UseCaseComputeError, UseCaseV3};
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::{OrderBase, OrderTrigger, PriceType, UserId};
@@ -296,21 +299,21 @@ mod tests {
         )
     }
 
-    fn state(status: SpotOrderStatus, frozen: Decimal) -> CancelSpotOrderV2State {
-        CancelSpotOrderV2State {
+    fn state(status: SpotOrderStatus, frozen: Decimal) -> CancelSpotOrderFsmV3State {
+        CancelSpotOrderFsmV3State {
             order: order(status),
             balance: balance(frozen),
         }
     }
 
-    fn command(order_id: OrderId) -> LogEntry<CancelSpotOrderV2Cmd> {
+    fn command(order_id: OrderId) -> LogEntry<CancelSpotOrderFsmV3Cmd> {
         LogEntrySequencer::from_metadata(
             LSN,
             LOGICAL_TS,
             1,
             2,
             OWNER.into(),
-            CancelSpotOrderV2Cmd { order_id },
+            CancelSpotOrderFsmV3Cmd { order_id },
         )
     }
 
@@ -322,38 +325,47 @@ mod tests {
         let given = state(SpotOrderStatus::Open, Decimal::from(100));
 
         // When: 执行取消并形成可回放 changes。
-        let changed = CancelSpotOrderV2UseCase
+        let changed = CancelSpotOrderFsmV3UseCase
             .compute_state_changed(&cmd, &given)
             .expect("open order should cancel");
 
         // Then: after state 用于后续块内状态，FSM 原生事件用于 replay。
-        assert_eq!(changed.order_after.status(), SpotOrderStatus::Canceled);
+        assert_eq!(changed.order.after().status(), SpotOrderStatus::Canceled);
         let balance_after = changed
-            .balance_after
+            .balance
             .as_ref()
-            .expect("non-zero release must update balance");
+            .expect("non-zero release must update balance")
+            .after();
         assert_eq!(balance_after.frozen(), Decimal::ZERO);
         assert_eq!(balance_after.available(), Decimal::from(100));
 
-        let events = changed.to_replayable_events().expect("events project");
-        assert_eq!(events.len(), 2);
-        assert_eq!(events[0], changed.order_event);
+        let events = changed.replayable_events();
+        let [order_event, balance_event] = events.as_slice() else {
+            panic!("non-zero release must emit order and balance events");
+        };
+        assert_eq!(*order_event, changed.order.events().first().unwrap());
         assert_eq!(
-            events[1],
-            *changed.balance_event.as_ref().expect("balance event")
+            *balance_event,
+            changed.balance.as_ref().unwrap().events().first().unwrap()
         );
-        assert_eq!(events[0].domain_event_type, 6);
-        assert_eq!(events[1].domain_event_type, 2);
-        assert_eq!((events[1].lsn, events[1].logical_ts), (LSN, LOGICAL_TS));
-        assert_eq!((events[0].lsn, events[0].logical_ts), (LSN, LOGICAL_TS));
-        assert_eq!((events[0].previous_lsn, events[0].change_type), (0, 1));
-        assert!(events[0].field_changes.iter().any(|change| {
+        assert_eq!(order_event.domain_event_type, 6);
+        assert_eq!(balance_event.domain_event_type, 2);
+        assert_eq!(
+            (balance_event.lsn, balance_event.logical_ts),
+            (LSN, LOGICAL_TS)
+        );
+        assert_eq!((order_event.lsn, order_event.logical_ts), (LSN, LOGICAL_TS));
+        assert_eq!((order_event.previous_lsn, order_event.change_type), (0, 1));
+        assert!(order_event.field_changes.iter().any(|change| {
             change.field_name_as_str() == Ok("status")
                 && change.old_value_bytes() == b"Open"
                 && change.new_value_bytes() == b"Canceled"
         }));
-        assert_eq!(changed.order_event.lsn, LSN);
-        assert_eq!(changed.order_event.logical_ts, LOGICAL_TS);
+        assert_eq!(changed.order.events().first().unwrap().lsn, LSN);
+        assert_eq!(
+            changed.order.events().first().unwrap().logical_ts,
+            LOGICAL_TS
+        );
     }
 
     #[test]
@@ -364,26 +376,24 @@ mod tests {
         let given = state(SpotOrderStatus::PartiallyFilled, Decimal::from(100));
 
         // When: 执行取消。
-        let changes = CancelSpotOrderV2UseCase
-            .compute_state_diff(&cmd, given)
+        let changes = CancelSpotOrderFsmV3UseCase
+            .compute_state_changed(&cmd, &given)
             .expect("partially filled order should cancel");
 
         // Then: 返回两个 after state，事件顺序固定为 order、balance。
-        assert_eq!(changes.order_after.status(), SpotOrderStatus::Canceled);
-        assert!(changes.balance_after.is_some());
-        let events = changes.to_replayable_events().expect("events project");
-        assert_eq!(events.len(), 2);
+        assert_eq!(changes.order.after().status(), SpotOrderStatus::Canceled);
+        assert!(changes.balance.is_some());
+        let events = changes.replayable_events();
+        let [order_event, balance_event] = events.as_slice() else {
+            panic!("non-zero release must emit order and balance events");
+        };
         assert_eq!(
-            events[0].entity_id,
-            changes.order_after.order_base().order_id
+            order_event.entity_id,
+            changes.order.after().order_base().order_id
         );
         assert_eq!(
-            events[1].entity_id,
-            changes
-                .balance_after
-                .as_ref()
-                .expect("balance after")
-                .entity_id()
+            balance_event.entity_id,
+            Entity::entity_id(changes.balance.as_ref().expect("balance after").after())
         );
     }
 
@@ -395,39 +405,32 @@ mod tests {
         let given = state(SpotOrderStatus::Pending, Decimal::ZERO);
 
         // When: 执行取消。
-        let changes = CancelSpotOrderV2UseCase
+        let changes = CancelSpotOrderFsmV3UseCase
             .compute_state_changed(&cmd, &given)
             .expect("pending order should cancel");
 
         // Then: 仅订单 pair/replay 变化，但仍保留 canceled 事件码。
-        assert_eq!(changes.order_after.status(), SpotOrderStatus::Canceled);
-        assert_eq!(changes.balance_after, None);
-        assert_eq!(changes.balance_event, None);
-        assert_eq!(
-            changes
-                .to_replayable_events()
-                .expect("events project")
-                .len(),
-            1
-        );
-        assert_eq!(changes.order_event.domain_event_type, 6);
+        assert_eq!(changes.order.after().status(), SpotOrderStatus::Canceled);
+        assert_eq!(changes.balance, None);
+        assert_eq!(changes.replayable_events().len(), 1);
+        assert_eq!(changes.order.events().first().unwrap().domain_event_type, 6);
     }
 
     #[test]
     fn invalid_lookup_and_authoritative_state_are_rejected() {
         let valid_state = state(SpotOrderStatus::Open, Decimal::from(100));
         assert_eq!(
-            CancelSpotOrderV2UseCase.check_command(&command(OrderId::Oid(0))),
-            Err(CancelSpotOrderV2Error::InvalidOid)
+            CancelSpotOrderFsmV3UseCase.check_command(&command(OrderId::Oid(0))),
+            Err(CancelSpotOrderFsmV3Error::InvalidOid)
         );
         assert_eq!(
-            CancelSpotOrderV2UseCase.check_command(&command(OrderId::Cloid(" ".into()))),
-            Err(CancelSpotOrderV2Error::EmptyCloid)
+            CancelSpotOrderFsmV3UseCase.check_command(&command(OrderId::Cloid(" ".into()))),
+            Err(CancelSpotOrderFsmV3Error::EmptyCloid)
         );
         assert_eq!(
-            CancelSpotOrderV2UseCase
+            CancelSpotOrderFsmV3UseCase
                 .validate_state_given(&command(OrderId::Oid(ORDER_ID + 1)), &valid_state,),
-            Err(CancelSpotOrderV2Error::OrderLookupMismatch)
+            Err(CancelSpotOrderFsmV3Error::OrderLookupMismatch)
         );
 
         let mut wrong_owner = command(OrderId::Oid(ORDER_ID));
@@ -440,8 +443,8 @@ mod tests {
             wrong_owner.payload().clone(),
         );
         assert_eq!(
-            CancelSpotOrderV2UseCase.validate_state_given(&wrong_owner, &valid_state),
-            Err(CancelSpotOrderV2Error::OwnerMismatch)
+            CancelSpotOrderFsmV3UseCase.validate_state_given(&wrong_owner, &valid_state),
+            Err(CancelSpotOrderFsmV3Error::OwnerMismatch)
         );
     }
 
@@ -454,12 +457,14 @@ mod tests {
         let before = given.clone();
 
         // When: 执行取消。
-        let result = CancelSpotOrderV2UseCase.compute_state_changed(&cmd, &given);
+        let result = CancelSpotOrderFsmV3UseCase.compute_state_changed(&cmd, &given);
 
         // Then: 不返回 changes/event，且 authoritative input 保持不变。
         assert_eq!(
             result,
-            Err(CancelSpotOrderV2Error::InsufficientFrozenBalance)
+            Err(UseCaseComputeError::Business(
+                CancelSpotOrderFsmV3Error::InsufficientFrozenBalance
+            ))
         );
         assert_eq!(given, before);
     }

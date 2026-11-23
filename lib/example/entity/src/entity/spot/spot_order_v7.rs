@@ -680,6 +680,20 @@ impl Entity for SpotOrderV7 {
         todo!()
     }
 }
+
+impl common_entity::PositionedEntity for SpotOrderV7 {
+    fn entity_id(&self) -> u64 {
+        <Self as Entity>::entity_id(self)
+    }
+
+    fn entity_type(&self) -> u8 {
+        <Self as Entity>::entity_type()
+    }
+
+    fn event_position(&self) -> common_entity::EventPosition {
+        common_entity::EventPosition::new(<Self as Entity>::lsn(self), 0)
+    }
+}
 impl Shard for SpotOrderV7 {
     fn partition(&self) -> u8 {
         self.order_base.symbol.base.index() as u8

@@ -378,6 +378,20 @@ impl Entity for BalanceV2 {
     }
 }
 
+impl common_entity::PositionedEntity for BalanceV2 {
+    fn entity_id(&self) -> u64 {
+        <Self as Entity>::entity_id(self)
+    }
+
+    fn entity_type(&self) -> u8 {
+        <Self as Entity>::entity_type()
+    }
+
+    fn event_position(&self) -> common_entity::EventPosition {
+        common_entity::EventPosition::new(<Self as Entity>::lsn(self), 0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
