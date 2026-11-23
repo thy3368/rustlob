@@ -485,6 +485,25 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
 }
 
 #[test]
+fn command_metadata_flows_through_after_entity_and_replay_event() {
+    let subject = order(OrderSide::Buy, SpotOrderStatus::Pending);
+    let position = common_entity::EventPosition::new(23, 7);
+    let logical_ts = TIMESTAMP + 19;
+    let command = SequencedCommand::new(
+        CommandMetadata::new_at(position, logical_ts, 0, 1, String::new()),
+        SpotOrderV7Command::Freeze,
+    );
+
+    let (after, replay, _) = subject.transition(command).unwrap();
+
+    assert_eq!(after.event_position(), position);
+    assert_eq!(after.order_base().lsn, position.lsn);
+    assert_eq!(after.order_base().updated_at, logical_ts);
+    assert_eq!(replay.position, position);
+    assert_eq!(replay.logical_ts, logical_ts);
+}
+
+#[test]
 fn modify_and_buy_match_replay_all_business_field_changes() {
     let modified = order(OrderSide::Buy, SpotOrderStatus::Open);
     let (_, event, _) = modified
@@ -777,6 +796,21 @@ fn invalid_buy_notional_and_counter_overflow_are_atomic() {
     );
     assert_eq!(buyer, before);
 
+    for quote_notional in [Decimal::ZERO, -Decimal::ONE] {
+        let buyer = before.clone();
+        let original = buyer.clone();
+        assert!(
+            buyer
+                .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+                    filled_size: Decimal::ONE,
+                    quote_notional,
+                    quote_fee: Decimal::ZERO,
+                }))
+                .is_err()
+        );
+        assert_eq!(buyer, original);
+    }
+
     let mut record = before.order_base().clone();
     record.buy_quote_principal_paid = Decimal::MAX;
     let buyer = SpotOrderV7::from_record(record).unwrap();
@@ -791,4 +825,16 @@ fn invalid_buy_notional_and_counter_overflow_are_atomic() {
             .is_err()
     );
     assert_eq!(buyer, before);
+}
+
+#[test]
+fn terminal_buy_conservation_rejects_unclassified_funds() {
+    let mut record = order(OrderSide::Buy, SpotOrderStatus::Open)
+        .order_base()
+        .clone();
+    record.status = SpotOrderStatus::Filled;
+    record.buy_quote_principal_paid = Decimal::from(199);
+    record.buy_quote_fee_reserve_consumed = Decimal::from(3);
+
+    assert!(super::validate_terminal_buy_conservation(&record).is_err());
 }

@@ -374,10 +374,11 @@ impl SpotOrderV7 {
 
     fn compute_transition(
         &self,
-        command: &SpotOrderV7Command,
-        position: common_entity::EventPosition,
-        timestamp: u64,
+        command: SequencedCommand<SpotOrderV7Command>,
     ) -> Result<(OrderBase, SpotOrderV7Output), EntityError> {
+        let (metadata, payload) = command.into_parts();
+        let position = metadata.position;
+        let timestamp = metadata.logical_ts;
         if position < self.position {
             return Err(err("order command LSN is older than the current LSN"));
         }
@@ -387,7 +388,7 @@ impl SpotOrderV7 {
         ) {
             return Err(err("order is terminal"));
         }
-        match command {
+        match &payload {
             SpotOrderV7Command::Create(_) => {
                 return Err(err("create cannot be applied to an existing order"));
             }
@@ -576,13 +577,12 @@ impl Fsm for SpotOrderV7 {
         &self,
         command: SequencedCommand<SpotOrderV7Command>,
     ) -> Result<(Self, Self::Output), EntityError> {
-        let (metadata, command) = command.into_parts();
-        let (next, output) =
-            self.compute_transition(&command, metadata.position, metadata.logical_ts)?;
+        let position = command.metadata.position;
+        let (next, output) = self.compute_transition(command)?;
         Ok((
             Self {
                 order_base: next,
-                position: metadata.position,
+                position,
             },
             output,
         ))
@@ -606,7 +606,7 @@ fn matched_order(
 ) -> Result<OrderBase, EntityError> {
     if filled_size < Decimal::ZERO
         || filled_size > current.size
-        || quote_notional < Decimal::ZERO
+        || (filled_size > Decimal::ZERO && quote_notional <= Decimal::ZERO)
         || quote_fee < Decimal::ZERO
     {
         return Err(err("invalid match facts"));

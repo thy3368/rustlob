@@ -121,7 +121,7 @@ pub trait Fsm: TrackDiff + Sized {
     #[doc(hidden)]
     fn derive_transition(
         &self,
-        command: SequencedCommand<Self::Command>,
+        command:  SequencedCommand<Self::Command>,
     ) -> Result<(Self, Self::Output), Self::Error>;
 
     /// 返回 command 对应的稳定、非零业务事件码。
