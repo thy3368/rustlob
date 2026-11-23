@@ -484,15 +484,15 @@ impl Fsm for SpotOrderV7 {
         command.event_type()
     }
 
-    fn transition_in_place(
-        &mut self,
+    fn derive_transition(
+        &self,
         metadata: CommandMetadata,
         command: SpotOrderV7Command,
-    ) -> Result<(Self::State, Self::Output), EntityError> {
+    ) -> Result<(Self, Self::State, Self::Output), EntityError> {
         let (next, output) =
             self.compute_transition(&command, metadata.lsn, metadata.logical_ts)?;
-        self.order_base = next;
-        Ok((self.order_base.status, output))
+        let state = next.status;
+        Ok((Self { order_base: next }, state, output))
     }
 }
 

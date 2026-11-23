@@ -159,11 +159,11 @@ impl Fsm for BalanceV2 {
     type Command = BalanceV2Command;
     type Output = ();
     type Error = BalanceV2Error;
-    fn transition_in_place(
-        &mut self,
+    fn derive_transition(
+        &self,
         metadata: CommandMetadata,
         command: Self::Command,
-    ) -> Result<(Self::State, Self::Output), Self::Error> {
+    ) -> Result<(Self, Self::State, Self::Output), Self::Error> {
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);
         }
@@ -241,12 +241,18 @@ impl Fsm for BalanceV2 {
                 (self.available(), self.frozen(), BalanceV2Status::Closed)
             }
         };
-        self.available = available;
-        self.frozen = frozen;
-        self.status = status;
-        self.version = lsn;
-        self.updated_at = metadata.logical_ts;
-        Ok((status, ()))
+        let after = Self {
+            party_id: self.party_id,
+            account_id: self.account_id,
+            coin_idx: self.coin_idx,
+            available,
+            frozen,
+            status,
+            version: lsn,
+            created_at: self.created_at,
+            updated_at: metadata.logical_ts,
+        };
+        Ok((after, status, ()))
     }
 
     fn event_type(command: &Self::Command) -> u8 {

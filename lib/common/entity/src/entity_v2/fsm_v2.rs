@@ -112,27 +112,26 @@ pub type TransitionResult<S, O, Err> = Result<Transition<S, O>, Err>;
 ///
 /// 该契约独立定义完整执行路径。实现方必须提供 v2 自己的无提交业务迁移入口；
 /// 新调用方显式构造 [`SequencedCommand`]。
-pub trait Fsm: TrackDiff + Clone {
+pub trait Fsm: TrackDiff + Sized {
     type State;
     type Command;
     type Output;
     type Error: From<EntityError>;
 
-    /// 只在 `transition` 创建的 working clone 上执行业务迁移。
+    /// 基于当前实体只读推导迁移后的完整实体、状态和业务输出。
     ///
-    /// 实现不得发布事件或产生外部副作用。
+    /// 实现不得修改当前实体、发布事件或产生外部副作用。
     #[doc(hidden)]
-    fn transition_in_place(
-        &mut self,
+    fn derive_transition(
+        &self,
         metadata: CommandMetadata,
         command: Self::Command,
-    ) -> Result<(Self::State, Self::Output), Self::Error>;
+    ) -> Result<(Self, Self::State, Self::Output), Self::Error>;
 
     /// 返回 command 对应的稳定、非零业务事件码。
     fn event_type(command: &Self::Command) -> u8;
 
-    /// 在一个 working clone 上完成业务迁移和 replay 投影，全部成功后
-    /// 才原子替换原实体。
+    /// 先纯计算 after entity，再完成 replay 投影；全部成功后才原子替换原实体。
     fn transition(
         &mut self,
         command: SequencedCommand<Self::Command>,
@@ -142,12 +141,12 @@ pub trait Fsm: TrackDiff + Clone {
         if event_type == 0 {
             return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
         }
-        let mut working = self.clone();
-        let (state, output) = working.transition_in_place(metadata.clone(), payload)?;
-        let mut replay_event =
-            working.track_update_event_from_command(self, metadata.lsn, metadata.logical_ts)?;
+        let lsn = metadata.lsn;
+        let logical_ts = metadata.logical_ts;
+        let (after, state, output) = self.derive_transition(metadata, payload)?;
+        let mut replay_event = after.track_update_event_from_command(self, lsn, logical_ts)?;
         replay_event.domain_event_type = event_type;
-        *self = working;
+        *self = after;
         Ok(Transition::new(state, output, replay_event))
     }
 }
@@ -261,18 +260,25 @@ mod tests {
             if command.delta == u64::MAX { 0 } else { 7 }
         }
 
-        fn transition_in_place(
-            &mut self,
+        fn derive_transition(
+            &self,
             metadata: CommandMetadata,
             command: Command,
-        ) -> Result<(Self::State, Self::Output), Self::Error> {
-            self.value = self.value.saturating_add(command.delta);
-            self.lsn = metadata.lsn;
-            self.updated_at = metadata.logical_ts;
+        ) -> Result<(Self, Self::State, Self::Output), Self::Error> {
+            let value = self.value.saturating_add(command.delta);
             if command.fail {
                 return Err(TestError::Business);
             }
-            Ok((self.value, command.delta))
+            Ok((
+                Self {
+                    value,
+                    lsn: metadata.lsn,
+                    updated_at: metadata.logical_ts,
+                    clones: Arc::clone(&self.clones),
+                },
+                value,
+                command.delta,
+            ))
         }
     }
 
@@ -286,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn transition_uses_one_clone_and_envelope_metadata() {
+    fn transition_uses_zero_clones_and_envelope_metadata() {
         let mut subject = subject();
         let clones = Arc::clone(&subject.clones);
         let result = FsmV2::transition(
@@ -304,7 +310,7 @@ mod tests {
             Err(error) => panic!("v2 transition failed: {error:?}"),
         };
 
-        assert_eq!(clones.load(Ordering::Relaxed), 1);
+        assert_eq!(clones.load(Ordering::Relaxed), 0);
         assert_eq!(
             (subject.value, subject.lsn, subject.updated_at),
             (12, 9, 13)
