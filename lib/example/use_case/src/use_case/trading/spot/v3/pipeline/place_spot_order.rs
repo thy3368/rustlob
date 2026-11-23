@@ -286,6 +286,7 @@ pub(crate) fn build_place_changes(
         let mut event = after.track_create_event_at(position, cmd.logical_ts())?;
         event.t = cmd.topic();
         event.p = cmd.partition();
+        event.domain_event_type = 1;
         created_orders.push(
             CreatedEntityEvent::try_new(after, event)
                 .map_err(PlaceSpotOrderV3Error::InvalidCreatedEvent)?,
@@ -770,6 +771,12 @@ mod tests {
         assert_eq!(changes.created_orders.len(), 2);
         assert_eq!(changes.created_orders[0].after().order_base().order_id, 1);
         assert_eq!(changes.created_orders[1].after().order_base().order_id, 2);
+        assert!(
+            changes
+                .created_orders
+                .iter()
+                .all(|created| created.event().domain_event_type == 1)
+        );
         assert!(changes.updated_maker_orders.is_empty());
         assert!(changes.settled_trades.is_empty());
         assert_eq!(changes.replayable_events().len(), 3);
