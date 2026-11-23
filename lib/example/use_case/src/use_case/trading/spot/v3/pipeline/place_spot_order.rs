@@ -11,11 +11,11 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::use_case::trading::spot::v3::domain_service::place_order_pipeline::{
+use crate::use_case::trading::spot::v3::pipeline::place_order_pipeline::{
     PlaceDomainServiceError, PlaceNormalSpotOrderV2Input, PlaceNormalSpotOrderV3AfterChanges,
     PlaceOrderPipeline, PlaceTriggerSpotOrderV2Input, PlaceTriggerSpotOrderV3AfterChanges,
 };
-pub use crate::use_case::trading::spot::v3::domain_service::place_order_pipeline::{
+pub use crate::use_case::trading::spot::v3::pipeline::place_order_pipeline::{
     PlaceSpotOrderV3OrderCmd, SpotOrderV3Balances,
 };
 
