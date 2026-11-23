@@ -552,8 +552,7 @@ mod tests {
         let changes = match_spot_order(&taker, &makers, input()).expect("ALO 应业务拒绝");
 
         // Then: taker 进入 Rejected，释放全部冻结且只有 index 0 事件。
-        let MatchSpotOrderChanges::Rejected { taker } = &changes
-        else {
+        let MatchSpotOrderChanges::Rejected { taker } = &changes else {
             panic!("ALO 应返回拒绝")
         };
         assert_eq!(taker.after().status(), SpotOrderStatus::Rejected);

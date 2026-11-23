@@ -1,7 +1,8 @@
-use common_entity::{Fsm, LogEntry, UseCase};
+use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::{LogEntry, Shard, UseCase};
 use example_core_entity::entity::common::order_primitives::OrderSide;
 use example_core_entity::spot::spot_trade_v3::{
-    SpotTradeEvent, SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3,
+    SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3, SpotTradeV3Command,
 };
 use example_core_entity::{BalanceV2, BalanceV2Command, BalanceV2Error};
 use serde::{Deserialize, Serialize};
@@ -206,13 +207,16 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let amounts = given_state.trade.settlement_amounts()?;
-        let mut trade_after = given_state.trade.clone();
-        Fsm::apply(
-            &mut trade_after,
-            SpotTradeEvent::Settle {
-                lsn: cmd.lsn(),
-                logical_ts: cmd.logical_ts(),
-            },
+        let trade_metadata = CommandMetadata::new(
+            cmd.lsn(),
+            cmd.logical_ts(),
+            given_state.trade.topic(),
+            given_state.trade.partition(),
+            given_state.trade.party_id(),
+        );
+        let (trade_after, _) = FsmV2::transition(
+            &given_state.trade,
+            SequencedCommand::new(trade_metadata, SpotTradeV3Command::Settle),
         )
         .map_err(|_| UnFreezeSpotOrderV2Error::DuplicateSettlement)?;
         let mut buyer_base_balance_after = given_state.buyer_base_balance.clone();

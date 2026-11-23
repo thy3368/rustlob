@@ -1,7 +1,8 @@
-use common_entity::Fsm;
+use common_entity::Shard;
+use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::spot::spot_trade_v3::{
-    SpotTradeEvent, SpotTradeSettlementError, SpotTradeStateError,
+    SpotTradeSettlementError, SpotTradeStateError, SpotTradeV3Command,
 };
 use example_core_entity::{BalanceV2, BalanceV2Command, BalanceV2Error, OrderSide};
 use rust_decimal::Decimal;
@@ -65,7 +66,6 @@ impl SpotTradeDomainService {
         let amounts = trade.settlement_amounts()?;
 
         // 所有聚合仅在工作副本上推进，任一步失败都不会暴露部分结算结果。
-        let mut trade_after = trade.clone();
         let mut buyer_base_balance_after = buyer_base_balance.clone();
         let mut buyer_quote_balance_after = buyer_quote_balance.clone();
         let mut seller_base_balance_after = seller_base_balance.clone();
@@ -105,7 +105,17 @@ impl SpotTradeDomainService {
                 },
             )?;
         }
-        trade_after.apply(SpotTradeEvent::Settle { lsn, logical_ts })?;
+        let metadata = CommandMetadata::new(
+            lsn,
+            logical_ts,
+            trade.topic(),
+            trade.partition(),
+            trade.party_id(),
+        );
+        let (trade_after, _) = FsmV2::transition(
+            &trade,
+            SequencedCommand::new(metadata, SpotTradeV3Command::Settle),
+        )?;
 
         Ok(SpotTradeSettlementOutcome {
             trade_after,

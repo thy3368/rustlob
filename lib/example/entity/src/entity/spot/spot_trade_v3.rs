@@ -1,7 +1,7 @@
+use common_entity::fsm_v2::{Fsm, SequencedCommand};
 use common_entity::{
-    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
-    FourColorArchetype, Fsm, LogAttr, ReplayBackedDomainEvent, ReplayableDomainEvent, Shard,
-    TrackDiff,
+    AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
+    Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -37,44 +37,10 @@ pub enum SpotTradeSettlementStatus {
     Settled,
 }
 
-/// 现货成交支持的生命周期事件。
+/// 现货成交支持的生命周期命令。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SpotTradeEvent {
-    Settle { lsn: u64, logical_ts: u64 },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpotTradeV3DomainEvent {
-    Settled { replay_event: ReplayableDomainEvent },
-}
-
-impl ReplayBackedDomainEvent<SpotTradeEvent> for SpotTradeV3DomainEvent {
-    fn domain_event_type(_: &SpotTradeEvent) -> u8 {
-        1
-    }
-    fn from_command(_: SpotTradeEvent, replay_event: ReplayableDomainEvent) -> Self {
-        Self::Settled { replay_event }
-    }
-    fn replayable_event(&self) -> &ReplayableDomainEvent {
-        let Self::Settled { replay_event } = self;
-        replay_event
-    }
-}
-
-impl Shard for SpotTradeEvent {
-    fn partition(&self) -> u8 {
-        0
-    }
-}
-impl LogAttr for SpotTradeEvent {
-    fn lsn(&self) -> u64 {
-        let Self::Settle { lsn, .. } = self;
-        *lsn
-    }
-    fn logical_ts(&self) -> u64 {
-        let Self::Settle { logical_ts, .. } = self;
-        *logical_ts
-    }
+pub enum SpotTradeV3Command {
+    Settle,
 }
 
 /// 现货成交状态迁移错误。
@@ -258,36 +224,36 @@ impl SpotTradeV3 {
 }
 
 impl Fsm for SpotTradeV3 {
-    type State = SpotTradeSettlementStatus;
-    type Command = SpotTradeEvent;
-    type DomainEvent = SpotTradeV3DomainEvent;
-    type Output = ();
+    type Command = SpotTradeV3Command;
     type Error = SpotTradeStateError;
 
-    /// 使用结算事件的权威 LSN 与逻辑时间完成成交，不生成 entity-local 下一版本。
-    fn transition_working(
-        &mut self,
-        metadata: CommandMetadata,
-        event: Self::Command,
-    ) -> Result<(Self::State, Self::Output), Self::Error> {
-        match (self.settlement_status, event) {
-            (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle { .. }) => {
-                let lsn = metadata.lsn;
-                let logical_ts = metadata.logical_ts;
+    fn event_type(_: &Self::Command) -> u8 {
+        1
+    }
+
+    /// 使用 envelope 中的权威位置与逻辑时间纯计算结算后的成交事实。
+    fn derive_transition(
+        &self,
+        command: SequencedCommand<Self::Command>,
+    ) -> Result<Self, Self::Error> {
+        let (metadata, command) = command.into_parts();
+        match (self.settlement_status, command) {
+            (SpotTradeSettlementStatus::Unsettled, SpotTradeV3Command::Settle) => {
                 let position = metadata.position;
                 if position < self.position {
                     return Err(SpotTradeStateError::StaleLsn {
-                        incoming_lsn: lsn,
+                        incoming_lsn: position.lsn,
                         current_lsn: self.position.lsn,
                     });
                 }
-                self.settlement_status = SpotTradeSettlementStatus::Settled;
-                self.comon_trade.version = position.lsn;
-                self.position = position;
-                self.comon_trade.updated_at = logical_ts;
-                Ok((self.settlement_status, ()))
+                let mut after = self.clone();
+                after.settlement_status = SpotTradeSettlementStatus::Settled;
+                after.comon_trade.version = position.lsn;
+                after.comon_trade.updated_at = metadata.logical_ts;
+                after.position = position;
+                Ok(after)
             }
-            (SpotTradeSettlementStatus::Settled, SpotTradeEvent::Settle { .. }) => {
+            (SpotTradeSettlementStatus::Settled, SpotTradeV3Command::Settle) => {
                 Err(SpotTradeStateError::AlreadySettled)
             }
         }
@@ -296,12 +262,13 @@ impl Fsm for SpotTradeV3 {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{Fsm, LogAttr, Shard};
+    use common_entity::fsm_v2::{CommandMetadata, Fsm, SequencedCommand};
+    use common_entity::{Entity, EventPosition, Shard};
     use rust_decimal::Decimal;
 
     use super::{
-        SpotTradeEvent, SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeStateError,
-        SpotTradeV3,
+        SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeStateError, SpotTradeV3,
+        SpotTradeV3Command,
     };
     use crate::OrderSide;
     use crate::account::coin::Coin;
@@ -309,16 +276,21 @@ mod tests {
     use crate::entity::common::UserId;
     use crate::entity::common::common_trade::TradeBase;
 
-    #[test]
-    fn settle_event_exposes_log_metadata_and_default_route() {
-        let event = SpotTradeEvent::Settle {
-            lsn: 9,
-            logical_ts: 7,
-        };
-        assert_eq!(event.lsn(), 9);
-        assert_eq!(event.logical_ts(), 7);
-        assert_eq!(event.topic(), 0);
-        assert_eq!(event.partition(), 0);
+    fn command_at(
+        trade: &SpotTradeV3,
+        position: EventPosition,
+        logical_ts: u64,
+    ) -> SequencedCommand<SpotTradeV3Command> {
+        SequencedCommand::new(
+            CommandMetadata::new_at(
+                position,
+                logical_ts,
+                trade.topic(),
+                trade.partition(),
+                trade.party_id(),
+            ),
+            SpotTradeV3Command::Settle,
+        )
     }
 
     fn trade(taker_side: OrderSide, taker_fee: i64, maker_fee: i64) -> SpotTradeV3 {
@@ -372,59 +344,73 @@ mod tests {
     }
 
     #[test]
-    fn apply_transitions_directly_and_preserves_state_on_error() {
-        let mut trade = trade(OrderSide::Buy, 1, 2);
-
-        Fsm::apply(
-            &mut trade,
-            SpotTradeEvent::Settle {
-                lsn: 20,
-                logical_ts: 7,
-            },
-        )
-        .unwrap();
-        assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
-        assert_eq!(trade.comon_trade.version, 20);
-        assert_eq!(trade.comon_trade.updated_at, 7);
+    fn settle_returns_after_truth_and_replay_event_without_mutating_before() {
+        let before = trade(OrderSide::Buy, 1, 2);
+        let position = EventPosition::new(20, 5);
+        let (after, event) = before.transition(command_at(&before, position, 7)).unwrap();
 
         assert_eq!(
-            Fsm::apply(
-                &mut trade,
-                SpotTradeEvent::Settle {
-                    lsn: 1,
-                    logical_ts: 1
-                }
-            ),
-            Err(SpotTradeStateError::AlreadySettled)
+            before.settlement_status,
+            SpotTradeSettlementStatus::Unsettled
         );
-        assert_eq!(trade.settlement_status, SpotTradeSettlementStatus::Settled);
+        assert_eq!(before.position, EventPosition::ZERO);
+        assert_eq!(after.settlement_status, SpotTradeSettlementStatus::Settled);
+        assert_eq!(after.comon_trade.version, 20);
+        assert_eq!(after.comon_trade.updated_at, 7);
+        assert_eq!(after.position, position);
+        assert_eq!(event.entity_id, Entity::entity_id(&before));
+        assert_eq!(event.entity_type, <SpotTradeV3 as Entity>::entity_type());
+        assert_eq!(event.previous_position, EventPosition::ZERO);
+        assert_eq!(event.position, position);
+        assert_eq!(event.domain_event_type, 1);
+        assert_eq!(event.logical_ts, 7);
+        assert_eq!(event.t, before.topic());
+        assert_eq!(event.p, before.partition());
     }
 
     #[test]
     fn stale_lsn_is_rejected_atomically_and_max_is_accepted() {
         let mut stale = trade(OrderSide::Buy, 1, 2);
         stale.comon_trade.version = 20;
-        stale.position = common_entity::EventPosition::new(20, 0);
+        stale.position = EventPosition::new(20, 1);
         let before = stale.clone();
         assert_eq!(
-            stale.transition(SpotTradeEvent::Settle {
-                lsn: 19,
-                logical_ts: 7
-            }),
+            stale.transition(command_at(&stale, EventPosition::new(20, 0), 7)),
             Err(SpotTradeStateError::StaleLsn {
-                incoming_lsn: 19,
+                incoming_lsn: 20,
                 current_lsn: 20
             })
         );
         assert_eq!(stale, before);
 
-        let mut max = trade(OrderSide::Buy, 1, 2);
-        max.comon_trade.version = u64::MAX;
-        max.apply(SpotTradeEvent::Settle {
-            lsn: u64::MAX,
-            logical_ts: 7,
-        })
-        .unwrap();
-        assert_eq!(max.comon_trade.version, u64::MAX);
+        let same_position = trade(OrderSide::Buy, 1, 2);
+        let (after, _) = same_position
+            .transition(command_at(&same_position, EventPosition::ZERO, 6))
+            .unwrap();
+        assert_eq!(after.position, EventPosition::ZERO);
+        assert_eq!(after.settlement_status, SpotTradeSettlementStatus::Settled);
+
+        let max = trade(OrderSide::Buy, 1, 2);
+        let (after, _) = max
+            .transition(command_at(
+                &max,
+                EventPosition::new(u64::MAX, u32::MAX),
+                7,
+            ))
+            .unwrap();
+        assert_eq!(after.comon_trade.version, u64::MAX);
+    }
+
+    #[test]
+    fn duplicate_settlement_is_rejected_without_mutating_before() {
+        let mut settled = trade(OrderSide::Buy, 1, 2);
+        settled.settlement_status = SpotTradeSettlementStatus::Settled;
+        let before = settled.clone();
+
+        assert_eq!(
+            settled.transition(command_at(&settled, EventPosition::new(21, 0), 8)),
+            Err(SpotTradeStateError::AlreadySettled)
+        );
+        assert_eq!(settled, before);
     }
 }
