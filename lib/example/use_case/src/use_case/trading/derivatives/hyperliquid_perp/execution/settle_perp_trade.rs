@@ -163,13 +163,14 @@ fn derive_changes(
                 .ok_or(SettleHyperliquidPerpTradeError::PositionMismatch)?;
             start_positions[index] = before.signed_size();
             let mut after = before.clone();
-            let (_, output) = after
+            let output = after
                 .transition(PerpPositionV3Event::TradeFilled {
                     trade: trade.clone(),
                     logical_ts: cmd.logical_ts(),
                     lsn: cmd.lsn(),
                 })
-                .map_err(map_position_error)?;
+                .map_err(map_position_error)?
+                .output;
             let PerpPositionV3Output::TradeApplied { closed_pnl } = output else {
                 return Err(SettleHyperliquidPerpTradeError::PositionMismatch);
             };
@@ -188,7 +189,7 @@ fn derive_changes(
 
         let before = trade.clone();
         let mut after = before.clone();
-        let (_, output) = after
+        let output = after
             .transition(PerpTradeV3Event::Settle {
                 taker_start_position: start_positions[0],
                 maker_start_position: start_positions[1],
@@ -197,7 +198,8 @@ fn derive_changes(
                 timestamp: cmd.logical_ts(),
                 lsn: cmd.lsn(),
             })
-            .map_err(map_trade_error)?;
+            .map_err(map_trade_error)?
+            .output;
         let PerpTradeV3Output::Settled { .. } = output;
         changed_trades.push(UpdatedEntityPair { before, after });
     }

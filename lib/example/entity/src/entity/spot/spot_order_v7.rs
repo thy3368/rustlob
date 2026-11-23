@@ -377,11 +377,12 @@ impl SpotOrderV7 {
 
 impl Fsm for SpotOrderV7 {
     type State = SpotOrderStatus;
-    type BizEvent = SpotOrderV7Event;
+    type Command = SpotOrderV7Event;
+    type DomainEvent = SpotOrderV7Event;
     type Output = SpotOrderV7Output;
     type Error = EntityError;
 
-    fn transition(
+    fn transition_legacy(
         &mut self,
         event: SpotOrderV7Event,
     ) -> Result<(Self::State, Self::Output), EntityError> {

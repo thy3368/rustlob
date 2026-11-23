@@ -7,7 +7,6 @@ pub use stable_id::stable_string_entity_id;
 mod sequence;
 mod use_case;
 
-pub use entity_v2::Fsm;
 pub use entity_v2::entity::{
     AggregateRole, Entity, EntityMutationModel, FinancialClassification, FourColorArchetype,
     TrackDiff,
@@ -18,13 +17,17 @@ pub use entity_v2::entity_replayable_event::{
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use entity_v2::shard::{LogAttr, Shard};
+pub use entity_v2::{
+    CommandMetadata, Fsm, IntoSequencedCommand, SequencedCommand, SequencedDomainEvent, Transition,
+};
 pub use sequence::id_generator::EntityIdGenerator;
 pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer, SYSTEM_USER_ID};
 pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::executor::{
-    ExecutionError, ExecutionResult, PresequencedCommand, StateSink, StateSource, UseCaseExecutor,
+    DomainEventChanges, DomainEventExecutionResult, DomainEventSink, ExecutionError,
+    ExecutionResult, PresequencedCommand, StateSink, StateSource, UseCaseExecutor,
 };
 pub use use_case::log_entry::LogEntry;
 pub use use_case::log_entry_repo::LogEntryRepo;

@@ -168,4 +168,3 @@ fn validate_balances(
     }
     Ok(())
 }
-

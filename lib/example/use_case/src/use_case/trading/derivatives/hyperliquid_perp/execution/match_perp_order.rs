@@ -107,17 +107,19 @@ impl UseCase for MatchHyperliquidPerpOrderUseCase {
     ) -> Result<Self::StateChanged, Self::Error> {
         let taker_before = state.taker_order.clone();
         let mut taker = taker_before.clone();
-        let (_, outcome) = taker.transition(PerpOrderV3Event::Match {
-            makers: state.maker_orders.clone(),
-            input: MatchPerpOrderV3Input {
-                match_id: cmd.match_id,
-                maker_fee_rate: state.maker_fee_rate,
-                taker_fee_rate: state.taker_fee_rate,
+        let outcome = taker
+            .transition(PerpOrderV3Event::Match {
+                makers: state.maker_orders.clone(),
+                input: MatchPerpOrderV3Input {
+                    match_id: cmd.match_id,
+                    maker_fee_rate: state.maker_fee_rate,
+                    taker_fee_rate: state.taker_fee_rate,
+                    timestamp: cmd.executed_at,
+                },
                 timestamp: cmd.executed_at,
-            },
-            timestamp: cmd.executed_at,
-            lsn: cmd.lsn(),
-        })?;
+                lsn: cmd.lsn(),
+            })?
+            .output;
         let (taker_after, maker_orders_after, created_trades) = outcome
             .ok_or(MatchHyperliquidPerpOrderError::MissingOutcome)?
             .into_parts();

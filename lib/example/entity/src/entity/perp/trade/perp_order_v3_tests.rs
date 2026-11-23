@@ -126,14 +126,15 @@ fn every_terminal_state_rejects_every_event_atomically() {
 fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
     let mut subject = taker(SpotOrderStatus::Pending);
     subject.is_liquidation = true;
-    let (_, outcome) = subject
+    let outcome = subject
         .transition(PerpOrderV3Event::Match {
             makers: vec![maker(2, dec!(4)), maker(3, dec!(6))],
             input: input(),
             timestamp: NOW,
             lsn: 20,
         })
-        .unwrap();
+        .unwrap()
+        .output;
     let MatchPerpOrderV3Output::Filled {
         filled_taker_order_after,
         maker_orders_after,
@@ -168,7 +169,7 @@ fn gtc_match_creates_trade_at_maker_price_and_updates_each_version_once() {
 #[test]
 fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
     let mut gtc = taker(SpotOrderStatus::Pending);
-    let (state, outcome) = gtc
+    let transition = gtc
         .transition(PerpOrderV3Event::Match {
             makers: vec![],
             input: input(),
@@ -176,6 +177,8 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
             lsn: 1,
         })
         .unwrap();
+    let state = transition.state;
+    let outcome = transition.output;
     assert_eq!(state, SpotOrderStatus::Open);
     assert!(matches!(
         outcome,
@@ -184,7 +187,7 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
 
     let mut ioc = taker(SpotOrderStatus::Pending);
     ioc.comon_order.tif = OrderTif::Ioc;
-    let (state, outcome) = ioc
+    let transition = ioc
         .transition(PerpOrderV3Event::Match {
             makers: vec![],
             input: input(),
@@ -192,6 +195,8 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
             lsn: 1,
         })
         .unwrap();
+    let state = transition.state;
+    let outcome = transition.output;
     assert_eq!(state, SpotOrderStatus::Rejected);
     assert!(matches!(
         outcome,
@@ -202,7 +207,7 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
     let maker_before = crossing_maker.clone();
     let mut alo = taker(SpotOrderStatus::Pending);
     alo.comon_order.tif = OrderTif::Alo;
-    let (state, outcome) = alo
+    let transition = alo
         .transition(PerpOrderV3Event::Match {
             makers: vec![crossing_maker],
             input: input(),
@@ -210,6 +215,8 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
             lsn: 1,
         })
         .unwrap();
+    let state = transition.state;
+    let outcome = transition.output;
     assert_eq!(state, SpotOrderStatus::Rejected);
     let MatchPerpOrderV3Output::Rejected { .. } = outcome.unwrap() else {
         panic!("expected rejected outcome")
@@ -221,7 +228,7 @@ fn gtc_ioc_and_alo_have_distinct_no_fill_results() {
 fn ioc_partial_fill_cancels_remainder() {
     let mut subject = taker(SpotOrderStatus::Pending);
     subject.comon_order.tif = OrderTif::Ioc;
-    let (state, outcome) = subject
+    let transition = subject
         .transition(PerpOrderV3Event::Match {
             makers: vec![maker(2, dec!(4))],
             input: input(),
@@ -229,6 +236,8 @@ fn ioc_partial_fill_cancels_remainder() {
             lsn: 1,
         })
         .unwrap();
+    let state = transition.state;
+    let outcome = transition.output;
     assert_eq!(state, SpotOrderStatus::Canceled);
     assert!(matches!(
         outcome,
@@ -246,7 +255,7 @@ fn incompatible_makers_are_skipped() {
     let mut non_crossing = maker(4, dec!(3));
     non_crossing.comon_order.limit_px = dec!(110);
     let mut subject = taker(SpotOrderStatus::Pending);
-    let (state, outcome) = subject
+    let transition = subject
         .transition(PerpOrderV3Event::Match {
             makers: vec![same_side, pending, non_crossing],
             input: input(),
@@ -254,6 +263,8 @@ fn incompatible_makers_are_skipped() {
             lsn: 1,
         })
         .unwrap();
+    let state = transition.state;
+    let outcome = transition.output;
     assert_eq!(state, SpotOrderStatus::Open);
     assert!(matches!(
         outcome,

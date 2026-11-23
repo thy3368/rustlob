@@ -449,13 +449,14 @@ impl PerpPositionV3 {}
 
 impl Fsm for PerpPositionV3 {
     type State = PerpPositionV3State;
-    type BizEvent = PerpPositionV3Event;
+    type Command = PerpPositionV3Event;
+    type DomainEvent = PerpPositionV3Event;
     type Output = PerpPositionV3Output;
     type Error = PerpPositionV3Error;
 
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match event {
             PerpPositionV3Event::TradeFilled {
@@ -592,13 +593,14 @@ mod tests {
         )
         .unwrap();
 
-        let (_, output) = position
+        let output = position
             .transition(PerpPositionV3Event::TradeFilled {
                 trade: trade(OrderSide::Sell, 110, 1, Decimal::new(25, 2)),
                 logical_ts: 9,
                 lsn: 5,
             })
-            .unwrap();
+            .unwrap()
+            .output;
 
         assert_eq!(
             output,
@@ -633,7 +635,7 @@ mod tests {
         )
         .unwrap();
 
-        let (state, output) = position
+        let transition = position
             .transition(PerpPositionV3Event::FundingAmountSettled {
                 user_id: UserId(7),
                 coin: Coin::BTC,
@@ -642,6 +644,8 @@ mod tests {
                 lsn: 5,
             })
             .unwrap();
+        let state = transition.state;
+        let output = transition.output;
 
         assert_eq!(state, PerpPositionV3State::Active);
         assert_eq!(
@@ -718,7 +722,7 @@ mod tests {
 
         for (event, expected) in cases {
             let mut position = base.clone();
-            assert_eq!(position.transition(event), Err(expected));
+            assert_eq!(position.transition(event).map(|_| ()), Err(expected));
             assert_eq!(position, base);
         }
     }

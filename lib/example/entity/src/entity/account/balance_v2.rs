@@ -195,12 +195,13 @@ impl BalanceV2 {
 
 impl Fsm for BalanceV2 {
     type State = BalanceV2Status;
-    type BizEvent = BalanceV2Event;
+    type Command = BalanceV2Event;
+    type DomainEvent = BalanceV2Event;
     type Output = ();
     type Error = BalanceV2Error;
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);
@@ -574,7 +575,9 @@ mod tests {
         ];
 
         for (mut balance, event, expected_available, expected_frozen, expected_status) in cases {
-            let (state, output) = balance.transition(event).unwrap();
+            let transition = balance.transition(event).unwrap();
+            let state = transition.state;
+            let output = transition.output;
 
             assert_eq!(state, expected_status);
             assert_eq!(output, ());

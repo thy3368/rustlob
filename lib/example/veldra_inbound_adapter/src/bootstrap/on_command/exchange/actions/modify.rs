@@ -358,6 +358,9 @@ where
         ExecutionError::Persist(error) => format!("persist failed: {error}"),
         ExecutionError::Replay(error) => format!("replay failed: {error}"),
         ExecutionError::Publish(error) => format!("publish failed: {error}"),
+        ExecutionError::PublishDomainEvent(error) => {
+            format!("publish domain event failed: {error}")
+        }
         ExecutionError::DuplicateEventKey { .. } => "duplicate replay event key".to_owned(),
     }
 }

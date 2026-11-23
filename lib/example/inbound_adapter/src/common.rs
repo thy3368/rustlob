@@ -270,6 +270,7 @@ fn outbound_phase_code<BE, OE>(error: &ExecutionError<BE, OE>) -> &'static str {
         ExecutionError::Persist(_) => "outbound_persist_failed",
         ExecutionError::Replay(_) => "outbound_replay_failed",
         ExecutionError::Publish(_) => "outbound_publish_failed",
+        ExecutionError::PublishDomainEvent(_) => "outbound_publish_domain_event_failed",
         _ => "event_project_failed",
     }
 }

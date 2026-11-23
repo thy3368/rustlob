@@ -151,14 +151,15 @@ fn command_lsn_can_jump_and_be_reused_within_one_command() {
 #[test]
 fn taker_tif_controls_final_state() {
     let mut gtc = order(OrderSide::Buy, SpotOrderStatus::Open);
-    let (_, output) = gtc
+    let output = gtc
         .apply(SpotOrderV7Event::MatchedAsTaker {
             lsn: 10,
             filled_size: Decimal::ONE,
             quote_fee: Decimal::ZERO,
             timestamp: TIMESTAMP,
         })
-        .unwrap();
+        .unwrap()
+        .output;
     assert_eq!(gtc.status(), SpotOrderStatus::PartiallyFilled);
     let SpotOrderV7Output::MatchedAsTaker(output) = output else {
         panic!("expected taker match output")
@@ -171,14 +172,15 @@ fn taker_tif_controls_final_state() {
         .clone();
     ioc_record.tif = OrderTif::Ioc;
     let mut ioc = SpotOrderV7::from_record(ioc_record).unwrap();
-    let (_, output) = ioc
+    let output = ioc
         .apply(SpotOrderV7Event::MatchedAsTaker {
             lsn: 10,
             filled_size: Decimal::ONE,
             quote_fee: Decimal::ZERO,
             timestamp: TIMESTAMP,
         })
-        .unwrap();
+        .unwrap()
+        .output;
     assert_eq!(ioc.status(), SpotOrderStatus::Canceled);
     let SpotOrderV7Output::MatchedAsTaker(output) = output else {
         panic!("expected taker match output")
@@ -195,12 +197,13 @@ fn taker_tif_controls_final_state() {
         .clone();
     alo_record.tif = OrderTif::Alo;
     let mut alo = SpotOrderV7::from_record(alo_record).unwrap();
-    let (_, output) = alo
+    let output = alo
         .apply(SpotOrderV7Event::RejectedAsTaker {
             lsn: 10,
             timestamp: TIMESTAMP,
         })
-        .unwrap();
+        .unwrap()
+        .output;
     assert_eq!(alo.status(), SpotOrderStatus::Rejected);
     let SpotOrderV7Output::RejectedAsTaker(output) = output else {
         panic!("expected rejected taker output")
@@ -216,14 +219,15 @@ fn taker_tif_controls_final_state() {
 #[test]
 fn filled_sell_taker_returns_zero_base_release_requirement() {
     let mut seller = order(OrderSide::Sell, SpotOrderStatus::Open);
-    let (_, output) = seller
+    let output = seller
         .apply(SpotOrderV7Event::MatchedAsTaker {
             lsn: 10,
             filled_size: Decimal::from(2),
             quote_fee: Decimal::ZERO,
             timestamp: TIMESTAMP,
         })
-        .unwrap();
+        .unwrap()
+        .output;
 
     let SpotOrderV7Output::MatchedAsTaker(output) = output else {
         panic!("expected taker match output")

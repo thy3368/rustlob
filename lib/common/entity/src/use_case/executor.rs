@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 
 use crate::entity_v2::shard::LogAttr;
-use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateDiff};
+use crate::{
+    EntityError, EntityReplayableEvent, ReplayableChanges, SequencedDomainEvent, StateDiff,
+};
 
 /// 已在进入 executor 前完成定序的批命令。
 pub trait PresequencedCommand: LogAttr {
@@ -20,6 +22,14 @@ pub struct ExecutionResult<C> {
     pub events: Vec<EntityReplayableEvent>,
 }
 
+/// 同时返回 replay 事实与业务订阅事实的执行结果。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DomainEventExecutionResult<C, E> {
+    pub changes: C,
+    pub replay_events: Vec<EntityReplayableEvent>,
+    pub domain_events: Vec<SequencedDomainEvent<E>>,
+}
+
 pub type ExecutionOutcome<C, BE, OE> = Result<ExecutionResult<C>, ExecutionError<BE, OE>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,11 +40,26 @@ pub enum ExecutionError<BE, OE> {
     Persist(OE),
     Replay(OE),
     Publish(OE),
+    PublishDomainEvent(OE),
     DuplicateEventKey {
         lsn: u64,
         entity_type: u8,
         entity_id: u64,
     },
+}
+
+/// 从 family changes 读取已按 transition 顺序编号的领域事件。
+pub trait DomainEventChanges {
+    type DomainEvent;
+
+    fn domain_events(&self) -> &[SequencedDomainEvent<Self::DomainEvent>];
+}
+
+/// 领域事件独立 outbound port；wire format 由 adapter 决定。
+pub trait DomainEventSink<E>: Send + Sync {
+    type Error: std::error::Error;
+
+    fn publish_domain_events(&self, events: &[SequencedDomainEvent<E>]) -> Result<(), Self::Error>;
 }
 
 /// MI family runtime 所需的 authoritative given state source port。
@@ -60,6 +85,67 @@ where
 }
 
 impl UseCaseExecutor {
+    /// 执行带领域事件的 use case，并保持 replay 与领域发布链相互独立。
+    ///
+    /// 固定副作用顺序：persist replay -> replay -> publish replay -> publish domain。
+    pub fn execute_with_domain_events<F, SS, OB, DS>(
+        &self,
+        family: &F,
+        command: &F::Command,
+        state_source: &SS,
+        state_sink: &OB,
+        domain_sink: &DS,
+    ) -> Result<
+        DomainEventExecutionResult<F::StateDiff, <F::StateDiff as DomainEventChanges>::DomainEvent>,
+        ExecutionError<F::Error, OB::Error>,
+    >
+    where
+        F: StateDiff,
+        F::StateDiff: DomainEventChanges,
+        <F::StateDiff as DomainEventChanges>::DomainEvent: Clone,
+        SS: StateSource<F, Error = OB::Error>,
+        OB: StateSink<F>,
+        DS: DomainEventSink<<F::StateDiff as DomainEventChanges>::DomainEvent, Error = OB::Error>,
+    {
+        family
+            .check_command(command)
+            .map_err(ExecutionError::Business)?;
+        let given_state = state_source
+            .load_given_state(command)
+            .map_err(ExecutionError::LoadState)?;
+        let changes = family
+            .compute_state_diff(command, given_state)
+            .map_err(ExecutionError::Business)?;
+        let mut replay_events = changes
+            .to_replayable_events()
+            .map_err(ExecutionError::ProjectEvents)?;
+        for event in &mut replay_events {
+            event.lsn = command.lsn();
+            event.logical_ts = command.logical_ts();
+        }
+        reject_duplicate_replay_keys(&replay_events)?;
+        let domain_events = changes.domain_events().to_vec();
+
+        state_sink
+            .persist(&replay_events)
+            .map_err(ExecutionError::Persist)?;
+        state_sink
+            .replay(&replay_events)
+            .map_err(ExecutionError::Replay)?;
+        state_sink
+            .publish(&replay_events)
+            .map_err(ExecutionError::Publish)?;
+        domain_sink
+            .publish_domain_events(&domain_events)
+            .map_err(ExecutionError::PublishDomainEvent)?;
+
+        Ok(DomainEventExecutionResult {
+            changes,
+            replay_events,
+            domain_events,
+        })
+    }
+
     /// 执行一个 MI family use case 的运行时编排。
     ///
     /// adapter 应在调用前完成 request 到 on_command 的转换。state source 基于 on_command 加载
@@ -174,4 +260,19 @@ impl UseCaseExecutor {
             .map_err(ExecutionError::Publish)?;
         Ok(ExecutionResult { changes, events })
     }
+}
+
+fn reject_duplicate_replay_keys<BE, OE>(
+    events: &[EntityReplayableEvent],
+) -> Result<(), ExecutionError<BE, OE>> {
+    let mut keys = HashSet::with_capacity(events.len());
+    for event in events {
+        if !keys.insert((event.lsn, event.entity_type, event.entity_id)) {
+            return Err(ExecutionError::ProjectEvents(EntityError::Custom(format!(
+                "duplicate event key ({}, {}, {})",
+                event.lsn, event.entity_type, event.entity_id
+            ))));
+        }
+    }
+    Ok(())
 }

@@ -234,13 +234,14 @@ fn validate_leverage(l: Leverage) -> Result<(), PositionError> {
 
 impl Fsm for PositionV4 {
     type State = PositionState;
-    type BizEvent = PositionEvent;
+    type Command = PositionEvent;
+    type DomainEvent = PositionEvent;
     type Output = PositionOutput;
     type Error = PositionError;
     /// 使用事件的 LSN 与逻辑时间推进仓位，不从当前实体版本推导下一版本。
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let lsn = event.lsn();
         if lsn < self.version {
@@ -630,11 +631,13 @@ mod tests {
 
         let before = position.clone();
         assert_eq!(
-            position.apply(PositionEvent::FundingSettled {
-                signed_amount: Decimal::ONE,
-                logical_ts: 22,
-                lsn: 19,
-            }),
+            position
+                .apply(PositionEvent::FundingSettled {
+                    signed_amount: Decimal::ONE,
+                    logical_ts: 22,
+                    lsn: 19,
+                })
+                .map(|_| ()),
             Err(PositionError::StaleLsn {
                 incoming_lsn: 19,
                 current_lsn: 20

@@ -96,17 +96,21 @@ impl HyperliquidPerpTrade {
         }
         let trade = self.trade(tu, mu, base, taker.signed_size(), maker.signed_size())?;
         let mut ta = taker.clone();
-        let (_, to) = ta.transition(PerpPositionV3Event::TradeFilled {
-            trade: trade.clone(),
-            logical_ts: self.created_at,
-            lsn: trade.trade_base.version,
-        })?;
+        let to = ta
+            .transition(PerpPositionV3Event::TradeFilled {
+                trade: trade.clone(),
+                logical_ts: self.created_at,
+                lsn: trade.trade_base.version,
+            })?
+            .output;
         let mut ma = maker.clone();
-        let (_, mo) = ma.transition(PerpPositionV3Event::TradeFilled {
-            lsn: trade.trade_base.version,
-            trade,
-            logical_ts: self.created_at,
-        })?;
+        let mo = ma
+            .transition(PerpPositionV3Event::TradeFilled {
+                lsn: trade.trade_base.version,
+                trade,
+                logical_ts: self.created_at,
+            })?
+            .output;
         let pnl = |o| match o {
             PerpPositionV3Output::TradeApplied { closed_pnl } => closed_pnl,
             _ => Decimal::ZERO,

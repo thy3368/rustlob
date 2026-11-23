@@ -128,14 +128,15 @@ impl BalanceLedgerV3 {
 
 impl Fsm for BalanceLedgerV3 {
     type State = BalanceLedgerV3State;
-    type BizEvent = BalanceLedgerV3Event;
+    type Command = BalanceLedgerV3Event;
+    type DomainEvent = BalanceLedgerV3Event;
     type Output = BalanceLedgerV3Output;
     type Error = BalanceLedgerV3Error;
 
     /// 校验余额 after 快照采用事件 LSN，before 快照不晚于事件 LSN，然后原子记录快照。
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if self.state()? == BalanceLedgerV3State::Applied {
             return Err(BalanceLedgerV3Error::AlreadyApplied);
@@ -318,9 +319,9 @@ mod tests {
 
         let result = ledger.transition(event(update.clone(), 12)).unwrap();
 
-        assert_eq!(result.0, super::BalanceLedgerV3State::Applied);
+        assert_eq!(result.state, super::BalanceLedgerV3State::Applied);
         assert_eq!(
-            result.1,
+            result.output,
             super::BalanceLedgerV3Output::Applied {
                 balance_update: update
             }

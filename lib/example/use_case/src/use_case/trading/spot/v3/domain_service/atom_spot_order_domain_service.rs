@@ -168,10 +168,12 @@ impl SpotOrderDomainService {
             OrderSide::Sell => t.limit_px <= maker.order_base().limit_px,
         };
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
-            let (_, output) = taker.apply(SpotOrderV7Event::RejectedAsTaker {
-                lsn: input.lsn,
-                timestamp: input.timestamp,
-            })?;
+            let output = taker
+                .apply(SpotOrderV7Event::RejectedAsTaker {
+                    lsn: input.lsn,
+                    timestamp: input.timestamp,
+                })?
+                .output;
             let SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
                 order_after,
                 release_requirement: Some(release_requirement),
@@ -275,12 +277,14 @@ impl SpotOrderDomainService {
                 settlement_status: SpotTradeSettlementStatus::Unsettled,
             });
         }
-        let (_, output) = taker.apply(SpotOrderV7Event::MatchedAsTaker {
-            lsn: input.lsn,
-            filled_size,
-            quote_fee: taker_fee_total,
-            timestamp: input.timestamp,
-        })?;
+        let output = taker
+            .apply(SpotOrderV7Event::MatchedAsTaker {
+                lsn: input.lsn,
+                filled_size,
+                quote_fee: taker_fee_total,
+                timestamp: input.timestamp,
+            })?
+            .output;
         let SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput {
             order_after: taker_order_after,
             release_requirement,
@@ -335,14 +339,16 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ModifySpotOrderV7Error> {
-        let (_, output) = order.apply(SpotOrderV7Event::Modify {
-            price,
-            size,
-            tif,
-            cloid,
-            lsn,
-            timestamp,
-        })?;
+        let output = order
+            .apply(SpotOrderV7Event::Modify {
+                price,
+                size,
+                tif,
+                cloid,
+                lsn,
+                timestamp,
+            })?
+            .output;
         let SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
             order_after,
             hold_adjustment,
@@ -384,7 +390,9 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ActivateSpotOrderV7Error> {
-        let (_, output) = order.apply(SpotOrderV7Event::Activate { lsn, timestamp })?;
+        let output = order
+            .apply(SpotOrderV7Event::Activate { lsn, timestamp })?
+            .output;
         let SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }) = output
         else {
             return Err(
@@ -410,7 +418,9 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), CancelSpotOrderV7Error> {
-        let (_, output) = order.apply(SpotOrderV7Event::Cancel { lsn, timestamp })?;
+        let output = order
+            .apply(SpotOrderV7Event::Cancel { lsn, timestamp })?
+            .output;
         let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
             release_requirement,
             ..
@@ -450,4 +460,3 @@ fn match_fee(notional: Decimal, bps: u64, scale: u32) -> Result<Decimal, EntityE
 fn match_error(message: &str) -> EntityError {
     EntityError::Custom(message.to_owned())
 }
-

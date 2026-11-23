@@ -138,7 +138,8 @@ impl SpotAccount {
 
 impl Fsm for SpotAccount {
     type State = AccountStatus;
-    type BizEvent = SpotAccountEvent;
+    type Command = SpotAccountEvent;
+    type DomainEvent = SpotAccountEvent;
     type Output = ();
     type Error = SpotAccountError;
 
@@ -149,9 +150,9 @@ impl Fsm for SpotAccount {
     /// 成功输出为空，并在所有校验完成后同时提交状态、事件时间和全局 command LSN；
     /// LSN 可以跳号，同一 command 的连续合法迁移可以复用同一 LSN；
     /// 任一错误都不会修改实体。
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let (next_status, timestamp, lsn) = match (self.status, event) {
             (AccountStatus::Active, SpotAccountEvent::FreezeForRisk { timestamp, lsn }) => {
@@ -349,10 +350,12 @@ mod tests {
         let identity_before = (account.account_id, account.party_id, account.created_at);
 
         assert_eq!(
-            account.transition(SpotAccountEvent::FreezeForRisk {
-                timestamp: 25,
-                lsn: 8
-            }),
+            account
+                .transition(SpotAccountEvent::FreezeForRisk {
+                    timestamp: 25,
+                    lsn: 8
+                })
+                .map(|transition| (transition.state, transition.output)),
             Ok((AccountStatus::Frozen, ()))
         );
         assert_eq!(
@@ -371,10 +374,12 @@ mod tests {
         let identity_before = (account.account_id, account.party_id, account.created_at);
 
         assert_eq!(
-            account.transition(SpotAccountEvent::UnfreezeFromRisk {
-                timestamp: 30,
-                lsn: 10
-            }),
+            account
+                .transition(SpotAccountEvent::UnfreezeFromRisk {
+                    timestamp: 30,
+                    lsn: 10
+                })
+                .map(|transition| (transition.state, transition.output)),
             Ok((AccountStatus::Active, ()))
         );
         assert_eq!(
@@ -507,7 +512,9 @@ mod tests {
         };
 
         assert_eq!(
-            transitioned.transition(event),
+            transitioned
+                .transition(event.clone())
+                .map(|transition| (transition.state, transition.output)),
             Ok((AccountStatus::Frozen, ()))
         );
         applied.apply(event).unwrap();

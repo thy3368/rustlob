@@ -191,12 +191,13 @@ impl UserFunding {
 
 impl Fsm for UserFunding {
     type State = UserFundingState;
-    type BizEvent = UserFundingEvent;
+    type Command = UserFundingEvent;
+    type DomainEvent = UserFundingEvent;
     type Output = UserFundingOutput;
     type Error = UserFundingError;
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let UserFundingEvent::Settle { settled_at, lsn } = event;
         if lsn < self.version {

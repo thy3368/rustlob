@@ -7,4 +7,6 @@ pub mod fsm;
 pub mod domain_service;
 pub mod shard;
 
-pub use fsm::Fsm;
+pub use fsm::{
+    CommandMetadata, Fsm, IntoSequencedCommand, SequencedCommand, SequencedDomainEvent, Transition,
+};

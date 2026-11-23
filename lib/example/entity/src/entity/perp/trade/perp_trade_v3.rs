@@ -96,13 +96,14 @@ pub struct PerpTradeV3 {
 
 impl Fsm for PerpTradeV3 {
     type State = PerpTradeV3State;
-    type BizEvent = PerpTradeV3Event;
+    type Command = PerpTradeV3Event;
+    type DomainEvent = PerpTradeV3Event;
     type Output = PerpTradeV3Output;
     type Error = PerpTradeV3Error;
 
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if self.state == PerpTradeV3State::Settled {
             return Err(PerpTradeV3Error::AlreadySettled);
@@ -339,9 +340,9 @@ mod tests {
         let before = trade.clone();
         let result = trade.transition(settle_event(8)).unwrap();
 
-        assert_eq!(result.0, PerpTradeV3State::Settled);
+        assert_eq!(result.state, PerpTradeV3State::Settled);
         assert_eq!(
-            result.1,
+            result.output,
             PerpTradeV3Output::Settled {
                 taker_closed_pnl: Decimal::from(4),
                 maker_closed_pnl: Decimal::from(-5),

@@ -222,14 +222,15 @@ impl SpotTradeV3 {
 
 impl Fsm for SpotTradeV3 {
     type State = SpotTradeSettlementStatus;
-    type BizEvent = SpotTradeEvent;
+    type Command = SpotTradeEvent;
+    type DomainEvent = SpotTradeEvent;
     type Output = ();
     type Error = SpotTradeStateError;
 
     /// 使用结算事件的权威 LSN 与逻辑时间完成成交，不生成 entity-local 下一版本。
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match (self.settlement_status, event) {
             (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle { lsn, logical_ts }) => {

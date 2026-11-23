@@ -160,14 +160,15 @@ pub struct PerpOrderV3 {
 
 impl Fsm for PerpOrderV3 {
     type State = SpotOrderStatus;
-    type BizEvent = PerpOrderV3Event;
+    type Command = PerpOrderV3Event;
+    type DomainEvent = PerpOrderV3Event;
     type Output = Option<MatchPerpOrderV3Output>;
     type Error = PerpOrderV3Error;
 
     /// 使用事件提供的权威 LSN 原子推进订单；允许跳号和相等 LSN，拒绝 stale LSN。
-    fn transition(
+    fn transition_legacy(
         &mut self,
-        event: Self::BizEvent,
+        event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if is_terminal(self.comon_order.status) {
             return Err(PerpOrderV3Error::Terminal);
