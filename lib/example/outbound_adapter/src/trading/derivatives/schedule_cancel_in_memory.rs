@@ -265,13 +265,14 @@ fn replay_events(
                 order.partition(),
                 order.party_id(),
             );
-            FsmV2::transition(
-                order,
+            let (after, _, _) = FsmV2::transition(
+                &*order,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
             .map_err(|error| {
                 HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
             })?;
+            *order = after;
         } else if event.entity_type == PerpOrderV3::entity_type() {
             let order = state
                 .perp_orders
@@ -350,8 +351,8 @@ fn replay_balance(
         balance.partition(),
         balance.party_id().to_string(),
     );
-    FsmV2::transition(
-        balance,
+    let (after, _, ()) = FsmV2::transition(
+        &*balance,
         SequencedCommand::new(
             metadata,
             BalanceV2Command::UnfreezeAndPay {
@@ -361,6 +362,7 @@ fn replay_balance(
         ),
     )
     .map_err(|error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()))?;
+    *balance = after;
     if balance.available() != available || balance.frozen() != frozen {
         return Err(HyperliquidScheduleCancelOutboundError::EventDecodeFailed);
     }
@@ -426,11 +428,10 @@ mod tests {
         let spot = SpotOrderV7::from_record(order_base(11, OrderSide::Buy))
             .expect("spot fixture should be valid");
         let release = {
-            let mut canceled = spot.clone();
             let metadata =
                 CommandMetadata::new(9, DUE_MS, spot.topic(), spot.partition(), spot.party_id());
-            FsmV2::transition(
-                &mut canceled,
+            let (canceled, _, _) = FsmV2::transition(
+                &spot,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
             .expect("fixture should cancel");

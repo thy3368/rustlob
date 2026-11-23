@@ -258,7 +258,6 @@ pub fn settle_user_funding_batch(
         if delta.is_zero() {
             continue;
         }
-        let mut after = before.clone();
         let event = if delta.is_sign_positive() {
             BalanceV2Command::CreditAvailable { amount: delta }
         } else {
@@ -276,7 +275,7 @@ pub fn settle_user_funding_batch(
             before.partition(),
             before.party_id().to_string(),
         );
-        FsmV2::transition(&mut after, SequencedCommand::new(metadata, event))
+        let (after, _, ()) = FsmV2::transition(before, SequencedCommand::new(metadata, event))
             .map_err(|error| map_balance_error(error, before.account_id()))?;
         changed_balances.push(UpdatedEntityPair::new(before.clone(), after));
     }
@@ -351,8 +350,6 @@ fn map_balance_error(error: BalanceV2Error, account_id: u64) -> SettleUserFundin
 
 #[cfg(test)]
 mod settle_user_funding_batch_tests {
-    use common_entity::Fsm;
-
     use super::*;
     use crate::FundingAccumulatorV3;
     use crate::account::coin::Coin;
@@ -613,16 +610,16 @@ mod settle_user_funding_batch_tests {
         );
         assert_eq!((fundings, positions, balances), before);
 
-        let mut closed = balance(Decimal::ZERO, 4);
+        let before_close = balance(Decimal::ZERO, 4);
         let metadata = CommandMetadata::new(
             COMMAND_LSN,
             110,
-            closed.topic(),
-            closed.partition(),
-            closed.party_id().to_string(),
+            before_close.topic(),
+            before_close.partition(),
+            before_close.party_id().to_string(),
         );
-        FsmV2::transition(
-            &mut closed,
+        let (closed, _, ()) = FsmV2::transition(
+            &before_close,
             SequencedCommand::new(metadata, BalanceV2Command::Close),
         )
         .unwrap();

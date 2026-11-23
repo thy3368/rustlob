@@ -475,7 +475,6 @@ impl SpotOrderV7 {
 }
 
 impl Fsm for SpotOrderV7 {
-    type State = SpotOrderStatus;
     type Command = SpotOrderV7Command;
     type Output = SpotOrderV7Output;
     type Error = EntityError;
@@ -488,11 +487,10 @@ impl Fsm for SpotOrderV7 {
         &self,
         metadata: CommandMetadata,
         command: SpotOrderV7Command,
-    ) -> Result<(Self, Self::State, Self::Output), EntityError> {
+    ) -> Result<(Self, Self::Output), EntityError> {
         let (next, output) =
             self.compute_transition(&command, metadata.lsn, metadata.logical_ts)?;
-        let state = next.status;
-        Ok((Self { order_base: next }, state, output))
+        Ok((Self { order_base: next }, output))
     }
 }
 

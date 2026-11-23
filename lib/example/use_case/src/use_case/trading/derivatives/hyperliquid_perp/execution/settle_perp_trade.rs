@@ -216,7 +216,6 @@ fn derive_changes(
             .find(|balance| balance.account_id() == account_id)
             .cloned()
             .ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
-        let mut after = before.clone();
         let event = if delta.is_sign_positive() {
             BalanceV2Command::CreditAvailable { amount: delta }
         } else {
@@ -224,7 +223,7 @@ fn derive_changes(
                 amount: delta.abs(),
             }
         };
-        transition_balance(&mut after, cmd.lsn(), cmd.logical_ts(), event)
+        let after = transition_balance(&before, cmd.lsn(), cmd.logical_ts(), event)
             .map_err(map_balance_error)?;
         changed_margin_balances.push(UpdatedEntityPair { before, after });
     }

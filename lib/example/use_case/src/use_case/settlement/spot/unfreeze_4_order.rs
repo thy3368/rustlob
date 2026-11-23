@@ -86,9 +86,8 @@ impl UseCase for Freeze4SpotOrderV2UseCase {
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let requirement = given_state.order.freeze_requirement()?;
-        let mut balance_after = given_state.balance.clone();
-        transition_balance(
-            &mut balance_after,
+        let balance_after = transition_balance(
+            &given_state.balance,
             cmd.lsn(),
             cmd.logical_ts(),
             BalanceV2Command::Freeze {

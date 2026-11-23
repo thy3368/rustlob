@@ -87,38 +87,16 @@ impl<C> LogAttr for SequencedCommand<C> {
     }
 }
 
-/// v2 FSM 一次成功迁移的完整结果。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Transition<S, O> {
-    pub state: S,
-    pub output: O,
-    pub event: ReplayableDomainEvent,
-}
-
-impl<S, O> Transition<S, O> {
-    pub const fn new(state: S, output: O, event: ReplayableDomainEvent) -> Self {
-        Self {
-            state,
-            output,
-            event,
-        }
-    }
-}
-
-/// v2 迁移的统一返回类型。
-pub type TransitionResult<S, O, Err> = Result<Transition<S, O>, Err>;
-
 /// FSM v2：只接受已定序 command envelope 的单一路径。
 ///
 /// 该契约独立定义完整执行路径。实现方必须提供 v2 自己的无提交业务迁移入口；
 /// 新调用方显式构造 [`SequencedCommand`]。
 pub trait Fsm: TrackDiff + Sized {
-    type State;
     type Command;
     type Output;
     type Error: From<EntityError>;
 
-    /// 基于当前实体只读推导迁移后的完整实体、状态和业务输出。
+    /// 基于当前实体只读推导迁移后的完整实体和业务输出。
     ///
     /// 实现不得修改当前实体、发布事件或产生外部副作用。
     #[doc(hidden)]
@@ -126,16 +104,16 @@ pub trait Fsm: TrackDiff + Sized {
         &self,
         metadata: CommandMetadata,
         command: Self::Command,
-    ) -> Result<(Self, Self::State, Self::Output), Self::Error>;
+    ) -> Result<(Self, Self::Output), Self::Error>;
 
     /// 返回 command 对应的稳定、非零业务事件码。
     fn event_type(command: &Self::Command) -> u8;
 
-    /// 先纯计算 after entity，再完成 replay 投影；全部成功后才原子替换原实体。
+    /// 先纯计算 after entity，再完成 replay 投影；原实体始终保持不变。
     fn transition(
-        &mut self,
+        &self,
         command: SequencedCommand<Self::Command>,
-    ) -> TransitionResult<Self::State, Self::Output, Self::Error> {
+    ) -> Result<(Self, ReplayableDomainEvent, Self::Output), Self::Error> {
         let (metadata, payload) = command.into_parts();
         let event_type = Self::event_type(&payload);
         if event_type == 0 {
@@ -143,11 +121,10 @@ pub trait Fsm: TrackDiff + Sized {
         }
         let lsn = metadata.lsn;
         let logical_ts = metadata.logical_ts;
-        let (after, state, output) = self.derive_transition(metadata, payload)?;
+        let (after, output) = self.derive_transition(metadata, payload)?;
         let mut replay_event = after.track_update_event_from_command(self, lsn, logical_ts)?;
         replay_event.domain_event_type = event_type;
-        *self = after;
-        Ok(Transition::new(state, output, replay_event))
+        Ok((after, replay_event, output))
     }
 }
 
@@ -251,7 +228,6 @@ mod tests {
     }
 
     impl FsmV2 for Subject {
-        type State = u64;
         type Command = Command;
         type Output = u64;
         type Error = TestError;
@@ -264,7 +240,7 @@ mod tests {
             &self,
             metadata: CommandMetadata,
             command: Command,
-        ) -> Result<(Self, Self::State, Self::Output), Self::Error> {
+        ) -> Result<(Self, Self::Output), Self::Error> {
             let value = self.value.saturating_add(command.delta);
             if command.fail {
                 return Err(TestError::Business);
@@ -276,7 +252,6 @@ mod tests {
                     updated_at: metadata.logical_ts,
                     clones: Arc::clone(&self.clones),
                 },
-                value,
                 command.delta,
             ))
         }
@@ -293,10 +268,10 @@ mod tests {
 
     #[test]
     fn transition_uses_zero_clones_and_envelope_metadata() {
-        let mut subject = subject();
+        let subject = subject();
         let clones = Arc::clone(&subject.clones);
         let result = FsmV2::transition(
-            &mut subject,
+            &subject,
             SequencedCommand::new(
                 CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
                 Command {
@@ -305,20 +280,20 @@ mod tests {
                 },
             ),
         );
-        let transition = match result {
+        let (after, event, output) = match result {
             Ok(transition) => transition,
             Err(error) => panic!("v2 transition failed: {error:?}"),
         };
 
         assert_eq!(clones.load(Ordering::Relaxed), 0);
+        assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
         assert_eq!(
-            (subject.value, subject.lsn, subject.updated_at),
-            (12, 9, 13)
+            (after.value, after.lsn, after.updated_at, output),
+            (12, 9, 13, 2)
         );
-        assert_eq!((transition.state, transition.output), (12, 2));
-        assert_eq!(transition.event.lsn, 9);
-        assert_eq!(transition.event.logical_ts, 13);
-        assert_eq!(transition.event.domain_event_type, 7);
+        assert_eq!(event.lsn, 9);
+        assert_eq!(event.logical_ts, 13);
+        assert_eq!(event.domain_event_type, 7);
     }
 
     #[test]
@@ -340,9 +315,9 @@ mod tests {
 
     #[test]
     fn business_failure_does_not_commit_working_state() {
-        let mut subject = subject();
+        let subject = subject();
         let result = FsmV2::transition(
-            &mut subject,
+            &subject,
             SequencedCommand::new(
                 CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
                 Command {
@@ -352,15 +327,15 @@ mod tests {
             ),
         );
 
-        assert_eq!(result, Err(TestError::Business));
+        assert!(matches!(result, Err(TestError::Business)));
         assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
     }
 
     #[test]
     fn projection_failure_does_not_commit_working_state() {
-        let mut subject = subject();
+        let subject = subject();
         let result = FsmV2::transition(
-            &mut subject,
+            &subject,
             SequencedCommand::new(
                 CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
                 Command {
@@ -370,16 +345,16 @@ mod tests {
             ),
         );
 
-        assert_eq!(result, Err(TestError::Projection));
+        assert!(matches!(result, Err(TestError::Projection)));
         assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
     }
 
     #[test]
     fn zero_event_type_is_rejected_before_transition() {
-        let mut subject = subject();
+        let subject = subject();
         let clones = Arc::clone(&subject.clones);
         let result = FsmV2::transition(
-            &mut subject,
+            &subject,
             SequencedCommand::new(
                 CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
                 Command {
@@ -389,7 +364,7 @@ mod tests {
             ),
         );
 
-        assert_eq!(result, Err(TestError::Projection));
+        assert!(matches!(result, Err(TestError::Projection)));
         assert_eq!(clones.load(Ordering::Relaxed), 0);
         assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
     }

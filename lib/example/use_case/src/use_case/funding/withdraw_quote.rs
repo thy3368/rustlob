@@ -79,7 +79,6 @@ impl UseCase for WithdrawQuoteUseCase {
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let quote_balance_before = state.quote_balance.clone();
-        let mut quote_balance_after = quote_balance_before.clone();
         let metadata = CommandMetadata::new(
             cmd.lsn(),
             cmd.logical_ts(),
@@ -87,8 +86,8 @@ impl UseCase for WithdrawQuoteUseCase {
             quote_balance_before.partition(),
             quote_balance_before.party_id().to_string(),
         );
-        FsmV2::transition(
-            &mut quote_balance_after,
+        let (quote_balance_after, _, ()) = FsmV2::transition(
+            &quote_balance_before,
             SequencedCommand::new(
                 metadata,
                 BalanceV2Command::DebitAvailable {

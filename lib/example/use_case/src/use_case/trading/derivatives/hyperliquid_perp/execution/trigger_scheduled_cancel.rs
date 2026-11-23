@@ -144,7 +144,6 @@ impl UseCase for TriggerScheduledCancelUseCase {
         let mut balances_after = state.spot_balances.clone();
         let mut canceled_spot_orders = Vec::with_capacity(state.spot_orders.len());
         for before in &state.spot_orders {
-            let mut after = before.clone();
             let metadata = CommandMetadata::new(
                 cmd.lsn(),
                 cmd.logical_ts(),
@@ -152,8 +151,8 @@ impl UseCase for TriggerScheduledCancelUseCase {
                 before.partition(),
                 before.party_id(),
             );
-            let _ = FsmV2::transition(
-                &mut after,
+            let (after, _, _) = FsmV2::transition(
+                before,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )?;
             let release = after.release_requirement()?;
@@ -167,8 +166,8 @@ impl UseCase for TriggerScheduledCancelUseCase {
             if matching.next().is_some() {
                 return Err(TriggerScheduledCancelError::AmbiguousSpotBalance);
             }
-            transition_balance(
-                balance,
+            *balance = transition_balance(
+                &*balance,
                 cmd.lsn(),
                 cmd.logical_ts(),
                 BalanceV2Command::UnfreezeAndPay {
@@ -275,7 +274,6 @@ mod tests {
         let spot = SpotOrderV7::from_record(order_base(11, OrderSide::Buy))
             .expect("spot fixture should be valid");
         let release = {
-            let mut canceled = spot.clone();
             let metadata = CommandMetadata::new(
                 9,
                 LOGICAL_TS,
@@ -283,8 +281,8 @@ mod tests {
                 spot.partition(),
                 spot.party_id(),
             );
-            FsmV2::transition(
-                &mut canceled,
+            let (canceled, _, _) = FsmV2::transition(
+                &spot,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
             .expect("fixture should cancel");

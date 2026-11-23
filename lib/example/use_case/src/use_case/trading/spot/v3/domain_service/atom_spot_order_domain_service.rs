@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-use common_entity::{EntityError, Fsm, Shard};
+use common_entity::{EntityError, Shard};
 use example_core_entity::entity::common::common_trade::TradeBase;
 use example_core_entity::spot::spot_order_v7::{
     ActivateSpotOrderV7Output, ApplySpotOrderV7MatchOutput, CancelSpotOrderV7Output,
@@ -131,8 +131,8 @@ impl SpotOrderDomainService {
             .ok_or(ReconcileSpotOrderHoldError::ArithmeticOverflow)?;
         let current = settled_balance.frozen();
         if current > target {
-            transition_balance(
-                &mut settled_balance,
+            settled_balance = transition_balance(
+                &settled_balance,
                 lsn,
                 timestamp,
                 BalanceV2Command::UnfreezeAndPay {
@@ -141,8 +141,8 @@ impl SpotOrderDomainService {
                 },
             )?;
         } else if current < target {
-            transition_balance(
-                &mut settled_balance,
+            settled_balance = transition_balance(
+                &settled_balance,
                 lsn,
                 timestamp,
                 BalanceV2Command::Freeze {
@@ -155,7 +155,7 @@ impl SpotOrderDomainService {
 
     /// 只读规划全部成交，验证成功后分别推进 taker 与 maker 聚合。
     pub fn match_order(
-        mut taker: SpotOrderV7,
+        taker: SpotOrderV7,
         mut makers: Vec<SpotOrderV7>,
         input: MatchSpotOrderV3Input,
     ) -> Result<MatchSpotOrderV3Outcome, EntityError> {
@@ -178,11 +178,10 @@ impl SpotOrderDomainService {
         };
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
             let metadata = command_metadata(input.lsn, input.timestamp, &taker);
-            let output = FsmV2::transition(
-                &mut taker,
+            let (_, _, output) = FsmV2::transition(
+                &taker,
                 SequencedCommand::new(metadata, SpotOrderV7Command::RejectedAsTaker),
-            )?
-            .output;
+            )?;
             let SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
                 order_after,
                 release_requirement: Some(release_requirement),
@@ -261,8 +260,8 @@ impl SpotOrderDomainService {
                 .ok_or_else(|| match_error("planned maker index is missing"))?;
             let maker_before = maker.order_base().clone();
             let metadata = command_metadata(input.lsn, input.timestamp, maker);
-            let _ = FsmV2::transition(
-                maker,
+            let (maker_after, _, _) = FsmV2::transition(
+                &*maker,
                 SequencedCommand::new(
                     metadata,
                     SpotOrderV7Command::MatchedAsMaker {
@@ -271,6 +270,7 @@ impl SpotOrderDomainService {
                     },
                 ),
             )?;
+            *maker = maker_after;
             trades.push(SpotTradeV3 {
                 comon_trade: TradeBase {
                     trade_id: fill.trade_id,
@@ -292,8 +292,8 @@ impl SpotOrderDomainService {
             });
         }
         let metadata = command_metadata(input.lsn, input.timestamp, &taker);
-        let output = FsmV2::transition(
-            &mut taker,
+        let (_, _, output) = FsmV2::transition(
+            &taker,
             SequencedCommand::new(
                 metadata,
                 SpotOrderV7Command::MatchedAsTaker {
@@ -301,8 +301,7 @@ impl SpotOrderDomainService {
                     quote_fee: taker_fee_total,
                 },
             ),
-        )?
-        .output;
+        )?;
         let SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput {
             order_after: taker_order_after,
             release_requirement,
@@ -348,7 +347,7 @@ impl SpotOrderDomainService {
     }
 
     pub fn modify(
-        mut order: SpotOrderV7,
+        order: SpotOrderV7,
         mut balance: BalanceV2,
         price: Decimal,
         size: Decimal,
@@ -358,8 +357,8 @@ impl SpotOrderDomainService {
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ModifySpotOrderV7Error> {
         let metadata = command_metadata(lsn, timestamp, &order);
-        let output = FsmV2::transition(
-            &mut order,
+        let (_, _, output) = FsmV2::transition(
+            &order,
             SequencedCommand::new(
                 metadata,
                 SpotOrderV7Command::Modify {
@@ -369,8 +368,7 @@ impl SpotOrderDomainService {
                     cloid,
                 },
             ),
-        )?
-        .output;
+        )?;
         let SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
             order_after,
             hold_adjustment,
@@ -386,8 +384,8 @@ impl SpotOrderDomainService {
         }
         match hold_adjustment {
             SpotOrderV7HoldAdjustment::Increase { amount } => {
-                transition_balance(
-                    &mut balance,
+                balance = transition_balance(
+                    &balance,
                     lsn,
                     timestamp,
                     BalanceV2Command::Freeze {
@@ -396,8 +394,8 @@ impl SpotOrderDomainService {
                 )?;
             }
             SpotOrderV7HoldAdjustment::Decrease { amount } => {
-                transition_balance(
-                    &mut balance,
+                balance = transition_balance(
+                    &balance,
                     lsn,
                     timestamp,
                     BalanceV2Command::UnfreezeAndPay {
@@ -413,17 +411,16 @@ impl SpotOrderDomainService {
     }
 
     pub fn freeze(
-        mut order: SpotOrderV7,
+        order: SpotOrderV7,
         mut balance: BalanceV2,
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ActivateSpotOrderV7Error> {
         let metadata = command_metadata(lsn, timestamp, &order);
-        let output = FsmV2::transition(
-            &mut order,
+        let (order_after, _, output) = FsmV2::transition(
+            &order,
             SequencedCommand::new(metadata, SpotOrderV7Command::Activate),
-        )?
-        .output;
+        )?;
         let SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }) = output
         else {
             return Err(
@@ -434,8 +431,8 @@ impl SpotOrderDomainService {
         if balance.coin_idx() != u64::from(freeze_requirement.currency().index()) {
             return Err(ActivateSpotOrderV7Error::CoinMismatch);
         }
-        transition_balance(
-            &mut balance,
+        balance = transition_balance(
+            &balance,
             lsn,
             timestamp,
             BalanceV2Command::Freeze {
@@ -443,21 +440,20 @@ impl SpotOrderDomainService {
             },
         )?;
 
-        Ok((order, balance))
+        Ok((order_after, balance))
     }
 
     pub fn cancel(
-        mut order: SpotOrderV7,
+        order: SpotOrderV7,
         mut balance: BalanceV2,
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), CancelSpotOrderV7Error> {
         let metadata = command_metadata(lsn, timestamp, &order);
-        let output = FsmV2::transition(
-            &mut order,
+        let (order_after, _, output) = FsmV2::transition(
+            &order,
             SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
-        )?
-        .output;
+        )?;
         let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
             release_requirement,
             ..
@@ -472,8 +468,8 @@ impl SpotOrderDomainService {
             return Err(CancelSpotOrderV7Error::AssetMismatch);
         }
         if release_requirement.amount() > Decimal::ZERO {
-            transition_balance(
-                &mut balance,
+            balance = transition_balance(
+                &balance,
                 lsn,
                 timestamp,
                 BalanceV2Command::UnfreezeAndPay {
@@ -483,7 +479,7 @@ impl SpotOrderDomainService {
             )?;
         }
 
-        Ok((order, balance))
+        Ok((order_after, balance))
     }
 }
 

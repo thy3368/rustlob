@@ -1,6 +1,6 @@
 use common_entity::{
-    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, TrackDiff,
-    UpdatedEntityPair, UseCase,
+    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, TrackDiff, UpdatedEntityPair,
+    UseCase,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -189,9 +189,8 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
                 let amount =
                     required_margin(cmd.size, cmd.execution.price(), state.position.leverage())?;
                 let before = state.margin_balance.clone();
-                let mut after = before.clone();
-                transition_balance(
-                    &mut after,
+                let after = transition_balance(
+                    &before,
                     cmd.lsn(),
                     cmd.logical_ts(),
                     BalanceV2Command::Freeze { amount },

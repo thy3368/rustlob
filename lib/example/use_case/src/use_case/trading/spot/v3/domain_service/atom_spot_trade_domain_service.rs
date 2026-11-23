@@ -71,24 +71,24 @@ impl SpotTradeDomainService {
         let mut seller_base_balance_after = seller_base_balance.clone();
         let mut seller_quote_balance_after = seller_quote_balance.clone();
 
-        transition_balance(
-            &mut buyer_quote_balance_after,
+        buyer_quote_balance_after = transition_balance(
+            &buyer_quote_balance_after,
             lsn,
             logical_ts,
             BalanceV2Command::DebitFrozen {
                 amount: amounts.buyer_quote_payment,
             },
         )?;
-        transition_balance(
-            &mut buyer_base_balance_after,
+        buyer_base_balance_after = transition_balance(
+            &buyer_base_balance_after,
             lsn,
             logical_ts,
             BalanceV2Command::CreditAvailable {
                 amount: amounts.base_amount,
             },
         )?;
-        transition_balance(
-            &mut seller_base_balance_after,
+        seller_base_balance_after = transition_balance(
+            &seller_base_balance_after,
             lsn,
             logical_ts,
             BalanceV2Command::DebitFrozen {
@@ -96,8 +96,8 @@ impl SpotTradeDomainService {
             },
         )?;
         if amounts.seller_quote_receipt > Decimal::ZERO {
-            transition_balance(
-                &mut seller_quote_balance_after,
+            seller_quote_balance_after = transition_balance(
+                &seller_quote_balance_after,
                 lsn,
                 logical_ts,
                 BalanceV2Command::CreditAvailable {

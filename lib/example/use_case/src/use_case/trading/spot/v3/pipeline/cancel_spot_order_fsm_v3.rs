@@ -110,7 +110,7 @@ impl UseCaseV3 for CancelSpotOrderFsmV3UseCase {
     fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
-        state: Self::StateGiven,
+        state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         compute_changes(cmd, state)
     }
@@ -161,41 +161,39 @@ fn validate_state(
 
 fn compute_changes(
     cmd: &LogEntry<CancelSpotOrderFsmV3Cmd>,
-    state: CancelSpotOrderFsmV3State,
+    state: &CancelSpotOrderFsmV3State,
 ) -> Result<CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Error> {
-    let CancelSpotOrderFsmV3State {
-        order: mut order_after,
-        balance: mut balance_after,
-    } = state;
-    let order_loaded_position = order_after.event_position();
+    let order_before = &state.order;
+    let balance_before = &state.balance;
+    let order_loaded_position = order_before.event_position();
     let metadata = FsmCommandMetadata::new(
         cmd.lsn(),
         cmd.logical_ts(),
-        order_after.topic(),
-        order_after.partition(),
-        order_after.party_id(),
+        order_before.topic(),
+        order_before.partition(),
+        order_before.party_id(),
     );
-    let transition = FsmV2::transition(
-        &mut order_after,
+    let (order_after, order_event, order_output) = FsmV2::transition(
+        order_before,
         SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
     )?;
-    let SpotOrderV7Output::Canceled(output) = transition.output else {
+    let SpotOrderV7Output::Canceled(output) = order_output else {
         return Err(CancelSpotOrderFsmV3Error::UnexpectedOrderOutput);
     };
 
     let balance = if output.release_requirement.amount() == Decimal::ZERO {
         None
     } else {
-        let balance_loaded_position = balance_after.event_position();
+        let balance_loaded_position = balance_before.event_position();
         let metadata = FsmCommandMetadata::new(
             cmd.lsn(),
             cmd.logical_ts(),
-            balance_after.topic(),
-            balance_after.partition(),
-            balance_after.party_id().to_string(),
+            balance_before.topic(),
+            balance_before.partition(),
+            balance_before.party_id().to_string(),
         );
-        let balance_transition = FsmV2::transition(
-            &mut balance_after,
+        let (balance_after, balance_event, ()) = FsmV2::transition(
+            balance_before,
             SequencedCommand::new(
                 metadata,
                 BalanceV2Command::UnfreezeAndPay {
@@ -209,19 +207,15 @@ fn compute_changes(
             UpdatedEntityEvents::try_new(
                 balance_after,
                 balance_loaded_position,
-                vec![balance_transition.event],
+                vec![balance_event],
             )
             .map_err(CancelSpotOrderFsmV3Error::InvalidEntityEvents)?,
         )
     };
 
     Ok(CancelSpotOrderFsmV3Changes {
-        order: UpdatedEntityEvents::try_new(
-            order_after,
-            order_loaded_position,
-            vec![transition.event],
-        )
-        .map_err(CancelSpotOrderFsmV3Error::InvalidEntityEvents)?,
+        order: UpdatedEntityEvents::try_new(order_after, order_loaded_position, vec![order_event])
+            .map_err(CancelSpotOrderFsmV3Error::InvalidEntityEvents)?,
         balance,
     })
 }

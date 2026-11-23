@@ -155,7 +155,6 @@ impl BalanceV2 {
 }
 
 impl Fsm for BalanceV2 {
-    type State = BalanceV2Status;
     type Command = BalanceV2Command;
     type Output = ();
     type Error = BalanceV2Error;
@@ -163,7 +162,7 @@ impl Fsm for BalanceV2 {
         &self,
         metadata: CommandMetadata,
         command: Self::Command,
-    ) -> Result<(Self, Self::State, Self::Output), Self::Error> {
+    ) -> Result<(Self, Self::Output), Self::Error> {
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);
         }
@@ -252,7 +251,7 @@ impl Fsm for BalanceV2 {
             created_at: self.created_at,
             updated_at: metadata.logical_ts,
         };
-        Ok((after, status, ()))
+        Ok((after, ()))
     }
 
     fn event_type(command: &Self::Command) -> u8 {
@@ -492,21 +491,22 @@ mod tests {
             ),
         ];
 
-        for (mut balance, command, available, frozen, status, event_type) in cases {
-            let transition = FsmV2::transition(&mut balance, sequenced(command))
-                .expect("valid balance transition");
+        for (balance, command, available, frozen, status, event_type) in cases {
+            let before = balance.clone();
+            let (after, event, ()) =
+                FsmV2::transition(&balance, sequenced(command)).expect("valid balance transition");
 
-            assert_eq!((transition.state, transition.output), (status, ()));
+            assert_eq!(balance, before);
             assert_eq!(
-                (balance.available(), balance.frozen(), balance.status()),
+                (after.available(), after.frozen(), after.status()),
                 (available, frozen, status)
             );
-            assert_eq!((balance.version(), balance.updated_at()), (LSN, LOGICAL_TS));
-            assert_eq!(transition.event.domain_event_type, event_type);
-            assert_eq!(transition.event.previous_lsn, 3);
-            assert_eq!(transition.event.lsn, LSN);
-            assert_eq!(transition.event.logical_ts, LOGICAL_TS);
-            assert!(!transition.event.field_changes.is_empty());
+            assert_eq!((after.version(), after.updated_at()), (LSN, LOGICAL_TS));
+            assert_eq!(event.domain_event_type, event_type);
+            assert_eq!(event.previous_lsn, 3);
+            assert_eq!(event.lsn, LSN);
+            assert_eq!(event.logical_ts, LOGICAL_TS);
+            assert!(!event.field_changes.is_empty());
         }
     }
 
@@ -585,8 +585,9 @@ mod tests {
 
     #[test]
     fn rejects_closed_state_stale_lsn_and_overflow_atomically() {
-        let mut closed = balance(0, 0, 3);
-        FsmV2::transition(&mut closed, sequenced(BalanceV2Command::Close)).expect("close balance");
+        let open = balance(0, 0, 3);
+        let (closed, _, ()) =
+            FsmV2::transition(&open, sequenced(BalanceV2Command::Close)).expect("close balance");
 
         assert_rejected_without_mutation(
             closed,
