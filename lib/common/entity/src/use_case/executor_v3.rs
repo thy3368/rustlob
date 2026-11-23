@@ -21,6 +21,9 @@ pub enum ExecutionErrorV3<BE, LE, OE> {
     Publish(OE),
 }
 
+pub type ExecutionOutcomeV3<C, BE, LE, OE> =
+    Result<ExecutionResultV3<C>, ExecutionErrorV3<BE, LE, OE>>;
+
 pub trait StateSourceV3<F>: Send + Sync
 where
     F: UseCaseV3,
@@ -45,7 +48,7 @@ impl UseCaseExecutorV3 {
         command: &F::Command,
         state_source: &SS,
         state_sink: &OB,
-    ) -> Result<ExecutionResultV3<F::StateChanged>, ExecutionErrorV3<F::Error, SS::Error, OB::Error>>
+    ) -> ExecutionOutcomeV3<F::StateChanged, F::Error, SS::Error, OB::Error>
     where
         F: UseCaseV3,
         SS: StateSourceV3<F>,
@@ -293,6 +296,29 @@ mod tests {
 
         assert_eq!(result, Err(ExecutionErrorV3::LoadState(TestError::Load)));
         assert_eq!(calls, ["load"]);
+    }
+
+    #[test]
+    fn maps_business_error_before_outbound_calls() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let result = UseCaseExecutorV3.execute(
+            &TestUseCase {
+                events: vec![event(1, 7)],
+                business_error: true,
+            },
+            &Command,
+            &Source {
+                calls: Arc::clone(&calls),
+                failure: false,
+            },
+            &Sink {
+                calls: Arc::clone(&calls),
+                failure: None,
+            },
+        );
+
+        assert_eq!(result, Err(ExecutionErrorV3::Business(TestError::Business)));
+        assert_eq!(*calls.lock().unwrap(), ["load"]);
     }
 
     #[test]

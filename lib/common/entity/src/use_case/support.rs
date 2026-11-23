@@ -32,3 +32,12 @@ where
         self.after.track_update_event_from(&self.before)
     }
 }
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdatedEntityEvents<E> {
+    pub after: E,
+    pub events: Vec<ReplayableDomainEvent>,
+}
+
+

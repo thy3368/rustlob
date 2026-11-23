@@ -27,6 +27,9 @@ pub enum UseCaseComputeError<E> {
     Contract(UseCaseContractError),
 }
 
+pub type UseCaseComputeOutcome<C, E> =
+    Result<(C, Vec<ReplayableDomainEvent>), UseCaseComputeError<E>>;
+
 /// 直接产出 after truth 与实体 FSM replay events 的 use case 契约。
 ///
 /// V3 不依赖 `UseCase`、`StateDiff` 或 `ReplayableChanges`。事件顺序由实现返回的
@@ -60,8 +63,7 @@ pub trait UseCaseV3: Clone + Debug + Send + Sync {
         &self,
         cmd: &Self::Command,
         state_given: &Self::StateGiven,
-    ) -> Result<(Self::StateChanged, Vec<ReplayableDomainEvent>), UseCaseComputeError<Self::Error>>
-    {
+    ) -> UseCaseComputeOutcome<Self::StateChanged, Self::Error> {
         self.validate_state_given(cmd, state_given)
             .map_err(UseCaseComputeError::Business)?;
         let (state_changed, events) = self
@@ -79,8 +81,7 @@ pub trait UseCaseV3: Clone + Debug + Send + Sync {
         &self,
         cmd: &Self::Command,
         state_given: &Self::StateGiven,
-    ) -> Result<(Self::StateChanged, Vec<ReplayableDomainEvent>), UseCaseComputeError<Self::Error>>
-    {
+    ) -> UseCaseComputeOutcome<Self::StateChanged, Self::Error> {
         self.check_command(cmd)
             .map_err(UseCaseComputeError::Business)?;
         self.validate_and_compute(cmd, state_given)
