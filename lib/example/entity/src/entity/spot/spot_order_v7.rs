@@ -762,7 +762,6 @@ fn coin_amount(
         .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
 }
 
-
 fn active_hold_requirement(o: &OrderBase) -> Result<Option<Decimal>, EntityError> {
     if o.status == SpotOrderStatus::Pending {
         return Ok(None);

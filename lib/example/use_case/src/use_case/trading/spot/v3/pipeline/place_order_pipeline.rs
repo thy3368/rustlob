@@ -16,7 +16,9 @@ use crate::use_case::trading::spot::v3::pipeline::atom_spot_order_domain_service
     FreezeSpotOrderV7Error, MatchSpotOrderV3Input, MatchSpotOrderV3Outcome,
     ReconcileSpotOrderHoldError, SpotOrderDomainService,
 };
-use crate::use_case::trading::spot::v3::pipeline::atom_spot_trade_domain_service::{SpotTradeDomainService, SpotTradeDomainServiceError};
+use crate::use_case::trading::spot::v3::pipeline::atom_spot_trade_domain_service::{
+    SpotTradeDomainService, SpotTradeDomainServiceError,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceSpotOrderV3OrderCmd {
