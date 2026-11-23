@@ -1,18 +1,16 @@
-use common_entity::fsm_v2::{
-    CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
-};
 use common_entity::{
-    EntityError, LogEntry, PositionedEntity, ReplayableDomainEvent, ReplayableEntityChanges, Shard,
-    UpdatedEntityEvents, UpdatedEntityEventsError, UseCaseV3,
+    EntityError, LogEntry, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
+    UpdatedEntityEventsError, UseCaseV3,
 };
 use example_core_entity::common::identifiers::OrderId;
-use example_core_entity::{
-    BalanceV2, BalanceV2Command, BalanceV2Error, OrderSide, SpotOrderStatus, SpotOrderV7,
-    SpotOrderV7Command, SpotOrderV7Output,
-};
-use rust_decimal::Decimal;
+use example_core_entity::{BalanceV2, OrderSide, SpotOrderStatus, SpotOrderV7};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::use_case::trading::spot::v3::domain_service::atom_spot_order_domain_service_v2::{
+    CancelSpotOrderDomainServiceV2Error, CancelSpotOrderDomainServiceV2Metadata,
+    SpotOrderDomainServiceV2,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderFsmV3Cmd {
@@ -163,81 +161,51 @@ fn compute_changes(
     cmd: &LogEntry<CancelSpotOrderFsmV3Cmd>,
     state: &CancelSpotOrderFsmV3State,
 ) -> Result<CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Error> {
-    let order_before = &state.order;
-    let balance_before = &state.balance;
-    let order_loaded_position = order_before.event_position();
-    let metadata = FsmCommandMetadata::new_at(
-        common_entity::EventPosition::new(cmd.lsn(), 0),
-        cmd.logical_ts(),
-        order_before.topic(),
-        order_before.partition(),
-        order_before.party_id(),
-    );
-    let (order_after, order_event, order_output) = FsmV2::transition(
-        order_before,
-        SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
-    )?;
-    let SpotOrderV7Output::Canceled(output) = order_output else {
-        return Err(CancelSpotOrderFsmV3Error::UnexpectedOrderOutput);
-    };
-
-    let balance = if output.release_requirement.amount() == Decimal::ZERO {
-        None
-    } else {
-        let balance_loaded_position = balance_before.event_position();
-        let metadata = FsmCommandMetadata::new_at(
-            common_entity::EventPosition::new(cmd.lsn(), 1),
-            cmd.logical_ts(),
-            balance_before.topic(),
-            balance_before.partition(),
-            balance_before.party_id().to_string(),
-        );
-        let (balance_after, balance_event, ()) = FsmV2::transition(
-            balance_before,
-            SequencedCommand::new(
-                metadata,
-                BalanceV2Command::UnfreezeAndPay {
-                    unfreeze_amount: output.release_requirement.amount(),
-                    payment_amount: Decimal::ZERO,
-                },
-            ),
+    let changes = SpotOrderDomainServiceV2
+        .cancel(
+            &state.order,
+            &state.balance,
+            CancelSpotOrderDomainServiceV2Metadata {
+                lsn: cmd.lsn(),
+                logical_ts: cmd.logical_ts(),
+                topic: cmd.topic(),
+                partition: cmd.partition(),
+            },
         )
-        .map_err(map_balance_error)?;
-        let mut balance_event = balance_event;
-        balance_event.t = cmd.topic();
-        balance_event.p = cmd.partition();
-        Some(
-            UpdatedEntityEvents::try_new(
-                balance_after,
-                balance_loaded_position,
-                vec![balance_event],
-            )
-            .map_err(CancelSpotOrderFsmV3Error::InvalidEntityEvents)?,
-        )
-    };
-
-    let mut order_event = order_event;
-    order_event.t = cmd.topic();
-    order_event.p = cmd.partition();
+        .map_err(map_domain_service_error)?;
     Ok(CancelSpotOrderFsmV3Changes {
-        order: UpdatedEntityEvents::try_new(order_after, order_loaded_position, vec![order_event])
-            .map_err(CancelSpotOrderFsmV3Error::InvalidEntityEvents)?,
-        balance,
+        order: changes.order,
+        balance: changes.balance,
     })
 }
 
-fn map_balance_error(error: BalanceV2Error) -> CancelSpotOrderFsmV3Error {
+fn map_domain_service_error(
+    error: CancelSpotOrderDomainServiceV2Error,
+) -> CancelSpotOrderFsmV3Error {
     match error {
-        BalanceV2Error::InsufficientFrozenBalance => {
+        CancelSpotOrderDomainServiceV2Error::AssetMismatch => {
+            CancelSpotOrderFsmV3Error::CoinMismatch
+        }
+        CancelSpotOrderDomainServiceV2Error::InsufficientFrozenBalance => {
             CancelSpotOrderFsmV3Error::InsufficientFrozenBalance
         }
-        BalanceV2Error::BalanceClosed => CancelSpotOrderFsmV3Error::BalanceClosed,
-        BalanceV2Error::InvalidAmount | BalanceV2Error::InsufficientAvailableBalance => {
+        CancelSpotOrderDomainServiceV2Error::BalanceClosed => {
+            CancelSpotOrderFsmV3Error::BalanceClosed
+        }
+        CancelSpotOrderDomainServiceV2Error::InvalidBalanceAmount => {
             CancelSpotOrderFsmV3Error::InvalidBalanceAmount
         }
-        BalanceV2Error::Replay(error) => CancelSpotOrderFsmV3Error::Entity(error),
-        BalanceV2Error::ArithmeticOverflow
-        | BalanceV2Error::CannotCloseNonZeroBalance
-        | BalanceV2Error::StaleLsn { .. } => CancelSpotOrderFsmV3Error::ArithmeticOverflow,
+        CancelSpotOrderDomainServiceV2Error::ArithmeticOverflow => {
+            CancelSpotOrderFsmV3Error::ArithmeticOverflow
+        }
+        CancelSpotOrderDomainServiceV2Error::UnexpectedOrderOutput => {
+            CancelSpotOrderFsmV3Error::UnexpectedOrderOutput
+        }
+        CancelSpotOrderDomainServiceV2Error::InvalidEntityEvents(error) => {
+            CancelSpotOrderFsmV3Error::InvalidEntityEvents(error)
+        }
+        CancelSpotOrderDomainServiceV2Error::Entity(error) => {
+            CancelSpotOrderFsmV3Error::Entity(error)
+        }
     }
 }

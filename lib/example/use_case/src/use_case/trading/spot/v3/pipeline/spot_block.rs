@@ -314,7 +314,7 @@ impl WorkingState {
             maker_fee_bps: self.maker_fee_bps,
             taker_fee_bps: self.taker_fee_bps,
         };
-        let changes = compute_place_changes(&entry, state)?;
+        let changes = compute_place_changes(&entry, &state)?;
         self.next_trade_id = self
             .next_trade_id
             .checked_add(changes.settled_trades.len() as u64)

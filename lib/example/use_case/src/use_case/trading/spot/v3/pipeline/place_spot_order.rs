@@ -270,7 +270,8 @@ pub(crate) fn build_place_changes(
     let flattened = flatten_after_changes(changed);
     let mut maker_orders_before = state
         .maker_orders
-        .into_iter()
+        .iter()
+        .cloned()
         .map(|maker| (maker.order_base().order_id, maker))
         .collect::<HashMap<_, _>>();
     let mut created_orders = Vec::with_capacity(flattened.created_orders.len());
@@ -816,7 +817,7 @@ mod tests {
                 tif: example_core_entity::OrderTif::Gtc,
             },
         )));
-        let changes = build_place_changes(&cmd, state, changed).unwrap();
+        let changes = build_place_changes(&cmd, &state, changed).unwrap();
 
         assert_eq!(changes.updated_maker_orders.len(), 1);
         assert_eq!(
