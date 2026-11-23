@@ -121,6 +121,8 @@ impl ReplayFieldChange {
 /// Entity event optimized for deterministic replay and optimistic locking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
+    ///domain event name
+    pub domain_event_name: u8,
     ///topic
     pub t: u8,
     ///partition
