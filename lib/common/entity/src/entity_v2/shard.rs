@@ -4,8 +4,8 @@ pub trait Shard {
     }
     fn partition(&self) -> u8;
 
-    fn party_id(&self) -> u64 {
-        0
+    fn party_id(&self) -> String {
+        String::new()
     }
 }
 

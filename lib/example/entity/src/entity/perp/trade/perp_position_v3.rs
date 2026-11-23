@@ -419,8 +419,8 @@ impl Shard for PerpPositionV3 {
         (self.user_id.0 % 256) as u8
     }
 
-    fn party_id(&self) -> u64 {
-        self.user_id.0
+    fn party_id(&self) -> String {
+        self.user_id.0.to_string()
     }
 }
 

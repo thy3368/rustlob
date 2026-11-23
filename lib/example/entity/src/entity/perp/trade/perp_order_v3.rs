@@ -571,8 +571,8 @@ impl Shard for PerpOrderV3 {
         (self.comon_order.owner.0 % 256) as u8
     }
 
-    fn party_id(&self) -> u64 {
-        self.comon_order.owner.0
+    fn party_id(&self) -> String {
+        self.comon_order.owner.0.to_string()
     }
 }
 

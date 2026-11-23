@@ -55,7 +55,7 @@ impl<C: Shard> Shard for SequencedCommand<C> {
     fn partition(&self) -> u8 {
         self.payload.partition()
     }
-    fn party_id(&self) -> u64 {
+    fn party_id(&self) -> String {
         self.payload.party_id()
     }
 }
@@ -94,7 +94,7 @@ impl<E: Shard> Shard for SequencedDomainEvent<E> {
     fn partition(&self) -> u8 {
         self.payload.partition()
     }
-    fn party_id(&self) -> u64 {
+    fn party_id(&self) -> String {
         self.payload.party_id()
     }
 }
@@ -198,8 +198,8 @@ mod tests {
         fn partition(&self) -> u8 {
             7
         }
-        fn party_id(&self) -> u64 {
-            11
+        fn party_id(&self) -> String {
+            "11".to_owned()
         }
     }
 
@@ -208,7 +208,7 @@ mod tests {
         let command = SequencedCommand::new(CommandMetadata::new(13, 17), Command);
         assert_eq!(command.topic(), 3);
         assert_eq!(command.partition(), 7);
-        assert_eq!(command.party_id(), 11);
+        assert_eq!(command.party_id(), "11");
         assert_eq!(command.lsn(), 13);
         assert_eq!(command.logical_ts(), 17);
     }

@@ -13,7 +13,10 @@ use crate::entity::common::order_primitives::{OrderSide, OrderTif, SpotOrderStat
 const TIMESTAMP: u64 = 500;
 
 fn sequenced(command: SpotOrderV7Command) -> SequencedCommand<SpotOrderV7Command> {
-    SequencedCommand::new(CommandMetadata::new(10, TIMESTAMP), command)
+    SequencedCommand::new(
+        CommandMetadata::new(10, TIMESTAMP, 0, 1, String::new()),
+        command,
+    )
 }
 
 fn field_names(event: &common_entity::ReplayableDomainEvent) -> Vec<&str> {
@@ -124,7 +127,7 @@ fn stale_lsn_keeps_order_unchanged() {
     assert!(
         subject
             .transition(SequencedCommand::new(
-                CommandMetadata::new(3, TIMESTAMP),
+                CommandMetadata::new(3, TIMESTAMP, 0, 1, String::new()),
                 SpotOrderV7Command::MatchedAsTaker {
                     filled_size: Decimal::ONE,
                     quote_fee: Decimal::ZERO,
@@ -140,13 +143,13 @@ fn command_lsn_can_jump_and_be_reused_within_one_command() {
     let mut subject = order(OrderSide::Buy, SpotOrderStatus::Pending);
     subject
         .transition(SequencedCommand::new(
-            CommandMetadata::new(20, TIMESTAMP),
+            CommandMetadata::new(20, TIMESTAMP, 0, 1, String::new()),
             SpotOrderV7Command::Activate,
         ))
         .unwrap();
     subject
         .transition(SequencedCommand::new(
-            CommandMetadata::new(20, TIMESTAMP + 1),
+            CommandMetadata::new(20, TIMESTAMP + 1, 0, 1, String::new()),
             SpotOrderV7Command::MatchedAsTaker {
                 filled_size: Decimal::ONE,
                 quote_fee: Decimal::ZERO,
@@ -358,7 +361,7 @@ fn sequenced_failures_are_atomic() {
         (
             order(OrderSide::Buy, SpotOrderStatus::Open),
             SequencedCommand::new(
-                CommandMetadata::new(3, TIMESTAMP),
+                CommandMetadata::new(3, TIMESTAMP, 0, 1, String::new()),
                 SpotOrderV7Command::Cancel,
             ),
         ),
@@ -447,7 +450,13 @@ fn replay_projection_failure_keeps_order_unchanged() {
     let mut subject = order(OrderSide::Buy, SpotOrderStatus::Open);
     let before = subject.clone();
     let command = SequencedCommand::new(
-        CommandMetadata::new(before.order_base().lsn, before.order_base().updated_at),
+        CommandMetadata::new(
+            before.order_base().lsn,
+            before.order_base().updated_at,
+            before.topic(),
+            before.partition(),
+            before.party_id(),
+        ),
         SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::ZERO,
             quote_fee: Decimal::ZERO,

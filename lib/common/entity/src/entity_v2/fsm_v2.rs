@@ -1,15 +1,54 @@
 use crate::{EntityError, LogAttr, ReplayableDomainEvent, Shard, TrackDiff};
 
 /// 已由日志定序器确定的 v2 command 元数据。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CommandMetadata {
     pub lsn: u64,
     pub logical_ts: u64,
+    pub topic: u8,
+    pub partition: u8,
+    pub party_id: String,
 }
 
 impl CommandMetadata {
-    pub const fn new(lsn: u64, logical_ts: u64) -> Self {
-        Self { lsn, logical_ts }
+    pub fn new(
+        lsn: u64,
+        logical_ts: u64,
+        topic: u8,
+        partition: u8,
+        party_id: String,
+    ) -> Self {
+        Self {
+            lsn,
+            logical_ts,
+            topic,
+            partition,
+            party_id,
+        }
+    }
+}
+
+impl Shard for CommandMetadata {
+    fn topic(&self) -> u8 {
+        self.topic
+    }
+
+    fn partition(&self) -> u8 {
+        self.partition
+    }
+
+    fn party_id(&self) -> String {
+        self.party_id.clone()
+    }
+}
+
+impl LogAttr for CommandMetadata {
+    fn lsn(&self) -> u64 {
+        self.lsn
+    }
+
+    fn logical_ts(&self) -> u64 {
+        self.logical_ts
     }
 }
 
@@ -30,21 +69,21 @@ impl<C> SequencedCommand<C> {
     }
 }
 
-impl<C: Shard> Shard for SequencedCommand<C> {
+impl<C> Shard for SequencedCommand<C> {
     fn topic(&self) -> u8 {
-        self.payload.topic()
+        self.metadata.topic()
     }
 
     fn partition(&self) -> u8 {
-        self.payload.partition()
+        self.metadata.partition()
     }
 
-    fn party_id(&self) -> u64 {
-        self.payload.party_id()
+    fn party_id(&self) -> String {
+        self.metadata.party_id()
     }
 }
 
-impl<C: Shard> LogAttr for SequencedCommand<C> {
+impl<C> LogAttr for SequencedCommand<C> {
     fn lsn(&self) -> u64 {
         self.metadata.lsn
     }
@@ -110,7 +149,7 @@ pub trait Fsm: TrackDiff + Clone {
             return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
         }
         let mut working = self.clone();
-        let (state, output) = working.transition_in_place(metadata, payload)?;
+        let (state, output) = working.transition_in_place(metadata.clone(), payload)?;
         let mut replay_event =
             working.track_update_event_from_command(self, metadata.lsn, metadata.logical_ts)?;
         replay_event.domain_event_type = event_type;
@@ -143,20 +182,6 @@ mod tests {
     struct Command {
         delta: u64,
         fail: bool,
-    }
-
-    impl Shard for Command {
-        fn topic(&self) -> u8 {
-            2
-        }
-
-        fn partition(&self) -> u8 {
-            3
-        }
-
-        fn party_id(&self) -> u64 {
-            5
-        }
     }
 
     #[derive(Debug)]
@@ -273,7 +298,7 @@ mod tests {
         let result = FsmV2::transition(
             &mut subject,
             SequencedCommand::new(
-                CommandMetadata::new(9, 13),
+                CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
                 Command {
                     delta: 2,
                     fail: false,
@@ -299,7 +324,7 @@ mod tests {
     #[test]
     fn envelope_owns_metadata_and_delegates_routing() {
         let command = SequencedCommand::new(
-            CommandMetadata::new(9, 13),
+            CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
             Command {
                 delta: 2,
                 fail: false,
@@ -309,7 +334,7 @@ mod tests {
         assert_eq!((command.lsn(), command.logical_ts()), (9, 13));
         assert_eq!(
             (command.topic(), command.partition(), command.party_id()),
-            (2, 3, 5)
+            (2, 3, "5".to_owned())
         );
     }
 
@@ -319,7 +344,7 @@ mod tests {
         let result = FsmV2::transition(
             &mut subject,
             SequencedCommand::new(
-                CommandMetadata::new(9, 13),
+                CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
                 Command {
                     delta: 2,
                     fail: true,
@@ -337,7 +362,7 @@ mod tests {
         let result = FsmV2::transition(
             &mut subject,
             SequencedCommand::new(
-                CommandMetadata::new(9, 13),
+                CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
                 Command {
                     delta: 0,
                     fail: false,
@@ -356,7 +381,7 @@ mod tests {
         let result = FsmV2::transition(
             &mut subject,
             SequencedCommand::new(
-                CommandMetadata::new(9, 13),
+                CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
                 Command {
                     delta: u64::MAX,
                     fail: false,

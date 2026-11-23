@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-use common_entity::{EntityError, Fsm};
+use common_entity::{EntityError, Fsm, Shard};
 use example_core_entity::entity::common::common_trade::TradeBase;
 use example_core_entity::spot::spot_order_v7::{
     ActivateSpotOrderV7Output, ApplySpotOrderV7MatchOutput, CancelSpotOrderV7Output,
@@ -169,10 +169,11 @@ impl SpotOrderDomainService {
             OrderSide::Sell => t.limit_px <= maker.order_base().limit_px,
         };
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
+            let metadata = command_metadata(input.lsn, input.timestamp, &taker);
             let output = FsmV2::transition(
                 &mut taker,
                 SequencedCommand::new(
-                    CommandMetadata::new(input.lsn, input.timestamp),
+                    metadata,
                     SpotOrderV7Command::RejectedAsTaker,
                 ),
             )?
@@ -254,10 +255,11 @@ impl SpotOrderDomainService {
                 .get_mut(fill.maker_index)
                 .ok_or_else(|| match_error("planned maker index is missing"))?;
             let maker_before = maker.order_base().clone();
+            let metadata = command_metadata(input.lsn, input.timestamp, maker);
             let _ = FsmV2::transition(
                 maker,
                 SequencedCommand::new(
-                    CommandMetadata::new(input.lsn, input.timestamp),
+                    metadata,
                     SpotOrderV7Command::MatchedAsMaker {
                         filled_size: fill.size,
                         quote_fee: fill.maker_fee,
@@ -284,10 +286,11 @@ impl SpotOrderDomainService {
                 settlement_status: SpotTradeSettlementStatus::Unsettled,
             });
         }
+        let metadata = command_metadata(input.lsn, input.timestamp, &taker);
         let output = FsmV2::transition(
             &mut taker,
             SequencedCommand::new(
-                CommandMetadata::new(input.lsn, input.timestamp),
+                metadata,
                 SpotOrderV7Command::MatchedAsTaker {
                     filled_size,
                     quote_fee: taker_fee_total,
@@ -349,10 +352,11 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ModifySpotOrderV7Error> {
+        let metadata = command_metadata(lsn, timestamp, &order);
         let output = FsmV2::transition(
             &mut order,
             SequencedCommand::new(
-                CommandMetadata::new(lsn, timestamp),
+                metadata,
                 SpotOrderV7Command::Modify {
                     price,
                     size,
@@ -403,12 +407,10 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ActivateSpotOrderV7Error> {
+        let metadata = command_metadata(lsn, timestamp, &order);
         let output = FsmV2::transition(
             &mut order,
-            SequencedCommand::new(
-                CommandMetadata::new(lsn, timestamp),
-                SpotOrderV7Command::Activate,
-            ),
+            SequencedCommand::new(metadata, SpotOrderV7Command::Activate),
         )?
         .output;
         let SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }) = output
@@ -436,12 +438,10 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), CancelSpotOrderV7Error> {
+        let metadata = command_metadata(lsn, timestamp, &order);
         let output = FsmV2::transition(
             &mut order,
-            SequencedCommand::new(
-                CommandMetadata::new(lsn, timestamp),
-                SpotOrderV7Command::Cancel,
-            ),
+            SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
         )?
         .output;
         let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
@@ -468,6 +468,16 @@ impl SpotOrderDomainService {
 
         Ok((order, balance))
     }
+}
+
+fn command_metadata(lsn: u64, logical_ts: u64, order: &SpotOrderV7) -> CommandMetadata {
+    CommandMetadata::new(
+        lsn,
+        logical_ts,
+        order.topic(),
+        order.partition(),
+        order.party_id(),
+    )
 }
 
 fn match_fee(notional: Decimal, bps: u64, scale: u32) -> Result<Decimal, EntityError> {
