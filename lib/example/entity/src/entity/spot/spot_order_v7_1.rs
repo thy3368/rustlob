@@ -1,8 +1,8 @@
+use crate::SpotOrderV7;
 use crate::account::coin::{CoinAmount, CoinAmountError};
 use crate::common::OrderBase;
 use crate::entity::common::common_order::SpotAmountConversionError;
 use crate::entity::common::order_primitives::{OrderSide, SpotOrderStatus};
-use crate::SpotOrderV7;
 
 impl SpotOrderV7 {
     /// 返回订单首次作为 taker 时应冻结的资产金额。
@@ -34,39 +34,21 @@ impl SpotOrderV7 {
     /// 仅接受 `Canceled`、`Filled` 或 `Rejected` 订单。买单返回累计释放的 quote
     /// 本金与手续费预留，卖单返回终态剩余 base 数量。本查询不修改订单。
     pub fn terminal_release_amount(&self) -> Result<CoinAmount, SpotAmountConversionError> {
-        if !matches!(
-            self.status(),
-            SpotOrderStatus::Canceled | SpotOrderStatus::Filled | SpotOrderStatus::Rejected
-        ) {
-            return Err(SpotAmountConversionError::OrderNotCanceled);
-        }
-        Self::terminal_release_amount2(
-            self.order_base(),
-            self.status() == SpotOrderStatus::Rejected,
-        )
-    }
-
-    pub fn terminal_release_amount2(
-        o: &OrderBase,
-        original: bool,
-    ) -> Result<CoinAmount, SpotAmountConversionError> {
-        let size = if original { o.orig_size } else { o.size };
-        let amount = match o.side {
-            OrderSide::Buy => o
+        let order = self.order_base();
+        let amount = match (order.status, order.side) {
+            (
+                SpotOrderStatus::Canceled | SpotOrderStatus::Filled | SpotOrderStatus::Rejected,
+                OrderSide::Buy,
+            ) => order
                 .buy_quote_principal_released
-                .checked_add(o.buy_quote_fee_reserve_released)
+                .checked_add(order.buy_quote_fee_reserve_released)
                 .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
-            OrderSide::Sell => size,
+            (SpotOrderStatus::Rejected, OrderSide::Sell) => order.orig_size,
+            (SpotOrderStatus::Canceled | SpotOrderStatus::Filled, OrderSide::Sell) => order.size,
+            _ => return Err(SpotAmountConversionError::OrderNotCanceled),
         };
-        CoinAmount::new(
-            if o.side == OrderSide::Buy {
-                o.symbol.quote
-            } else {
-                o.symbol.base
-            },
-            amount,
-        )
-        .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
+        CoinAmount::new(held_currency(order), amount)
+            .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
     }
 
     /// 返回改单导致的冻结金额有符号差额。
@@ -126,8 +108,8 @@ mod tests {
     use super::*;
     use crate::account::coin::Coin;
     use crate::account::symbol::Symbol;
-    use crate::entity::common::common_order::OrderBase;
     use crate::entity::common::UserId;
+    use crate::entity::common::common_order::OrderBase;
 
     fn order(side: OrderSide) -> SpotOrderV7 {
         SpotOrderV7::from_record(OrderBase {
@@ -255,6 +237,20 @@ mod tests {
         assert_terminal_query_preserves_order(
             &order(OrderSide::Buy),
             Err(SpotAmountConversionError::OrderNotCanceled),
+        );
+    }
+
+    #[test]
+    fn terminal_release_reports_buy_addition_overflow_without_mutation() {
+        let mut record = order(OrderSide::Buy).order_base().clone();
+        record.status = SpotOrderStatus::Canceled;
+        record.buy_quote_principal_released = Decimal::MAX;
+        record.buy_quote_fee_reserve_released = Decimal::ONE;
+        let order = SpotOrderV7::from_record(record).unwrap();
+
+        assert_terminal_query_preserves_order(
+            &order,
+            Err(SpotAmountConversionError::ArithmeticOverflow),
         );
     }
 

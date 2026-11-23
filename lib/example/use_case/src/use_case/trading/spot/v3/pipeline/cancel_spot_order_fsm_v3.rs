@@ -1,16 +1,13 @@
 use common_entity::{
     EntityError, LogEntry, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
-    UpdatedEntityEventsError, UseCaseV3,
+    UseCaseV3,
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{BalanceV2, OrderSide, SpotOrderStatus, SpotOrderV7};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::use_case::trading::spot::v3::domain_service::atom_spot_order_domain_service_v2::{
-    CancelSpotOrderDomainServiceV2Error, CancelSpotOrderDomainServiceV2Metadata,
-    SpotOrderDomainServiceV2,
-};
+use crate::use_case::trading::spot::v3::domain_service::cancel_spot_order::cancel_spot_order;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderFsmV3Cmd {
@@ -50,16 +47,6 @@ pub enum CancelSpotOrderFsmV3Error {
     PartyMismatch,
     #[error("balance coin does not match the asset held by the order")]
     CoinMismatch,
-    #[error("frozen balance is insufficient")]
-    InsufficientFrozenBalance,
-    #[error("balance is closed")]
-    BalanceClosed,
-    #[error("invalid balance amount")]
-    InvalidBalanceAmount,
-    #[error("arithmetic overflow while canceling the order")]
-    ArithmeticOverflow,
-    #[error("invalid entity event chain: {0:?}")]
-    InvalidEntityEvents(UpdatedEntityEventsError),
     #[error(transparent)]
     Entity(#[from] EntityError),
 }
@@ -159,48 +146,13 @@ fn compute_changes(
     cmd: &LogEntry<CancelSpotOrderFsmV3Cmd>,
     state: &CancelSpotOrderFsmV3State,
 ) -> Result<CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Error> {
-    let changes = SpotOrderDomainServiceV2
-        .cancel(
-            &state.order,
-            &state.balance,
-            CancelSpotOrderDomainServiceV2Metadata {
-                lsn: cmd.lsn(),
-                logical_ts: cmd.logical_ts(),
-                topic: cmd.topic(),
-                partition: cmd.partition(),
-            },
-        )
-        .map_err(map_domain_service_error)?;
-    Ok(CancelSpotOrderFsmV3Changes {
-        order: changes.order,
-        balance: changes.balance,
-    })
-}
-
-fn map_domain_service_error(
-    error: CancelSpotOrderDomainServiceV2Error,
-) -> CancelSpotOrderFsmV3Error {
-    match error {
-        CancelSpotOrderDomainServiceV2Error::AssetMismatch => {
-            CancelSpotOrderFsmV3Error::CoinMismatch
-        }
-        CancelSpotOrderDomainServiceV2Error::InsufficientFrozenBalance => {
-            CancelSpotOrderFsmV3Error::InsufficientFrozenBalance
-        }
-        CancelSpotOrderDomainServiceV2Error::BalanceClosed => {
-            CancelSpotOrderFsmV3Error::BalanceClosed
-        }
-        CancelSpotOrderDomainServiceV2Error::InvalidBalanceAmount => {
-            CancelSpotOrderFsmV3Error::InvalidBalanceAmount
-        }
-        CancelSpotOrderDomainServiceV2Error::ArithmeticOverflow => {
-            CancelSpotOrderFsmV3Error::ArithmeticOverflow
-        }
-        CancelSpotOrderDomainServiceV2Error::InvalidEntityEvents(error) => {
-            CancelSpotOrderFsmV3Error::InvalidEntityEvents(error)
-        }
-        CancelSpotOrderDomainServiceV2Error::Entity(error) => {
-            CancelSpotOrderFsmV3Error::Entity(error)
-        }
-    }
+    let (order, balance) = cancel_spot_order(
+        &state.order,
+        &state.balance,
+        cmd.lsn(),
+        cmd.logical_ts(),
+        cmd.topic(),
+        cmd.partition(),
+    )?;
+    Ok(CancelSpotOrderFsmV3Changes { order, balance })
 }
