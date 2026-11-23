@@ -58,8 +58,6 @@ pub enum CancelSpotOrderFsmV3Error {
     InvalidBalanceAmount,
     #[error("arithmetic overflow while canceling the order")]
     ArithmeticOverflow,
-    #[error("order FSM returned an unexpected cancel output")]
-    UnexpectedOrderOutput,
     #[error("invalid entity event chain: {0:?}")]
     InvalidEntityEvents(UpdatedEntityEventsError),
     #[error(transparent)]
@@ -197,9 +195,6 @@ fn map_domain_service_error(
         }
         CancelSpotOrderDomainServiceV2Error::ArithmeticOverflow => {
             CancelSpotOrderFsmV3Error::ArithmeticOverflow
-        }
-        CancelSpotOrderDomainServiceV2Error::UnexpectedOrderOutput => {
-            CancelSpotOrderFsmV3Error::UnexpectedOrderOutput
         }
         CancelSpotOrderDomainServiceV2Error::InvalidEntityEvents(error) => {
             CancelSpotOrderFsmV3Error::InvalidEntityEvents(error)

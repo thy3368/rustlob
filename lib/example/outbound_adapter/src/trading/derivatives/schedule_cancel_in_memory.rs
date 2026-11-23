@@ -265,7 +265,7 @@ fn replay_events(
                 order.partition(),
                 order.party_id(),
             );
-            let (after, _, _) = FsmV2::transition(
+            let (after, _) = FsmV2::transition(
                 &*order,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
@@ -351,7 +351,7 @@ fn replay_balance(
         balance.partition(),
         balance.party_id().to_string(),
     );
-    let (after, _, ()) = FsmV2::transition(
+    let (after, _) = FsmV2::transition(
         &*balance,
         SequencedCommand::new(
             metadata,
@@ -430,13 +430,13 @@ mod tests {
         let release = {
             let metadata =
                 CommandMetadata::new(9, DUE_MS, spot.topic(), spot.partition(), spot.party_id());
-            let (canceled, _, _) = FsmV2::transition(
+            let (canceled, _) = FsmV2::transition(
                 &spot,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
             .expect("fixture should cancel");
             canceled
-                .release_requirement()
+                .terminal_release_amount()
                 .expect("fixture should release")
         };
         outbound

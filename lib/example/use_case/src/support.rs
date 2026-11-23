@@ -15,7 +15,7 @@ pub(crate) fn transition_balance(
         balance.partition(),
         balance.party_id().to_string(),
     );
-    FsmV2::transition(balance, SequencedCommand::new(metadata, command)).map(|(after, _, ())| after)
+    FsmV2::transition(balance, SequencedCommand::new(metadata, command)).map(|(after, _)| after)
 }
 
 pub(crate) fn concat2(a: &str, b: &str) -> String {

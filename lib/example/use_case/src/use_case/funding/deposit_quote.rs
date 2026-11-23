@@ -80,7 +80,7 @@ impl UseCase for DepositQuoteUseCase {
             quote_balance_before.partition(),
             quote_balance_before.party_id().to_string(),
         );
-        let (quote_balance_after, _, ()) = FsmV2::transition(
+        let (quote_balance_after, _) = FsmV2::transition(
             &quote_balance_before,
             SequencedCommand::new(
                 metadata,

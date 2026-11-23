@@ -3,14 +3,10 @@ use std::collections::HashSet;
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{EntityError, Shard};
 use example_core_entity::entity::common::common_trade::TradeBase;
-use example_core_entity::spot::spot_order_v7::{
-    ApplySpotOrderV7MatchOutput, CancelSpotOrderV7Output, FreezeSpotOrderV7Output,
-    ModifySpotOrderV7Output, SpotOrderV7Output,
-};
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3};
 use example_core_entity::{
     BalanceV2, BalanceV2Command, BalanceV2Error, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
-    SpotOrderV7Command, SpotOrderV7HoldAdjustment,
+    SpotOrderV7Command,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -178,22 +174,16 @@ impl SpotOrderDomainService {
         };
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
             let metadata = command_metadata(input.lsn, input.timestamp, &taker);
-            let (_, _, output) = FsmV2::transition(
+            let (order_after, _) = FsmV2::transition(
                 &taker,
                 SequencedCommand::new(metadata, SpotOrderV7Command::RejectedAsTaker),
             )?;
-            let SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
-                order_after,
-                release_requirement: Some(release_requirement),
-            }) = output
-            else {
-                return Err(match_error(
-                    "rejected taker event produced mismatched output",
-                ));
-            };
+            let release_requirement = order_after
+                .terminal_release_amount()
+                .map_err(|error| match_error(&error.to_string()))?;
             return Ok(MatchSpotOrderV3Outcome::Rejected {
                 rejected_taker_order_after: order_after,
-                release_requirement: release_requirement.amount(),
+                release_requirement,
             });
         }
 
@@ -262,7 +252,7 @@ impl SpotOrderDomainService {
                 .ok_or_else(|| match_error("planned maker index is missing"))?;
             let maker_before = maker.order_base().clone();
             let metadata = command_metadata(input.lsn, input.timestamp, maker);
-            let (maker_after, _, _) = FsmV2::transition(
+            let (maker_after, _) = FsmV2::transition(
                 &*maker,
                 SequencedCommand::new(
                     metadata,
@@ -296,7 +286,7 @@ impl SpotOrderDomainService {
             });
         }
         let metadata = command_metadata(input.lsn, input.timestamp, &taker);
-        let (_, _, output) = FsmV2::transition(
+        let (taker_order_after, _) = FsmV2::transition(
             &taker,
             SequencedCommand::new(
                 metadata,
@@ -307,46 +297,43 @@ impl SpotOrderDomainService {
                 },
             ),
         )?;
-        let SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput {
-            order_after: taker_order_after,
-            release_requirement,
-        }) = output
-        else {
-            return Err(match_error(
-                "matched taker event produced mismatched output",
-            ));
-        };
-
-        match (taker_order_after.status(), release_requirement) {
-            (SpotOrderStatus::Filled, Some(release_requirement)) => {
+        match taker_order_after.status() {
+            SpotOrderStatus::Filled => {
+                let release_requirement = taker_order_after
+                    .terminal_release_amount()
+                    .map_err(|error| match_error(&error.to_string()))?;
                 Ok(MatchSpotOrderV3Outcome::Filled {
                     filled_taker_order_after: taker_order_after,
                     maker_orders_after: makers,
                     created_trades: trades,
-                    release_requirement: release_requirement.amount(),
+                    release_requirement,
                 })
             }
-            (SpotOrderStatus::Canceled, Some(release_requirement)) => {
+            SpotOrderStatus::Canceled => {
+                let release_requirement = taker_order_after
+                    .terminal_release_amount()
+                    .map_err(|error| match_error(&error.to_string()))?;
                 Ok(MatchSpotOrderV3Outcome::CanceledAfterPartialFill {
                     canceled_taker_order_after: taker_order_after,
                     maker_orders_after: makers,
                     created_trades: trades,
-                    release_requirement: release_requirement.amount(),
+                    release_requirement,
                 })
             }
-            (SpotOrderStatus::Rejected, Some(release_requirement)) => {
+            SpotOrderStatus::Rejected => {
+                let release_requirement = taker_order_after
+                    .terminal_release_amount()
+                    .map_err(|error| match_error(&error.to_string()))?;
                 Ok(MatchSpotOrderV3Outcome::Rejected {
                     rejected_taker_order_after: taker_order_after,
-                    release_requirement: release_requirement.amount(),
+                    release_requirement,
                 })
             }
-            (SpotOrderStatus::PartiallyFilled, None) => {
-                Ok(MatchSpotOrderV3Outcome::PartiallyFilled {
-                    taker_order_after,
-                    maker_orders_after: makers,
-                    created_trades: trades,
-                })
-            }
+            SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderV3Outcome::PartiallyFilled {
+                taker_order_after,
+                maker_orders_after: makers,
+                created_trades: trades,
+            }),
             _ => Err(match_error("unexpected taker state after matching")),
         }
     }
@@ -362,7 +349,7 @@ impl SpotOrderDomainService {
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ModifySpotOrderV7Error> {
         let metadata = command_metadata(lsn, timestamp, &order);
-        let (_, _, output) = FsmV2::transition(
+        let (order_after, _) = FsmV2::transition(
             &order,
             SequencedCommand::new(
                 metadata,
@@ -374,42 +361,36 @@ impl SpotOrderDomainService {
                 },
             ),
         )?;
-        let SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
-            order_after,
-            hold_adjustment,
-        }) = output
-        else {
-            return Err(
-                EntityError::Custom("modify event produced mismatched output".into()).into(),
-            );
-        };
+        let hold_adjustment = order_after
+            .modify_freeze_delta(&order)
+            .map_err(|error| EntityError::Custom(error.to_string()))?;
 
         if balance.coin_idx() != u64::from(hold_adjustment.currency().index()) {
             return Err(ModifySpotOrderV7Error::AssetMismatch);
         }
-        match hold_adjustment {
-            SpotOrderV7HoldAdjustment::Increase { amount } => {
+        match hold_adjustment.amount().cmp(&Decimal::ZERO) {
+            std::cmp::Ordering::Greater => {
                 balance = transition_balance(
                     &balance,
                     lsn,
                     timestamp,
                     BalanceV2Command::Freeze {
-                        amount: amount.amount(),
+                        amount: hold_adjustment.amount(),
                     },
                 )?;
             }
-            SpotOrderV7HoldAdjustment::Decrease { amount } => {
+            std::cmp::Ordering::Less => {
                 balance = transition_balance(
                     &balance,
                     lsn,
                     timestamp,
                     BalanceV2Command::UnfreezeAndPay {
-                        unfreeze_amount: amount.amount(),
+                        unfreeze_amount: -hold_adjustment.amount(),
                         payment_amount: Decimal::ZERO,
                     },
                 )?;
             }
-            SpotOrderV7HoldAdjustment::Unchanged { .. } => {}
+            std::cmp::Ordering::Equal => {}
         }
 
         Ok((order_after, balance))
@@ -422,16 +403,13 @@ impl SpotOrderDomainService {
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), FreezeSpotOrderV7Error> {
         let metadata = command_metadata(lsn, timestamp, &order);
-        let (order_after, _, output) = FsmV2::transition(
+        let (order_after, _) = FsmV2::transition(
             &order,
             SequencedCommand::new(metadata, SpotOrderV7Command::Freeze),
         )?;
-        let SpotOrderV7Output::Frozen(FreezeSpotOrderV7Output { freeze_requirement }) = output
-        else {
-            return Err(
-                EntityError::Custom("freeze event produced mismatched output".into()).into(),
-            );
-        };
+        let freeze_requirement = order
+            .taker_freeze_amount()
+            .map_err(|error| EntityError::Custom(error.to_string()))?;
 
         if balance.coin_idx() != u64::from(freeze_requirement.currency().index()) {
             return Err(FreezeSpotOrderV7Error::CoinMismatch);
@@ -455,19 +433,13 @@ impl SpotOrderDomainService {
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), CancelSpotOrderV7Error> {
         let metadata = command_metadata(lsn, timestamp, &order);
-        let (order_after, _, output) = FsmV2::transition(
+        let (order_after, _) = FsmV2::transition(
             &order,
             SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
         )?;
-        let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
-            release_requirement,
-            ..
-        }) = output
-        else {
-            return Err(
-                EntityError::Custom("cancel event produced mismatched output".into()).into(),
-            );
-        };
+        let release_requirement = order_after
+            .terminal_release_amount()
+            .map_err(|error| EntityError::Custom(error.to_string()))?;
 
         if balance.coin_idx() != u64::from(release_requirement.currency().index()) {
             return Err(CancelSpotOrderV7Error::AssetMismatch);

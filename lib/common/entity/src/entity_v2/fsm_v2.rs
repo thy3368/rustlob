@@ -112,17 +112,16 @@ impl<C> LogAttr for SequencedCommand<C> {
 /// 新调用方显式构造 [`SequencedCommand`]。
 pub trait Fsm: TrackDiff + Sized {
     type Command;
-    type Output;
     type Error: From<EntityError>;
 
-    /// 基于当前实体只读推导迁移后的完整实体和业务输出。
+    /// 基于当前实体只读推导迁移后的完整实体。
     ///
     /// 实现不得修改当前实体、发布事件或产生外部副作用。
     #[doc(hidden)]
     fn derive_transition(
         &self,
-        command:  SequencedCommand<Self::Command>,
-    ) -> Result<(Self, Self::Output), Self::Error>;
+        command: SequencedCommand<Self::Command>,
+    ) -> Result<Self, Self::Error>;
 
     /// 返回 command 对应的稳定、非零业务事件码。
     fn event_type(command: &Self::Command) -> u8;
@@ -131,18 +130,18 @@ pub trait Fsm: TrackDiff + Sized {
     fn transition(
         &self,
         command: SequencedCommand<Self::Command>,
-    ) -> Result<(Self, ReplayableDomainEvent, Self::Output), Self::Error> {
+    ) -> Result<(Self, ReplayableDomainEvent), Self::Error> {
         let event_type = Self::event_type(&command.payload);
         if event_type == 0 {
             return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
         }
         let logical_ts = command.metadata.logical_ts;
         let position = command.metadata.position;
-        let (after, output) = self.derive_transition(command)?;
+        let after = self.derive_transition(command)?;
         let mut replay_event =
             after.track_update_event_from_at(self, self.event_position(), position, logical_ts)?;
         replay_event.domain_event_type = event_type;
-        Ok((after, replay_event, output))
+        Ok((after, replay_event))
     }
 }
 
@@ -253,7 +252,6 @@ mod tests {
 
     impl FsmV2 for Subject {
         type Command = Command;
-        type Output = u64;
         type Error = TestError;
 
         fn event_type(command: &Command) -> u8 {
@@ -263,24 +261,21 @@ mod tests {
         fn derive_transition(
             &self,
             command: SequencedCommand<Command>,
-        ) -> Result<(Self, Self::Output), Self::Error> {
+        ) -> Result<Self, Self::Error> {
             let (metadata, command) = command.into_parts();
             let value = self.value.saturating_add(command.delta);
             if command.fail {
                 return Err(TestError::Business);
             }
-            Ok((
-                Self {
-                    value,
-                    lsn: metadata.lsn,
-                    updated_at: metadata.logical_ts,
-                    topic: metadata.topic,
-                    command_partition: metadata.partition,
-                    party_id: metadata.party_id,
-                    clones: Arc::clone(&self.clones),
-                },
-                command.delta,
-            ))
+            Ok(Self {
+                value,
+                lsn: metadata.lsn,
+                updated_at: metadata.logical_ts,
+                topic: metadata.topic,
+                command_partition: metadata.partition,
+                party_id: metadata.party_id,
+                clones: Arc::clone(&self.clones),
+            })
         }
     }
 
@@ -310,17 +305,14 @@ mod tests {
                 },
             ),
         );
-        let (after, event, output) = match result {
+        let (after, event) = match result {
             Ok(transition) => transition,
             Err(error) => panic!("v2 transition failed: {error:?}"),
         };
 
         assert_eq!(clones.load(Ordering::Relaxed), 0);
         assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
-        assert_eq!(
-            (after.value, after.lsn, after.updated_at, output),
-            (12, 9, 13, 2)
-        );
+        assert_eq!((after.value, after.lsn, after.updated_at), (12, 9, 13));
         assert_eq!(
             (
                 after.topic,

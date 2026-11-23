@@ -164,12 +164,11 @@ impl BalanceV2 {
 
 impl Fsm for BalanceV2 {
     type Command = BalanceV2Command;
-    type Output = ();
     type Error = BalanceV2Error;
     fn derive_transition(
         &self,
         command: SequencedCommand<Self::Command>,
-    ) -> Result<(Self, Self::Output), Self::Error> {
+    ) -> Result<Self, Self::Error> {
         let (metadata, command) = command.into_parts();
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);
@@ -259,7 +258,7 @@ impl Fsm for BalanceV2 {
             created_at: self.created_at,
             updated_at: metadata.logical_ts,
         };
-        Ok((after, ()))
+        Ok(after)
     }
 
     fn event_type(command: &Self::Command) -> u8 {
@@ -504,7 +503,7 @@ mod tests {
 
         for (balance, command, available, frozen, status, event_type) in cases {
             let before = balance.clone();
-            let (after, event, ()) =
+            let (after, event) =
                 FsmV2::transition(&balance, sequenced(command)).expect("valid balance transition");
 
             assert_eq!(balance, before);
@@ -597,7 +596,7 @@ mod tests {
     #[test]
     fn rejects_closed_state_stale_lsn_and_overflow_atomically() {
         let open = balance(0, 0, 3);
-        let (closed, _, ()) =
+        let (closed, _) =
             FsmV2::transition(&open, sequenced(BalanceV2Command::Close)).expect("close balance");
 
         assert_rejected_without_mutation(

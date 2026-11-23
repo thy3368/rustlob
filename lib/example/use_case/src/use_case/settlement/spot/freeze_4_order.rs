@@ -73,7 +73,7 @@ impl UseCase for Freeze4SpotOrderV2UseCase {
         if given_state.balance.party_id() != order.owner.0 {
             return Err(FreezeSpotOrderV2Error::PartyMismatch);
         }
-        let requirement = given_state.order.freeze_requirement()?;
+        let requirement = given_state.order.taker_freeze_amount()?;
         if given_state.balance.coin_idx() != u64::from(requirement.currency().index()) {
             return Err(FreezeSpotOrderV2Error::AssetMismatch);
         }
@@ -85,7 +85,7 @@ impl UseCase for Freeze4SpotOrderV2UseCase {
         cmd: &Self::Command,
         given_state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let requirement = given_state.order.freeze_requirement()?;
+        let requirement = given_state.order.taker_freeze_amount()?;
         let balance_after = transition_balance(
             &given_state.balance,
             cmd.lsn(),

@@ -151,11 +151,11 @@ impl UseCase for TriggerScheduledCancelUseCase {
                 before.partition(),
                 before.party_id(),
             );
-            let (after, _, _) = FsmV2::transition(
+            let (after, _) = FsmV2::transition(
                 before,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )?;
-            let release = after.release_requirement()?;
+            let release = after.terminal_release_amount()?;
             let coin_idx = u64::from(release.currency().index());
             let mut matching = balances_after.iter_mut().filter(|balance| {
                 balance.party_id() == cmd.user_id.0 && balance.coin_idx() == coin_idx
@@ -287,13 +287,13 @@ mod tests {
                 spot.partition(),
                 spot.party_id(),
             );
-            let (canceled, _, _) = FsmV2::transition(
+            let (canceled, _) = FsmV2::transition(
                 &spot,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )
             .expect("fixture should cancel");
             canceled
-                .release_requirement()
+                .terminal_release_amount()
                 .expect("fixture should release")
         };
         let balance = BalanceV2::new(

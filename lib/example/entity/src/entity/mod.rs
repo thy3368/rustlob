@@ -60,9 +60,5 @@ pub use perp::trade::perp_trade_v3::{
 };
 use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
-pub use spot_entity::spot_order_v7::{
-    CancelSpotOrderV7Output, CreateSpotOrderV7Command, FreezeSpotOrderV7Output,
-    ModifySpotOrderV7Output, SpotOrderV7, SpotOrderV7Command, SpotOrderV7FreezeRequirement,
-    SpotOrderV7HoldAdjustment, SpotOrderV7Output,
-};
+pub use spot_entity::spot_order_v7::{CreateSpotOrderV7Command, SpotOrderV7, SpotOrderV7Command};
 pub use transfer::settlement_transfer_purpose::SettlementTransferPurpose;

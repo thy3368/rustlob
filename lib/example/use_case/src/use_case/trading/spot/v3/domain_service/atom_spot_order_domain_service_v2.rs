@@ -6,7 +6,7 @@ use common_entity::{
     Shard, UpdatedEntityEvents, UpdatedEntityEventsError,
 };
 use example_core_entity::{
-    BalanceV2, BalanceV2Command, BalanceV2Error, SpotOrderV7, SpotOrderV7Command, SpotOrderV7Output,
+    BalanceV2, BalanceV2Command, BalanceV2Error, SpotOrderV7, SpotOrderV7Command,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -49,8 +49,6 @@ pub enum CancelSpotOrderDomainServiceV2Error {
     InvalidBalanceAmount,
     #[error("arithmetic overflow while canceling the order")]
     ArithmeticOverflow,
-    #[error("order FSM returned an unexpected cancel output")]
-    UnexpectedOrderOutput,
     #[error("invalid entity event chain: {0:?}")]
     InvalidEntityEvents(UpdatedEntityEventsError),
     #[error(transparent)]
@@ -75,24 +73,24 @@ impl SpotOrderDomainServiceV2 {
             metadata.partition,
             order.party_id(),
         );
-        let (order_after, mut order_event, output) = FsmV2::transition(
+        let (order_after, mut order_event) = FsmV2::transition(
             order,
             SequencedCommand::new(order_metadata, SpotOrderV7Command::Cancel),
         )?;
-        let SpotOrderV7Output::Canceled(output) = output else {
-            return Err(CancelSpotOrderDomainServiceV2Error::UnexpectedOrderOutput);
-        };
+        let release_requirement = order_after
+            .terminal_release_amount()
+            .map_err(|error| EntityError::Custom(error.to_string()))?;
         order_event.t = metadata.topic;
         order_event.p = metadata.partition;
         let order =
             UpdatedEntityEvents::try_new(order_after, order_loaded_position, vec![order_event])
                 .map_err(CancelSpotOrderDomainServiceV2Error::InvalidEntityEvents)?;
 
-        let release_amount = output.release_requirement.amount();
+        let release_amount = release_requirement.amount();
         let balance = if release_amount == Decimal::ZERO {
             None
         } else {
-            if balance.coin_idx() != u64::from(output.release_requirement.currency().index()) {
+            if balance.coin_idx() != u64::from(release_requirement.currency().index()) {
                 return Err(CancelSpotOrderDomainServiceV2Error::AssetMismatch);
             }
             let loaded_position = balance.event_position();
@@ -103,7 +101,7 @@ impl SpotOrderDomainServiceV2 {
                 metadata.partition,
                 balance.party_id().to_string(),
             );
-            let (after, mut event, ()) = FsmV2::transition(
+            let (after, mut event) = FsmV2::transition(
                 balance,
                 SequencedCommand::new(
                     balance_metadata,
