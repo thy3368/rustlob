@@ -1,6 +1,6 @@
+use common_entity::fsm_v2::{CommandMetadata, Fsm, ReplayableDomainEvent};
 use common_entity::{
-    CommandMetadata, Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Fsm, LogAttr,
-    ReplayableDomainEvent, SequencedCommand, Shard, TrackDiff, Transition,
+    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Shard, TrackDiff,
 };
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
@@ -11,49 +11,6 @@ use crate::entity::common::common_order::{OrderBase, OrderTrigger, SpotAmountCon
 use crate::entity::common::order_primitives::{
     OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus,
 };
-
-/// 现货订单生命周期事件。
-///
-/// 每个事件显式携带 command 的全局 LSN。LSN 可以相对实体当前版本跳号；同一 command
-/// 内的连续迁移可以复用同一 LSN，但不能使用小于实体当前 LSN 的值。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpotOrderV7Event {
-    Activate {
-        lsn: u64,
-        timestamp: u64,
-    },
-    /// 将已规划的全部 taker 成交一次性提交到订单聚合。
-    MatchedAsTaker {
-        lsn: u64,
-        filled_size: Decimal,
-        quote_fee: Decimal,
-        timestamp: u64,
-    },
-    /// 将一笔已规划的 maker 成交提交到订单聚合。
-    MatchedAsMaker {
-        lsn: u64,
-        filled_size: Decimal,
-        quote_fee: Decimal,
-        timestamp: u64,
-    },
-    /// ALO 遇到可成交对手盘时拒绝 taker。
-    RejectedAsTaker {
-        lsn: u64,
-        timestamp: u64,
-    },
-    Modify {
-        lsn: u64,
-        price: Decimal,
-        size: Decimal,
-        tif: Option<crate::entity::common::order_primitives::OrderTif>,
-        cloid: Option<String>,
-        timestamp: u64,
-    },
-    Cancel {
-        lsn: u64,
-        timestamp: u64,
-    },
-}
 
 /// 不含定序元数据的现货订单业务命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,76 +70,6 @@ impl ReplayableDomainEvent<SpotOrderV7Command> for SpotOrderV7DomainEvent {
             | Self::Modified { replay_event }
             | Self::Canceled { replay_event } => replay_event,
         }
-    }
-}
-
-impl Shard for SpotOrderV7Event {
-    fn partition(&self) -> u8 {
-        0
-    }
-}
-
-impl LogAttr for SpotOrderV7Event {
-    fn lsn(&self) -> u64 {
-        match self {
-            Self::Activate { lsn, .. }
-            | Self::MatchedAsTaker { lsn, .. }
-            | Self::MatchedAsMaker { lsn, .. }
-            | Self::RejectedAsTaker { lsn, .. }
-            | Self::Modify { lsn, .. }
-            | Self::Cancel { lsn, .. } => *lsn,
-        }
-    }
-
-    fn logical_ts(&self) -> u64 {
-        match self {
-            Self::Activate { timestamp, .. }
-            | Self::MatchedAsTaker { timestamp, .. }
-            | Self::MatchedAsMaker { timestamp, .. }
-            | Self::RejectedAsTaker { timestamp, .. }
-            | Self::Modify { timestamp, .. }
-            | Self::Cancel { timestamp, .. } => *timestamp,
-        }
-    }
-}
-
-impl common_entity::IntoSequencedCommand<SpotOrderV7Command> for SpotOrderV7Event {
-    fn into_sequenced(self) -> SequencedCommand<SpotOrderV7Command> {
-        let metadata = CommandMetadata::new(self.lsn(), self.logical_ts());
-        let command = match self {
-            Self::Activate { .. } => SpotOrderV7Command::Activate,
-            Self::MatchedAsTaker {
-                filled_size,
-                quote_fee,
-                ..
-            } => SpotOrderV7Command::MatchedAsTaker {
-                filled_size,
-                quote_fee,
-            },
-            Self::MatchedAsMaker {
-                filled_size,
-                quote_fee,
-                ..
-            } => SpotOrderV7Command::MatchedAsMaker {
-                filled_size,
-                quote_fee,
-            },
-            Self::RejectedAsTaker { .. } => SpotOrderV7Command::RejectedAsTaker,
-            Self::Modify {
-                price,
-                size,
-                tif,
-                cloid,
-                ..
-            } => SpotOrderV7Command::Modify {
-                price,
-                size,
-                tif,
-                cloid,
-            },
-            Self::Cancel { .. } => SpotOrderV7Command::Cancel,
-        };
-        SequencedCommand::new(metadata, command)
     }
 }
 
@@ -459,36 +346,6 @@ impl SpotOrderV7 {
         Ok(())
     }
 
-    /// 执行已定序命令，并在提交实体前生成可回放领域事件。
-    pub fn transition_sequenced(
-        &mut self,
-        command: SequencedCommand<SpotOrderV7Command>,
-    ) -> Result<Transition<SpotOrderStatus, SpotOrderV7Output, SpotOrderV7DomainEvent>, EntityError>
-    {
-        let (metadata, payload) = command.into_parts();
-        let (next, output) =
-            self.compute_transition(&payload, metadata.lsn, metadata.logical_ts)?;
-        let after = Self { order_base: next };
-        let mut replay_event = after.track_update_event_from(self)?;
-        replay_event.t = after.topic();
-        replay_event.p = after.partition();
-        replay_event.previous_lsn = self.order_base.lsn;
-        replay_event.lsn = metadata.lsn;
-        replay_event.logical_ts = metadata.logical_ts;
-        let event = domain_event(payload, replay_event);
-        self.order_base = after.order_base;
-        Ok(Transition::new(self.status(), output, event))
-    }
-
-    /// 与 [`Self::transition_sequenced`] 相同；供不区分 transition/apply 的调用方使用。
-    pub fn apply_sequenced(
-        &mut self,
-        command: SequencedCommand<SpotOrderV7Command>,
-    ) -> Result<Transition<SpotOrderStatus, SpotOrderV7Output, SpotOrderV7DomainEvent>, EntityError>
-    {
-        self.transition_sequenced(command)
-    }
-
     fn compute_transition(
         &self,
         command: &SpotOrderV7Command,
@@ -643,26 +500,6 @@ impl SpotOrderV7 {
             }
         }
     }
-
-    /// 兼容入口；版本由 command 的全局 `lsn` 决定，并委托统一 FSM 迁移。
-    pub fn modify(
-        &mut self,
-        price: Decimal,
-        size: Decimal,
-        lsn: u64,
-        timestamp: u64,
-    ) -> Result<(), EntityError> {
-        self.apply(SequencedCommand::new(
-            CommandMetadata::new(lsn, timestamp),
-            SpotOrderV7Command::Modify {
-                price,
-                size,
-                tif: None,
-                cloid: None,
-            },
-        ))
-        .map(|_| ())
-    }
 }
 
 impl Fsm for SpotOrderV7 {
@@ -672,7 +509,7 @@ impl Fsm for SpotOrderV7 {
     type Output = SpotOrderV7Output;
     type Error = EntityError;
 
-    fn transition_working(
+    fn transition_in_place(
         &mut self,
         metadata: CommandMetadata,
         command: SpotOrderV7Command,
@@ -701,19 +538,6 @@ fn domain_event(
         }
         SpotOrderV7Command::Modify { .. } => SpotOrderV7DomainEvent::Modified { replay_event },
         SpotOrderV7Command::Cancel => SpotOrderV7DomainEvent::Canceled { replay_event },
-    }
-}
-
-impl SpotOrderV7Event {
-    fn lsn(&self) -> u64 {
-        match self {
-            Self::Activate { lsn, .. }
-            | Self::MatchedAsTaker { lsn, .. }
-            | Self::MatchedAsMaker { lsn, .. }
-            | Self::RejectedAsTaker { lsn, .. }
-            | Self::Modify { lsn, .. }
-            | Self::Cancel { lsn, .. } => *lsn,
-        }
     }
 }
 

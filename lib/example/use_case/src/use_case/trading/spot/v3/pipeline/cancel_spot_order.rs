@@ -231,4 +231,3 @@ fn map_cancel_error(error: CancelSpotOrderV7Error) -> CancelSpotOrderV3Error {
         CancelSpotOrderV7Error::Entity(error) => CancelSpotOrderV3Error::Entity(error),
     }
 }
-

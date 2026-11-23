@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{Entity, EntityReplayableEvent, Fsm, LogEntry, StateSink, StateSource};
 use example_core_use_case::{
     BalanceV2, BalanceV2Event, DueScheduledCancelSource, PerpOrderV3, PerpOrderV3Event,
     ScheduleHyperliquidCancelCmd, ScheduleHyperliquidCancelState, ScheduleHyperliquidCancelUseCase,
-    ScheduledCancel, SpotOrderStatus, SpotOrderV7, SpotOrderV7Event, TriggerScheduledCancelCmd,
+    ScheduledCancel, SpotOrderStatus, SpotOrderV7, SpotOrderV7Command, TriggerScheduledCancelCmd,
     TriggerScheduledCancelState, TriggerScheduledCancelUseCase, UserId,
 };
 use rust_decimal::Decimal;
@@ -257,14 +258,16 @@ fn replay_events(
                 .get_mut(&event.entity_id)
                 .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
             check_version(event, order.order_base().lsn)?;
-            order
-                .transition(SpotOrderV7Event::Cancel {
-                    lsn: event.lsn,
-                    timestamp: event.logical_ts,
-                })
-                .map_err(|error| {
-                    HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
-                })?;
+            FsmV2::transition(
+                order,
+                SequencedCommand::new(
+                    CommandMetadata::new(event.lsn, event.logical_ts),
+                    SpotOrderV7Command::Cancel,
+                ),
+            )
+            .map_err(|error| {
+                HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
+            })?;
         } else if event.entity_type == PerpOrderV3::entity_type() {
             let order = state
                 .perp_orders
@@ -410,12 +413,11 @@ mod tests {
             .expect("spot fixture should be valid");
         let release = {
             let mut canceled = spot.clone();
-            canceled
-                .transition(SpotOrderV7Event::Cancel {
-                    lsn: 9,
-                    timestamp: DUE_MS,
-                })
-                .expect("fixture should cancel");
+            FsmV2::transition(
+                &mut canceled,
+                SequencedCommand::new(CommandMetadata::new(9, DUE_MS), SpotOrderV7Command::Cancel),
+            )
+            .expect("fixture should cancel");
             canceled
                 .release_requirement()
                 .expect("fixture should release")

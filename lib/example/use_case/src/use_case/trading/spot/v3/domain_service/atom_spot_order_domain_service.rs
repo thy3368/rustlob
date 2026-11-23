@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{EntityError, Fsm};
 use example_core_entity::entity::common::common_trade::TradeBase;
 use example_core_entity::spot::spot_order_v7::{
@@ -9,7 +10,7 @@ use example_core_entity::spot::spot_order_v7::{
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3};
 use example_core_entity::{
     BalanceV2, BalanceV2Error, BalanceV2Event, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
-    SpotOrderV7Event, SpotOrderV7HoldAdjustment,
+    SpotOrderV7Command, SpotOrderV7HoldAdjustment,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -168,12 +169,14 @@ impl SpotOrderDomainService {
             OrderSide::Sell => t.limit_px <= maker.order_base().limit_px,
         };
         if t.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
-            let output = taker
-                .apply(SpotOrderV7Event::RejectedAsTaker {
-                    lsn: input.lsn,
-                    timestamp: input.timestamp,
-                })?
-                .output;
+            let output = FsmV2::transition(
+                &mut taker,
+                SequencedCommand::new(
+                    CommandMetadata::new(input.lsn, input.timestamp),
+                    SpotOrderV7Command::RejectedAsTaker,
+                ),
+            )?
+            .output;
             let SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
                 order_after,
                 release_requirement: Some(release_requirement),
@@ -251,12 +254,16 @@ impl SpotOrderDomainService {
                 .get_mut(fill.maker_index)
                 .ok_or_else(|| match_error("planned maker index is missing"))?;
             let maker_before = maker.order_base().clone();
-            maker.apply(SpotOrderV7Event::MatchedAsMaker {
-                lsn: input.lsn,
-                filled_size: fill.size,
-                quote_fee: fill.maker_fee,
-                timestamp: input.timestamp,
-            })?;
+            let _ = FsmV2::transition(
+                maker,
+                SequencedCommand::new(
+                    CommandMetadata::new(input.lsn, input.timestamp),
+                    SpotOrderV7Command::MatchedAsMaker {
+                        filled_size: fill.size,
+                        quote_fee: fill.maker_fee,
+                    },
+                ),
+            )?;
             trades.push(SpotTradeV3 {
                 comon_trade: TradeBase {
                     trade_id: fill.trade_id,
@@ -277,14 +284,17 @@ impl SpotOrderDomainService {
                 settlement_status: SpotTradeSettlementStatus::Unsettled,
             });
         }
-        let output = taker
-            .apply(SpotOrderV7Event::MatchedAsTaker {
-                lsn: input.lsn,
-                filled_size,
-                quote_fee: taker_fee_total,
-                timestamp: input.timestamp,
-            })?
-            .output;
+        let output = FsmV2::transition(
+            &mut taker,
+            SequencedCommand::new(
+                CommandMetadata::new(input.lsn, input.timestamp),
+                SpotOrderV7Command::MatchedAsTaker {
+                    filled_size,
+                    quote_fee: taker_fee_total,
+                },
+            ),
+        )?
+        .output;
         let SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput {
             order_after: taker_order_after,
             release_requirement,
@@ -339,16 +349,19 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ModifySpotOrderV7Error> {
-        let output = order
-            .apply(SpotOrderV7Event::Modify {
-                price,
-                size,
-                tif,
-                cloid,
-                lsn,
-                timestamp,
-            })?
-            .output;
+        let output = FsmV2::transition(
+            &mut order,
+            SequencedCommand::new(
+                CommandMetadata::new(lsn, timestamp),
+                SpotOrderV7Command::Modify {
+                    price,
+                    size,
+                    tif,
+                    cloid,
+                },
+            ),
+        )?
+        .output;
         let SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
             order_after,
             hold_adjustment,
@@ -390,9 +403,14 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), ActivateSpotOrderV7Error> {
-        let output = order
-            .apply(SpotOrderV7Event::Activate { lsn, timestamp })?
-            .output;
+        let output = FsmV2::transition(
+            &mut order,
+            SequencedCommand::new(
+                CommandMetadata::new(lsn, timestamp),
+                SpotOrderV7Command::Activate,
+            ),
+        )?
+        .output;
         let SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }) = output
         else {
             return Err(
@@ -418,9 +436,14 @@ impl SpotOrderDomainService {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(SpotOrderV7, BalanceV2), CancelSpotOrderV7Error> {
-        let output = order
-            .apply(SpotOrderV7Event::Cancel { lsn, timestamp })?
-            .output;
+        let output = FsmV2::transition(
+            &mut order,
+            SequencedCommand::new(
+                CommandMetadata::new(lsn, timestamp),
+                SpotOrderV7Command::Cancel,
+            ),
+        )?
+        .output;
         let SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
             release_requirement,
             ..

@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
+use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{
     EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff,
     UpdatedEntityPair, UseCase,
 };
-use example_core_entity::spot::{SpotOrderV7, SpotOrderV7Event};
+use example_core_entity::spot::{SpotOrderV7, SpotOrderV7Command};
 use example_core_entity::{
     BalanceV2, BalanceV2Error, BalanceV2Event, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
     ScheduledCancel, ScheduledCancelError, SpotAmountConversionError, UserId,
@@ -142,10 +143,13 @@ impl UseCase for TriggerScheduledCancelUseCase {
         let mut canceled_spot_orders = Vec::with_capacity(state.spot_orders.len());
         for before in &state.spot_orders {
             let mut after = before.clone();
-            after.transition(SpotOrderV7Event::Cancel {
-                lsn: cmd.lsn(),
-                timestamp: cmd.logical_ts(),
-            })?;
+            let _ = FsmV2::transition(
+                &mut after,
+                SequencedCommand::new(
+                    CommandMetadata::new(cmd.lsn(), cmd.logical_ts()),
+                    SpotOrderV7Command::Cancel,
+                ),
+            )?;
             let release = after.release_requirement()?;
             let coin_idx = u64::from(release.currency().index());
             let mut matching = balances_after.iter_mut().filter(|balance| {
@@ -263,12 +267,14 @@ mod tests {
             .expect("spot fixture should be valid");
         let release = {
             let mut canceled = spot.clone();
-            canceled
-                .transition(SpotOrderV7Event::Cancel {
-                    lsn: 9,
-                    timestamp: LOGICAL_TS,
-                })
-                .expect("fixture should cancel");
+            FsmV2::transition(
+                &mut canceled,
+                SequencedCommand::new(
+                    CommandMetadata::new(9, LOGICAL_TS),
+                    SpotOrderV7Command::Cancel,
+                ),
+            )
+            .expect("fixture should cancel");
             canceled
                 .release_requirement()
                 .expect("fixture should release")
