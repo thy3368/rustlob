@@ -1,9 +1,10 @@
-use crate::{EntityError, LogAttr, ReplayableDomainEvent, Shard, TrackDiff};
+use crate::{EntityError, EventPosition, LogAttr, ReplayableDomainEvent, Shard, TrackDiff};
 
 /// 已由日志定序器确定的 v2 command 元数据。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CommandMetadata {
     pub lsn: u64,
+    pub position: EventPosition,
     pub logical_ts: u64,
     pub topic: u8,
     pub partition: u8,
@@ -14,6 +15,24 @@ impl CommandMetadata {
     pub fn new(lsn: u64, logical_ts: u64, topic: u8, partition: u8, party_id: String) -> Self {
         Self {
             lsn,
+            position: EventPosition::new(lsn, 0),
+            logical_ts,
+            topic,
+            partition,
+            party_id,
+        }
+    }
+
+    pub fn new_at(
+        position: EventPosition,
+        logical_ts: u64,
+        topic: u8,
+        partition: u8,
+        party_id: String,
+    ) -> Self {
+        Self {
+            lsn: position.lsn,
+            position,
             logical_ts,
             topic,
             partition,
@@ -119,10 +138,15 @@ pub trait Fsm: TrackDiff + Sized {
         if event_type == 0 {
             return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
         }
-        let lsn = metadata.lsn;
         let logical_ts = metadata.logical_ts;
+        let position = metadata.position;
         let (after, output) = self.derive_transition(metadata, payload)?;
-        let mut replay_event = after.track_update_event_from_command(self, lsn, logical_ts)?;
+        let mut replay_event = after.track_update_event_from_at(
+            self,
+            self.event_position(),
+            position,
+            logical_ts,
+        )?;
         replay_event.domain_event_type = event_type;
         Ok((after, replay_event, output))
     }

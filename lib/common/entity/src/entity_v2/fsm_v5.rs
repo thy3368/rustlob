@@ -105,7 +105,7 @@ pub trait Fsm: TrackDiff + Sized {
         &mut self,
         metadata: CommandMetadata,
         command: Self::Command,
-    ) -> Result<(Self, Self::Output), Self::Error>;
+    ) -> Result<Self::Output, Self::Error>;
 
     /// 返回 command 对应的稳定、非零业务事件码。
     fn event_type(command: &Self::Command) -> u8;
@@ -114,7 +114,7 @@ pub trait Fsm: TrackDiff + Sized {
     fn transition(
         &mut self,
         command: SequencedCommand<Self::Command>,
-    ) -> Result<(Self, ReplayableDomainEvent, Self::Output), Self::Error> {
+    ) -> Result<(ReplayableDomainEvent, Self::Output), Self::Error> {
         ///主要问题，可能不原子， error报错，但self已经改了
         todo!()
     }

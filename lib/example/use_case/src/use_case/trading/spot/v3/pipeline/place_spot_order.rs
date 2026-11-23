@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff, TrackDiff,
-    UpdatedEntityPair, UseCase,
+    CreatedEntityEvent, CreatedEntityEventError, Entity, EntityError, EventPosition, LogEntry,
+    ReplayableDomainEvent, ReplayableEntityChanges, TrackDiff,
+    UpdatedEntityEvents, UpdatedEntityEventsError, UseCaseV3,
 };
 use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::{BalanceV2, OrderGroupRelation, OrderType, SpotOrderStatus, SpotOrderV7};
@@ -58,29 +59,29 @@ pub enum PlaceSpotOrderV3Result {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceSpotOrderV3Changes {
-    pub created_orders: Vec<SpotOrderV7>,
-    pub updated_maker_orders: Vec<UpdatedEntityPair<SpotOrderV7>>,
-    pub settled_trades: Vec<SpotTradeV3>,
-    pub updated_balances: Vec<UpdatedEntityPair<BalanceV2>>,
+    pub created_orders: Vec<CreatedEntityEvent<SpotOrderV7>>,
+    pub updated_maker_orders: Vec<UpdatedEntityEvents<SpotOrderV7>>,
+    pub settled_trades: Vec<CreatedEntityEvent<SpotTradeV3>>,
+    pub updated_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     pub result: PlaceSpotOrderV3Result,
 }
 
-impl ReplayableChanges for PlaceSpotOrderV3Changes {
-    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
+impl ReplayableEntityChanges for PlaceSpotOrderV3Changes {
+    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
         let mut events = Vec::new();
         for order in &self.created_orders {
-            events.push(order.track_create_event()?);
+            events.push(order.event());
         }
-        for pair in &self.updated_maker_orders {
-            events.push(pair.after.track_update_event_from(&pair.before)?);
+        for changed in &self.updated_maker_orders {
+            events.extend(changed.events());
         }
         for trade in &self.settled_trades {
-            events.push(trade.track_create_event()?);
+            events.push(trade.event());
         }
-        for pair in &self.updated_balances {
-            events.push(pair.after.track_update_event_from(&pair.before)?);
+        for changed in &self.updated_balances {
+            events.extend(changed.events());
         }
-        Ok(events)
+        events
     }
 }
 
@@ -102,16 +103,22 @@ pub enum PlaceSpotOrderV3Error {
     TradeIdOverflow,
     #[error(transparent)]
     Domain(#[from] PlaceDomainServiceError),
+    #[error("invalid created entity event: {0:?}")]
+    InvalidCreatedEvent(CreatedEntityEventError),
+    #[error("invalid updated entity events: {0:?}")]
+    InvalidUpdatedEvents(UpdatedEntityEventsError),
+    #[error(transparent)]
+    Entity(#[from] EntityError),
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PlaceSpotOrderV3UseCase;
 
-impl UseCase for PlaceSpotOrderV3UseCase {
+impl UseCaseV3 for PlaceSpotOrderV3UseCase {
     type Command = LogEntry<PlaceSpotOrderV3Cmd>;
     type StateGiven = PlaceSpotOrderV3State;
     type Error = PlaceSpotOrderV3Error;
-    type StateChanged = PlaceSpotOrderV3AfterChanges;
+    type StateChanged = PlaceSpotOrderV3Changes;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
         check_place_command(cmd)
@@ -130,7 +137,7 @@ impl UseCase for PlaceSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_place_after(cmd, state)
+        compute_place_changes(cmd, state.clone())
     }
 }
 
@@ -255,18 +262,8 @@ pub(crate) fn compute_place_after(
     }
 }
 
-impl StateDiff for PlaceSpotOrderV3UseCase {
-    type StateDiff = PlaceSpotOrderV3Changes;
-
-    fn do_compute_state_diff(
-        state: Self::StateGiven,
-        changed: Self::StateChanged,
-    ) -> Result<Self::StateDiff, Self::Error> {
-        build_place_changes(state, changed)
-    }
-}
-
 pub(crate) fn build_place_changes(
+    cmd: &LogEntry<PlaceSpotOrderV3Cmd>,
     state: PlaceSpotOrderV3State,
     changed: PlaceSpotOrderV3AfterChanges,
 ) -> Result<PlaceSpotOrderV3Changes, PlaceSpotOrderV3Error> {
@@ -276,22 +273,70 @@ pub(crate) fn build_place_changes(
         .into_iter()
         .map(|maker| (maker.order_base().order_id, maker))
         .collect::<HashMap<_, _>>();
+    let mut created_orders = Vec::with_capacity(flattened.created_orders.len());
     let mut updated_maker_orders = Vec::with_capacity(flattened.updated_maker_orders_after.len());
+    let mut settled_trades = Vec::with_capacity(flattened.settled_trades.len());
+    let mut updated_balances = Vec::with_capacity(flattened.updated_balances_after.len());
+    let mut command_index = 0u32;
+    for order in flattened.created_orders {
+        let position = EventPosition::new(cmd.lsn(), command_index);
+        command_index += 1;
+        let after = SpotOrderV7::from_record_at(order.order_base().clone(), position)?;
+        let event = after.track_create_event_at(position, cmd.logical_ts())?;
+        created_orders.push(CreatedEntityEvent::try_new(after, event).map_err(
+            PlaceSpotOrderV3Error::InvalidCreatedEvent,
+        )?);
+    }
     for after in flattened.updated_maker_orders_after {
         let before = maker_orders_before
             .remove(&after.order_base().order_id)
             .ok_or(PlaceSpotOrderV3Error::InvalidMaker)?;
-        updated_maker_orders.push(UpdatedEntityPair { before, after });
+        let position = EventPosition::new(cmd.lsn(), command_index);
+        command_index += 1;
+        let after = SpotOrderV7::from_record_at(after.order_base().clone(), position)?;
+        let event = after.track_update_event_from_at(
+            &before,
+            Entity::event_position(&before),
+            position,
+            cmd.logical_ts(),
+        )?;
+        updated_maker_orders.push(UpdatedEntityEvents::try_new(
+            after,
+            Entity::event_position(&before),
+            vec![event],
+        ).map_err(PlaceSpotOrderV3Error::InvalidUpdatedEvents)?);
     }
-    let mut updated_balances = Vec::new();
+    for mut trade in flattened.settled_trades {
+        let position = EventPosition::new(cmd.lsn(), command_index);
+        command_index += 1;
+        trade.position = position;
+        trade.comon_trade.version = position.lsn;
+        let event = trade.track_create_event_at(position, cmd.logical_ts())?;
+        settled_trades.push(CreatedEntityEvent::try_new(trade, event).map_err(
+            PlaceSpotOrderV3Error::InvalidCreatedEvent,
+        )?);
+    }
     for after in flattened.updated_balances_after {
         let before = find_bound_balance(&state.balances_by_order_id, &after)?;
-        updated_balances.push(UpdatedEntityPair { before, after });
+        let position = EventPosition::new(cmd.lsn(), command_index);
+        command_index += 1;
+        let after = after.with_position(position);
+        let event = after.track_update_event_from_at(
+            &before,
+            Entity::event_position(&before),
+            position,
+            cmd.logical_ts(),
+        )?;
+        updated_balances.push(UpdatedEntityEvents::try_new(
+            after,
+            Entity::event_position(&before),
+            vec![event],
+        ).map_err(PlaceSpotOrderV3Error::InvalidUpdatedEvents)?);
     }
     Ok(PlaceSpotOrderV3Changes {
-        created_orders: flattened.created_orders,
+        created_orders,
         updated_maker_orders,
-        settled_trades: flattened.settled_trades,
+        settled_trades,
         updated_balances,
         result: flattened.result,
     })
@@ -304,7 +349,7 @@ pub(crate) fn compute_place_changes(
     check_place_command(cmd)?;
     validate_place_state(cmd, &state)?;
     let changed = compute_place_after(cmd, &state)?;
-    build_place_changes(state, changed)
+    build_place_changes(cmd, state, changed)
 }
 
 fn place_normal(

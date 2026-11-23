@@ -1,5 +1,5 @@
 use common_entity::fsm_v2::{CommandMetadata, Fsm};
-use common_entity::{Entity, EntityError, EntityFieldChange, TrackDiff};
+use common_entity::{Entity, EntityError, EntityFieldChange, EventPosition, TrackDiff};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -75,11 +75,15 @@ pub struct BalanceV2 {
     available: Decimal,
     frozen: Decimal,
     status: BalanceV2Status,
-    version: u64,
+    position: EventPosition,
     created_at: u64,
     updated_at: u64,
 }
 impl BalanceV2 {
+    pub fn with_position(mut self, position: EventPosition) -> Self {
+        self.position = position;
+        self
+    }
     /// 返回账户与币种组成的稳定业务身份。
     pub fn business_entity_id(&self) -> String {
         concat3(
@@ -112,8 +116,12 @@ impl BalanceV2 {
     pub fn frozen(&self) -> Decimal {
         self.frozen
     }
+    pub fn position(&self) -> EventPosition {
+        self.position
+    }
+    /// 兼容旧调用方的 LSN 视图；权威版本仍为完整事件位置。
     pub fn version(&self) -> u64 {
-        self.version
+        self.position.lsn
     }
     pub fn created_at(&self) -> u64 {
         self.created_at
@@ -133,7 +141,7 @@ impl BalanceV2 {
         coin_idx: u64,
         available: A,
         frozen: F,
-        version: u64,
+        position: impl Into<EventPosition>,
         created_at: u64,
     ) -> Self
     where
@@ -147,7 +155,7 @@ impl BalanceV2 {
             available: available.into(),
             frozen: frozen.into(),
             status: BalanceV2Status::Open,
-            version,
+            position: position.into(),
             created_at,
             updated_at: created_at,
         }
@@ -166,11 +174,11 @@ impl Fsm for BalanceV2 {
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);
         }
-        let lsn = metadata.lsn;
-        if lsn < self.version {
+        let position = metadata.position;
+        if position < self.position {
             return Err(BalanceV2Error::StaleLsn {
-                incoming_lsn: lsn,
-                current_lsn: self.version,
+                incoming_lsn: position.lsn,
+                current_lsn: self.position.lsn,
             });
         }
         let (available, frozen, status) = match command {
@@ -247,7 +255,7 @@ impl Fsm for BalanceV2 {
             available,
             frozen,
             status,
-            version: lsn,
+            position,
             created_at: self.created_at,
             updated_at: metadata.logical_ts,
         };
@@ -373,7 +381,10 @@ impl Entity for BalanceV2 {
         BALANCE_V2_ENTITY_TYPE
     }
     fn lsn(&self) -> u64 {
-        self.version
+        self.position.lsn
+    }
+    fn event_position(&self) -> EventPosition {
+        self.position
     }
     fn replay_field_type(f: &str) -> u8 {
         match f {
@@ -393,7 +404,7 @@ impl common_entity::PositionedEntity for BalanceV2 {
     }
 
     fn event_position(&self) -> common_entity::EventPosition {
-        common_entity::EventPosition::new(<Self as Entity>::lsn(self), 0)
+        self.position
     }
 }
 

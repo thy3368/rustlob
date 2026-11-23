@@ -93,6 +93,7 @@ pub enum SpotTradeStateError {
 pub struct SpotTradeV3 {
     pub comon_trade: TradeBase,
     pub settlement_status: SpotTradeSettlementStatus,
+    pub position: common_entity::EventPosition,
 }
 
 impl TrackDiff for SpotTradeV3 {
@@ -147,7 +148,10 @@ impl Entity for SpotTradeV3 {
         13
     }
     fn lsn(&self) -> u64 {
-        self.comon_trade.version
+        self.position.lsn
+    }
+    fn event_position(&self) -> common_entity::EventPosition {
+        self.position
     }
     fn four_color_archetype() -> FourColorArchetype {
         FourColorArchetype::MomentInterval
@@ -186,6 +190,18 @@ impl Entity for SpotTradeV3 {
 impl Shard for SpotTradeV3 {
     fn partition(&self) -> u8 {
         self.comon_trade.symbol.base.index() as u8
+    }
+}
+
+impl common_entity::PositionedEntity for SpotTradeV3 {
+    fn entity_id(&self) -> u64 {
+        <Self as Entity>::entity_id(self)
+    }
+    fn entity_type(&self) -> u8 {
+        <Self as Entity>::entity_type()
+    }
+    fn event_position(&self) -> common_entity::EventPosition {
+        self.position
     }
 }
 
@@ -258,14 +274,16 @@ impl Fsm for SpotTradeV3 {
             (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle { .. }) => {
                 let lsn = metadata.lsn;
                 let logical_ts = metadata.logical_ts;
-                if lsn < self.comon_trade.version {
+                let position = metadata.position;
+                if position < self.position {
                     return Err(SpotTradeStateError::StaleLsn {
                         incoming_lsn: lsn,
-                        current_lsn: self.comon_trade.version,
+                        current_lsn: self.position.lsn,
                     });
                 }
                 self.settlement_status = SpotTradeSettlementStatus::Settled;
-                self.comon_trade.version = lsn;
+                self.comon_trade.version = position.lsn;
+                self.position = position;
                 self.comon_trade.updated_at = logical_ts;
                 Ok((self.settlement_status, ()))
             }
@@ -322,6 +340,7 @@ mod tests {
                 version: 0,
             },
             settlement_status: SpotTradeSettlementStatus::Unsettled,
+            position: common_entity::EventPosition::ZERO,
         }
     }
 

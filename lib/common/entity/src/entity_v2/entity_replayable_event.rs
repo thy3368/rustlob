@@ -25,6 +25,12 @@ impl EventPosition {
     }
 }
 
+impl From<u64> for EventPosition {
+    fn from(lsn: u64) -> Self {
+        Self::new(lsn, 0)
+    }
+}
+
 /// Logical entity change kind used before encoding into compact replay tags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EntityChangeType {

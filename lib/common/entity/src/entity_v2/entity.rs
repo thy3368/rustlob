@@ -3,7 +3,8 @@ use std::fmt::Debug;
 use crate::entity_v2::entity_replayable_event::current_timestamp;
 use crate::entity_v2::shard::Shard;
 use crate::{
-    EntityChangeType, EntityError, EntityFieldChange, ReplayFieldChange, ReplayableDomainEvent,
+    EntityChangeType, EntityError, EntityFieldChange, EventPosition, ReplayFieldChange,
+    ReplayableDomainEvent,
 };
 
 /// 四色建模中的实体原型分类。
@@ -178,6 +179,10 @@ pub trait Entity: Shard + Clone + Debug + Send + Sync + 'static {
 
     fn lsn(&self) -> u64;
 
+    fn event_position(&self) -> EventPosition {
+        EventPosition::new(self.lsn(), 0)
+    }
+
     fn created_at(&self) -> u64;
 
     fn updated_at(&self) -> u64;
@@ -292,6 +297,63 @@ pub trait TrackDiff: Entity {
             ));
         }
 
+        Ok(event)
+    }
+
+    /// 使用显式复合位置与逻辑时间确定性投影 create event。
+    fn track_create_event_at(
+        &self,
+        position: EventPosition,
+        logical_ts: u64,
+    ) -> Result<ReplayableDomainEvent, EntityError>
+    where
+        Self: Sized,
+    {
+        let mut event = ReplayableDomainEvent::new_at(
+            self.topic(),
+            self.partition(),
+            logical_ts,
+            EventPosition::ZERO,
+            position,
+            self.entity_id(),
+            Self::entity_type(),
+            EntityChangeType::Created.as_tag(),
+        );
+        for change in self.created_field_changes() {
+            let field_type = Self::replay_field_type(change.field_name.as_ref());
+            event.add_field_change(ReplayFieldChange::from_entity_field_change(
+                &change, field_type,
+            ));
+        }
+        Ok(event)
+    }
+
+    /// 使用显式前驱位置、复合位置与逻辑时间确定性投影 update event。
+    fn track_update_event_from_at(
+        &self,
+        old_state: &Self,
+        previous_position: EventPosition,
+        position: EventPosition,
+        logical_ts: u64,
+    ) -> Result<ReplayableDomainEvent, EntityError>
+    where
+        Self: Sized,
+    {
+        ensure_same_entity(old_state, self)?;
+        let changes = old_state.diff(self);
+        if changes.is_empty() {
+            return Err(EntityError::NoChangesDetected);
+        }
+        let mut event = ReplayableDomainEvent::new_at(
+            self.topic(), self.partition(), logical_ts, previous_position, position,
+            self.entity_id(), Self::entity_type(), EntityChangeType::Updated.as_tag(),
+        );
+        for change in changes {
+            let field_type = Self::replay_field_type(change.field_name.as_ref());
+            event.add_field_change(ReplayFieldChange::from_entity_field_change(
+                &change, field_type,
+            ));
+        }
         Ok(event)
     }
 

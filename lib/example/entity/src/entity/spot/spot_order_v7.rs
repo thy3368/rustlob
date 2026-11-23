@@ -154,6 +154,7 @@ pub enum SpotOrderV7Output {
 /// 3,cancel, 4.modify 用以创建balance的event
 pub struct SpotOrderV7 {
     order_base: OrderBase,
+    position: common_entity::EventPosition,
 }
 
 impl SpotOrderV7 {
@@ -163,7 +164,7 @@ impl SpotOrderV7 {
         relation: OrderGroupRelation,
         fee_bps: u64,
         timestamp: u64,
-        lsn: u64,
+        position: impl Into<common_entity::EventPosition>,
     ) -> Result<Self, EntityError> {
         let (execution, tif, trigger, trigger_px) = match order_type {
             OrderType::Limit { tif } => (PriceType::Limit, tif, OrderTrigger::None, None),
@@ -197,7 +198,8 @@ impl SpotOrderV7 {
         order.group_relation = relation;
         order.created_at = timestamp;
         order.updated_at = timestamp;
-        order.lsn = lsn;
+        let position = position.into();
+        order.lsn = position.lsn;
         order.buy_quote_fee_reserve_limit = if order.side == OrderSide::Buy {
             order
                 .limit_px
@@ -215,13 +217,14 @@ impl SpotOrderV7 {
             Decimal::ZERO
         };
         order.buy_quote_fee_reserve_consumed = Decimal::ZERO;
-        Self::from_record(order)
+        Self::from_record_at(order, position)
     }
 
     pub fn single(mut order: OrderBase) -> Self {
         order.status = SpotOrderStatus::Pending;
         order.group_relation = OrderGroupRelation::Standalone;
-        Self { order_base: order }
+        let position = common_entity::EventPosition::new(order.lsn, 0);
+        Self { order_base: order, position }
     }
 
     pub fn normal_tpsl(parent: OrderBase, children: Vec<OrderBase>) -> (Self, Vec<Self>) {
@@ -235,15 +238,24 @@ impl SpotOrderV7 {
                 child.group_relation = OrderGroupRelation::NormalTpslChild {
                     parent_order_id: id,
                 };
-                Self { order_base: child }
+                let position = common_entity::EventPosition::new(child.lsn, 0);
+                Self { order_base: child, position }
             })
             .collect();
         (parent, children)
     }
 
     pub fn from_record(order: OrderBase) -> Result<Self, EntityError> {
+        let position = common_entity::EventPosition::new(order.lsn, 0);
+        Self::from_record_at(order, position)
+    }
+
+    pub fn from_record_at(
+        order: OrderBase,
+        position: common_entity::EventPosition,
+    ) -> Result<Self, EntityError> {
         validate_record(&order)?;
-        Ok(Self { order_base: order })
+        Ok(Self { order_base: order, position })
     }
     pub fn order_base(&self) -> &OrderBase {
         &self.order_base
@@ -321,10 +333,10 @@ impl SpotOrderV7 {
     fn compute_transition(
         &self,
         command: &SpotOrderV7Command,
-        lsn: u64,
+        position: common_entity::EventPosition,
         timestamp: u64,
     ) -> Result<(OrderBase, SpotOrderV7Output), EntityError> {
-        if lsn < self.order_base.lsn {
+        if position < self.position {
             return Err(err("order command LSN is older than the current LSN"));
         }
         if matches!(
@@ -343,7 +355,7 @@ impl SpotOrderV7 {
                 let mut next = self.order_base.clone();
                 next.status = SpotOrderStatus::Open;
                 next.updated_at = timestamp;
-                next.lsn = lsn;
+                next.lsn = position.lsn;
                 Ok((
                     next,
                     SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
@@ -358,12 +370,13 @@ impl SpotOrderV7 {
                     &self.order_base,
                     *filled_size,
                     *quote_fee,
-                    lsn,
+                    position,
                     timestamp,
                     MatchRole::Taker,
                 )?;
                 let order_after = Self {
                     order_base: next.clone(),
+                    position,
                 };
                 let release_requirement = matches!(
                     order_after.status(),
@@ -388,12 +401,13 @@ impl SpotOrderV7 {
                     &self.order_base,
                     *filled_size,
                     *quote_fee,
-                    lsn,
+                    position,
                     timestamp,
                     MatchRole::Maker,
                 )?;
                 let order_after = Self {
                     order_base: next.clone(),
+                    position,
                 };
                 Ok((
                     next,
@@ -411,9 +425,10 @@ impl SpotOrderV7 {
                 let mut next = self.order_base.clone();
                 next.status = SpotOrderStatus::Rejected;
                 next.updated_at = timestamp;
-                next.lsn = lsn;
+                next.lsn = position.lsn;
                 let order_after = Self {
                     order_base: next.clone(),
+                    position,
                 };
                 let release_requirement = Some(match_release_requirement(&order_after)?);
                 Ok((
@@ -431,7 +446,7 @@ impl SpotOrderV7 {
                 cloid,
             } => {
                 let hold_before = active_hold_requirement(&self.order_base)?;
-                let mut next = modified_order(&self.order_base, *price, *size, lsn, timestamp)?;
+                let mut next = modified_order(&self.order_base, *price, *size, position, timestamp)?;
                 if let Some(tif) = tif {
                     next.tif = *tif;
                 }
@@ -442,6 +457,7 @@ impl SpotOrderV7 {
                 let hold_adjustment = hold_adjustment(&self.order_base, hold_before, hold_after)?;
                 let order_after = Self {
                     order_base: next.clone(),
+                    position,
                 };
                 Ok((
                     next,
@@ -453,9 +469,10 @@ impl SpotOrderV7 {
             }
             SpotOrderV7Command::Cancel => {
                 let was_pending = self.status() == SpotOrderStatus::Pending;
-                let next = canceled_order(&self.order_base, lsn, timestamp)?;
+                let next = canceled_order(&self.order_base, position, timestamp)?;
                 let order_after = Self {
                     order_base: next.clone(),
+                    position,
                 };
                 let release_requirement = if was_pending {
                     zero_release_requirement(&order_after)?
@@ -489,8 +506,12 @@ impl Fsm for SpotOrderV7 {
         command: SpotOrderV7Command,
     ) -> Result<(Self, Self::Output), EntityError> {
         let (next, output) =
-            self.compute_transition(&command, metadata.lsn, metadata.logical_ts)?;
-        Ok((Self { order_base: next }, output))
+            self.compute_transition(
+                &command,
+                metadata.position,
+                metadata.logical_ts,
+            )?;
+        Ok((Self { order_base: next, position: metadata.position }, output))
     }
 }
 
@@ -504,7 +525,7 @@ fn matched_order(
     current: &OrderBase,
     filled_size: Decimal,
     quote_fee: Decimal,
-    lsn: u64,
+    position: common_entity::EventPosition,
     timestamp: u64,
     role: MatchRole,
 ) -> Result<OrderBase, EntityError> {
@@ -548,7 +569,7 @@ fn matched_order(
         }
     };
     next.updated_at = timestamp;
-    next.lsn = lsn;
+    next.lsn = position.lsn;
     Ok(next)
 }
 
@@ -556,7 +577,7 @@ fn modified_order(
     current: &OrderBase,
     price: Decimal,
     size: Decimal,
-    lsn: u64,
+    position: common_entity::EventPosition,
     timestamp: u64,
 ) -> Result<OrderBase, EntityError> {
     let filled = current
@@ -573,15 +594,19 @@ fn modified_order(
         .checked_sub(filled)
         .ok_or_else(|| err("size overflow"))?;
     next.updated_at = timestamp;
-    next.lsn = lsn;
+    next.lsn = position.lsn;
     Ok(next)
 }
 
-fn canceled_order(current: &OrderBase, lsn: u64, timestamp: u64) -> Result<OrderBase, EntityError> {
+fn canceled_order(
+    current: &OrderBase,
+    position: common_entity::EventPosition,
+    timestamp: u64,
+) -> Result<OrderBase, EntityError> {
     let mut next = current.clone();
     next.status = SpotOrderStatus::Canceled;
     next.updated_at = timestamp;
-    next.lsn = lsn;
+    next.lsn = position.lsn;
     Ok(next)
 }
 
@@ -590,7 +615,6 @@ impl TrackDiff for SpotOrderV7 {
         vec![
             EntityFieldChange::new("order_id", "", self.order_base.order_id.to_string()),
             EntityFieldChange::new("status", "", format!("{:?}", self.status())),
-            EntityFieldChange::new("version", "", self.order_base.lsn.to_string()),
         ]
     }
     fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
@@ -622,7 +646,6 @@ impl TrackDiff for SpotOrderV7 {
                 a.updated_at.to_string(),
                 b.updated_at.to_string(),
             ),
-            ("version", a.lsn.to_string(), b.lsn.to_string()),
         ] {
             if x != y {
                 v.push(EntityFieldChange::new(n, x, y));
@@ -643,7 +666,10 @@ impl Entity for SpotOrderV7 {
         16
     }
     fn lsn(&self) -> u64 {
-        self.order_base.lsn
+        self.position.lsn
+    }
+    fn event_position(&self) -> common_entity::EventPosition {
+        self.position
     }
     fn four_color_archetype() -> common_entity::FourColorArchetype {
         common_entity::FourColorArchetype::MomentInterval
@@ -689,7 +715,7 @@ impl common_entity::PositionedEntity for SpotOrderV7 {
     }
 
     fn event_position(&self) -> common_entity::EventPosition {
-        common_entity::EventPosition::new(<Self as Entity>::lsn(self), 0)
+        self.position
     }
 }
 impl Shard for SpotOrderV7 {
@@ -728,7 +754,7 @@ impl LobOrder for SpotOrderV7 {
         self.order_base.created_at
     }
     fn entity_ver(&self) -> u64 {
-        self.order_base.lsn
+        self.position.lsn
     }
     fn is_active(&self) -> bool {
         matches!(

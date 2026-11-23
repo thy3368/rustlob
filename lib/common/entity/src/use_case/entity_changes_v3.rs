@@ -24,6 +24,54 @@ pub enum UpdatedEntityEventsError {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CreatedEntityEventError {
+    EntityIdentityMismatch,
+    NonZeroPreviousPosition { actual: EventPosition },
+    AfterPositionMismatch {
+        expected: EventPosition,
+        actual: EventPosition,
+    },
+}
+
+/// 新建实体的 after truth 与唯一 create replay event。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedEntityEvent<E> {
+    after: E,
+    event: ReplayableDomainEvent,
+}
+
+impl<E: PositionedEntity> CreatedEntityEvent<E> {
+    pub fn try_new(
+        after: E,
+        event: ReplayableDomainEvent,
+    ) -> Result<Self, CreatedEntityEventError> {
+        if event.entity_id != after.entity_id() || event.entity_type != after.entity_type() {
+            return Err(CreatedEntityEventError::EntityIdentityMismatch);
+        }
+        if event.previous_position != EventPosition::ZERO {
+            return Err(CreatedEntityEventError::NonZeroPreviousPosition {
+                actual: event.previous_position,
+            });
+        }
+        if after.event_position() != event.position {
+            return Err(CreatedEntityEventError::AfterPositionMismatch {
+                expected: event.position,
+                actual: after.event_position(),
+            });
+        }
+        Ok(Self { after, event })
+    }
+
+    pub fn after(&self) -> &E {
+        &self.after
+    }
+
+    pub fn event(&self) -> &ReplayableDomainEvent {
+        &self.event
+    }
+}
+
 /// 至少包含一条 replay event 的集合。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NonEmptyReplayEvents(Vec<ReplayableDomainEvent>);
@@ -95,6 +143,12 @@ pub trait ReplayableEntityChanges {
 impl<E> ReplayableEntityChanges for UpdatedEntityEvents<E> {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
         self.events.as_slice().iter().collect()
+    }
+}
+
+impl<E> ReplayableEntityChanges for CreatedEntityEvent<E> {
+    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
+        vec![&self.event]
     }
 }
 

@@ -36,6 +36,6 @@ pub struct TradeBase {
     pub created_at: u64,
     /// 订单最后更新时间，单位为 Unix 纳秒。
     pub updated_at: u64,
-    /// 当前订单实体版本，用于生成可重放更新事件。
+    /// 当前成交实体版本，用于生成可重放更新事件。
     pub version: u64,
 }
