@@ -53,15 +53,15 @@ pub trait UseCaseV3: Clone + Debug + Send + Sync {
     fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
-        state_given: &Self::StateGiven,
+        state_given: Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error>;
 
     fn validate_and_compute(
         &self,
         cmd: &Self::Command,
-        state_given: &Self::StateGiven,
+        state_given: Self::StateGiven,
     ) -> UseCaseComputeOutcome<Self::StateChanged, Self::Error> {
-        self.validate_state_given(cmd, state_given)
+        self.validate_state_given(cmd, &state_given)
             .map_err(UseCaseComputeError::Business)?;
         self.compute_state_changed_only(cmd, state_given)
             .map_err(UseCaseComputeError::Business)
@@ -70,7 +70,7 @@ pub trait UseCaseV3: Clone + Debug + Send + Sync {
     fn compute_state_changed(
         &self,
         cmd: &Self::Command,
-        state_given: &Self::StateGiven,
+        state_given: Self::StateGiven,
     ) -> UseCaseComputeOutcome<Self::StateChanged, Self::Error> {
         self.check_command(cmd)
             .map_err(UseCaseComputeError::Business)?;

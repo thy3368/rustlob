@@ -110,7 +110,7 @@ impl UseCaseV3 for CancelSpotOrderFsmV3UseCase {
     fn compute_state_changed_only(
         &self,
         cmd: &Self::Command,
-        state: &Self::StateGiven,
+        state: Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         compute_changes(cmd, state)
     }
@@ -161,17 +161,19 @@ fn validate_state(
 
 fn compute_changes(
     cmd: &LogEntry<CancelSpotOrderFsmV3Cmd>,
-    state: &CancelSpotOrderFsmV3State,
+    state: CancelSpotOrderFsmV3State,
 ) -> Result<CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Error> {
-    let order_before = state.order.clone();
-    let order_loaded_position = order_before.event_position();
-    let mut order_after = order_before.clone();
+    let CancelSpotOrderFsmV3State {
+        order: mut order_after,
+        balance: mut balance_after,
+    } = state;
+    let order_loaded_position = order_after.event_position();
     let metadata = FsmCommandMetadata::new(
         cmd.lsn(),
         cmd.logical_ts(),
-        order_before.topic(),
-        order_before.partition(),
-        order_before.party_id(),
+        order_after.topic(),
+        order_after.partition(),
+        order_after.party_id(),
     );
     let transition = FsmV2::transition(
         &mut order_after,
@@ -184,15 +186,13 @@ fn compute_changes(
     let balance = if output.release_requirement.amount() == Decimal::ZERO {
         None
     } else {
-        let balance_before = state.balance.clone();
-        let balance_loaded_position = balance_before.event_position();
-        let mut balance_after = balance_before.clone();
+        let balance_loaded_position = balance_after.event_position();
         let metadata = FsmCommandMetadata::new(
             cmd.lsn(),
             cmd.logical_ts(),
-            balance_before.topic(),
-            balance_before.partition(),
-            balance_before.party_id().to_string(),
+            balance_after.topic(),
+            balance_after.partition(),
+            balance_after.party_id().to_string(),
         );
         let balance_transition = FsmV2::transition(
             &mut balance_after,
@@ -326,7 +326,7 @@ mod tests {
 
         // When: 执行取消并形成可回放 changes。
         let changed = CancelSpotOrderFsmV3UseCase
-            .compute_state_changed(&cmd, &given)
+            .compute_state_changed(&cmd, given)
             .expect("open order should cancel");
 
         // Then: after state 用于后续块内状态，FSM 原生事件用于 replay。
@@ -377,7 +377,7 @@ mod tests {
 
         // When: 执行取消。
         let changes = CancelSpotOrderFsmV3UseCase
-            .compute_state_changed(&cmd, &given)
+            .compute_state_changed(&cmd, given)
             .expect("partially filled order should cancel");
 
         // Then: 返回两个 after state，事件顺序固定为 order、balance。
@@ -406,7 +406,7 @@ mod tests {
 
         // When: 执行取消。
         let changes = CancelSpotOrderFsmV3UseCase
-            .compute_state_changed(&cmd, &given)
+            .compute_state_changed(&cmd, given)
             .expect("pending order should cancel");
 
         // Then: 仅订单 pair/replay 变化，但仍保留 canceled 事件码。
@@ -449,23 +449,21 @@ mod tests {
     }
 
     #[test]
-    fn failed_release_returns_no_changes_and_preserves_given_state() {
-        // Rule: 余额解冻失败时取消必须原子失败，不得修改输入 state 或泄漏领域事件。
+    fn failed_release_returns_no_changes() {
+        // Rule: 余额解冻失败时取消必须原子失败，不得返回 changes 或泄漏领域事件。
         // Given: 活跃订单的冻结余额不足。
         let cmd = command(OrderId::Oid(ORDER_ID));
         let given = state(SpotOrderStatus::Open, Decimal::ONE);
-        let before = given.clone();
 
         // When: 执行取消。
-        let result = CancelSpotOrderFsmV3UseCase.compute_state_changed(&cmd, &given);
+        let result = CancelSpotOrderFsmV3UseCase.compute_state_changed(&cmd, given);
 
-        // Then: 不返回 changes/event，且 authoritative input 保持不变。
+        // Then: 不返回 changes/event。
         assert_eq!(
             result,
             Err(UseCaseComputeError::Business(
                 CancelSpotOrderFsmV3Error::InsufficientFrozenBalance
             ))
         );
-        assert_eq!(given, before);
     }
 }
