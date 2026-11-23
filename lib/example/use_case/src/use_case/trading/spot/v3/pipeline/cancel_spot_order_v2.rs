@@ -2,8 +2,7 @@ use common_entity::fsm_v2::{
     CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
 };
 use common_entity::{
-    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, Shard, StateDiff,
-    UpdatedEntityPair, UseCase,
+    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, Shard, StateDiff, UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{
@@ -13,8 +12,6 @@ use example_core_entity::{
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderV2Cmd {
@@ -27,12 +24,13 @@ pub struct CancelSpotOrderV2State {
     pub balance: BalanceV2,
 }
 
-/// FSM 产生的订单事件与两个聚合的 pair 共同构成取消用例的唯一事实源。
+/// 取消后的聚合状态与 FSM 原生 replay 事件。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancelSpotOrderV2Changes {
-    pub updated_order: UpdatedEntityPair<SpotOrderV7>,
-    pub updated_balance: Option<UpdatedEntityPair<BalanceV2>>,
+    pub order_after: SpotOrderV7,
+    pub balance_after: Option<BalanceV2>,
     pub order_event: ReplayableDomainEvent,
+    pub balance_event: Option<ReplayableDomainEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -74,10 +72,10 @@ pub struct CancelSpotOrderV2UseCase;
 
 impl ReplayableChanges for CancelSpotOrderV2Changes {
     fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
-        let mut events = Vec::with_capacity(1 + usize::from(self.updated_balance.is_some()));
+        let mut events = Vec::with_capacity(1 + usize::from(self.balance_event.is_some()));
         events.push(self.order_event.clone());
-        if let Some(balance) = &self.updated_balance {
-            events.push(balance.to_replayable_event()?);
+        if let Some(balance_event) = &self.balance_event {
+            events.push(balance_event.clone());
         }
         Ok(events)
     }
@@ -191,28 +189,37 @@ fn compute_changes(
         return Err(CancelSpotOrderV2Error::UnexpectedOrderOutput);
     };
 
-    let updated_balance = if output.release_requirement.amount() == Decimal::ZERO {
-        None
+    let (balance_after, balance_event) = if output.release_requirement.amount() == Decimal::ZERO {
+        (None, None)
     } else {
         let balance_before = state.balance.clone();
         let mut balance_after = balance_before.clone();
-        transition_balance(
-            &mut balance_after,
+        let metadata = FsmCommandMetadata::new(
             cmd.lsn(),
             cmd.logical_ts(),
-            BalanceV2Command::UnfreezeAndPay {
-                unfreeze_amount: output.release_requirement.amount(),
-                payment_amount: Decimal::ZERO,
-            },
+            balance_before.topic(),
+            balance_before.partition(),
+            balance_before.party_id().to_string(),
+        );
+        let balance_transition = FsmV2::transition(
+            &mut balance_after,
+            SequencedCommand::new(
+                metadata,
+                BalanceV2Command::UnfreezeAndPay {
+                    unfreeze_amount: output.release_requirement.amount(),
+                    payment_amount: Decimal::ZERO,
+                },
+            ),
         )
         .map_err(map_balance_error)?;
-        Some(UpdatedEntityPair::new(balance_before, balance_after))
+        (Some(balance_after), Some(balance_transition.event))
     };
 
     Ok(CancelSpotOrderV2Changes {
-        updated_order: UpdatedEntityPair::new(order_before, order_after),
-        updated_balance,
+        order_after,
+        balance_after,
         order_event: transition.event,
+        balance_event,
     })
 }
 
@@ -319,24 +326,25 @@ mod tests {
             .compute_state_changed(&cmd, &given)
             .expect("open order should cancel");
 
-        // Then: pair 是唯一状态事实，领域事件内嵌 replay 是订单事件权威来源。
-        assert_eq!(changed.updated_order.before, given.order);
-        assert_eq!(
-            changed.updated_order.after.status(),
-            SpotOrderStatus::Canceled
-        );
-        let balance_pair = changed
-            .updated_balance
+        // Then: after state 用于后续块内状态，FSM 原生事件用于 replay。
+        assert_eq!(changed.order_after.status(), SpotOrderStatus::Canceled);
+        let balance_after = changed
+            .balance_after
             .as_ref()
             .expect("non-zero release must update balance");
-        assert_eq!(balance_pair.before.frozen(), Decimal::from(100));
-        assert_eq!(balance_pair.after.frozen(), Decimal::ZERO);
-        assert_eq!(balance_pair.after.available(), Decimal::from(100));
+        assert_eq!(balance_after.frozen(), Decimal::ZERO);
+        assert_eq!(balance_after.available(), Decimal::from(100));
 
         let events = changed.to_replayable_events().expect("events project");
         assert_eq!(events.len(), 2);
         assert_eq!(events[0], changed.order_event);
+        assert_eq!(
+            events[1],
+            *changed.balance_event.as_ref().expect("balance event")
+        );
         assert_eq!(events[0].domain_event_type, 6);
+        assert_eq!(events[1].domain_event_type, 2);
+        assert_eq!((events[1].lsn, events[1].logical_ts), (LSN, LOGICAL_TS));
         assert_eq!((events[0].lsn, events[0].logical_ts), (LSN, LOGICAL_TS));
         assert_eq!((events[0].previous_lsn, events[0].change_type), (0, 1));
         assert!(events[0].field_changes.iter().any(|change| {
@@ -360,25 +368,21 @@ mod tests {
             .compute_state_diff(&cmd, given)
             .expect("partially filled order should cancel");
 
-        // Then: 订单和余额均形成 pair，事件顺序固定为 order、balance。
-        assert_eq!(
-            changes.updated_order.after.status(),
-            SpotOrderStatus::Canceled
-        );
-        assert!(changes.updated_balance.is_some());
+        // Then: 返回两个 after state，事件顺序固定为 order、balance。
+        assert_eq!(changes.order_after.status(), SpotOrderStatus::Canceled);
+        assert!(changes.balance_after.is_some());
         let events = changes.to_replayable_events().expect("events project");
         assert_eq!(events.len(), 2);
         assert_eq!(
             events[0].entity_id,
-            changes.updated_order.after.order_base().order_id
+            changes.order_after.order_base().order_id
         );
         assert_eq!(
             events[1].entity_id,
             changes
-                .updated_balance
+                .balance_after
                 .as_ref()
-                .expect("balance pair")
-                .after
+                .expect("balance after")
                 .entity_id()
         );
     }
@@ -396,11 +400,9 @@ mod tests {
             .expect("pending order should cancel");
 
         // Then: 仅订单 pair/replay 变化，但仍保留 canceled 事件码。
-        assert_eq!(
-            changes.updated_order.after.status(),
-            SpotOrderStatus::Canceled
-        );
-        assert_eq!(changes.updated_balance, None);
+        assert_eq!(changes.order_after.status(), SpotOrderStatus::Canceled);
+        assert_eq!(changes.balance_after, None);
+        assert_eq!(changes.balance_event, None);
         assert_eq!(
             changes
                 .to_replayable_events()

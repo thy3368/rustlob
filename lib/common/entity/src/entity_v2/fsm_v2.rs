@@ -11,13 +11,7 @@ pub struct CommandMetadata {
 }
 
 impl CommandMetadata {
-    pub fn new(
-        lsn: u64,
-        logical_ts: u64,
-        topic: u8,
-        partition: u8,
-        party_id: String,
-    ) -> Self {
+    pub fn new(lsn: u64, logical_ts: u64, topic: u8, partition: u8, party_id: String) -> Self {
         Self {
             lsn,
             logical_ts,

@@ -490,6 +490,8 @@ pub trait UseCase: Clone + Debug + Send + Sync {
     ) -> Result<Self::StateChanged, Self::Error> {
         self.check_command(cmd)?;
         self.validate_state_given(cmd, given_state)?;
+
+        ///todo 返回改后状态及event
         self.compute_state_changed_only(cmd, given_state)
     }
 }
