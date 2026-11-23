@@ -322,6 +322,7 @@ mod tests {
                     version: 0,
                 },
                 settlement_status: SpotTradeSettlementStatus::Unsettled,
+                position: common_entity::EventPosition::ZERO,
             },
             buyer_base_balance: balance(buyer, buyer, Coin::BTC, 10, 0),
             buyer_quote_balance: balance(buyer, buyer, Coin::USDT, 10, 20),

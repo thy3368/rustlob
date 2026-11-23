@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use common_entity::{
     CreatedEntityEvent, CreatedEntityEventError, Entity, EntityError, EventPosition, LogEntry,
-    ReplayableDomainEvent, ReplayableEntityChanges, TrackDiff,
-    UpdatedEntityEvents, UpdatedEntityEventsError, UseCaseV3,
+    ReplayableDomainEvent, ReplayableEntityChanges, TrackDiff, UpdatedEntityEvents,
+    UpdatedEntityEventsError, UseCaseV3,
 };
 use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::{BalanceV2, OrderGroupRelation, OrderType, SpotOrderStatus, SpotOrderV7};
@@ -137,7 +137,7 @@ impl UseCaseV3 for PlaceSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        compute_place_changes(cmd, state.clone())
+        compute_place_changes(cmd, state)
     }
 }
 
@@ -264,7 +264,7 @@ pub(crate) fn compute_place_after(
 
 pub(crate) fn build_place_changes(
     cmd: &LogEntry<PlaceSpotOrderV3Cmd>,
-    state: PlaceSpotOrderV3State,
+    state: &PlaceSpotOrderV3State,
     changed: PlaceSpotOrderV3AfterChanges,
 ) -> Result<PlaceSpotOrderV3Changes, PlaceSpotOrderV3Error> {
     let flattened = flatten_after_changes(changed);
@@ -282,10 +282,13 @@ pub(crate) fn build_place_changes(
         let position = EventPosition::new(cmd.lsn(), command_index);
         command_index += 1;
         let after = SpotOrderV7::from_record_at(order.order_base().clone(), position)?;
-        let event = after.track_create_event_at(position, cmd.logical_ts())?;
-        created_orders.push(CreatedEntityEvent::try_new(after, event).map_err(
-            PlaceSpotOrderV3Error::InvalidCreatedEvent,
-        )?);
+        let mut event = after.track_create_event_at(position, cmd.logical_ts())?;
+        event.t = cmd.topic();
+        event.p = cmd.partition();
+        created_orders.push(
+            CreatedEntityEvent::try_new(after, event)
+                .map_err(PlaceSpotOrderV3Error::InvalidCreatedEvent)?,
+        );
     }
     for after in flattened.updated_maker_orders_after {
         let before = maker_orders_before
@@ -294,44 +297,49 @@ pub(crate) fn build_place_changes(
         let position = EventPosition::new(cmd.lsn(), command_index);
         command_index += 1;
         let after = SpotOrderV7::from_record_at(after.order_base().clone(), position)?;
-        let event = after.track_update_event_from_at(
+        let mut event = after.track_update_event_from_at(
             &before,
             Entity::event_position(&before),
             position,
             cmd.logical_ts(),
         )?;
-        updated_maker_orders.push(UpdatedEntityEvents::try_new(
-            after,
-            Entity::event_position(&before),
-            vec![event],
-        ).map_err(PlaceSpotOrderV3Error::InvalidUpdatedEvents)?);
+        event.t = cmd.topic();
+        event.p = cmd.partition();
+        updated_maker_orders.push(
+            UpdatedEntityEvents::try_new(after, Entity::event_position(&before), vec![event])
+                .map_err(PlaceSpotOrderV3Error::InvalidUpdatedEvents)?,
+        );
     }
     for mut trade in flattened.settled_trades {
         let position = EventPosition::new(cmd.lsn(), command_index);
         command_index += 1;
         trade.position = position;
         trade.comon_trade.version = position.lsn;
-        let event = trade.track_create_event_at(position, cmd.logical_ts())?;
-        settled_trades.push(CreatedEntityEvent::try_new(trade, event).map_err(
-            PlaceSpotOrderV3Error::InvalidCreatedEvent,
-        )?);
+        let mut event = trade.track_create_event_at(position, cmd.logical_ts())?;
+        event.t = cmd.topic();
+        event.p = cmd.partition();
+        settled_trades.push(
+            CreatedEntityEvent::try_new(trade, event)
+                .map_err(PlaceSpotOrderV3Error::InvalidCreatedEvent)?,
+        );
     }
     for after in flattened.updated_balances_after {
         let before = find_bound_balance(&state.balances_by_order_id, &after)?;
         let position = EventPosition::new(cmd.lsn(), command_index);
         command_index += 1;
         let after = after.with_position(position);
-        let event = after.track_update_event_from_at(
+        let mut event = after.track_update_event_from_at(
             &before,
             Entity::event_position(&before),
             position,
             cmd.logical_ts(),
         )?;
-        updated_balances.push(UpdatedEntityEvents::try_new(
-            after,
-            Entity::event_position(&before),
-            vec![event],
-        ).map_err(PlaceSpotOrderV3Error::InvalidUpdatedEvents)?);
+        event.t = cmd.topic();
+        event.p = cmd.partition();
+        updated_balances.push(
+            UpdatedEntityEvents::try_new(after, Entity::event_position(&before), vec![event])
+                .map_err(PlaceSpotOrderV3Error::InvalidUpdatedEvents)?,
+        );
     }
     Ok(PlaceSpotOrderV3Changes {
         created_orders,
@@ -344,11 +352,11 @@ pub(crate) fn build_place_changes(
 
 pub(crate) fn compute_place_changes(
     cmd: &LogEntry<PlaceSpotOrderV3Cmd>,
-    state: PlaceSpotOrderV3State,
+    state: &PlaceSpotOrderV3State,
 ) -> Result<PlaceSpotOrderV3Changes, PlaceSpotOrderV3Error> {
     check_place_command(cmd)?;
-    validate_place_state(cmd, &state)?;
-    let changed = compute_place_after(cmd, &state)?;
+    validate_place_state(cmd, state)?;
+    let changed = compute_place_after(cmd, state)?;
     build_place_changes(cmd, state, changed)
 }
 
@@ -547,7 +555,7 @@ fn flatten_normal(
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{LogEntrySequencer, StateDiff, UseCase};
+    use common_entity::LogEntrySequencer;
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::{OrderBase, PriceType, UserId};
@@ -715,9 +723,7 @@ mod tests {
     #[test]
     fn single_trigger_is_pending_without_balances() {
         let cmd = command(PlaceSpotOrderV3Cmd::Single(trigger(2)));
-        let changed = PlaceSpotOrderV3UseCase
-            .compute_state_changed(&cmd, &state(false))
-            .unwrap();
+        let changed = compute_place_after(&cmd, &state(false)).unwrap();
         let PlaceSpotOrderV3AfterChanges::Trigger(after) = changed else {
             panic!("expected trigger branch");
         };
@@ -743,9 +749,7 @@ mod tests {
             ),
             children: vec![trigger(2)],
         });
-        let changed = PlaceSpotOrderV3UseCase
-            .compute_state_changed(&cmd, &state(true))
-            .unwrap();
+        let changed = compute_place_after(&cmd, &state(true)).unwrap();
         let PlaceSpotOrderV3AfterChanges::NormalTpsl { parent, children } = changed else {
             panic!("expected normal TP/SL branch");
         };
@@ -773,14 +777,14 @@ mod tests {
             children: vec![trigger(2)],
         });
         let changes = PlaceSpotOrderV3UseCase
-            .compute_state_diff(&cmd, state(true))
+            .validate_and_compute(&cmd, &state(true))
             .unwrap();
         assert_eq!(changes.created_orders.len(), 2);
-        assert_eq!(changes.created_orders[0].order_base().order_id, 1);
-        assert_eq!(changes.created_orders[1].order_base().order_id, 2);
+        assert_eq!(changes.created_orders[0].after().order_base().order_id, 1);
+        assert_eq!(changes.created_orders[1].after().order_base().order_id, 2);
         assert!(changes.updated_maker_orders.is_empty());
         assert!(changes.settled_trades.is_empty());
-        assert_eq!(changes.to_replayable_events().unwrap().len(), 3);
+        assert_eq!(changes.replayable_events().len(), 3);
     }
 
     #[test]
@@ -805,12 +809,20 @@ mod tests {
             },
         );
 
-        let changes =
-            <PlaceSpotOrderV3UseCase as StateDiff>::do_compute_state_diff(state, changed).unwrap();
+        let cmd = command(PlaceSpotOrderV3Cmd::Single(order(
+            1,
+            OrderSide::Buy,
+            OrderType::Limit {
+                tif: example_core_entity::OrderTif::Gtc,
+            },
+        )));
+        let changes = build_place_changes(&cmd, state, changed).unwrap();
 
         assert_eq!(changes.updated_maker_orders.len(), 1);
-        assert_eq!(changes.updated_maker_orders[0].before, second_before);
-        assert_eq!(changes.updated_maker_orders[0].after, second_after);
+        assert_eq!(
+            changes.updated_maker_orders[0].after().order_base(),
+            second_after.order_base()
+        );
     }
 
     #[test]
@@ -823,9 +835,7 @@ mod tests {
             },
         )));
 
-        let changed = PlaceSpotOrderV3UseCase
-            .compute_state_changed(&cmd, &rejection_state(true))
-            .unwrap();
+        let changed = compute_place_after(&cmd, &rejection_state(true)).unwrap();
         let PlaceSpotOrderV3AfterChanges::Normal(PlaceNormalSpotOrderV3AfterChanges::Rejected {
             created_taker_order,
         }) = changed
@@ -838,13 +848,13 @@ mod tests {
         );
 
         let changes = PlaceSpotOrderV3UseCase
-            .compute_state_diff(&cmd, rejection_state(true))
+            .validate_and_compute(&cmd, &rejection_state(true))
             .unwrap();
         assert_eq!(changes.created_orders.len(), 1);
         assert!(changes.updated_maker_orders.is_empty());
         assert!(changes.settled_trades.is_empty());
         assert!(changes.updated_balances.is_empty());
-        assert_eq!(changes.to_replayable_events().unwrap().len(), 1);
+        assert_eq!(changes.replayable_events().len(), 1);
     }
 
     #[test]
@@ -860,14 +870,14 @@ mod tests {
         let authoritative_balance = before.balances_by_order_id[&1].quote.clone();
 
         let changes = PlaceSpotOrderV3UseCase
-            .compute_state_diff(&cmd, before)
+            .validate_and_compute(&cmd, &before)
             .unwrap();
 
         assert_eq!(changes.result, PlaceSpotOrderV3Result::Rejected);
         assert!(changes.updated_maker_orders.is_empty());
         assert!(changes.settled_trades.is_empty());
         assert!(changes.updated_balances.is_empty());
-        assert_eq!(changes.to_replayable_events().unwrap().len(), 1);
+        assert_eq!(changes.replayable_events().len(), 1);
         assert_eq!(authoritative_balance, binding().quote);
     }
 
@@ -884,9 +894,7 @@ mod tests {
             children: vec![trigger(2)],
         });
 
-        let changed = PlaceSpotOrderV3UseCase
-            .compute_state_changed(&cmd, &rejection_state(true))
-            .unwrap();
+        let changed = compute_place_after(&cmd, &rejection_state(true)).unwrap();
         let PlaceSpotOrderV3AfterChanges::NormalTpsl { parent, children } = changed else {
             panic!("expected normal TP/SL rejection")
         };
@@ -897,10 +905,10 @@ mod tests {
         assert!(children.is_empty());
 
         let changes = PlaceSpotOrderV3UseCase
-            .compute_state_diff(&cmd, rejection_state(true))
+            .validate_and_compute(&cmd, &rejection_state(true))
             .unwrap();
         assert_eq!(changes.created_orders.len(), 1);
         assert!(changes.updated_balances.is_empty());
-        assert_eq!(changes.to_replayable_events().unwrap().len(), 1);
+        assert_eq!(changes.replayable_events().len(), 1);
     }
 }

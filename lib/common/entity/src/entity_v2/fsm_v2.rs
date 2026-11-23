@@ -141,12 +141,8 @@ pub trait Fsm: TrackDiff + Sized {
         let logical_ts = metadata.logical_ts;
         let position = metadata.position;
         let (after, output) = self.derive_transition(metadata, payload)?;
-        let mut replay_event = after.track_update_event_from_at(
-            self,
-            self.event_position(),
-            position,
-            logical_ts,
-        )?;
+        let mut replay_event =
+            after.track_update_event_from_at(self, self.event_position(), position, logical_ts)?;
         replay_event.domain_event_type = event_type;
         Ok((after, replay_event, output))
     }

@@ -326,7 +326,6 @@ fn modify_and_buy_match_replay_all_business_field_changes() {
         "tif",
         "cloid",
         "updated_at",
-        "version",
     ] {
         assert!(fields.contains(&expected), "missing {expected}: {fields:?}");
     }

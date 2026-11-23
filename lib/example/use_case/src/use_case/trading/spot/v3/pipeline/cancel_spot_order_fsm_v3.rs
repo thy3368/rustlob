@@ -166,8 +166,8 @@ fn compute_changes(
     let order_before = &state.order;
     let balance_before = &state.balance;
     let order_loaded_position = order_before.event_position();
-    let metadata = FsmCommandMetadata::new(
-        cmd.lsn(),
+    let metadata = FsmCommandMetadata::new_at(
+        common_entity::EventPosition::new(cmd.lsn(), 0),
         cmd.logical_ts(),
         order_before.topic(),
         order_before.partition(),
@@ -185,8 +185,8 @@ fn compute_changes(
         None
     } else {
         let balance_loaded_position = balance_before.event_position();
-        let metadata = FsmCommandMetadata::new(
-            cmd.lsn(),
+        let metadata = FsmCommandMetadata::new_at(
+            common_entity::EventPosition::new(cmd.lsn(), 1),
             cmd.logical_ts(),
             balance_before.topic(),
             balance_before.partition(),
@@ -203,6 +203,9 @@ fn compute_changes(
             ),
         )
         .map_err(map_balance_error)?;
+        let mut balance_event = balance_event;
+        balance_event.t = cmd.topic();
+        balance_event.p = cmd.partition();
         Some(
             UpdatedEntityEvents::try_new(
                 balance_after,
@@ -213,6 +216,9 @@ fn compute_changes(
         )
     };
 
+    let mut order_event = order_event;
+    order_event.t = cmd.topic();
+    order_event.p = cmd.partition();
     Ok(CancelSpotOrderFsmV3Changes {
         order: UpdatedEntityEvents::try_new(order_after, order_loaded_position, vec![order_event])
             .map_err(CancelSpotOrderFsmV3Error::InvalidEntityEvents)?,
@@ -235,4 +241,3 @@ fn map_balance_error(error: BalanceV2Error) -> CancelSpotOrderFsmV3Error {
         | BalanceV2Error::StaleLsn { .. } => CancelSpotOrderFsmV3Error::ArithmeticOverflow,
     }
 }
-

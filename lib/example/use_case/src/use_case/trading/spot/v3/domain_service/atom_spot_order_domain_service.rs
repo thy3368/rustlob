@@ -288,6 +288,7 @@ impl SpotOrderDomainService {
                     updated_at: input.timestamp,
                     version: 0,
                 },
+                position: common_entity::EventPosition::ZERO,
                 settlement_status: SpotTradeSettlementStatus::Unsettled,
             });
         }

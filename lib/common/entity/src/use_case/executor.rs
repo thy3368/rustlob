@@ -8,6 +8,10 @@ use crate::{
 /// 已在进入 executor 前完成定序的批命令。
 pub trait PresequencedCommand: LogAttr {
     fn contains_event_metadata(&self, event: &ReplayableDomainEvent) -> bool;
+
+    fn allows_empty_events(&self) -> bool {
+        false
+    }
 }
 
 /// 多聚合 MI state-machine family 的运行时编排器。

@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 
 use common_entity::{
-    EntityError, LogAttr, LogEntry, PresequencedCommand, ReplayableChanges, ReplayableDomainEvent,
-    Shard, StateDiff, UseCase,
+    LogAttr, LogEntry, PresequencedCommand, ReplayableDomainEvent, ReplayableEntityChanges, Shard,
+    UseCaseV3,
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{BalanceV2, SpotOrderStatus, SpotOrderV7};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::cancel_spot_order::{
-    CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd, CancelSpotOrderV3Error, CancelSpotOrderV3State,
-    compute_cancel_changes,
+use super::cancel_spot_order_fsm_v3::{
+    CancelSpotOrderFsmV3Changes as CancelSpotOrderV3Changes,
+    CancelSpotOrderFsmV3Cmd as CancelSpotOrderV3Cmd,
+    CancelSpotOrderFsmV3Error as CancelSpotOrderV3Error,
+    CancelSpotOrderFsmV3State as CancelSpotOrderV3State, CancelSpotOrderFsmV3UseCase,
 };
 use super::place_spot_order::{
     PlaceSpotOrderV3Changes, PlaceSpotOrderV3Cmd, PlaceSpotOrderV3Error, PlaceSpotOrderV3OrderCmd,
@@ -57,6 +59,10 @@ impl PresequencedCommand for SpotBlockCmd {
                 && item.lsn() == event.lsn
                 && item.logical_ts() == event.logical_ts
         })
+    }
+
+    fn allows_empty_events(&self) -> bool {
+        true
     }
 }
 
@@ -127,30 +133,24 @@ pub enum SpotBlockError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SpotBlockUseCase;
 
-impl ReplayableChanges for SpotBlockChanges {
-    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
+impl ReplayableEntityChanges for SpotBlockChanges {
+    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
         let mut events = Vec::new();
         for result in &self.item_results {
-            let SpotBlockItemResult::Applied { item, changes } = result else {
+            let SpotBlockItemResult::Applied { changes, .. } = result else {
                 continue;
             };
-            let mut item_events = match changes {
-                SpotBlockAppliedChanges::Place(changes) => changes.to_replayable_events()?,
-                SpotBlockAppliedChanges::Cancel(changes) => changes.to_replayable_events()?,
+            let item_events = match changes {
+                SpotBlockAppliedChanges::Place(changes) => changes.replayable_events(),
+                SpotBlockAppliedChanges::Cancel(changes) => changes.replayable_events(),
             };
-            for event in &mut item_events {
-                event.t = item.topic();
-                event.p = item.partition();
-                event.lsn = item.lsn();
-                event.logical_ts = item.logical_ts();
-            }
             events.extend(item_events);
         }
-        Ok(events)
+        events
     }
 }
 
-impl UseCase for SpotBlockUseCase {
+impl UseCaseV3 for SpotBlockUseCase {
     type Command = SpotBlockCmd;
     type StateGiven = SpotBlockState;
     type Error = SpotBlockError;
@@ -205,17 +205,6 @@ impl UseCase for SpotBlockUseCase {
             });
         }
         Ok(SpotBlockChanges { item_results })
-    }
-}
-
-impl StateDiff for SpotBlockUseCase {
-    type StateDiff = SpotBlockChanges;
-
-    fn do_compute_state_diff(
-        _state: Self::StateGiven,
-        changed: Self::StateChanged,
-    ) -> Result<Self::StateDiff, Self::Error> {
-        Ok(changed)
     }
 }
 
@@ -331,13 +320,13 @@ impl WorkingState {
             .checked_add(changes.settled_trades.len() as u64)
             .ok_or(PlaceSpotOrderV3Error::TradeIdOverflow)?;
         for pair in &changes.updated_maker_orders {
-            self.replace_order(pair.after.clone())?;
+            self.replace_order(pair.after().clone())?;
         }
         for order in &changes.created_orders {
-            self.orders.push(order.clone());
+            self.orders.push(order.after().clone());
         }
         for pair in &changes.updated_balances {
-            self.replace_balance(pair.after.clone())?;
+            self.replace_balance(pair.after().clone())?;
         }
         self.rebuild_indexes()
             .map_err(|_| SpotBlockItemError::OrderNotFound)?;
@@ -351,8 +340,8 @@ impl WorkingState {
     ) -> Result<SpotBlockAppliedChanges, SpotBlockItemError> {
         let entry = common_entity::LogEntrySequencer::derive(&item, command);
         let order_index = match &entry.order_id {
-            OrderId::Oid(oid) => self.order_by_oid.get(oid),
-            OrderId::Cloid(cloid) => self.order_by_cloid.get(cloid),
+            OrderId::Oid(oid) => self.order_by_oid.get(&oid),
+            OrderId::Cloid(cloid) => self.order_by_cloid.get(cloid.as_str()),
         }
         .copied()
         .ok_or(SpotBlockItemError::OrderNotFound)?;
@@ -366,10 +355,17 @@ impl WorkingState {
         let balance = self
             .balance_for(base.owner.0, u64::from(held_coin.index()))?
             .clone();
-        let changes = compute_cancel_changes(&entry, CancelSpotOrderV3State { order, balance })?;
-        self.replace_order(changes.updated_order.after.clone())?;
-        if let Some(pair) = &changes.updated_balance {
-            self.replace_balance(pair.after.clone())?;
+        let changes = CancelSpotOrderFsmV3UseCase
+            .validate_and_compute(&entry, &CancelSpotOrderV3State { order, balance })
+            .map_err(|error| match error {
+                common_entity::UseCaseComputeError::Business(error) => error,
+                common_entity::UseCaseComputeError::Contract(_) => CancelSpotOrderV3Error::Entity(
+                    common_entity::EntityError::Custom("cancel transition contract failed".into()),
+                ),
+            })?;
+        self.replace_order(changes.order.after().clone())?;
+        if let Some(balance) = &changes.balance {
+            self.replace_balance(balance.after().clone())?;
         }
         self.rebuild_indexes()
             .map_err(|_| SpotBlockItemError::OrderNotFound)?;
@@ -527,7 +523,7 @@ mod tests {
             .check_command(&command)
             .expect("block metadata must be valid");
         let changes = SpotBlockUseCase
-            .compute_state_diff(&command, state())
+            .validate_and_compute(&command, &state())
             .expect("place and cancel must both apply");
         assert!(
             changes
@@ -536,9 +532,7 @@ mod tests {
                 .all(|item| matches!(item, SpotBlockItemResult::Applied { .. }))
         );
 
-        let events = changes
-            .to_replayable_events()
-            .expect("changes must project");
+        let events = changes.replayable_events();
         let order_type = <SpotOrderV7 as Entity>::entity_type();
         let order_events = events
             .iter()
@@ -560,7 +554,7 @@ mod tests {
             items: vec![item(10, cancel(OrderId::Oid(999))), item(11, place(7))],
         };
         let changes = SpotBlockUseCase
-            .compute_state_diff(&command, state())
+            .validate_and_compute(&command, &state())
             .expect("item rejection is not a block error");
         assert!(matches!(
             changes.item_results[0],

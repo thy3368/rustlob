@@ -1,5 +1,5 @@
 use common_entity::{
-    ExecutionError, ExecutionResult, LogEntry, StateSink, StateSource, UseCaseExecutor,
+    ExecutionErrorV3, ExecutionResultV3, LogEntry, StateSinkV3, StateSourceV3, UseCaseExecutorV3,
 };
 use example_core_use_case::pipeline::place_spot_order::{
     PlaceSpotOrderV3Changes, PlaceSpotOrderV3Cmd, PlaceSpotOrderV3Error, PlaceSpotOrderV3UseCase,
@@ -10,16 +10,17 @@ pub fn execute_place_spot_order_v3_with_outbound<OB>(
     command: &LogEntry<PlaceSpotOrderV3Cmd>,
     outbound: &OB,
 ) -> Result<
-    ExecutionResult<PlaceSpotOrderV3Changes>,
-    ExecutionError<PlaceSpotOrderV3Error, <OB as StateSink<PlaceSpotOrderV3UseCase>>::Error>,
+    ExecutionResultV3<PlaceSpotOrderV3Changes>,
+    ExecutionErrorV3<
+        PlaceSpotOrderV3Error,
+        <OB as StateSourceV3<PlaceSpotOrderV3UseCase>>::Error,
+        <OB as StateSinkV3>::Error,
+    >,
 >
 where
-    OB: StateSource<
-            PlaceSpotOrderV3UseCase,
-            Error = <OB as StateSink<PlaceSpotOrderV3UseCase>>::Error,
-        > + StateSink<PlaceSpotOrderV3UseCase>,
+    OB: StateSourceV3<PlaceSpotOrderV3UseCase> + StateSinkV3,
 {
-    UseCaseExecutor.execute::<PlaceSpotOrderV3UseCase, OB, OB>(
+    UseCaseExecutorV3.execute::<PlaceSpotOrderV3UseCase, OB, OB>(
         &PlaceSpotOrderV3UseCase,
         command,
         outbound,

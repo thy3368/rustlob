@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::{
-    EventPosition, LogAttr, ReplayableDomainEvent, ReplayableEntityChanges, UseCaseComputeError,
-    UseCaseContractError, UseCaseV3,
+    EventPosition, LogAttr, PresequencedCommand, ReplayableDomainEvent, ReplayableEntityChanges,
+    UseCaseComputeError, UseCaseContractError, UseCaseV3,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -77,6 +77,84 @@ impl UseCaseExecutorV3 {
             .map_err(ExecutionErrorV3::Publish)?;
         Ok(ExecutionResultV3 { state_changed })
     }
+
+    pub fn execute_presequenced<F, SS, OB>(
+        &self,
+        use_case: &F,
+        command: &F::Command,
+        state_source: &SS,
+        state_sink: &OB,
+    ) -> ExecutionOutcomeV3<F::StateChanged, F::Error, SS::Error, OB::Error>
+    where
+        F: UseCaseV3,
+        F::Command: PresequencedCommand,
+        SS: StateSourceV3<F>,
+        OB: StateSinkV3,
+    {
+        use_case
+            .check_command(command)
+            .map_err(ExecutionErrorV3::Business)?;
+        let state_given = state_source
+            .load_given_state(command)
+            .map_err(ExecutionErrorV3::LoadState)?;
+        let state_changed = use_case
+            .validate_and_compute(command, &state_given)
+            .map_err(map_compute_error)?;
+        let events = state_changed.replayable_events();
+        validate_presequenced_events(command, &events).map_err(ExecutionErrorV3::Contract)?;
+        if events.is_empty() {
+            return Ok(ExecutionResultV3 { state_changed });
+        }
+        state_sink
+            .persist(&events)
+            .map_err(ExecutionErrorV3::Persist)?;
+        state_sink
+            .replay(&events)
+            .map_err(ExecutionErrorV3::Replay)?;
+        state_sink
+            .publish(&events)
+            .map_err(ExecutionErrorV3::Publish)?;
+        Ok(ExecutionResultV3 { state_changed })
+    }
+}
+
+fn validate_presequenced_events(
+    command: &impl PresequencedCommand,
+    events: &[&ReplayableDomainEvent],
+) -> Result<(), UseCaseContractError> {
+    if events.is_empty() {
+        return if command.allows_empty_events() {
+            Ok(())
+        } else {
+            Err(UseCaseContractError::EmptyEvents)
+        };
+    }
+    let mut keys = HashSet::with_capacity(events.len());
+    let mut previous = None;
+    for (event_index, event) in events.iter().enumerate() {
+        if !command.contains_event_metadata(event) {
+            return Err(UseCaseContractError::EventMetadataMismatch {
+                event_index,
+                expected_lsn: command.lsn(),
+                actual_lsn: event.position.lsn,
+                expected_logical_ts: command.logical_ts(),
+                actual_logical_ts: event.logical_ts,
+            });
+        }
+        if previous.is_some_and(|position: EventPosition| event.position <= position) {
+            return Err(UseCaseContractError::EventPositionOutOfOrder { event_index });
+        }
+        previous = Some(event.position);
+        if !keys.insert((event.position, event.entity_type, event.entity_id)) {
+            return Err(UseCaseContractError::DuplicateEventKey {
+                lsn: event.position.lsn,
+                command_index: event.position.command_index,
+                entity_type: event.entity_type,
+                entity_id: event.entity_id,
+            });
+        }
+    }
+    Ok(())
 }
 
 fn map_compute_error<BE, LE, OE>(error: UseCaseComputeError<BE>) -> ExecutionErrorV3<BE, LE, OE> {

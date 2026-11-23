@@ -27,7 +27,9 @@ pub enum UpdatedEntityEventsError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CreatedEntityEventError {
     EntityIdentityMismatch,
-    NonZeroPreviousPosition { actual: EventPosition },
+    NonZeroPreviousPosition {
+        actual: EventPosition,
+    },
     AfterPositionMismatch {
         expected: EventPosition,
         actual: EventPosition,

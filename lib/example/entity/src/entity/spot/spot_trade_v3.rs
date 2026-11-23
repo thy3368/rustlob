@@ -404,6 +404,7 @@ mod tests {
     fn stale_lsn_is_rejected_atomically_and_max_is_accepted() {
         let mut stale = trade(OrderSide::Buy, 1, 2);
         stale.comon_trade.version = 20;
+        stale.position = common_entity::EventPosition::new(20, 0);
         let before = stale.clone();
         assert_eq!(
             stale.transition(SpotTradeEvent::Settle {

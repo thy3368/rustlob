@@ -224,7 +224,10 @@ impl SpotOrderV7 {
         order.status = SpotOrderStatus::Pending;
         order.group_relation = OrderGroupRelation::Standalone;
         let position = common_entity::EventPosition::new(order.lsn, 0);
-        Self { order_base: order, position }
+        Self {
+            order_base: order,
+            position,
+        }
     }
 
     pub fn normal_tpsl(parent: OrderBase, children: Vec<OrderBase>) -> (Self, Vec<Self>) {
@@ -239,7 +242,10 @@ impl SpotOrderV7 {
                     parent_order_id: id,
                 };
                 let position = common_entity::EventPosition::new(child.lsn, 0);
-                Self { order_base: child, position }
+                Self {
+                    order_base: child,
+                    position,
+                }
             })
             .collect();
         (parent, children)
@@ -255,7 +261,10 @@ impl SpotOrderV7 {
         position: common_entity::EventPosition,
     ) -> Result<Self, EntityError> {
         validate_record(&order)?;
-        Ok(Self { order_base: order, position })
+        Ok(Self {
+            order_base: order,
+            position,
+        })
     }
     pub fn order_base(&self) -> &OrderBase {
         &self.order_base
@@ -446,7 +455,8 @@ impl SpotOrderV7 {
                 cloid,
             } => {
                 let hold_before = active_hold_requirement(&self.order_base)?;
-                let mut next = modified_order(&self.order_base, *price, *size, position, timestamp)?;
+                let mut next =
+                    modified_order(&self.order_base, *price, *size, position, timestamp)?;
                 if let Some(tif) = tif {
                     next.tif = *tif;
                 }
@@ -506,12 +516,14 @@ impl Fsm for SpotOrderV7 {
         command: SpotOrderV7Command,
     ) -> Result<(Self, Self::Output), EntityError> {
         let (next, output) =
-            self.compute_transition(
-                &command,
-                metadata.position,
-                metadata.logical_ts,
-            )?;
-        Ok((Self { order_base: next, position: metadata.position }, output))
+            self.compute_transition(&command, metadata.position, metadata.logical_ts)?;
+        Ok((
+            Self {
+                order_base: next,
+                position: metadata.position,
+            },
+            output,
+        ))
     }
 }
 

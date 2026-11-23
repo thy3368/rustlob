@@ -345,8 +345,14 @@ pub trait TrackDiff: Entity {
             return Err(EntityError::NoChangesDetected);
         }
         let mut event = ReplayableDomainEvent::new_at(
-            self.topic(), self.partition(), logical_ts, previous_position, position,
-            self.entity_id(), Self::entity_type(), EntityChangeType::Updated.as_tag(),
+            self.topic(),
+            self.partition(),
+            logical_ts,
+            previous_position,
+            position,
+            self.entity_id(),
+            Self::entity_type(),
+            EntityChangeType::Updated.as_tag(),
         );
         for change in changes {
             let field_type = Self::replay_field_type(change.field_name.as_ref());
