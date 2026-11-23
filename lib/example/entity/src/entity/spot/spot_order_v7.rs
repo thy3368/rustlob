@@ -362,7 +362,9 @@ impl SpotOrderV7 {
             SpotOrderV7Command::Cancel => {
                 let was_pending = self.status() == SpotOrderStatus::Pending;
                 let mut next = canceled_order(&self.order_base, position, timestamp)?;
-                if !was_pending {
+                if was_pending {
+                    next.size = Decimal::ZERO;
+                } else {
                     settle_terminal_release(&mut next)?;
                 }
                 Ok(next)

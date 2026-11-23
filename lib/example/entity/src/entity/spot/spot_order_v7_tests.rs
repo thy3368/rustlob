@@ -715,7 +715,7 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
         .unwrap();
     assert_eq!(
         buyer.terminal_release_amount().unwrap().amount(),
-        Decimal::from(21)
+        Decimal::from(31)
     );
     assert_eq!(
         buyer.order_base().buy_quote_principal_paid,

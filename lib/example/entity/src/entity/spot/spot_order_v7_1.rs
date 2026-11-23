@@ -128,6 +128,15 @@ mod tests {
         assert_eq!(order, &before);
     }
 
+    fn assert_terminal_query_preserves_order(
+        order: &SpotOrderV7,
+        expected: Result<CoinAmount, SpotAmountConversionError>,
+    ) {
+        let before = order.clone();
+        assert_eq!(order.terminal_release_amount(), expected);
+        assert_eq!(order, &before);
+    }
+
     #[test]
     fn buy_freezes_quote_principal_and_fee_reserve() {
         let order = order(OrderSide::Buy);
@@ -191,7 +200,7 @@ mod tests {
         buy.buy_quote_principal_released = Decimal::from(40);
         buy.buy_quote_fee_reserve_released = Decimal::from(2);
         let buy = SpotOrderV7::from_record(buy).unwrap();
-        assert_query_preserves_order(
+        assert_terminal_query_preserves_order(
             &buy,
             Ok(CoinAmount::new(Coin::USDT, Decimal::from(42)).unwrap()),
         );
@@ -200,7 +209,7 @@ mod tests {
         sell.status = SpotOrderStatus::Filled;
         sell.size = Decimal::ZERO;
         let sell = SpotOrderV7::from_record(sell).unwrap();
-        assert_query_preserves_order(
+        assert_terminal_query_preserves_order(
             &sell,
             Ok(CoinAmount::new(Coin::BTC, Decimal::ZERO).unwrap()),
         );
@@ -209,7 +218,7 @@ mod tests {
         rejected.status = SpotOrderStatus::Rejected;
         rejected.size = Decimal::ZERO;
         let rejected = SpotOrderV7::from_record(rejected).unwrap();
-        assert_query_preserves_order(
+        assert_terminal_query_preserves_order(
             &rejected,
             Ok(CoinAmount::new(Coin::BTC, Decimal::from(2)).unwrap()),
         );
@@ -217,7 +226,7 @@ mod tests {
 
     #[test]
     fn terminal_release_rejects_non_terminal_order() {
-        assert_query_preserves_order(
+        assert_terminal_query_preserves_order(
             &order(OrderSide::Buy),
             Err(SpotAmountConversionError::OrderNotCanceled),
         );
@@ -236,6 +245,7 @@ mod tests {
         ] {
             let mut after = before.order_base().clone();
             after.size = size;
+            after.orig_size = size;
             let after = SpotOrderV7::from_record(after).unwrap();
             let before_snapshot = before.clone();
             let after_snapshot = after.clone();
@@ -282,12 +292,16 @@ mod tests {
             Err(SpotAmountConversionError::ArithmeticOverflow)
         );
 
-        let mut inexact = before.order_base().clone();
+        let mut precise_before = before.order_base().clone();
+        precise_before.limit_px = Decimal::ONE;
+        let precise_before = SpotOrderV7::from_record(precise_before).unwrap();
+        let mut inexact = precise_before.order_base().clone();
         inexact.size = Decimal::new(20_000_001, 7);
+        inexact.orig_size = inexact.size;
         assert_eq!(
             SpotOrderV7::from_record(inexact)
                 .unwrap()
-                .modify_freeze_delta(&before),
+                .modify_freeze_delta(&precise_before),
             Err(SpotAmountConversionError::InexactConversion)
         );
     }
