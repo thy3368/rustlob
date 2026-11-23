@@ -31,6 +31,9 @@ pub use use_case::executor::{
     DomainEventChanges, DomainEventExecutionResult, DomainEventSink, ExecutionError,
     ExecutionResult, PresequencedCommand, StateSink, StateSource, UseCaseExecutor,
 };
+pub use use_case::executor_v3::{
+    ExecutionErrorV3, ExecutionResultV3, StateSinkV3, StateSourceV3, UseCaseExecutorV3,
+};
 pub use use_case::log_entry::LogEntry;
 pub use use_case::log_entry_repo::LogEntryRepo;
 pub use use_case::query::{
@@ -48,6 +51,7 @@ pub use use_case::use_case_v2::StateDiff as MultiAggregateUseCaseBeforeAfter;
 /// 这是 `core.use_case` 层多聚合 `use-case family` 的最低实现契约称呼。
 pub use use_case::use_case_v2::UseCase as MultiAggregateUseCaseUnchecked;
 pub use use_case::use_case_v2::{StateDiff, UseCase};
+pub use use_case::use_case_v3::{UseCaseComputeError, UseCaseContractError, UseCaseV3};
 
 /// Error raised while tracking entity state into replayable events.
 #[derive(Debug, Clone, PartialEq, Eq)]
