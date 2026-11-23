@@ -1,4 +1,7 @@
-use common_entity::{Entity, EntityError, EntityFieldChange, Fsm, LogAttr, Shard, TrackDiff};
+use common_entity::{
+    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Fsm, LogAttr,
+    ReplayableDomainEvent, SequencedCommand, Shard, TrackDiff, Transition,
+};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
 
@@ -50,6 +53,52 @@ pub enum SpotOrderV7Event {
         lsn: u64,
         timestamp: u64,
     },
+}
+
+/// 不含定序元数据的现货订单业务命令。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotOrderV7Command {
+    Activate,
+    MatchedAsTaker {
+        filled_size: Decimal,
+        quote_fee: Decimal,
+    },
+    MatchedAsMaker {
+        filled_size: Decimal,
+        quote_fee: Decimal,
+    },
+    RejectedAsTaker,
+    Modify {
+        price: Decimal,
+        size: Decimal,
+        tif: Option<OrderTif>,
+        cloid: Option<String>,
+    },
+    Cancel,
+}
+
+/// 现货订单成功迁移后成立的领域事实。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotOrderV7DomainEvent {
+    Activated { replay_event: EntityReplayableEvent },
+    MatchedAsTaker { replay_event: EntityReplayableEvent },
+    MatchedAsMaker { replay_event: EntityReplayableEvent },
+    RejectedAsTaker { replay_event: EntityReplayableEvent },
+    Modified { replay_event: EntityReplayableEvent },
+    Canceled { replay_event: EntityReplayableEvent },
+}
+
+impl ReplayableDomainEvent for SpotOrderV7DomainEvent {
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        match self {
+            Self::Activated { replay_event }
+            | Self::MatchedAsTaker { replay_event }
+            | Self::MatchedAsMaker { replay_event }
+            | Self::RejectedAsTaker { replay_event }
+            | Self::Modified { replay_event }
+            | Self::Canceled { replay_event } => replay_event,
+        }
+    }
 }
 
 impl Shard for SpotOrderV7Event {
@@ -355,6 +404,191 @@ impl SpotOrderV7 {
         Ok(())
     }
 
+    /// 执行已定序命令，并在提交实体前生成可回放领域事件。
+    pub fn transition_sequenced(
+        &mut self,
+        command: SequencedCommand<SpotOrderV7Command>,
+    ) -> Result<Transition<SpotOrderStatus, SpotOrderV7Output, SpotOrderV7DomainEvent>, EntityError>
+    {
+        let (metadata, payload) = command.into_parts();
+        let (next, output) =
+            self.compute_transition(&payload, metadata.lsn, metadata.logical_ts)?;
+        let after = Self { order_base: next };
+        let mut replay_event = after.track_update_event_from(self)?;
+        replay_event.t = after.topic();
+        replay_event.p = after.partition();
+        replay_event.previous_lsn = self.order_base.lsn;
+        replay_event.lsn = metadata.lsn;
+        replay_event.logical_ts = metadata.logical_ts;
+        let event = domain_event(payload, replay_event);
+        self.order_base = after.order_base;
+        Ok(Transition::new(self.status(), output, event))
+    }
+
+    /// 与 [`Self::transition_sequenced`] 相同；供不区分 transition/apply 的调用方使用。
+    pub fn apply_sequenced(
+        &mut self,
+        command: SequencedCommand<SpotOrderV7Command>,
+    ) -> Result<Transition<SpotOrderStatus, SpotOrderV7Output, SpotOrderV7DomainEvent>, EntityError>
+    {
+        self.transition_sequenced(command)
+    }
+
+    fn compute_transition(
+        &self,
+        command: &SpotOrderV7Command,
+        lsn: u64,
+        timestamp: u64,
+    ) -> Result<(OrderBase, SpotOrderV7Output), EntityError> {
+        if lsn < self.order_base.lsn {
+            return Err(err("order command LSN is older than the current LSN"));
+        }
+        if matches!(
+            self.order_base.status,
+            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+        ) {
+            return Err(err("order is terminal"));
+        }
+        match command {
+            SpotOrderV7Command::Activate => {
+                if self.status() != SpotOrderStatus::Pending {
+                    return Err(err("order is not pending"));
+                }
+                let freeze_requirement = freeze_requirement(&self.order_base)
+                    .map_err(|error| err(&error.to_string()))?;
+                let mut next = self.order_base.clone();
+                next.status = SpotOrderStatus::Open;
+                next.updated_at = timestamp;
+                next.lsn = lsn;
+                Ok((
+                    next,
+                    SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
+                ))
+            }
+            SpotOrderV7Command::MatchedAsTaker {
+                filled_size,
+                quote_fee,
+            } => {
+                self.validate_matchable_as_taker()?;
+                let next = matched_order(
+                    &self.order_base,
+                    *filled_size,
+                    *quote_fee,
+                    lsn,
+                    timestamp,
+                    MatchRole::Taker,
+                )?;
+                let order_after = Self {
+                    order_base: next.clone(),
+                };
+                let release_requirement = matches!(
+                    order_after.status(),
+                    SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+                )
+                .then(|| match_release_requirement(&order_after))
+                .transpose()?;
+                Ok((
+                    next,
+                    SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput {
+                        order_after,
+                        release_requirement,
+                    }),
+                ))
+            }
+            SpotOrderV7Command::MatchedAsMaker {
+                filled_size,
+                quote_fee,
+            } => {
+                self.validate_matchable_as_maker()?;
+                let next = matched_order(
+                    &self.order_base,
+                    *filled_size,
+                    *quote_fee,
+                    lsn,
+                    timestamp,
+                    MatchRole::Maker,
+                )?;
+                let order_after = Self {
+                    order_base: next.clone(),
+                };
+                Ok((
+                    next,
+                    SpotOrderV7Output::MatchedAsMaker(ApplySpotOrderV7MatchOutput {
+                        order_after,
+                        release_requirement: None,
+                    }),
+                ))
+            }
+            SpotOrderV7Command::RejectedAsTaker => {
+                self.validate_matchable_as_taker()?;
+                if self.order_base.effective_tif() != OrderTif::Alo {
+                    return Err(err("order cannot be rejected as ALO taker"));
+                }
+                let mut next = self.order_base.clone();
+                next.status = SpotOrderStatus::Rejected;
+                next.updated_at = timestamp;
+                next.lsn = lsn;
+                let order_after = Self {
+                    order_base: next.clone(),
+                };
+                let release_requirement = Some(match_release_requirement(&order_after)?);
+                Ok((
+                    next,
+                    SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
+                        order_after,
+                        release_requirement,
+                    }),
+                ))
+            }
+            SpotOrderV7Command::Modify {
+                price,
+                size,
+                tif,
+                cloid,
+            } => {
+                let hold_before = active_hold_requirement(&self.order_base)?;
+                let mut next = modified_order(&self.order_base, *price, *size, lsn, timestamp)?;
+                if let Some(tif) = tif {
+                    next.tif = *tif;
+                }
+                if let Some(cloid) = cloid {
+                    next.cloid = Some(cloid.clone());
+                }
+                let hold_after = active_hold_requirement(&next)?;
+                let hold_adjustment = hold_adjustment(&self.order_base, hold_before, hold_after)?;
+                let order_after = Self {
+                    order_base: next.clone(),
+                };
+                Ok((
+                    next,
+                    SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
+                        order_after,
+                        hold_adjustment,
+                    }),
+                ))
+            }
+            SpotOrderV7Command::Cancel => {
+                let was_pending = self.status() == SpotOrderStatus::Pending;
+                let next = canceled_order(&self.order_base, lsn, timestamp)?;
+                let order_after = Self {
+                    order_base: next.clone(),
+                };
+                let release_requirement = if was_pending {
+                    zero_release_requirement(&order_after)?
+                } else {
+                    entity_release_requirement(&order_after)?
+                };
+                Ok((
+                    next,
+                    SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
+                        order_after,
+                        release_requirement,
+                    }),
+                ))
+            }
+        }
+    }
+
     /// 兼容入口；版本由 command 的全局 `lsn` 决定，并委托统一 FSM 迁移。
     pub fn modify(
         &mut self,
@@ -386,162 +620,64 @@ impl Fsm for SpotOrderV7 {
         &mut self,
         event: SpotOrderV7Event,
     ) -> Result<(Self::State, Self::Output), EntityError> {
-        let incoming_lsn = event.lsn();
-        if incoming_lsn < self.order_base.lsn {
-            return Err(err("order command LSN is older than the current LSN"));
-        }
-        if matches!(
-            self.order_base.status,
-            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
-        ) {
-            return Err(err("order is terminal"));
-        }
-        let (next, output) = match event {
-            SpotOrderV7Event::Activate { lsn, timestamp } => {
-                if self.status() != SpotOrderStatus::Pending {
-                    return Err(err("order is not pending"));
-                }
-                let freeze_requirement = freeze_requirement(&self.order_base)
-                    .map_err(|error| err(&error.to_string()))?;
-                let mut next = self.order_base.clone();
-                next.status = SpotOrderStatus::Open;
-                next.updated_at = timestamp;
-                next.lsn = lsn;
-                (
-                    next,
-                    SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
-                )
-            }
+        let lsn = event.lsn();
+        let timestamp = event.logical_ts();
+        let command = match event {
+            SpotOrderV7Event::Activate { .. } => SpotOrderV7Command::Activate,
             SpotOrderV7Event::MatchedAsTaker {
-                lsn,
                 filled_size,
                 quote_fee,
-                timestamp,
-            } => {
-                self.validate_matchable_as_taker()?;
-                let next = matched_order(
-                    &self.order_base,
-                    filled_size,
-                    quote_fee,
-                    lsn,
-                    timestamp,
-                    MatchRole::Taker,
-                )?;
-                let order_after = SpotOrderV7 {
-                    order_base: next.clone(),
-                };
-                let release_requirement = match order_after.status() {
-                    SpotOrderStatus::Filled
-                    | SpotOrderStatus::Canceled
-                    | SpotOrderStatus::Rejected => Some(match_release_requirement(&order_after)?),
-                    _ => None,
-                };
-                (
-                    next,
-                    SpotOrderV7Output::MatchedAsTaker(ApplySpotOrderV7MatchOutput {
-                        order_after,
-                        release_requirement,
-                    }),
-                )
-            }
+                ..
+            } => SpotOrderV7Command::MatchedAsTaker {
+                filled_size,
+                quote_fee,
+            },
             SpotOrderV7Event::MatchedAsMaker {
-                lsn,
                 filled_size,
                 quote_fee,
-                timestamp,
-            } => {
-                self.validate_matchable_as_maker()?;
-                let next = matched_order(
-                    &self.order_base,
-                    filled_size,
-                    quote_fee,
-                    lsn,
-                    timestamp,
-                    MatchRole::Maker,
-                )?;
-                let order_after = SpotOrderV7 {
-                    order_base: next.clone(),
-                };
-                (
-                    next,
-                    SpotOrderV7Output::MatchedAsMaker(ApplySpotOrderV7MatchOutput {
-                        order_after,
-                        release_requirement: None,
-                    }),
-                )
-            }
-            SpotOrderV7Event::RejectedAsTaker { lsn, timestamp } => {
-                self.validate_matchable_as_taker()?;
-                if self.order_base.effective_tif() != OrderTif::Alo {
-                    return Err(err("order cannot be rejected as ALO taker"));
-                }
-                let mut next = self.order_base.clone();
-                next.status = SpotOrderStatus::Rejected;
-                next.updated_at = timestamp;
-                next.lsn = lsn;
-                let order_after = SpotOrderV7 {
-                    order_base: next.clone(),
-                };
-                let release_requirement = Some(match_release_requirement(&order_after)?);
-                (
-                    next,
-                    SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
-                        order_after,
-                        release_requirement,
-                    }),
-                )
-            }
+                ..
+            } => SpotOrderV7Command::MatchedAsMaker {
+                filled_size,
+                quote_fee,
+            },
+            SpotOrderV7Event::RejectedAsTaker { .. } => SpotOrderV7Command::RejectedAsTaker,
             SpotOrderV7Event::Modify {
-                lsn,
                 price,
                 size,
                 tif,
                 cloid,
-                timestamp,
-            } => {
-                let hold_before = active_hold_requirement(&self.order_base)?;
-                let mut next = modified_order(&self.order_base, price, size, lsn, timestamp)?;
-                if let Some(tif) = tif {
-                    next.tif = tif;
-                }
-                if let Some(cloid) = cloid {
-                    next.cloid = Some(cloid);
-                }
-                let hold_after = active_hold_requirement(&next)?;
-                let hold_adjustment = hold_adjustment(&self.order_base, hold_before, hold_after)?;
-                let order_after = SpotOrderV7 {
-                    order_base: next.clone(),
-                };
-                (
-                    next,
-                    SpotOrderV7Output::Modified(ModifySpotOrderV7Output {
-                        order_after,
-                        hold_adjustment,
-                    }),
-                )
-            }
-            SpotOrderV7Event::Cancel { lsn, timestamp } => {
-                let was_pending = self.status() == SpotOrderStatus::Pending;
-                let next = canceled_order(&self.order_base, lsn, timestamp)?;
-                let order_after = SpotOrderV7 {
-                    order_base: next.clone(),
-                };
-                let release_requirement = if was_pending {
-                    zero_release_requirement(&order_after)?
-                } else {
-                    entity_release_requirement(&order_after)?
-                };
-                (
-                    next,
-                    SpotOrderV7Output::Canceled(CancelSpotOrderV7Output {
-                        order_after,
-                        release_requirement,
-                    }),
-                )
-            }
+                ..
+            } => SpotOrderV7Command::Modify {
+                price,
+                size,
+                tif,
+                cloid,
+            },
+            SpotOrderV7Event::Cancel { .. } => SpotOrderV7Command::Cancel,
         };
+        let (next, output) = self.compute_transition(&command, lsn, timestamp)?;
         self.order_base = next;
         Ok((self.order_base.status, output))
+    }
+}
+
+fn domain_event(
+    command: SpotOrderV7Command,
+    replay_event: EntityReplayableEvent,
+) -> SpotOrderV7DomainEvent {
+    match command {
+        SpotOrderV7Command::Activate => SpotOrderV7DomainEvent::Activated { replay_event },
+        SpotOrderV7Command::MatchedAsTaker { .. } => {
+            SpotOrderV7DomainEvent::MatchedAsTaker { replay_event }
+        }
+        SpotOrderV7Command::MatchedAsMaker { .. } => {
+            SpotOrderV7DomainEvent::MatchedAsMaker { replay_event }
+        }
+        SpotOrderV7Command::RejectedAsTaker => {
+            SpotOrderV7DomainEvent::RejectedAsTaker { replay_event }
+        }
+        SpotOrderV7Command::Modify { .. } => SpotOrderV7DomainEvent::Modified { replay_event },
+        SpotOrderV7Command::Cancel => SpotOrderV7DomainEvent::Canceled { replay_event },
     }
 }
 
@@ -673,6 +809,13 @@ impl TrackDiff for SpotOrderV7 {
                 "status",
                 format!("{:?}", a.status),
                 format!("{:?}", b.status),
+            ),
+            ("tif", format!("{:?}", a.tif), format!("{:?}", b.tif)),
+            ("cloid", format!("{:?}", a.cloid), format!("{:?}", b.cloid)),
+            (
+                "buy_quote_fee_reserve_consumed",
+                a.buy_quote_fee_reserve_consumed.to_string(),
+                b.buy_quote_fee_reserve_consumed.to_string(),
             ),
             (
                 "updated_at",

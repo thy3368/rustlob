@@ -18,7 +18,8 @@ pub use entity_v2::entity_replayable_event::{
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use entity_v2::shard::{LogAttr, Shard};
 pub use entity_v2::{
-    CommandMetadata, Fsm, IntoSequencedCommand, SequencedCommand, SequencedDomainEvent, Transition,
+    CommandMetadata, Fsm, IntoSequencedCommand, ReplayableDomainEvent, SequencedCommand,
+    SequencedDomainEvent, Transition,
 };
 pub use sequence::id_generator::EntityIdGenerator;
 pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer, SYSTEM_USER_ID};

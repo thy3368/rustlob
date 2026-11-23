@@ -1,7 +1,10 @@
-use common_entity::Fsm;
+use common_entity::{CommandMetadata, Fsm, ReplayableDomainEvent, SequencedCommand, Shard};
 use rust_decimal::Decimal;
 
-use super::{SpotOrderV7, SpotOrderV7Event, SpotOrderV7Output, SpotOrderV7ReleaseRequirement};
+use super::{
+    SpotOrderV7, SpotOrderV7Command, SpotOrderV7DomainEvent, SpotOrderV7Event, SpotOrderV7Output,
+    SpotOrderV7ReleaseRequirement,
+};
 use crate::account::coin::Coin;
 use crate::account::symbol::Symbol;
 use crate::common::PriceType;
@@ -10,6 +13,19 @@ use crate::entity::common::common_order::OrderBase;
 use crate::entity::common::order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
 
 const TIMESTAMP: u64 = 500;
+
+fn sequenced(command: SpotOrderV7Command) -> SequencedCommand<SpotOrderV7Command> {
+    SequencedCommand::new(CommandMetadata::new(10, TIMESTAMP), command)
+}
+
+fn field_names(event: &SpotOrderV7DomainEvent) -> Vec<&str> {
+    event
+        .replayable_event()
+        .field_changes
+        .iter()
+        .map(|change| change.field_name_as_str().unwrap())
+        .collect()
+}
 
 fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {
     SpotOrderV7::from_record(OrderBase {
@@ -238,4 +254,336 @@ fn filled_sell_taker_returns_zero_base_release_requirement() {
         Some(SpotOrderV7ReleaseRequirement::Sell { base_quantity })
             if base_quantity.amount() == Decimal::ZERO
     ));
+}
+
+#[test]
+fn sequenced_commands_emit_past_tense_events_with_replay_metadata() {
+    let cases = [
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Pending),
+            SpotOrderV7Command::Activate,
+            "Activated",
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            SpotOrderV7Command::MatchedAsTaker {
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::ONE,
+            },
+            "MatchedAsTaker",
+        ),
+        (
+            order(OrderSide::Sell, SpotOrderStatus::Open),
+            SpotOrderV7Command::MatchedAsMaker {
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::ZERO,
+            },
+            "MatchedAsMaker",
+        ),
+        (
+            {
+                let mut record = order(OrderSide::Buy, SpotOrderStatus::Open)
+                    .order_base()
+                    .clone();
+                record.tif = OrderTif::Alo;
+                SpotOrderV7::from_record(record).unwrap()
+            },
+            SpotOrderV7Command::RejectedAsTaker,
+            "RejectedAsTaker",
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            SpotOrderV7Command::Modify {
+                price: Decimal::from(110),
+                size: Decimal::from(3),
+                tif: Some(OrderTif::Ioc),
+                cloid: Some("next-cloid".to_owned()),
+            },
+            "Modified",
+        ),
+        (
+            order(OrderSide::Sell, SpotOrderStatus::Open),
+            SpotOrderV7Command::Cancel,
+            "Canceled",
+        ),
+    ];
+
+    for (mut subject, command, expected_variant) in cases {
+        let before = subject.clone();
+        let result = subject.transition_sequenced(sequenced(command)).unwrap();
+        assert_eq!(result.state, subject.status());
+        let actual_variant = match &result.event {
+            SpotOrderV7DomainEvent::Activated { .. } => "Activated",
+            SpotOrderV7DomainEvent::MatchedAsTaker { .. } => "MatchedAsTaker",
+            SpotOrderV7DomainEvent::MatchedAsMaker { .. } => "MatchedAsMaker",
+            SpotOrderV7DomainEvent::RejectedAsTaker { .. } => "RejectedAsTaker",
+            SpotOrderV7DomainEvent::Modified { .. } => "Modified",
+            SpotOrderV7DomainEvent::Canceled { .. } => "Canceled",
+        };
+        assert_eq!(actual_variant, expected_variant);
+        let replay = result.event.replayable_event();
+        assert_eq!(replay.t, subject.topic());
+        assert_eq!(replay.p, subject.partition());
+        assert_eq!(replay.previous_lsn, before.order_base().lsn);
+        assert_eq!(replay.lsn, 10);
+        assert_eq!(replay.logical_ts, TIMESTAMP);
+        assert_eq!(replay.entity_id, subject.order_base().order_id);
+        assert_eq!(replay.entity_type, 16);
+        assert!(!replay.field_changes.is_empty());
+    }
+}
+
+#[test]
+fn modify_and_buy_match_replay_all_business_field_changes() {
+    let mut modified = order(OrderSide::Buy, SpotOrderStatus::Open);
+    let result = modified
+        .transition_sequenced(sequenced(SpotOrderV7Command::Modify {
+            price: Decimal::from(110),
+            size: Decimal::from(3),
+            tif: Some(OrderTif::Ioc),
+            cloid: Some("next-cloid".to_owned()),
+        }))
+        .unwrap();
+    let fields = field_names(&result.event);
+    for expected in [
+        "limit_px",
+        "size",
+        "orig_size",
+        "tif",
+        "cloid",
+        "updated_at",
+        "version",
+    ] {
+        assert!(fields.contains(&expected), "missing {expected}: {fields:?}");
+    }
+
+    let mut matched = order(OrderSide::Buy, SpotOrderStatus::Open);
+    let result = matched
+        .transition_sequenced(sequenced(SpotOrderV7Command::MatchedAsTaker {
+            filled_size: Decimal::ONE,
+            quote_fee: Decimal::ONE,
+        }))
+        .unwrap();
+    let fields = field_names(&result.event);
+    for expected in [
+        "size",
+        "status",
+        "buy_quote_fee_reserve_consumed",
+        "updated_at",
+        "version",
+    ] {
+        assert!(fields.contains(&expected), "missing {expected}: {fields:?}");
+    }
+}
+
+#[test]
+fn sequenced_failures_are_atomic() {
+    let cases = [
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            SequencedCommand::new(
+                CommandMetadata::new(3, TIMESTAMP),
+                SpotOrderV7Command::Cancel,
+            ),
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Filled),
+            sequenced(SpotOrderV7Command::Cancel),
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            sequenced(SpotOrderV7Command::Modify {
+                price: Decimal::ZERO,
+                size: Decimal::ONE,
+                tif: None,
+                cloid: None,
+            }),
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            sequenced(SpotOrderV7Command::MatchedAsTaker {
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::from(4),
+            }),
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            sequenced(SpotOrderV7Command::MatchedAsTaker {
+                filled_size: -Decimal::ONE,
+                quote_fee: Decimal::ZERO,
+            }),
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            sequenced(SpotOrderV7Command::MatchedAsTaker {
+                filled_size: Decimal::from(3),
+                quote_fee: Decimal::ZERO,
+            }),
+        ),
+        (
+            {
+                let mut record = order(OrderSide::Buy, SpotOrderStatus::Open)
+                    .order_base()
+                    .clone();
+                record.buy_quote_fee_reserve_consumed = Decimal::MAX;
+                record.buy_quote_fee_reserve_limit = Decimal::MAX;
+                SpotOrderV7::from_record(record).unwrap()
+            },
+            sequenced(SpotOrderV7Command::MatchedAsTaker {
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::ONE,
+            }),
+        ),
+    ];
+    for (mut subject, command) in cases {
+        let before = subject.clone();
+        assert!(subject.transition_sequenced(command).is_err());
+        assert_eq!(subject, before);
+    }
+}
+
+#[test]
+fn pending_cancel_releases_zero_and_exact_fee_reserve_is_allowed() {
+    let mut pending = order(OrderSide::Sell, SpotOrderStatus::Pending);
+    let result = pending
+        .transition_sequenced(sequenced(SpotOrderV7Command::Cancel))
+        .unwrap();
+    let SpotOrderV7Output::Canceled(output) = result.output else {
+        panic!("expected cancel output")
+    };
+    assert_eq!(output.release_requirement.amount(), Decimal::ZERO);
+
+    let mut buyer = order(OrderSide::Buy, SpotOrderStatus::Open);
+    buyer
+        .transition_sequenced(sequenced(SpotOrderV7Command::MatchedAsTaker {
+            filled_size: Decimal::ONE,
+            quote_fee: Decimal::from(3),
+        }))
+        .unwrap();
+    assert_eq!(
+        buyer.order_base().buy_quote_fee_reserve_consumed,
+        Decimal::from(3)
+    );
+}
+
+#[test]
+fn replay_projection_failure_keeps_order_unchanged() {
+    let mut subject = order(OrderSide::Buy, SpotOrderStatus::Open);
+    let before = subject.clone();
+    let command = SequencedCommand::new(
+        CommandMetadata::new(before.order_base().lsn, before.order_base().updated_at),
+        SpotOrderV7Command::MatchedAsTaker {
+            filled_size: Decimal::ZERO,
+            quote_fee: Decimal::ZERO,
+        },
+    );
+    assert!(subject.transition_sequenced(command).is_err());
+    assert_eq!(subject, before);
+}
+
+#[test]
+fn sequenced_and_compatibility_paths_have_identical_state_and_output() {
+    let cases = [
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Pending),
+            SpotOrderV7Command::Activate,
+            SpotOrderV7Event::Activate {
+                lsn: 10,
+                timestamp: TIMESTAMP,
+            },
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            SpotOrderV7Command::MatchedAsTaker {
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::ONE,
+            },
+            SpotOrderV7Event::MatchedAsTaker {
+                lsn: 10,
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::ONE,
+                timestamp: TIMESTAMP,
+            },
+        ),
+        (
+            order(OrderSide::Sell, SpotOrderStatus::Open),
+            SpotOrderV7Command::MatchedAsMaker {
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::ZERO,
+            },
+            SpotOrderV7Event::MatchedAsMaker {
+                lsn: 10,
+                filled_size: Decimal::ONE,
+                quote_fee: Decimal::ZERO,
+                timestamp: TIMESTAMP,
+            },
+        ),
+        (
+            {
+                let mut record = order(OrderSide::Buy, SpotOrderStatus::Open)
+                    .order_base()
+                    .clone();
+                record.tif = OrderTif::Alo;
+                SpotOrderV7::from_record(record).unwrap()
+            },
+            SpotOrderV7Command::RejectedAsTaker,
+            SpotOrderV7Event::RejectedAsTaker {
+                lsn: 10,
+                timestamp: TIMESTAMP,
+            },
+        ),
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Open),
+            SpotOrderV7Command::Modify {
+                price: Decimal::from(110),
+                size: Decimal::from(3),
+                tif: Some(OrderTif::Ioc),
+                cloid: Some("next-cloid".to_owned()),
+            },
+            SpotOrderV7Event::Modify {
+                lsn: 10,
+                price: Decimal::from(110),
+                size: Decimal::from(3),
+                tif: Some(OrderTif::Ioc),
+                cloid: Some("next-cloid".to_owned()),
+                timestamp: TIMESTAMP,
+            },
+        ),
+        (
+            order(OrderSide::Sell, SpotOrderStatus::Open),
+            SpotOrderV7Command::Cancel,
+            SpotOrderV7Event::Cancel {
+                lsn: 10,
+                timestamp: TIMESTAMP,
+            },
+        ),
+    ];
+    for (subject, command, legacy_event) in cases {
+        let mut sequenced_subject = subject.clone();
+        let mut legacy_subject = subject;
+        let sequenced_result = sequenced_subject
+            .transition_sequenced(sequenced(command))
+            .unwrap();
+        let legacy_result = legacy_subject.transition(legacy_event).unwrap();
+        assert_eq!(sequenced_result.state, legacy_result.state);
+        assert_eq!(sequenced_result.output, legacy_result.output);
+        assert_eq!(sequenced_subject, legacy_subject);
+    }
+}
+
+#[test]
+fn transition_and_apply_sequenced_return_the_same_result() {
+    let subject = order(OrderSide::Buy, SpotOrderStatus::Open);
+    let command = sequenced(SpotOrderV7Command::Modify {
+        price: Decimal::from(110),
+        size: Decimal::from(3),
+        tif: Some(OrderTif::Ioc),
+        cloid: Some("next-cloid".to_owned()),
+    });
+    let mut transitioned = subject.clone();
+    let mut applied = subject;
+    let transition = transitioned.transition_sequenced(command.clone()).unwrap();
+    let apply = applied.apply_sequenced(command).unwrap();
+    assert_eq!(transition, apply);
+    assert_eq!(transitioned, applied);
 }

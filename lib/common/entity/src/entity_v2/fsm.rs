@@ -1,4 +1,5 @@
 use super::shard::{LogAttr, Shard};
+use crate::EntityReplayableEvent;
 
 /// 已由日志定序器确定的命令元数据。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -114,6 +115,11 @@ pub struct Transition<S, O, E> {
     pub state: S,
     pub output: O,
     pub event: E,
+}
+
+/// 统一读取领域事件内嵌的实体 replay 事实。
+pub trait ReplayableDomainEvent {
+    fn replayable_event(&self) -> &EntityReplayableEvent;
 }
 
 impl<S, O, E> Transition<S, O, E> {
