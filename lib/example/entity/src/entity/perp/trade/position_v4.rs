@@ -1,6 +1,7 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm,
-    LogAttr, Shard, TrackDiff,
+    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    EntityReplayableEvent, FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard,
+    TrackDiff,
 };
 use rust_decimal::Decimal;
 use rust_decimal::prelude::Signed;
@@ -66,6 +67,41 @@ pub enum PositionEvent {
         lsn: u64,
     },
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PositionV4DomainEvent {
+    TradeFilled { replay_event: EntityReplayableEvent },
+    FundingSettled { replay_event: EntityReplayableEvent },
+    LeverageUpdated { replay_event: EntityReplayableEvent },
+    IsolatedMarginAdjusted { replay_event: EntityReplayableEvent },
+}
+impl ReplayableDomainEvent<PositionEvent> for PositionV4DomainEvent {
+    fn domain_event_type(c: &PositionEvent) -> u8 {
+        match c {
+            PositionEvent::TradeFilled { .. } => 1,
+            PositionEvent::FundingSettled { .. } => 2,
+            PositionEvent::LeverageUpdated { .. } => 3,
+            PositionEvent::IsolatedMarginAdjusted { .. } => 4,
+        }
+    }
+    fn from_command(c: PositionEvent, replay_event: EntityReplayableEvent) -> Self {
+        match c {
+            PositionEvent::TradeFilled { .. } => Self::TradeFilled { replay_event },
+            PositionEvent::FundingSettled { .. } => Self::FundingSettled { replay_event },
+            PositionEvent::LeverageUpdated { .. } => Self::LeverageUpdated { replay_event },
+            PositionEvent::IsolatedMarginAdjusted { .. } => {
+                Self::IsolatedMarginAdjusted { replay_event }
+            }
+        }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        match self {
+            Self::TradeFilled { replay_event }
+            | Self::FundingSettled { replay_event }
+            | Self::LeverageUpdated { replay_event }
+            | Self::IsolatedMarginAdjusted { replay_event } => replay_event,
+        }
+    }
+}
 impl Shard for PositionEvent {
     fn partition(&self) -> u8 {
         0
@@ -114,8 +150,10 @@ pub enum PositionOutput {
         margin_after: Decimal,
     },
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PositionError {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     #[error("quantity must be non-zero")]
     InvalidQuantity,
     #[error("price must be greater than zero")]
@@ -235,14 +273,32 @@ fn validate_leverage(l: Leverage) -> Result<(), PositionError> {
 impl Fsm for PositionV4 {
     type State = PositionState;
     type Command = PositionEvent;
-    type DomainEvent = PositionEvent;
+    type DomainEvent = PositionV4DomainEvent;
     type Output = PositionOutput;
     type Error = PositionError;
     /// 使用事件的 LSN 与逻辑时间推进仓位，不从当前实体版本推导下一版本。
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
-        event: Self::Command,
+        metadata: CommandMetadata,
+        mut event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
+        match &mut event {
+            PositionEvent::TradeFilled {
+                logical_ts, lsn, ..
+            }
+            | PositionEvent::FundingSettled {
+                logical_ts, lsn, ..
+            }
+            | PositionEvent::LeverageUpdated {
+                logical_ts, lsn, ..
+            }
+            | PositionEvent::IsolatedMarginAdjusted {
+                logical_ts, lsn, ..
+            } => {
+                *logical_ts = metadata.logical_ts;
+                *lsn = metadata.lsn;
+            }
+        }
         let lsn = event.lsn();
         if lsn < self.version {
             return Err(PositionError::StaleLsn {
@@ -496,7 +552,21 @@ impl TrackDiff for PositionV4 {
                 self.entry_px.to_string(),
                 o.entry_px.to_string(),
             ),
-            ("version", self.version.to_string(), o.version.to_string()),
+            (
+                "leverage",
+                format!("{:?}", self.leverage),
+                format!("{:?}", o.leverage),
+            ),
+            (
+                "cum_funding",
+                format!("{:?}", self.cum_funding),
+                format!("{:?}", o.cum_funding),
+            ),
+            (
+                "updated_at",
+                self.updated_at.to_string(),
+                o.updated_at.to_string(),
+            ),
         ]
         .into_iter()
         .filter(|(_, a, b)| a != b)

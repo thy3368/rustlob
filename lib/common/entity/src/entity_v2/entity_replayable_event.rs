@@ -121,8 +121,8 @@ impl ReplayFieldChange {
 /// Entity event optimized for deterministic replay and optimistic locking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityReplayableEvent {
-    ///domain event name
-    pub domain_event_name: u8,
+    /// 实体类型内稳定、非零的领域事件类型码；`0` 保留给非 FSM 事件。
+    pub domain_event_type: u8,
     ///topic
     pub t: u8,
     ///partition
@@ -194,6 +194,7 @@ impl EntityReplayableEvent {
         change_type: u8,
     ) -> Self {
         Self {
+            domain_event_type: 0,
             t,
             p,
             logical_ts: timestamp,

@@ -1,6 +1,7 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm,
-    LogAttr, Shard, TrackDiff,
+    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    EntityReplayableEvent, FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard,
+    TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -42,6 +43,24 @@ pub enum SpotTradeEvent {
     Settle { lsn: u64, logical_ts: u64 },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotTradeV3DomainEvent {
+    Settled { replay_event: EntityReplayableEvent },
+}
+
+impl ReplayableDomainEvent<SpotTradeEvent> for SpotTradeV3DomainEvent {
+    fn domain_event_type(_: &SpotTradeEvent) -> u8 {
+        1
+    }
+    fn from_command(_: SpotTradeEvent, replay_event: EntityReplayableEvent) -> Self {
+        Self::Settled { replay_event }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        let Self::Settled { replay_event } = self;
+        replay_event
+    }
+}
+
 impl Shard for SpotTradeEvent {
     fn partition(&self) -> u8 {
         0
@@ -59,8 +78,10 @@ impl LogAttr for SpotTradeEvent {
 }
 
 /// 现货成交状态迁移错误。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SpotTradeStateError {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     #[error("spot trade settlement was already completed")]
     AlreadySettled,
     #[error("stale lsn {incoming_lsn}; current lsn is {current_lsn}")]
@@ -223,17 +244,20 @@ impl SpotTradeV3 {
 impl Fsm for SpotTradeV3 {
     type State = SpotTradeSettlementStatus;
     type Command = SpotTradeEvent;
-    type DomainEvent = SpotTradeEvent;
+    type DomainEvent = SpotTradeV3DomainEvent;
     type Output = ();
     type Error = SpotTradeStateError;
 
     /// 使用结算事件的权威 LSN 与逻辑时间完成成交，不生成 entity-local 下一版本。
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
+        metadata: CommandMetadata,
         event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         match (self.settlement_status, event) {
-            (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle { lsn, logical_ts }) => {
+            (SpotTradeSettlementStatus::Unsettled, SpotTradeEvent::Settle { .. }) => {
+                let lsn = metadata.lsn;
+                let logical_ts = metadata.logical_ts;
                 if lsn < self.comon_trade.version {
                     return Err(SpotTradeStateError::StaleLsn {
                         incoming_lsn: lsn,

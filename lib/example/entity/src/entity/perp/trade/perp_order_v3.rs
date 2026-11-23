@@ -1,6 +1,7 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm,
-    LogAttr, Shard, TrackDiff,
+    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    EntityReplayableEvent, FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard,
+    TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -38,6 +39,39 @@ pub enum PerpOrderV3Event {
         timestamp: u64,
         lsn: u64,
     },
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PerpOrderV3DomainEvent {
+    Matched { replay_event: EntityReplayableEvent },
+    ReplacedOrFilled { replay_event: EntityReplayableEvent },
+    Modified { replay_event: EntityReplayableEvent },
+    Canceled { replay_event: EntityReplayableEvent },
+}
+impl ReplayableDomainEvent<PerpOrderV3Event> for PerpOrderV3DomainEvent {
+    fn domain_event_type(c: &PerpOrderV3Event) -> u8 {
+        match c {
+            PerpOrderV3Event::Match { .. } => 1,
+            PerpOrderV3Event::ReplaceOrFill { .. } => 2,
+            PerpOrderV3Event::Modify { .. } => 3,
+            PerpOrderV3Event::Cancel { .. } => 4,
+        }
+    }
+    fn from_command(c: PerpOrderV3Event, replay_event: EntityReplayableEvent) -> Self {
+        match c {
+            PerpOrderV3Event::Match { .. } => Self::Matched { replay_event },
+            PerpOrderV3Event::ReplaceOrFill { .. } => Self::ReplacedOrFilled { replay_event },
+            PerpOrderV3Event::Modify { .. } => Self::Modified { replay_event },
+            PerpOrderV3Event::Cancel { .. } => Self::Canceled { replay_event },
+        }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        match self {
+            Self::Matched { replay_event }
+            | Self::ReplacedOrFilled { replay_event }
+            | Self::Modified { replay_event }
+            | Self::Canceled { replay_event } => replay_event,
+        }
+    }
 }
 impl Shard for PerpOrderV3Event {
     fn partition(&self) -> u8 {
@@ -130,6 +164,8 @@ impl MatchPerpOrderV3Output {
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PerpOrderV3Error {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     #[error("order is terminal")]
     Terminal,
     #[error("order facts are invalid")]
@@ -161,15 +197,25 @@ pub struct PerpOrderV3 {
 impl Fsm for PerpOrderV3 {
     type State = SpotOrderStatus;
     type Command = PerpOrderV3Event;
-    type DomainEvent = PerpOrderV3Event;
+    type DomainEvent = PerpOrderV3DomainEvent;
     type Output = Option<MatchPerpOrderV3Output>;
     type Error = PerpOrderV3Error;
 
     /// 使用事件提供的权威 LSN 原子推进订单；允许跳号和相等 LSN，拒绝 stale LSN。
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
-        event: Self::Command,
+        metadata: CommandMetadata,
+        mut event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
+        match &mut event {
+            PerpOrderV3Event::Match { timestamp, lsn, .. }
+            | PerpOrderV3Event::ReplaceOrFill { timestamp, lsn, .. }
+            | PerpOrderV3Event::Modify { timestamp, lsn, .. }
+            | PerpOrderV3Event::Cancel { timestamp, lsn } => {
+                *timestamp = metadata.logical_ts;
+                *lsn = metadata.lsn;
+            }
+        }
         if is_terminal(self.comon_order.status) {
             return Err(PerpOrderV3Error::Terminal);
         }

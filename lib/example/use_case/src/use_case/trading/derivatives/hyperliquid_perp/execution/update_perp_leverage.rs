@@ -116,7 +116,8 @@ fn map_position_error(error: PerpPositionV3Error) -> UpdateHyperliquidPerpLevera
         PerpPositionV3Error::ArithmeticOverflow => {
             UpdateHyperliquidPerpLeverageError::ArithmeticOverflow
         }
-        PerpPositionV3Error::InvalidQuantity
+        PerpPositionV3Error::Replay(_)
+        | PerpPositionV3Error::InvalidQuantity
         | PerpPositionV3Error::InvalidPrice
         | PerpPositionV3Error::InvalidState
         | PerpPositionV3Error::FundingUserMismatch

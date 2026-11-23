@@ -1,5 +1,5 @@
 use super::shard::{LogAttr, Shard};
-use crate::EntityReplayableEvent;
+use crate::{EntityError, EntityReplayableEvent, TrackDiff};
 
 /// 已由日志定序器确定的命令元数据。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -31,7 +31,7 @@ impl<C> SequencedCommand<C> {
     }
 }
 
-/// 将迁移期旧命令或显式 envelope 统一转换为已定序命令。
+/// 迁移期输入适配；新调用点应显式构造 [`SequencedCommand`]。
 pub trait IntoSequencedCommand<C> {
     fn into_sequenced(self) -> SequencedCommand<C>;
 }
@@ -44,8 +44,7 @@ impl<C> IntoSequencedCommand<C> for SequencedCommand<C> {
 
 impl<C: LogAttr> IntoSequencedCommand<C> for C {
     fn into_sequenced(self) -> SequencedCommand<C> {
-        let metadata = CommandMetadata::new(self.lsn(), self.logical_ts());
-        SequencedCommand::new(metadata, self)
+        SequencedCommand::new(CommandMetadata::new(self.lsn(), self.logical_ts()), self)
     }
 }
 
@@ -118,7 +117,9 @@ pub struct Transition<S, O, E> {
 }
 
 /// 统一读取领域事件内嵌的实体 replay 事实。
-pub trait ReplayableDomainEvent {
+pub trait ReplayableDomainEvent<C>: Sized {
+    fn domain_event_type(command: &C) -> u8;
+    fn from_command(command: C, replay_event: EntityReplayableEvent) -> Self;
     fn replayable_event(&self) -> &EntityReplayableEvent;
 }
 
@@ -132,21 +133,18 @@ impl<S, O, E> Transition<S, O, E> {
     }
 }
 
-/// 实体状态机兼容层。
-///
-/// `DomainEvent: From<Command>` 只保留旧 FSM 的 command 回显语义，不能用于构造
-/// [`EntityReplayableEvent`]。Replay event 必须由具体实体在成功计算 before/after 后投影，
-/// 再使用 [`CommandMetadata`] 覆盖确定性的 LSN 与逻辑时间。
-pub trait Fsm {
+/// 以 command envelope 驱动、可确定性回放且原子提交的实体状态机。
+pub trait Fsm: TrackDiff + Clone {
     type State;
-    type Command: LogAttr + Clone;
-    type DomainEvent: From<Self::Command>;
+    type Command: Clone;
+    type DomainEvent: ReplayableDomainEvent<Self::Command>;
     type Output;
-    type Error;
+    type Error: From<EntityError>;
 
     #[doc(hidden)]
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
+        metadata: CommandMetadata,
         command: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error>;
 
@@ -157,11 +155,21 @@ pub trait Fsm {
     where
         C: IntoSequencedCommand<Self::Command>,
     {
-        let command = command.into_sequenced();
-        let payload = command.payload;
-        let (state, output) = self.transition_legacy(payload.clone())?;
-        // 兼容事件不包含实体 before/after，禁止将此处扩展为 replay event 构造。
-        let event = Self::DomainEvent::from(payload);
+        let (metadata, payload) = command.into_sequenced().into_parts();
+        let before = self.clone();
+        let mut working = before.clone();
+        let (state, output) = working.transition_working(metadata, payload.clone())?;
+        let mut replay_event =
+            working.track_update_event_from_command(&before, metadata.lsn, metadata.logical_ts)?;
+        let domain_event_type = Self::DomainEvent::domain_event_type(&payload);
+        if domain_event_type == 0 {
+            return Err(
+                EntityError::Custom("FSM domain event type must be non-zero".into()).into(),
+            );
+        }
+        replay_event.domain_event_type = domain_event_type;
+        let event = Self::DomainEvent::from_command(payload, replay_event);
+        *self = working;
         Ok(Transition::new(state, output, event))
     }
 

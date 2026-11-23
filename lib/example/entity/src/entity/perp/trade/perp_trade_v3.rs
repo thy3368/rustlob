@@ -1,6 +1,7 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, Fsm,
-    LogAttr, Shard, TrackDiff,
+    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    EntityReplayableEvent, FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard,
+    TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -34,6 +35,22 @@ pub enum PerpTradeV3Event {
         lsn: u64,
     },
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PerpTradeV3DomainEvent {
+    Settled { replay_event: EntityReplayableEvent },
+}
+impl ReplayableDomainEvent<PerpTradeV3Event> for PerpTradeV3DomainEvent {
+    fn domain_event_type(_: &PerpTradeV3Event) -> u8 {
+        1
+    }
+    fn from_command(_: PerpTradeV3Event, replay_event: EntityReplayableEvent) -> Self {
+        Self::Settled { replay_event }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        let Self::Settled { replay_event } = self;
+        replay_event
+    }
+}
 impl Shard for PerpTradeV3Event {
     fn partition(&self) -> u8 {
         0
@@ -59,8 +76,10 @@ pub enum PerpTradeV3Output {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PerpTradeV3Error {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     #[error("trade was already settled")]
     AlreadySettled,
     #[error("trade facts are invalid")]
@@ -97,12 +116,13 @@ pub struct PerpTradeV3 {
 impl Fsm for PerpTradeV3 {
     type State = PerpTradeV3State;
     type Command = PerpTradeV3Event;
-    type DomainEvent = PerpTradeV3Event;
+    type DomainEvent = PerpTradeV3DomainEvent;
     type Output = PerpTradeV3Output;
     type Error = PerpTradeV3Error;
 
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
+        metadata: CommandMetadata,
         event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if self.state == PerpTradeV3State::Settled {
@@ -123,9 +143,11 @@ impl Fsm for PerpTradeV3 {
                 maker_start_position,
                 taker_closed_pnl,
                 maker_closed_pnl,
-                timestamp,
-                lsn,
+                timestamp: _,
+                lsn: _,
             } => {
+                let timestamp = metadata.logical_ts;
+                let lsn = metadata.lsn;
                 if timestamp < base.created_at || timestamp < base.updated_at {
                     return Err(PerpTradeV3Error::TimestampRegression);
                 }

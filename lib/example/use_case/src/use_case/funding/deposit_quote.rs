@@ -108,7 +108,8 @@ impl StateDiff for DepositQuoteUseCase {
 fn map_balance_error(error: BalanceV2Error) -> DepositQuoteError {
     match error {
         BalanceV2Error::InvalidAmount => DepositQuoteError::InvalidAmount,
-        BalanceV2Error::ArithmeticOverflow
+        BalanceV2Error::Replay(_)
+        | BalanceV2Error::ArithmeticOverflow
         | BalanceV2Error::InsufficientAvailableBalance
         | BalanceV2Error::InsufficientFrozenBalance
         | BalanceV2Error::BalanceClosed

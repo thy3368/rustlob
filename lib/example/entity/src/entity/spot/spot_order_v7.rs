@@ -1,5 +1,5 @@
 use common_entity::{
-    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Fsm, LogAttr,
+    CommandMetadata, Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Fsm, LogAttr,
     ReplayableDomainEvent, SequencedCommand, Shard, TrackDiff, Transition,
 };
 use lob_repo_v2::lob::LobOrder;
@@ -88,7 +88,22 @@ pub enum SpotOrderV7DomainEvent {
     Canceled { replay_event: EntityReplayableEvent },
 }
 
-impl ReplayableDomainEvent for SpotOrderV7DomainEvent {
+impl ReplayableDomainEvent<SpotOrderV7Command> for SpotOrderV7DomainEvent {
+    fn domain_event_type(command: &SpotOrderV7Command) -> u8 {
+        match command {
+            SpotOrderV7Command::Activate => 1,
+            SpotOrderV7Command::MatchedAsTaker { .. } => 2,
+            SpotOrderV7Command::MatchedAsMaker { .. } => 3,
+            SpotOrderV7Command::RejectedAsTaker => 4,
+            SpotOrderV7Command::Modify { .. } => 5,
+            SpotOrderV7Command::Cancel => 6,
+        }
+    }
+
+    fn from_command(command: SpotOrderV7Command, replay_event: EntityReplayableEvent) -> Self {
+        domain_event(command, replay_event)
+    }
+
     fn replayable_event(&self) -> &EntityReplayableEvent {
         match self {
             Self::Activated { replay_event }
@@ -128,6 +143,46 @@ impl LogAttr for SpotOrderV7Event {
             | Self::Modify { timestamp, .. }
             | Self::Cancel { timestamp, .. } => *timestamp,
         }
+    }
+}
+
+impl common_entity::IntoSequencedCommand<SpotOrderV7Command> for SpotOrderV7Event {
+    fn into_sequenced(self) -> SequencedCommand<SpotOrderV7Command> {
+        let metadata = CommandMetadata::new(self.lsn(), self.logical_ts());
+        let command = match self {
+            Self::Activate { .. } => SpotOrderV7Command::Activate,
+            Self::MatchedAsTaker {
+                filled_size,
+                quote_fee,
+                ..
+            } => SpotOrderV7Command::MatchedAsTaker {
+                filled_size,
+                quote_fee,
+            },
+            Self::MatchedAsMaker {
+                filled_size,
+                quote_fee,
+                ..
+            } => SpotOrderV7Command::MatchedAsMaker {
+                filled_size,
+                quote_fee,
+            },
+            Self::RejectedAsTaker { .. } => SpotOrderV7Command::RejectedAsTaker,
+            Self::Modify {
+                price,
+                size,
+                tif,
+                cloid,
+                ..
+            } => SpotOrderV7Command::Modify {
+                price,
+                size,
+                tif,
+                cloid,
+            },
+            Self::Cancel { .. } => SpotOrderV7Command::Cancel,
+        };
+        SequencedCommand::new(metadata, command)
     }
 }
 
@@ -597,65 +652,33 @@ impl SpotOrderV7 {
         lsn: u64,
         timestamp: u64,
     ) -> Result<(), EntityError> {
-        self.apply(SpotOrderV7Event::Modify {
-            price,
-            size,
-            tif: None,
-            cloid: None,
-            lsn,
-            timestamp,
-        })
+        self.apply(SequencedCommand::new(
+            CommandMetadata::new(lsn, timestamp),
+            SpotOrderV7Command::Modify {
+                price,
+                size,
+                tif: None,
+                cloid: None,
+            },
+        ))
         .map(|_| ())
     }
 }
 
 impl Fsm for SpotOrderV7 {
     type State = SpotOrderStatus;
-    type Command = SpotOrderV7Event;
-    type DomainEvent = SpotOrderV7Event;
+    type Command = SpotOrderV7Command;
+    type DomainEvent = SpotOrderV7DomainEvent;
     type Output = SpotOrderV7Output;
     type Error = EntityError;
 
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
-        event: SpotOrderV7Event,
+        metadata: CommandMetadata,
+        command: SpotOrderV7Command,
     ) -> Result<(Self::State, Self::Output), EntityError> {
-        let lsn = event.lsn();
-        let timestamp = event.logical_ts();
-        let command = match event {
-            SpotOrderV7Event::Activate { .. } => SpotOrderV7Command::Activate,
-            SpotOrderV7Event::MatchedAsTaker {
-                filled_size,
-                quote_fee,
-                ..
-            } => SpotOrderV7Command::MatchedAsTaker {
-                filled_size,
-                quote_fee,
-            },
-            SpotOrderV7Event::MatchedAsMaker {
-                filled_size,
-                quote_fee,
-                ..
-            } => SpotOrderV7Command::MatchedAsMaker {
-                filled_size,
-                quote_fee,
-            },
-            SpotOrderV7Event::RejectedAsTaker { .. } => SpotOrderV7Command::RejectedAsTaker,
-            SpotOrderV7Event::Modify {
-                price,
-                size,
-                tif,
-                cloid,
-                ..
-            } => SpotOrderV7Command::Modify {
-                price,
-                size,
-                tif,
-                cloid,
-            },
-            SpotOrderV7Event::Cancel { .. } => SpotOrderV7Command::Cancel,
-        };
-        let (next, output) = self.compute_transition(&command, lsn, timestamp)?;
+        let (next, output) =
+            self.compute_transition(&command, metadata.lsn, metadata.logical_ts)?;
         self.order_base = next;
         Ok((self.order_base.status, output))
     }

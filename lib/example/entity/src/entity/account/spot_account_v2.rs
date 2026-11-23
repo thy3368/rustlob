@@ -1,5 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, FourColorArchetype, Fsm, LogAttr, Shard, TrackDiff,
+    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityReplayableEvent,
+    FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard, TrackDiff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -38,6 +39,32 @@ pub enum SpotAccountEvent {
     /// 解除风控冻结，使账户恢复激活。
     UnfreezeFromRisk { timestamp: u64, lsn: u64 },
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpotAccountDomainEvent {
+    FrozenForRisk { replay_event: EntityReplayableEvent },
+    UnfrozenFromRisk { replay_event: EntityReplayableEvent },
+}
+impl ReplayableDomainEvent<SpotAccountEvent> for SpotAccountDomainEvent {
+    fn domain_event_type(command: &SpotAccountEvent) -> u8 {
+        match command {
+            SpotAccountEvent::FreezeForRisk { .. } => 1,
+            SpotAccountEvent::UnfreezeFromRisk { .. } => 2,
+        }
+    }
+    fn from_command(command: SpotAccountEvent, replay_event: EntityReplayableEvent) -> Self {
+        match command {
+            SpotAccountEvent::FreezeForRisk { .. } => Self::FrozenForRisk { replay_event },
+            SpotAccountEvent::UnfreezeFromRisk { .. } => Self::UnfrozenFromRisk { replay_event },
+        }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        match self {
+            Self::FrozenForRisk { replay_event } | Self::UnfrozenFromRisk { replay_event } => {
+                replay_event
+            }
+        }
+    }
+}
 
 impl Shard for SpotAccountEvent {
     fn partition(&self) -> u8 {
@@ -60,8 +87,10 @@ impl LogAttr for SpotAccountEvent {
 }
 
 /// 账户生命周期迁移错误。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SpotAccountError {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     /// 当前状态不接受指定事件，包括已经关闭的终态。
     #[error("account state {state:?} does not accept event {event:?}")]
     InvalidTransition {
@@ -139,7 +168,7 @@ impl SpotAccount {
 impl Fsm for SpotAccount {
     type State = AccountStatus;
     type Command = SpotAccountEvent;
-    type DomainEvent = SpotAccountEvent;
+    type DomainEvent = SpotAccountDomainEvent;
     type Output = ();
     type Error = SpotAccountError;
 
@@ -150,16 +179,17 @@ impl Fsm for SpotAccount {
     /// 成功输出为空，并在所有校验完成后同时提交状态、事件时间和全局 command LSN；
     /// LSN 可以跳号，同一 command 的连续合法迁移可以复用同一 LSN；
     /// 任一错误都不会修改实体。
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
+        metadata: CommandMetadata,
         event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         let (next_status, timestamp, lsn) = match (self.status, event) {
-            (AccountStatus::Active, SpotAccountEvent::FreezeForRisk { timestamp, lsn }) => {
-                (AccountStatus::Frozen, timestamp, lsn)
+            (AccountStatus::Active, SpotAccountEvent::FreezeForRisk { .. }) => {
+                (AccountStatus::Frozen, metadata.logical_ts, metadata.lsn)
             }
-            (AccountStatus::Frozen, SpotAccountEvent::UnfreezeFromRisk { timestamp, lsn }) => {
-                (AccountStatus::Active, timestamp, lsn)
+            (AccountStatus::Frozen, SpotAccountEvent::UnfreezeFromRisk { .. }) => {
+                (AccountStatus::Active, metadata.logical_ts, metadata.lsn)
             }
             (state, event) => {
                 return Err(SpotAccountError::InvalidTransition { state, event });

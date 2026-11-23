@@ -1,6 +1,7 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FinancialClassification,
-    FourColorArchetype, Fsm, LogAttr, Shard, TrackDiff, UpdatedEntityPair,
+    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    EntityReplayableEvent, FinancialClassification, FourColorArchetype, Fsm, LogAttr,
+    ReplayableDomainEvent, Shard, TrackDiff, UpdatedEntityPair,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,22 @@ pub enum BalanceLedgerV3Event {
         applied_at: u64,
         lsn: u64,
     },
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BalanceLedgerV3DomainEvent {
+    BalanceApplied { replay_event: EntityReplayableEvent },
+}
+impl ReplayableDomainEvent<BalanceLedgerV3Event> for BalanceLedgerV3DomainEvent {
+    fn domain_event_type(_: &BalanceLedgerV3Event) -> u8 {
+        1
+    }
+    fn from_command(_: BalanceLedgerV3Event, replay_event: EntityReplayableEvent) -> Self {
+        Self::BalanceApplied { replay_event }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        let Self::BalanceApplied { replay_event } = self;
+        replay_event
+    }
 }
 
 impl Shard for BalanceLedgerV3Event {
@@ -50,6 +67,8 @@ pub enum BalanceLedgerV3Output {
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum BalanceLedgerV3Error {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     #[error("ledger amount must be greater than zero")]
     InvalidAmount,
     #[error("balance identity does not match ledger")]
@@ -129,13 +148,14 @@ impl BalanceLedgerV3 {
 impl Fsm for BalanceLedgerV3 {
     type State = BalanceLedgerV3State;
     type Command = BalanceLedgerV3Event;
-    type DomainEvent = BalanceLedgerV3Event;
+    type DomainEvent = BalanceLedgerV3DomainEvent;
     type Output = BalanceLedgerV3Output;
     type Error = BalanceLedgerV3Error;
 
     /// 校验余额 after 快照采用事件 LSN，before 快照不晚于事件 LSN，然后原子记录快照。
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
+        metadata: CommandMetadata,
         event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
         if self.state()? == BalanceLedgerV3State::Applied {
@@ -147,9 +167,11 @@ impl Fsm for BalanceLedgerV3 {
 
         let BalanceLedgerV3Event::BalanceApplied {
             balance_update,
-            applied_at,
-            lsn,
+            applied_at: _,
+            lsn: _,
         } = event;
+        let applied_at = metadata.logical_ts;
+        let lsn = metadata.lsn;
         if lsn < self.version {
             return Err(BalanceLedgerV3Error::StaleLsn {
                 incoming_lsn: lsn,
@@ -210,8 +232,39 @@ impl TrackDiff for BalanceLedgerV3 {
             EntityFieldChange::new("updated_at", "", self.updated_at.to_string()),
         ]
     }
-    fn diff(&self, _other: &Self) -> Vec<EntityFieldChange> {
-        Vec::new()
+    fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+        let value = |v: Option<Decimal>| v.map(|n| n.to_string()).unwrap_or_default();
+        [
+            (
+                "before_available",
+                value(self.before_available),
+                value(other.before_available),
+            ),
+            (
+                "before_frozen",
+                value(self.before_frozen),
+                value(other.before_frozen),
+            ),
+            (
+                "after_available",
+                value(self.after_available),
+                value(other.after_available),
+            ),
+            (
+                "after_frozen",
+                value(self.after_frozen),
+                value(other.after_frozen),
+            ),
+            (
+                "updated_at",
+                self.updated_at.to_string(),
+                other.updated_at.to_string(),
+            ),
+        ]
+        .into_iter()
+        .filter(|(_, before, after)| before != after)
+        .map(|(name, before, after)| EntityFieldChange::new(name, before, after))
+        .collect()
     }
 }
 

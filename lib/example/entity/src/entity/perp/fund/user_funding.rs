@@ -1,6 +1,7 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityMutationModel, FinancialClassification,
-    FourColorArchetype, Fsm, LogAttr, Shard, TrackDiff,
+    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
+    EntityReplayableEvent, FinancialClassification, FourColorArchetype, Fsm, LogAttr,
+    ReplayableDomainEvent, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -60,6 +61,22 @@ impl UserFundingState {
 pub enum UserFundingEvent {
     Settle { settled_at: u64, lsn: u64 },
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UserFundingDomainEvent {
+    Settled { replay_event: EntityReplayableEvent },
+}
+impl ReplayableDomainEvent<UserFundingEvent> for UserFundingDomainEvent {
+    fn domain_event_type(_: &UserFundingEvent) -> u8 {
+        1
+    }
+    fn from_command(_: UserFundingEvent, replay_event: EntityReplayableEvent) -> Self {
+        Self::Settled { replay_event }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        let Self::Settled { replay_event } = self;
+        replay_event
+    }
+}
 impl Shard for UserFundingEvent {
     fn partition(&self) -> u8 {
         0
@@ -85,6 +102,8 @@ pub enum UserFundingOutput {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum UserFundingError {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     #[error("user funding is already settled")]
     AlreadySettled,
     #[error("settlement time must not precede creation time")]
@@ -192,14 +211,17 @@ impl UserFunding {
 impl Fsm for UserFunding {
     type State = UserFundingState;
     type Command = UserFundingEvent;
-    type DomainEvent = UserFundingEvent;
+    type DomainEvent = UserFundingDomainEvent;
     type Output = UserFundingOutput;
     type Error = UserFundingError;
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
+        metadata: CommandMetadata,
         event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
-        let UserFundingEvent::Settle { settled_at, lsn } = event;
+        let UserFundingEvent::Settle { .. } = event;
+        let settled_at = metadata.logical_ts;
+        let lsn = metadata.lsn;
         if lsn < self.version {
             return Err(UserFundingError::StaleLsn {
                 incoming_lsn: lsn,

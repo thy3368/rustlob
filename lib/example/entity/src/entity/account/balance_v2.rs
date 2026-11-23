@@ -1,4 +1,7 @@
-use common_entity::{Entity, EntityFieldChange, Fsm, LogAttr, Shard, TrackDiff};
+use common_entity::{
+    CommandMetadata, Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Fsm, LogAttr,
+    ReplayableDomainEvent, Shard, TrackDiff,
+};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -9,6 +12,8 @@ const BALANCE_V2_ENTITY_TYPE: u8 = 12;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum BalanceV2Error {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     #[error("balance amount must be greater than zero")]
     InvalidAmount,
     #[error("available balance is insufficient")]
@@ -74,6 +79,49 @@ pub enum BalanceV2Event {
         timestamp: u64,
         lsn: u64,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BalanceV2DomainEvent {
+    Frozen { replay_event: EntityReplayableEvent },
+    UnfrozenAndPaid { replay_event: EntityReplayableEvent },
+    FrozenDebited { replay_event: EntityReplayableEvent },
+    AvailableCredited { replay_event: EntityReplayableEvent },
+    AvailableDebited { replay_event: EntityReplayableEvent },
+    Closed { replay_event: EntityReplayableEvent },
+}
+
+impl ReplayableDomainEvent<BalanceV2Event> for BalanceV2DomainEvent {
+    fn domain_event_type(command: &BalanceV2Event) -> u8 {
+        match command {
+            BalanceV2Event::Freeze { .. } => 1,
+            BalanceV2Event::UnfreezeAndPay { .. } => 2,
+            BalanceV2Event::DebitFrozen { .. } => 3,
+            BalanceV2Event::CreditAvailable { .. } => 4,
+            BalanceV2Event::DebitAvailable { .. } => 5,
+            BalanceV2Event::Close { .. } => 6,
+        }
+    }
+    fn from_command(command: BalanceV2Event, replay_event: EntityReplayableEvent) -> Self {
+        match command {
+            BalanceV2Event::Freeze { .. } => Self::Frozen { replay_event },
+            BalanceV2Event::UnfreezeAndPay { .. } => Self::UnfrozenAndPaid { replay_event },
+            BalanceV2Event::DebitFrozen { .. } => Self::FrozenDebited { replay_event },
+            BalanceV2Event::CreditAvailable { .. } => Self::AvailableCredited { replay_event },
+            BalanceV2Event::DebitAvailable { .. } => Self::AvailableDebited { replay_event },
+            BalanceV2Event::Close { .. } => Self::Closed { replay_event },
+        }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        match self {
+            Self::Frozen { replay_event }
+            | Self::UnfrozenAndPaid { replay_event }
+            | Self::FrozenDebited { replay_event }
+            | Self::AvailableCredited { replay_event }
+            | Self::AvailableDebited { replay_event }
+            | Self::Closed { replay_event } => replay_event,
+        }
+    }
 }
 
 impl Shard for BalanceV2Event {
@@ -196,13 +244,25 @@ impl BalanceV2 {
 impl Fsm for BalanceV2 {
     type State = BalanceV2Status;
     type Command = BalanceV2Event;
-    type DomainEvent = BalanceV2Event;
+    type DomainEvent = BalanceV2DomainEvent;
     type Output = ();
     type Error = BalanceV2Error;
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
-        event: Self::Command,
+        metadata: CommandMetadata,
+        mut event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
+        match &mut event {
+            BalanceV2Event::Freeze { lsn, timestamp, .. }
+            | BalanceV2Event::UnfreezeAndPay { lsn, timestamp, .. }
+            | BalanceV2Event::DebitFrozen { lsn, timestamp, .. }
+            | BalanceV2Event::CreditAvailable { lsn, timestamp, .. }
+            | BalanceV2Event::DebitAvailable { lsn, timestamp, .. }
+            | BalanceV2Event::Close { lsn, timestamp } => {
+                *lsn = metadata.lsn;
+                *timestamp = metadata.logical_ts;
+            }
+        }
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);
         }

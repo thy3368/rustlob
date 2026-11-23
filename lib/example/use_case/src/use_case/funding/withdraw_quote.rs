@@ -117,7 +117,8 @@ fn map_balance_error(error: BalanceV2Error) -> WithdrawQuoteError {
         BalanceV2Error::InsufficientAvailableBalance => {
             WithdrawQuoteError::InsufficientQuoteBalance
         }
-        BalanceV2Error::ArithmeticOverflow
+        BalanceV2Error::Replay(_)
+        | BalanceV2Error::ArithmeticOverflow
         | BalanceV2Error::InsufficientFrozenBalance
         | BalanceV2Error::BalanceClosed
         | BalanceV2Error::CannotCloseNonZeroBalance

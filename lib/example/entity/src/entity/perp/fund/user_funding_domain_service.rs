@@ -297,7 +297,7 @@ fn map_user_funding_error(error: UserFundingError, funding_id: u64) -> SettleUse
         UserFundingError::InvalidSettlementTime => {
             SettleUserFundingBatchError::InvalidSettlementTime { funding_id }
         }
-        UserFundingError::VersionOverflow => {
+        UserFundingError::Replay(_) | UserFundingError::VersionOverflow => {
             SettleUserFundingBatchError::FundingVersionOverflow { funding_id }
         }
         UserFundingError::StaleLsn { .. } => {
@@ -313,7 +313,8 @@ fn map_position_error(error: PerpPositionV3Error, position_id: u64) -> SettleUse
                 funding_id: position_id,
             }
         }
-        PerpPositionV3Error::InvalidQuantity
+        PerpPositionV3Error::Replay(_)
+        | PerpPositionV3Error::InvalidQuantity
         | PerpPositionV3Error::InvalidPrice
         | PerpPositionV3Error::InvalidLeverage
         | PerpPositionV3Error::InvalidMarginConfiguration
@@ -336,7 +337,8 @@ fn map_balance_error(error: BalanceV2Error, account_id: u64) -> SettleUserFundin
             SettleUserFundingBatchError::InsufficientAvailableBalance { account_id }
         }
         BalanceV2Error::BalanceClosed => SettleUserFundingBatchError::BalanceClosed { account_id },
-        BalanceV2Error::InvalidAmount
+        BalanceV2Error::Replay(_)
+        | BalanceV2Error::InvalidAmount
         | BalanceV2Error::InsufficientFrozenBalance
         | BalanceV2Error::ArithmeticOverflow
         | BalanceV2Error::CannotCloseNonZeroBalance => {

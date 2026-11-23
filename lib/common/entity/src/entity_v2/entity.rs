@@ -358,6 +358,54 @@ pub trait TrackDiff: Entity {
         Ok(event)
     }
 
+    /// 使用 command envelope 的确定性元数据投影单步 update replay event。
+    fn track_update_event_from_command(
+        &self,
+        old_state: &Self,
+        lsn: u64,
+        logical_ts: u64,
+    ) -> Result<EntityReplayableEvent, EntityError>
+    where
+        Self: Sized,
+    {
+        ensure_same_entity(old_state, self)?;
+        if old_state.topic() != self.topic() || old_state.partition() != self.partition() {
+            return Err(EntityError::EntityIdMismatch {
+                expected: format!("{}/{}", old_state.topic(), old_state.partition()),
+                actual: format!("{}/{}", self.topic(), self.partition()),
+            });
+        }
+        if self.lsn() != lsn {
+            return Err(EntityError::EntityVersionMismatch {
+                expected_next: lsn,
+                actual_next: self.lsn(),
+            });
+        }
+
+        let changes = old_state.diff(self);
+        if changes.is_empty() {
+            return Err(EntityError::NoChangesDetected);
+        }
+
+        let mut event = EntityReplayableEvent::new_with_topic(
+            self.topic(),
+            self.partition(),
+            logical_ts,
+            old_state.lsn(),
+            lsn,
+            self.entity_id(),
+            Self::entity_type(),
+            EntityChangeType::Updated.as_tag(),
+        );
+        for change in changes {
+            let field_type = Self::replay_field_type(change.field_name.as_ref());
+            event.add_field_change(ReplayFieldChange::from_entity_field_change(
+                &change, field_type,
+            ));
+        }
+        Ok(event)
+    }
+
     #[inline]
     fn track_delete_event(&self) -> Result<EntityReplayableEvent, EntityError>
     where

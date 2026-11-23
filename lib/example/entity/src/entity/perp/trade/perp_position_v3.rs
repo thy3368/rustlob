@@ -1,4 +1,7 @@
-use common_entity::{Entity, EntityFieldChange, Fsm, LogAttr, Shard, TrackDiff};
+use common_entity::{
+    CommandMetadata, Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Fsm, LogAttr,
+    ReplayableDomainEvent, Shard, TrackDiff,
+};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -41,8 +44,10 @@ impl Default for FundingAccumulatorV3 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PerpPositionV3Error {
+    #[error("replay projection failed: {0}")]
+    Replay(#[from] EntityError),
     #[error("quantity must be non-zero")]
     InvalidQuantity,
     #[error("price must be greater than zero")]
@@ -102,6 +107,47 @@ pub enum PerpPositionV3Event {
         logical_ts: u64,
         lsn: u64,
     },
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PerpPositionV3DomainEvent {
+    TradeApplied { replay_event: EntityReplayableEvent },
+    FundingApplied { replay_event: EntityReplayableEvent },
+    FundingAmountApplied { replay_event: EntityReplayableEvent },
+    LeverageUpdated { replay_event: EntityReplayableEvent },
+    IsolatedMarginAdjusted { replay_event: EntityReplayableEvent },
+}
+impl ReplayableDomainEvent<PerpPositionV3Event> for PerpPositionV3DomainEvent {
+    fn domain_event_type(c: &PerpPositionV3Event) -> u8 {
+        match c {
+            PerpPositionV3Event::TradeFilled { .. } => 1,
+            PerpPositionV3Event::FundingSettled { .. } => 2,
+            PerpPositionV3Event::FundingAmountSettled { .. } => 3,
+            PerpPositionV3Event::LeverageUpdated { .. } => 4,
+            PerpPositionV3Event::IsolatedMarginAdjusted { .. } => 5,
+        }
+    }
+    fn from_command(c: PerpPositionV3Event, replay_event: EntityReplayableEvent) -> Self {
+        match c {
+            PerpPositionV3Event::TradeFilled { .. } => Self::TradeApplied { replay_event },
+            PerpPositionV3Event::FundingSettled { .. } => Self::FundingApplied { replay_event },
+            PerpPositionV3Event::FundingAmountSettled { .. } => {
+                Self::FundingAmountApplied { replay_event }
+            }
+            PerpPositionV3Event::LeverageUpdated { .. } => Self::LeverageUpdated { replay_event },
+            PerpPositionV3Event::IsolatedMarginAdjusted { .. } => {
+                Self::IsolatedMarginAdjusted { replay_event }
+            }
+        }
+    }
+    fn replayable_event(&self) -> &EntityReplayableEvent {
+        match self {
+            Self::TradeApplied { replay_event }
+            | Self::FundingApplied { replay_event }
+            | Self::FundingAmountApplied { replay_event }
+            | Self::LeverageUpdated { replay_event }
+            | Self::IsolatedMarginAdjusted { replay_event } => replay_event,
+        }
+    }
 }
 impl Shard for PerpPositionV3Event {
     fn partition(&self) -> u8 {
@@ -450,14 +496,35 @@ impl PerpPositionV3 {}
 impl Fsm for PerpPositionV3 {
     type State = PerpPositionV3State;
     type Command = PerpPositionV3Event;
-    type DomainEvent = PerpPositionV3Event;
+    type DomainEvent = PerpPositionV3DomainEvent;
     type Output = PerpPositionV3Output;
     type Error = PerpPositionV3Error;
 
-    fn transition_legacy(
+    fn transition_working(
         &mut self,
-        event: Self::Command,
+        metadata: CommandMetadata,
+        mut event: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error> {
+        match &mut event {
+            PerpPositionV3Event::TradeFilled {
+                logical_ts, lsn, ..
+            }
+            | PerpPositionV3Event::FundingSettled {
+                logical_ts, lsn, ..
+            }
+            | PerpPositionV3Event::FundingAmountSettled {
+                logical_ts, lsn, ..
+            }
+            | PerpPositionV3Event::LeverageUpdated {
+                logical_ts, lsn, ..
+            }
+            | PerpPositionV3Event::IsolatedMarginAdjusted {
+                logical_ts, lsn, ..
+            } => {
+                *logical_ts = metadata.logical_ts;
+                *lsn = metadata.lsn;
+            }
+        }
         match event {
             PerpPositionV3Event::TradeFilled {
                 trade, logical_ts, ..
