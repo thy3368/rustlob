@@ -62,7 +62,7 @@ impl UseCaseExecutorV3 {
             .load_given_state(command)
             .map_err(ExecutionErrorV3::LoadState)?;
         let state_changed = use_case
-            .validate_and_compute(command, state_given)
+            .validate_and_compute(command, &state_given)
             .map_err(map_compute_error)?;
         let events = state_changed.replayable_events();
         validate_events(command, &events).map_err(ExecutionErrorV3::Contract)?;
