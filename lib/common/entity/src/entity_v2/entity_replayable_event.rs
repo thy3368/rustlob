@@ -8,6 +8,23 @@ use thiserror::Error;
 
 use crate::EntityError;
 
+/// 一次用户触发内某条实体 command 的确定性位置。
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+pub struct EventPosition {
+    pub lsn: u64,
+    pub command_index: u32,
+}
+
+impl EventPosition {
+    pub const ZERO: Self = Self::new(0, 0);
+
+    pub const fn new(lsn: u64, command_index: u32) -> Self {
+        Self { lsn, command_index }
+    }
+}
+
 /// Logical entity change kind used before encoding into compact replay tags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EntityChangeType {
@@ -130,10 +147,14 @@ pub struct ReplayableDomainEvent {
     /// 全局单调递增的序列号 来自command
     /// 这是"全序"的唯一依据
     pub lsn: u64,
+    /// V3 权威事件位置；`lsn` 仅供旧 V2 调用方迁移。
+    pub position: EventPosition,
     pub entity_id: u64,
     pub entity_type: u8,
 
     pub previous_lsn: u64,
+    /// V3 权威前驱位置；`previous_lsn` 仅供旧 V2 调用方迁移。
+    pub previous_position: EventPosition,
 
     /// 逻辑时间戳（由定序器分配，非物理时钟）来自command
     /// 用于替代 NTP/PTP，作为系统的逻辑时间
@@ -199,12 +220,41 @@ impl ReplayableDomainEvent {
             p,
             logical_ts: timestamp,
             previous_lsn,
+            previous_position: EventPosition::new(previous_lsn, 0),
             lsn,
+            position: EventPosition::new(lsn, 0),
             entity_id,
             entity_type,
             change_type,
             field_changes: Vec::new(),
         }
+    }
+
+    /// 使用复合版本位置构造 V3 replay event。
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_at(
+        t: u8,
+        p: u8,
+        timestamp: u64,
+        previous_position: EventPosition,
+        position: EventPosition,
+        entity_id: u64,
+        entity_type: u8,
+        change_type: u8,
+    ) -> Self {
+        let mut event = Self::new_with_topic(
+            t,
+            p,
+            timestamp,
+            previous_position.lsn,
+            position.lsn,
+            entity_id,
+            entity_type,
+            change_type,
+        );
+        event.previous_position = previous_position;
+        event.position = position;
+        event
     }
 
     #[inline]
@@ -448,6 +498,25 @@ mod tests {
             ));
         }
         event
+    }
+
+    #[test]
+    fn composite_positions_survive_bincode_round_trip() {
+        let event = ReplayableDomainEvent::new_at(
+            1,
+            2,
+            30,
+            EventPosition::new(9, 4),
+            EventPosition::new(10, 1),
+            7,
+            3,
+            1,
+        );
+        let encoded = bincode::serialize(&event).unwrap();
+        let decoded: ReplayableDomainEvent = bincode::deserialize(&encoded).unwrap();
+        assert_eq!(decoded, event);
+        assert_eq!(decoded.previous_position, EventPosition::new(9, 4));
+        assert_eq!(decoded.position, EventPosition::new(10, 1));
     }
 
     #[test]

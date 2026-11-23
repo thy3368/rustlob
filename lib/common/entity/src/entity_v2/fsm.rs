@@ -1,16 +1,29 @@
 use super::shard::{LogAttr, Shard};
-use crate::{EntityError, ReplayableDomainEvent, TrackDiff};
+use crate::{EntityError, EventPosition, ReplayableDomainEvent, TrackDiff};
 
 /// 已由日志定序器确定的命令元数据。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CommandMetadata {
     pub lsn: u64,
+    pub position: EventPosition,
     pub logical_ts: u64,
 }
 
 impl CommandMetadata {
     pub const fn new(lsn: u64, logical_ts: u64) -> Self {
-        Self { lsn, logical_ts }
+        Self {
+            lsn,
+            position: EventPosition::new(lsn, 0),
+            logical_ts,
+        }
+    }
+
+    pub const fn new_at(position: EventPosition, logical_ts: u64) -> Self {
+        Self {
+            lsn: position.lsn,
+            position,
+            logical_ts,
+        }
     }
 }
 

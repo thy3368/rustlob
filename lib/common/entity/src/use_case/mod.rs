@@ -1,3 +1,4 @@
+pub mod entity_changes_v3;
 pub mod event_handler;
 pub mod executor;
 pub mod executor_v3;

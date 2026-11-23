@@ -13,8 +13,8 @@ pub use entity_v2::entity::{
     TrackDiff,
 };
 pub use entity_v2::entity_replayable_event::{
-    EntityChangeType, EntityFieldChange, ReplayEventFieldParseError, ReplayFieldChange,
-    ReplayableDomainEvent,
+    EntityChangeType, EntityFieldChange, EventPosition, ReplayEventFieldParseError,
+    ReplayFieldChange, ReplayableDomainEvent,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use entity_v2::shard::{LogAttr, Shard};
@@ -26,6 +26,10 @@ pub use sequence::id_generator::EntityIdGenerator;
 pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer, SYSTEM_USER_ID};
 pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
+pub use use_case::entity_changes_v3::{
+    NonEmptyReplayEvents, PositionedEntity, ReplayableEntityChanges, UpdatedEntityEvents,
+    UpdatedEntityEventsError,
+};
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::executor::{
     DomainEventChanges, DomainEventExecutionResult, DomainEventSink, ExecutionError,

@@ -78,7 +78,9 @@ impl MySqlStore {
                 change_type TINYINT UNSIGNED NOT NULL,
                 entity_id BIGINT UNSIGNED NOT NULL,
                 previous_lsn BIGINT UNSIGNED NOT NULL,
+                previous_command_index INT UNSIGNED NOT NULL DEFAULT 0,
                 lsn BIGINT UNSIGNED NOT NULL,
+                command_index INT UNSIGNED NOT NULL DEFAULT 0,
                 logical_ts BIGINT UNSIGNED NOT NULL,
                 order_id VARCHAR(191) NULL,
                 account_id VARCHAR(191) NULL,
@@ -97,6 +99,7 @@ impl MySqlStore {
                 frozen_quote BIGINT UNSIGNED NULL,
                 published_at TIMESTAMP NULL DEFAULT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ,UNIQUE KEY uq_event_position_entity (lsn, command_index, entity_type, entity_id)
             )"
         ))
         .map_err(map_mysql_error)?;
