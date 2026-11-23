@@ -1,4 +1,4 @@
-use common_entity::{EntityReplayableEvent, LogEntry, StateDiff, StateSink, StateSource};
+use common_entity::{LogEntry, ReplayableDomainEvent, StateDiff, StateSink, StateSource};
 use example_core_use_case::{
     BalanceV2, WithdrawQuoteCmd, WithdrawQuoteState, WithdrawQuoteUseCase,
 };
@@ -39,13 +39,13 @@ impl StateSource<WithdrawQuoteUseCase> for InMemoryWithdrawQuoteOutbound {
 impl StateSink<WithdrawQuoteUseCase> for InMemoryWithdrawQuoteOutbound {
     type Error = WithdrawQuoteOutboundError;
 
-    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         let mut state = self.store.lock_state()?;
         state.persisted_events.extend(events.iter().cloned());
         Ok(())
     }
 
-    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         let mut state = self.store.lock_state()?;
 
         for event in events {
@@ -79,7 +79,7 @@ impl StateSink<WithdrawQuoteUseCase> for InMemoryWithdrawQuoteOutbound {
         Ok(())
     }
 
-    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         let mut state = self.store.lock_state()?;
         state.published_events.extend(events.iter().cloned());
         Ok(())

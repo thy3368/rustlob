@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityReplayableEvent, LogEntry, StateDiff, StateSink, StateSource, stable_string_entity_id,
+    LogEntry, ReplayableDomainEvent, StateDiff, StateSink, StateSource, stable_string_entity_id,
 };
 use example_core_use_case::{BalanceV2, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase};
 use mysql::prelude::Queryable;
@@ -60,7 +60,7 @@ impl StateSource<DepositQuoteUseCase> for MySqlDepositQuoteOutbound {
 impl StateSink<DepositQuoteUseCase> for MySqlDepositQuoteOutbound {
     type Error = DepositQuoteOutboundError;
 
-    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
 
         for event in events {
@@ -115,7 +115,7 @@ impl StateSink<DepositQuoteUseCase> for MySqlDepositQuoteOutbound {
         Ok(())
     }
 
-    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
 
         for event in events {
@@ -154,7 +154,7 @@ impl StateSink<DepositQuoteUseCase> for MySqlDepositQuoteOutbound {
         Ok(())
     }
 
-    fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn publish(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         let mut conn = self.store.pool.get_conn().map_err(map_mysql_error)?;
         conn.query_drop(format!(
             "UPDATE {EVENT_TABLE}

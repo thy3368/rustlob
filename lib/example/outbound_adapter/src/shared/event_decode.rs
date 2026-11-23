@@ -1,7 +1,7 @@
-use common_entity::EntityReplayableEvent;
+use common_entity::ReplayableDomainEvent;
 
 pub(crate) fn event_string_field(
-    event: &EntityReplayableEvent,
+    event: &ReplayableDomainEvent,
     field_name: &str,
 ) -> Option<String> {
     event.field_changes.iter().find_map(|change| {
@@ -13,7 +13,7 @@ pub(crate) fn event_string_field(
     })
 }
 
-pub(crate) fn event_u64_field(event: &EntityReplayableEvent, field_name: &str) -> Option<u64> {
+pub(crate) fn event_u64_field(event: &ReplayableDomainEvent, field_name: &str) -> Option<u64> {
     event.field_changes.iter().find_map(|change| {
         if change.field_name_as_str().ok() != Some(field_name) {
             return None;
@@ -26,7 +26,7 @@ pub(crate) fn event_u64_field(event: &EntityReplayableEvent, field_name: &str) -
     })
 }
 
-pub(crate) fn event_identity_field(event: &EntityReplayableEvent, field_name: &str) -> Option<u64> {
+pub(crate) fn event_identity_field(event: &ReplayableDomainEvent, field_name: &str) -> Option<u64> {
     event_u64_field(event, field_name).or_else(|| {
         event_string_field(event, field_name)
             .map(|value| common_entity::stable_string_entity_id(value.as_str()))
@@ -34,7 +34,7 @@ pub(crate) fn event_identity_field(event: &EntityReplayableEvent, field_name: &s
 }
 
 #[cfg(test)]
-fn event_order_sequence(event: &EntityReplayableEvent) -> Option<u64> {
+fn event_order_sequence(event: &ReplayableDomainEvent) -> Option<u64> {
     event_u64_field(event, "order_sequence").or_else(|| {
         let order_id = event_string_field(event, "order_id")?;
         order_id.rsplit('-').next()?.parse::<u64>().ok()
@@ -43,7 +43,7 @@ fn event_order_sequence(event: &EntityReplayableEvent) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::{EntityReplayableEvent, ReplayFieldChange};
+    use common_entity::{ReplayFieldChange, ReplayableDomainEvent};
     use example_core_use_case::ORDER_ENTITY_TYPE;
 
     use super::event_order_sequence;
@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn event_order_sequence_prefers_explicit_field() {
-        let mut event = EntityReplayableEvent::new_created(0, 1, ORDER_ENTITY_TYPE);
+        let mut event = ReplayableDomainEvent::new_created(0, 1, ORDER_ENTITY_TYPE);
         event.add_field_change(string_field("order_id", "trader-1-BTCUSDT-9"));
         event.add_field_change(int_field("order_sequence", 7));
 
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn event_order_sequence_falls_back_to_order_id_suffix() {
-        let mut event = EntityReplayableEvent::new_created(0, 1, ORDER_ENTITY_TYPE);
+        let mut event = ReplayableDomainEvent::new_created(0, 1, ORDER_ENTITY_TYPE);
         event.add_field_change(string_field("order_id", "trader-1-BTCUSDT-9"));
 
         assert_eq!(event_order_sequence(&event), Some(9));

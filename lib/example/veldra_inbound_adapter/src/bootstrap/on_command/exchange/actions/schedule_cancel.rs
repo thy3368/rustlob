@@ -1,4 +1,4 @@
-use common_entity::{EntityError, EntityReplayableEvent, ReplayableChanges, UseCase};
+use common_entity::{EntityError, ReplayableChanges, ReplayableDomainEvent, UseCase};
 use example_core_use_case::{
     ScheduleHyperliquidCancelChanges, ScheduleHyperliquidCancelCmd, ScheduleHyperliquidCancelError,
     ScheduleHyperliquidCancelState, ScheduleHyperliquidCancelUseCase, UserId,
@@ -90,9 +90,9 @@ pub trait ScheduleCancelOutbound {
         cmd: &ScheduleHyperliquidCancelCmd,
     ) -> Result<ScheduleHyperliquidCancelState, Self::Error>;
 
-    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
-    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
-    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
+    fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
+    fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
+    fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
 }
 
 impl ScheduleCancelOutbound for HyperliquidScheduleCancelInMemoryOutbound {
@@ -108,15 +108,15 @@ impl ScheduleCancelOutbound for HyperliquidScheduleCancelInMemoryOutbound {
         )
     }
 
-    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         common_entity::StateSink::<ScheduleHyperliquidCancelUseCase>::persist(self, events)
     }
 
-    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         common_entity::StateSink::<ScheduleHyperliquidCancelUseCase>::replay(self, events)
     }
 
-    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         common_entity::StateSink::<ScheduleHyperliquidCancelUseCase>::publish(self, events)
     }
 }
@@ -375,7 +375,7 @@ mod tests {
         at_daily_limit: bool,
         steps: RefCell<Vec<&'static str>>,
         seen_cmd: RefCell<Option<ScheduleHyperliquidCancelCmd>>,
-        batches: RefCell<Vec<Vec<EntityReplayableEvent>>>,
+        batches: RefCell<Vec<Vec<ReplayableDomainEvent>>>,
     }
 
     impl ScheduleCancelOutbound for ObservingOutbound {
@@ -401,19 +401,19 @@ mod tests {
             Ok(ScheduleHyperliquidCancelState { scheduled_cancel })
         }
 
-        fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("persist");
             self.batches.borrow_mut().push(events.to_vec());
             Ok(())
         }
 
-        fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("replay");
             self.batches.borrow_mut().push(events.to_vec());
             Ok(())
         }
 
-        fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("publish");
             self.batches.borrow_mut().push(events.to_vec());
             Ok(())

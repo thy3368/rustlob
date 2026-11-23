@@ -1,4 +1,4 @@
-use crate::{EntityError, EntityReplayableEvent, LogAttr, Shard, TrackDiff};
+use crate::{EntityError, LogAttr, ReplayableDomainEvent, Shard, TrackDiff};
 
 /// 已由日志定序器确定的 v2 command 元数据。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -56,14 +56,14 @@ impl<C: Shard> LogAttr for SequencedCommand<C> {
 
 /// v2 FSM 一次成功迁移的完整结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Transition<S, O, E> {
+pub struct Transition<S, O> {
     pub state: S,
     pub output: O,
-    pub event: E,
+    pub event: ReplayableDomainEvent,
 }
 
-impl<S, O, E> Transition<S, O, E> {
-    pub const fn new(state: S, output: O, event: E) -> Self {
+impl<S, O> Transition<S, O> {
+    pub const fn new(state: S, output: O, event: ReplayableDomainEvent) -> Self {
         Self {
             state,
             output,
@@ -73,14 +73,7 @@ impl<S, O, E> Transition<S, O, E> {
 }
 
 /// v2 迁移的统一返回类型。
-pub type TransitionResult<S, O, E, Err> = Result<Transition<S, O, E>, Err>;
-
-/// v2 领域事件与实体 replay 事实之间的稳定映射。
-pub trait ReplayableDomainEvent<C>: Sized {
-    fn domain_event_type(command: &C) -> u8;
-    fn from_command(command: C, replay_event: EntityReplayableEvent) -> Self;
-    fn replayable_event(&self) -> &EntityReplayableEvent;
-}
+pub type TransitionResult<S, O, Err> = Result<Transition<S, O>, Err>;
 
 /// FSM v2：只接受已定序 command envelope 的单一路径。
 ///
@@ -88,8 +81,7 @@ pub trait ReplayableDomainEvent<C>: Sized {
 /// 新调用方显式构造 [`SequencedCommand`]。
 pub trait Fsm: TrackDiff + Clone {
     type State;
-    type Command: Clone;
-    type DomainEvent: ReplayableDomainEvent<Self::Command>;
+    type Command;
     type Output;
     type Error: From<EntityError>;
 
@@ -103,27 +95,27 @@ pub trait Fsm: TrackDiff + Clone {
         command: Self::Command,
     ) -> Result<(Self::State, Self::Output), Self::Error>;
 
-    /// 在一个 working clone 上完成业务迁移、replay 投影和领域事件构造，全部成功后
+    /// 返回 command 对应的稳定、非零业务事件码。
+    fn event_type(command: &Self::Command) -> u8;
+
+    /// 在一个 working clone 上完成业务迁移和 replay 投影，全部成功后
     /// 才原子替换原实体。
     fn transition(
         &mut self,
         command: SequencedCommand<Self::Command>,
-    ) -> TransitionResult<Self::State, Self::Output, Self::DomainEvent, Self::Error> {
+    ) -> TransitionResult<Self::State, Self::Output, Self::Error> {
         let (metadata, payload) = command.into_parts();
+        let event_type = Self::event_type(&payload);
+        if event_type == 0 {
+            return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
+        }
         let mut working = self.clone();
-        let (state, output) = working.transition_in_place(metadata, payload.clone())?;
+        let (state, output) = working.transition_in_place(metadata, payload)?;
         let mut replay_event =
             working.track_update_event_from_command(self, metadata.lsn, metadata.logical_ts)?;
-        let domain_event_type = Self::DomainEvent::domain_event_type(&payload);
-        if domain_event_type == 0 {
-            return Err(
-                EntityError::Custom("FSM domain event type must be non-zero".into()).into(),
-            );
-        }
-        replay_event.domain_event_type = domain_event_type;
-        let event = Self::DomainEvent::from_command(payload, replay_event);
+        replay_event.domain_event_type = event_type;
         *self = working;
-        Ok(Transition::new(state, output, event))
+        Ok(Transition::new(state, output, replay_event))
     }
 }
 
@@ -132,8 +124,8 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use super::{CommandMetadata, Fsm as FsmV2, ReplayableDomainEvent, SequencedCommand};
-    use crate::{Entity, EntityFieldChange, EntityReplayableEvent, LogAttr, Shard, TrackDiff};
+    use super::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+    use crate::{Entity, EntityFieldChange, LogAttr, Shard, TrackDiff};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum TestError {
@@ -147,7 +139,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[derive(Debug, PartialEq, Eq)]
     struct Command {
         delta: u64,
         fail: bool,
@@ -164,23 +156,6 @@ mod tests {
 
         fn party_id(&self) -> u64 {
             5
-        }
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct DomainEvent(EntityReplayableEvent);
-
-    impl ReplayableDomainEvent<Command> for DomainEvent {
-        fn domain_event_type(_: &Command) -> u8 {
-            7
-        }
-
-        fn from_command(_: Command, replay_event: EntityReplayableEvent) -> Self {
-            Self(replay_event)
-        }
-
-        fn replayable_event(&self) -> &EntityReplayableEvent {
-            &self.0
         }
     }
 
@@ -260,9 +235,12 @@ mod tests {
     impl FsmV2 for Subject {
         type State = u64;
         type Command = Command;
-        type DomainEvent = DomainEvent;
         type Output = u64;
         type Error = TestError;
+
+        fn event_type(command: &Command) -> u8 {
+            if command.delta == u64::MAX { 0 } else { 7 }
+        }
 
         fn transition_in_place(
             &mut self,
@@ -313,9 +291,9 @@ mod tests {
             (12, 9, 13)
         );
         assert_eq!((transition.state, transition.output), (12, 2));
-        assert_eq!(transition.event.0.lsn, 9);
-        assert_eq!(transition.event.0.logical_ts, 13);
-        assert_eq!(transition.event.0.domain_event_type, 7);
+        assert_eq!(transition.event.lsn, 9);
+        assert_eq!(transition.event.logical_ts, 13);
+        assert_eq!(transition.event.domain_event_type, 7);
     }
 
     #[test]
@@ -368,6 +346,26 @@ mod tests {
         );
 
         assert_eq!(result, Err(TestError::Projection));
+        assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
+    }
+
+    #[test]
+    fn zero_event_type_is_rejected_before_transition() {
+        let mut subject = subject();
+        let clones = Arc::clone(&subject.clones);
+        let result = FsmV2::transition(
+            &mut subject,
+            SequencedCommand::new(
+                CommandMetadata::new(9, 13),
+                Command {
+                    delta: u64::MAX,
+                    fail: false,
+                },
+            ),
+        );
+
+        assert_eq!(result, Err(TestError::Projection));
+        assert_eq!(clones.load(Ordering::Relaxed), 0);
         assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
     }
 }

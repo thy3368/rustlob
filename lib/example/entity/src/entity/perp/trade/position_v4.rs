@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
-    EntityReplayableEvent, FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard,
+    FourColorArchetype, Fsm, LogAttr, ReplayBackedDomainEvent, ReplayableDomainEvent, Shard,
     TrackDiff,
 };
 use rust_decimal::Decimal;
@@ -69,12 +69,12 @@ pub enum PositionEvent {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PositionV4DomainEvent {
-    TradeFilled { replay_event: EntityReplayableEvent },
-    FundingSettled { replay_event: EntityReplayableEvent },
-    LeverageUpdated { replay_event: EntityReplayableEvent },
-    IsolatedMarginAdjusted { replay_event: EntityReplayableEvent },
+    TradeFilled { replay_event: ReplayableDomainEvent },
+    FundingSettled { replay_event: ReplayableDomainEvent },
+    LeverageUpdated { replay_event: ReplayableDomainEvent },
+    IsolatedMarginAdjusted { replay_event: ReplayableDomainEvent },
 }
-impl ReplayableDomainEvent<PositionEvent> for PositionV4DomainEvent {
+impl ReplayBackedDomainEvent<PositionEvent> for PositionV4DomainEvent {
     fn domain_event_type(c: &PositionEvent) -> u8 {
         match c {
             PositionEvent::TradeFilled { .. } => 1,
@@ -83,7 +83,7 @@ impl ReplayableDomainEvent<PositionEvent> for PositionV4DomainEvent {
             PositionEvent::IsolatedMarginAdjusted { .. } => 4,
         }
     }
-    fn from_command(c: PositionEvent, replay_event: EntityReplayableEvent) -> Self {
+    fn from_command(c: PositionEvent, replay_event: ReplayableDomainEvent) -> Self {
         match c {
             PositionEvent::TradeFilled { .. } => Self::TradeFilled { replay_event },
             PositionEvent::FundingSettled { .. } => Self::FundingSettled { replay_event },
@@ -93,7 +93,7 @@ impl ReplayableDomainEvent<PositionEvent> for PositionV4DomainEvent {
             }
         }
     }
-    fn replayable_event(&self) -> &EntityReplayableEvent {
+    fn replayable_event(&self) -> &ReplayableDomainEvent {
         match self {
             Self::TradeFilled { replay_event }
             | Self::FundingSettled { replay_event }

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use common_entity::{EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, UseCase};
+use common_entity::{EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, UseCase};
 use example_core_entity::clearinghouse::perp_clearinghouse_state_v3::PerpClearinghouseStateV3;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -143,7 +143,7 @@ pub enum LiquidationError {
 }
 
 impl ReplayableChanges for PlaceOnlySpotOrderV3AfterChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         match self {
             Self::Orders { orders, .. } => orders.iter().try_fold(Vec::new(), |mut all, order| {
                 all.extend(order.to_replayable_events()?);

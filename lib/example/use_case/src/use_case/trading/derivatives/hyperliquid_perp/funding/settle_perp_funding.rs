@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, TrackDiff, UpdatedEntityPair,
+    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, TrackDiff, UpdatedEntityPair,
     UseCase,
 };
 use rust_decimal::Decimal;
@@ -67,7 +67,7 @@ pub struct SettleHyperliquidPerpFundingChanges {
 }
 
 impl ReplayableChanges for SettleHyperliquidPerpFundingChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         let mut events = Vec::with_capacity(
             self.created_fundings.len()
                 + self.changed_positions.len()

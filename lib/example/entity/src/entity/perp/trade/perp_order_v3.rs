@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
-    EntityReplayableEvent, FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard,
+    FourColorArchetype, Fsm, LogAttr, ReplayBackedDomainEvent, ReplayableDomainEvent, Shard,
     TrackDiff,
 };
 use rust_decimal::Decimal;
@@ -42,12 +42,12 @@ pub enum PerpOrderV3Event {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PerpOrderV3DomainEvent {
-    Matched { replay_event: EntityReplayableEvent },
-    ReplacedOrFilled { replay_event: EntityReplayableEvent },
-    Modified { replay_event: EntityReplayableEvent },
-    Canceled { replay_event: EntityReplayableEvent },
+    Matched { replay_event: ReplayableDomainEvent },
+    ReplacedOrFilled { replay_event: ReplayableDomainEvent },
+    Modified { replay_event: ReplayableDomainEvent },
+    Canceled { replay_event: ReplayableDomainEvent },
 }
-impl ReplayableDomainEvent<PerpOrderV3Event> for PerpOrderV3DomainEvent {
+impl ReplayBackedDomainEvent<PerpOrderV3Event> for PerpOrderV3DomainEvent {
     fn domain_event_type(c: &PerpOrderV3Event) -> u8 {
         match c {
             PerpOrderV3Event::Match { .. } => 1,
@@ -56,7 +56,7 @@ impl ReplayableDomainEvent<PerpOrderV3Event> for PerpOrderV3DomainEvent {
             PerpOrderV3Event::Cancel { .. } => 4,
         }
     }
-    fn from_command(c: PerpOrderV3Event, replay_event: EntityReplayableEvent) -> Self {
+    fn from_command(c: PerpOrderV3Event, replay_event: ReplayableDomainEvent) -> Self {
         match c {
             PerpOrderV3Event::Match { .. } => Self::Matched { replay_event },
             PerpOrderV3Event::ReplaceOrFill { .. } => Self::ReplacedOrFilled { replay_event },
@@ -64,7 +64,7 @@ impl ReplayableDomainEvent<PerpOrderV3Event> for PerpOrderV3DomainEvent {
             PerpOrderV3Event::Cancel { .. } => Self::Canceled { replay_event },
         }
     }
-    fn replayable_event(&self) -> &EntityReplayableEvent {
+    fn replayable_event(&self) -> &ReplayableDomainEvent {
         match self {
             Self::Matched { replay_event }
             | Self::ReplacedOrFilled { replay_event }

@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, UpdatedEntityPair,
+    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff, UpdatedEntityPair,
     UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
@@ -71,7 +71,7 @@ pub enum CancelSpotOrderV3Error {
 pub struct CancelSpotOrderV3UseCase;
 
 impl ReplayableChanges for CancelSpotOrderV3Changes {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         let mut events = Vec::with_capacity(1 + usize::from(self.updated_balance.is_some()));
         events.push(self.updated_order.to_replayable_event()?);
         if let Some(balance) = &self.updated_balance {

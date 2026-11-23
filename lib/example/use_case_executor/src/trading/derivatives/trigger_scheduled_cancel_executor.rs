@@ -32,7 +32,7 @@ where
 mod tests {
     use std::sync::Mutex;
 
-    use common_entity::{EntityReplayableEvent, LogEntrySequencer};
+    use common_entity::{LogEntrySequencer, ReplayableDomainEvent};
     use example_core_use_case::{ScheduledCancel, TriggerScheduledCancelState, UserId};
 
     use super::*;
@@ -47,7 +47,7 @@ mod tests {
     #[derive(Debug)]
     struct FakeOutbound {
         state: TriggerScheduledCancelState,
-        batches: Mutex<Vec<Vec<EntityReplayableEvent>>>,
+        batches: Mutex<Vec<Vec<ReplayableDomainEvent>>>,
     }
 
     impl StateSource<TriggerScheduledCancelUseCase> for FakeOutbound {
@@ -64,15 +64,15 @@ mod tests {
     impl StateSink<TriggerScheduledCancelUseCase> for FakeOutbound {
         type Error = FakeError;
 
-        fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.record(events)
         }
 
-        fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.record(events)
         }
 
-        fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.record(events)
         }
     }
@@ -94,7 +94,7 @@ mod tests {
             }
         }
 
-        fn record(&self, events: &[EntityReplayableEvent]) -> Result<(), FakeError> {
+        fn record(&self, events: &[ReplayableDomainEvent]) -> Result<(), FakeError> {
             self.batches
                 .lock()
                 .map_err(|_| FakeError)?

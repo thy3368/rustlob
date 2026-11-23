@@ -331,7 +331,7 @@ fn decode_execution_mysql(execution: &str, time_in_force: &str) -> Option<(Price
 }
 
 pub(crate) fn event_string_field_mysql(
-    event: &common_entity::EntityReplayableEvent,
+    event: &common_entity::ReplayableDomainEvent,
     field_name: &str,
 ) -> Option<String> {
     event.field_changes.iter().find_map(|change| {
@@ -344,7 +344,7 @@ pub(crate) fn event_string_field_mysql(
 }
 
 pub(crate) fn event_u64_field_mysql(
-    event: &common_entity::EntityReplayableEvent,
+    event: &common_entity::ReplayableDomainEvent,
     field_name: &str,
 ) -> Option<u64> {
     event.field_changes.iter().find_map(|change| {

@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, TrackDiff,
+    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use rust_decimal::Decimal;
@@ -46,7 +46,7 @@ pub struct UpdateHyperliquidPerpLeverageChanges {
 }
 
 impl ReplayableChanges for UpdateHyperliquidPerpLeverageChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         Ok(vec![
             self.changed_position
                 .after

@@ -59,7 +59,7 @@ mod tests {
     use std::fs;
 
     use base_types_v2::{Coin, Symbol};
-    use common_entity::EntityReplayableEvent;
+    use common_entity::ReplayableDomainEvent;
     use rust_decimal::Decimal;
     use serde::{Deserialize, Serialize};
     use tempfile::tempdir;
@@ -131,10 +131,10 @@ mod tests {
         fn is_active(&self) -> bool {
             true
         }
-        fn from_replay_event(_: &EntityReplayableEvent, _: u64) -> Result<Self, LobError> {
+        fn from_replay_event(_: &ReplayableDomainEvent, _: u64) -> Result<Self, LobError> {
             unreachable!("repository tests insert orders directly")
         }
-        fn apply_replay_event(self, _: &EntityReplayableEvent) -> Result<Self, LobError> {
+        fn apply_replay_event(self, _: &ReplayableDomainEvent) -> Result<Self, LobError> {
             unreachable!("repository tests insert orders directly")
         }
     }

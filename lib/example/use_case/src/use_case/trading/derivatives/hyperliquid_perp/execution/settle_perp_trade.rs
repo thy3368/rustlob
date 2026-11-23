@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use common_entity::{
-    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, TrackDiff,
+    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use rust_decimal::Decimal;
@@ -60,7 +60,7 @@ pub struct SettleHyperliquidPerpTradeChanges {
 }
 
 impl ReplayableChanges for SettleHyperliquidPerpTradeChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         let mut events = Vec::with_capacity(
             self.changed_positions.len()
                 + self.changed_margin_balances.len()

@@ -1,14 +1,14 @@
 use common_entity::fsm_v2::{
-    CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, ReplayableDomainEvent, SequencedCommand,
+    CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
 };
 use common_entity::{
-    CommandMetadata, DomainEventChanges, EntityError, EntityReplayableEvent, Fsm, LogEntry,
-    ReplayableChanges, SequencedDomainEvent, StateDiff, UpdatedEntityPair, UseCase,
+    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff,
+    UpdatedEntityPair, UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{
     BalanceV2, BalanceV2Error, BalanceV2Event, OrderSide, SpotOrderStatus, SpotOrderV7,
-    SpotOrderV7Command, SpotOrderV7DomainEvent, SpotOrderV7Output,
+    SpotOrderV7Command, SpotOrderV7Output,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct CancelSpotOrderV2State {
 pub struct CancelSpotOrderV2Changes {
     pub updated_order: UpdatedEntityPair<SpotOrderV7>,
     pub updated_balance: Option<UpdatedEntityPair<BalanceV2>>,
-    pub order_event: SequencedDomainEvent<SpotOrderV7DomainEvent>,
+    pub order_event: ReplayableDomainEvent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -71,21 +71,13 @@ pub enum CancelSpotOrderV2Error {
 pub struct CancelSpotOrderV2UseCase;
 
 impl ReplayableChanges for CancelSpotOrderV2Changes {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         let mut events = Vec::with_capacity(1 + usize::from(self.updated_balance.is_some()));
-        events.push(self.order_event.payload.replayable_event().clone());
+        events.push(self.order_event.clone());
         if let Some(balance) = &self.updated_balance {
             events.push(balance.to_replayable_event()?);
         }
         Ok(events)
-    }
-}
-
-impl DomainEventChanges for CancelSpotOrderV2Changes {
-    type DomainEvent = SpotOrderV7DomainEvent;
-
-    fn domain_events(&self) -> &[SequencedDomainEvent<Self::DomainEvent>] {
-        std::slice::from_ref(&self.order_event)
     }
 }
 
@@ -212,11 +204,7 @@ fn compute_changes(
     Ok(CancelSpotOrderV2Changes {
         updated_order: UpdatedEntityPair::new(order_before, order_after),
         updated_balance,
-        order_event: SequencedDomainEvent::new(
-            CommandMetadata::new(cmd.lsn(), cmd.logical_ts()),
-            0,
-            transition.event,
-        ),
+        order_event: transition.event,
     })
 }
 
@@ -339,7 +327,7 @@ mod tests {
 
         let events = changed.to_replayable_events().expect("events project");
         assert_eq!(events.len(), 2);
-        assert_eq!(events[0], *changed.order_event.payload.replayable_event());
+        assert_eq!(events[0], changed.order_event);
         assert_eq!(events[0].domain_event_type, 6);
         assert_eq!((events[0].lsn, events[0].logical_ts), (LSN, LOGICAL_TS));
         assert_eq!((events[0].previous_lsn, events[0].change_type), (0, 1));
@@ -348,9 +336,8 @@ mod tests {
                 && change.old_value_bytes() == b"Open"
                 && change.new_value_bytes() == b"Canceled"
         }));
-        assert_eq!(changed.order_event.event_index, 0);
-        assert_eq!(changed.order_event.metadata.lsn, LSN);
-        assert_eq!(changed.order_event.metadata.logical_ts, LOGICAL_TS);
+        assert_eq!(changed.order_event.lsn, LSN);
+        assert_eq!(changed.order_event.logical_ts, LOGICAL_TS);
     }
 
     #[test]
@@ -400,7 +387,7 @@ mod tests {
             .compute_state_changed(&cmd, &given)
             .expect("pending order should cancel");
 
-        // Then: 仅订单 pair/replay 变化，但仍发布 canceled 领域事件。
+        // Then: 仅订单 pair/replay 变化，但仍保留 canceled 事件码。
         assert_eq!(
             changes.updated_order.after.status(),
             SpotOrderStatus::Canceled
@@ -413,10 +400,7 @@ mod tests {
                 .len(),
             1
         );
-        assert!(matches!(
-            changes.order_event.payload,
-            SpotOrderV7DomainEvent::Canceled { .. }
-        ));
+        assert_eq!(changes.order_event.domain_event_type, 6);
     }
 
     #[test]

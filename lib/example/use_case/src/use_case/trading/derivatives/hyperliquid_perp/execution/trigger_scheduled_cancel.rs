@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{
-    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff,
+    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::spot::{SpotOrderV7, SpotOrderV7Command};
@@ -44,7 +44,7 @@ pub struct TriggerScheduledCancelChanges {
 }
 
 impl ReplayableChanges for TriggerScheduledCancelChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         let mut events = Vec::with_capacity(
             1 + self.canceled_spot_orders.len()
                 + self.changed_spot_balances.len()

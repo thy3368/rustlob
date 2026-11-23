@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, EntityReplayableEvent, FinancialClassification,
-    FourColorArchetype, TrackDiff,
+    AggregateRole, Entity, EntityFieldChange, FinancialClassification, FourColorArchetype,
+    ReplayableDomainEvent, TrackDiff,
 };
 use lob_repo_v2::LobError;
 use lob_repo_v2::lob::LobOrder;
@@ -664,11 +664,11 @@ impl LobOrder for HyperliquidPerpOrder {
         todo!()
     }
 
-    fn from_replay_event(_event: &EntityReplayableEvent, _id: u64) -> Result<Self, LobError> {
+    fn from_replay_event(_event: &ReplayableDomainEvent, _id: u64) -> Result<Self, LobError> {
         todo!()
     }
 
-    fn apply_replay_event(self, _event: &EntityReplayableEvent) -> Result<Self, LobError> {
+    fn apply_replay_event(self, _event: &ReplayableDomainEvent) -> Result<Self, LobError> {
         todo!()
     }
 }

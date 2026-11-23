@@ -5,7 +5,7 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, LogEntry, LogEntrySequencer, StateSink, StateSource,
+    ExecutionError, LogEntry, LogEntrySequencer, ReplayableDomainEvent, StateSink, StateSource,
 };
 use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteUseCase};
 use serde::{Deserialize, Serialize};
@@ -63,7 +63,7 @@ struct DepositQuoteHttpReplyMapper {
 impl InboundReplyMapper for DepositQuoteHttpReplyMapper {
     type Reply = DepositQuoteHttpResponse;
 
-    fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
+    fn map(&self, events: Vec<ReplayableDomainEvent>) -> Self::Reply {
         DepositQuoteHttpResponse {
             account_id: self.account_id.clone(),
             available_quote: find_u64_field(&events, "available").unwrap_or(0),

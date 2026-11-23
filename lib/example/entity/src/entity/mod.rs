@@ -62,7 +62,6 @@ use spot as spot_entity;
 pub use spot::spot_kline::SpotKline;
 pub use spot_entity::spot_order_v7::{
     ActivateSpotOrderV7Output, CancelSpotOrderV7Output, ModifySpotOrderV7Output, SpotOrderV7,
-    SpotOrderV7Command, SpotOrderV7DomainEvent, SpotOrderV7FreezeRequirement,
-    SpotOrderV7HoldAdjustment, SpotOrderV7Output,
+    SpotOrderV7Command, SpotOrderV7FreezeRequirement, SpotOrderV7HoldAdjustment, SpotOrderV7Output,
 };
 pub use transfer::settlement_transfer_purpose::SettlementTransferPurpose;

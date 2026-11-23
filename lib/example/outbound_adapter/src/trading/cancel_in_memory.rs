@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityReplayableEvent, LogEntry, StateSink, StateSource, stable_string_entity_id,
+    LogEntry, ReplayableDomainEvent, StateSink, StateSource, stable_string_entity_id,
 };
 use example_core_use_case::{
     CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, CancelSpotOrderV2State, CancelSpotOrderV2UseCase,
@@ -62,7 +62,7 @@ impl StateSource<CancelSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
 impl StateSink<CancelSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
     type Error = PlaceOrderOutboundError;
 
-    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         self.store
             .lock_state()?
             .persisted_events
@@ -70,11 +70,11 @@ impl StateSink<CancelSpotOrderV2UseCase> for InMemoryPlaceOrderOutbound {
         Ok(())
     }
 
-    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         super::place_order_in_memory::replay_events(self, events)
     }
 
-    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         self.store
             .lock_state()?
             .published_events

@@ -1,6 +1,6 @@
 use common_entity::{
-    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityReplayableEvent,
-    FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard, TrackDiff,
+    AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, FourColorArchetype,
+    Fsm, LogAttr, ReplayBackedDomainEvent, ReplayableDomainEvent, Shard, TrackDiff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -41,23 +41,23 @@ pub enum SpotAccountEvent {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotAccountDomainEvent {
-    FrozenForRisk { replay_event: EntityReplayableEvent },
-    UnfrozenFromRisk { replay_event: EntityReplayableEvent },
+    FrozenForRisk { replay_event: ReplayableDomainEvent },
+    UnfrozenFromRisk { replay_event: ReplayableDomainEvent },
 }
-impl ReplayableDomainEvent<SpotAccountEvent> for SpotAccountDomainEvent {
+impl ReplayBackedDomainEvent<SpotAccountEvent> for SpotAccountDomainEvent {
     fn domain_event_type(command: &SpotAccountEvent) -> u8 {
         match command {
             SpotAccountEvent::FreezeForRisk { .. } => 1,
             SpotAccountEvent::UnfreezeFromRisk { .. } => 2,
         }
     }
-    fn from_command(command: SpotAccountEvent, replay_event: EntityReplayableEvent) -> Self {
+    fn from_command(command: SpotAccountEvent, replay_event: ReplayableDomainEvent) -> Self {
         match command {
             SpotAccountEvent::FreezeForRisk { .. } => Self::FrozenForRisk { replay_event },
             SpotAccountEvent::UnfreezeFromRisk { .. } => Self::UnfrozenFromRisk { replay_event },
         }
     }
-    fn replayable_event(&self) -> &EntityReplayableEvent {
+    fn replayable_event(&self) -> &ReplayableDomainEvent {
         match self {
             Self::FrozenForRisk { replay_event } | Self::UnfrozenFromRisk { replay_event } => {
                 replay_event

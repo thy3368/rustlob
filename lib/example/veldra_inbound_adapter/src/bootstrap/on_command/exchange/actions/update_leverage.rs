@@ -1,4 +1,4 @@
-use common_entity::{EntityError, EntityReplayableEvent, ReplayableChanges, UseCase};
+use common_entity::{EntityError, ReplayableChanges, ReplayableDomainEvent, UseCase};
 use example_core_use_case::account::coin::Coin;
 use example_core_use_case::account::symbol::Symbol;
 use example_core_use_case::{
@@ -96,11 +96,11 @@ pub trait UpdateLeverageOutbound {
         cmd: &UpdateHyperliquidPerpLeverageCmd,
     ) -> Result<UpdateHyperliquidPerpLeverageState, Self::Error>;
 
-    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
+    fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
 
-    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
+    fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
 
-    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
+    fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -126,15 +126,15 @@ impl UpdateLeverageOutbound for DefaultUpdateLeverageOutbound {
         })
     }
 
-    fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn persist(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn replay(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn publish(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
 }
@@ -486,7 +486,7 @@ mod tests {
         before_leverage: Decimal,
         steps: RefCell<Vec<&'static str>>,
         seen_cmd: RefCell<Option<UpdateHyperliquidPerpLeverageCmd>>,
-        event_batches: RefCell<Vec<(&'static str, Vec<EntityReplayableEvent>)>>,
+        event_batches: RefCell<Vec<(&'static str, Vec<ReplayableDomainEvent>)>>,
     }
 
     impl ObservingUpdateLeverageOutbound {
@@ -514,7 +514,7 @@ mod tests {
             })
         }
 
-        fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("persist");
             self.event_batches
                 .borrow_mut()
@@ -522,7 +522,7 @@ mod tests {
             Ok(())
         }
 
-        fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("replay");
             self.event_batches
                 .borrow_mut()
@@ -530,7 +530,7 @@ mod tests {
             Ok(())
         }
 
-        fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.steps.borrow_mut().push("publish");
             self.event_batches
                 .borrow_mut()

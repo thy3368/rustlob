@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, TrackDiff,
+    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use rust_decimal::Decimal;
@@ -57,7 +57,7 @@ pub struct MatchHyperliquidPerpOrderChanges {
 }
 
 impl ReplayableChanges for MatchHyperliquidPerpOrderChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         let mut events = Vec::with_capacity(self.created_trades.len() * 2 + 1);
         for (trade, maker) in self.created_trades.iter().zip(&self.updated_maker_orders) {
             events.push(trade.track_create_event()?);

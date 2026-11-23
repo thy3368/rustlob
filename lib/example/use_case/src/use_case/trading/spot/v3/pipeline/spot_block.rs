@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogAttr, LogEntry, PresequencedCommand, ReplayableChanges,
+    EntityError, LogAttr, LogEntry, PresequencedCommand, ReplayableChanges, ReplayableDomainEvent,
     Shard, StateDiff, UseCase,
 };
 use example_core_entity::common::identifiers::OrderId;
@@ -50,7 +50,7 @@ impl LogAttr for SpotBlockCmd {
 }
 
 impl PresequencedCommand for SpotBlockCmd {
-    fn contains_event_metadata(&self, event: &EntityReplayableEvent) -> bool {
+    fn contains_event_metadata(&self, event: &ReplayableDomainEvent) -> bool {
         self.items.iter().any(|item| {
             item.topic() == event.t
                 && item.partition() == event.p
@@ -128,7 +128,7 @@ pub enum SpotBlockError {
 pub struct SpotBlockUseCase;
 
 impl ReplayableChanges for SpotBlockChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         let mut events = Vec::new();
         for result in &self.item_results {
             let SpotBlockItemResult::Applied { item, changes } = result else {

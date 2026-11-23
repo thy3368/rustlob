@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use base_types_v2::Symbol;
-use common_entity::EntityReplayableEvent;
+use common_entity::ReplayableDomainEvent;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -113,11 +113,11 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
         todo!()
     }
 
-    fn replay_events(&mut self, events: &[EntityReplayableEvent]) -> Result<(), LobError> {
+    fn replay_events(&mut self, events: &[ReplayableDomainEvent]) -> Result<(), LobError> {
         todo!()
     }
 
-    fn replay_event(&mut self, event: &EntityReplayableEvent) -> Result<(), LobError> {
+    fn replay_event(&mut self, event: &ReplayableDomainEvent) -> Result<(), LobError> {
         todo!()
     }
 }

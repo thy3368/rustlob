@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use common_entity::{
-    EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, TrackDiff, UseCase,
+    LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff, TrackDiff, UseCase,
 };
 use example_core_entity::TradeBase;
 use example_core_entity::account::symbol::Symbol;
@@ -56,7 +56,7 @@ pub struct GenerateSpotKlinesFromHistoricalTradesUseCase;
 impl ReplayableChanges for GenerateSpotKlinesFromHistoricalTradesChanges {
     fn to_replayable_events(
         &self,
-    ) -> Result<Vec<EntityReplayableEvent>, common_entity::EntityError> {
+    ) -> Result<Vec<ReplayableDomainEvent>, common_entity::EntityError> {
         self.created_klines
             .iter()
             .map(TrackDiff::track_create_event)

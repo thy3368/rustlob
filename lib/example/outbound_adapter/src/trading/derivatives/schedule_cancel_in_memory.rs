@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-use common_entity::{Entity, EntityReplayableEvent, Fsm, LogEntry, StateSink, StateSource};
+use common_entity::{Entity, Fsm, LogEntry, ReplayableDomainEvent, StateSink, StateSource};
 use example_core_use_case::{
     BalanceV2, BalanceV2Event, DueScheduledCancelSource, PerpOrderV3, PerpOrderV3Event,
     ScheduleHyperliquidCancelCmd, ScheduleHyperliquidCancelState, ScheduleHyperliquidCancelUseCase,
@@ -21,8 +21,8 @@ struct State {
     spot_orders: HashMap<u64, SpotOrderV7>,
     perp_orders: HashMap<u64, PerpOrderV3>,
     balances: HashMap<u64, BalanceV2>,
-    persisted_events: Vec<EntityReplayableEvent>,
-    published_events: Vec<EntityReplayableEvent>,
+    persisted_events: Vec<ReplayableDomainEvent>,
+    published_events: Vec<ReplayableDomainEvent>,
 }
 
 impl State {
@@ -221,12 +221,12 @@ macro_rules! impl_sink {
         impl StateSink<$use_case> for HyperliquidScheduleCancelInMemoryOutbound {
             type Error = HyperliquidScheduleCancelOutboundError;
 
-            fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+            fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
                 self.lock()?.persisted_events.extend(events.iter().cloned());
                 Ok(())
             }
 
-            fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+            fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
                 let mut state = self.lock()?;
                 let mut next = state.clone();
                 replay_events(&mut next, events)?;
@@ -234,7 +234,7 @@ macro_rules! impl_sink {
                 Ok(())
             }
 
-            fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+            fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
                 self.lock()?.published_events.extend(events.iter().cloned());
                 Ok(())
             }
@@ -247,7 +247,7 @@ impl_sink!(TriggerScheduledCancelUseCase);
 
 fn replay_events(
     state: &mut State,
-    events: &[EntityReplayableEvent],
+    events: &[ReplayableDomainEvent],
 ) -> Result<(), HyperliquidScheduleCancelOutboundError> {
     for event in events {
         if event.entity_type == ScheduledCancel::entity_type() {
@@ -293,7 +293,7 @@ fn replay_events(
 
 fn replay_schedule(
     state: &mut State,
-    event: &EntityReplayableEvent,
+    event: &ReplayableDomainEvent,
 ) -> Result<(), HyperliquidScheduleCancelOutboundError> {
     let schedule = state
         .schedules
@@ -327,7 +327,7 @@ fn replay_schedule(
 
 fn replay_balance(
     state: &mut State,
-    event: &EntityReplayableEvent,
+    event: &ReplayableDomainEvent,
 ) -> Result<(), HyperliquidScheduleCancelOutboundError> {
     let balance = state
         .balances
@@ -354,7 +354,7 @@ fn replay_balance(
 }
 
 fn decimal_field(
-    event: &EntityReplayableEvent,
+    event: &ReplayableDomainEvent,
     name: &'static str,
 ) -> Result<Decimal, HyperliquidScheduleCancelOutboundError> {
     let value = event_string_field(event, name)
@@ -363,7 +363,7 @@ fn decimal_field(
 }
 
 fn check_version(
-    event: &EntityReplayableEvent,
+    event: &ReplayableDomainEvent,
     actual: u64,
 ) -> Result<(), HyperliquidScheduleCancelOutboundError> {
     if actual != event.previous_lsn {

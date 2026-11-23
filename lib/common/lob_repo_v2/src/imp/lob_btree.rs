@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use base_types_v2::Symbol;
-use common_entity::{EntityChangeType, EntityReplayableEvent};
+use common_entity::{EntityChangeType, ReplayableDomainEvent};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -206,7 +206,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
     fn symbol(&self) -> Symbol {
         self.symbol
     }
-    fn replay_events(&mut self, events: &[EntityReplayableEvent]) -> Result<(), LobError> {
+    fn replay_events(&mut self, events: &[ReplayableDomainEvent]) -> Result<(), LobError> {
         let mut next = self.clone();
         for event in events {
             next.replay_event(event)?;
@@ -214,7 +214,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
         *self = next;
         Ok(())
     }
-    fn replay_event(&mut self, event: &EntityReplayableEvent) -> Result<(), LobError> {
+    fn replay_event(&mut self, event: &ReplayableDomainEvent) -> Result<(), LobError> {
         if event.entity_type != O::entity_type() {
             return Err(LobError::Event("wrong entity type".into()));
         }
@@ -266,7 +266,7 @@ impl<O: LobOrder> AssetLobV2 for LocalLobBtree<O> {
 #[cfg(test)]
 mod tests {
     use base_types_v2::{Coin, Symbol};
-    use common_entity::EntityReplayableEvent;
+    use common_entity::ReplayableDomainEvent;
     use rust_decimal::Decimal;
     use serde::{Deserialize, Serialize};
 
@@ -351,10 +351,10 @@ mod tests {
         fn is_active(&self) -> bool {
             true
         }
-        fn from_replay_event(_: &EntityReplayableEvent, _: u64) -> Result<Self, LobError> {
+        fn from_replay_event(_: &ReplayableDomainEvent, _: u64) -> Result<Self, LobError> {
             unreachable!("test orders are inserted directly")
         }
-        fn apply_replay_event(self, _: &EntityReplayableEvent) -> Result<Self, LobError> {
+        fn apply_replay_event(self, _: &ReplayableDomainEvent) -> Result<Self, LobError> {
             unreachable!("test orders are inserted directly")
         }
     }

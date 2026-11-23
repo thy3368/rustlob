@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, TrackDiff,
+    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::{ScheduledCancel, ScheduledCancelError, UserId};
@@ -28,7 +28,7 @@ pub struct ScheduleHyperliquidCancelChanges {
 }
 
 impl ReplayableChanges for ScheduleHyperliquidCancelChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         Ok(vec![
             self.changed_schedule
                 .after

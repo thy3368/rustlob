@@ -1,5 +1,5 @@
 use base_types_v2::Symbol;
-use common_entity::EntityReplayableEvent;
+use common_entity::ReplayableDomainEvent;
 use rust_decimal::Decimal;
 
 use crate::LobError;
@@ -19,8 +19,8 @@ pub trait LobOrder: Clone + std::fmt::Debug + Send + Sync + 'static {
     fn created_at(&self) -> u64;
     fn entity_ver(&self) -> u64;
     fn is_active(&self) -> bool;
-    fn from_replay_event(event: &EntityReplayableEvent, id: u64) -> Result<Self, crate::LobError>;
-    fn apply_replay_event(self, event: &EntityReplayableEvent) -> Result<Self, crate::LobError>;
+    fn from_replay_event(event: &ReplayableDomainEvent, id: u64) -> Result<Self, crate::LobError>;
+    fn apply_replay_event(self, event: &ReplayableDomainEvent) -> Result<Self, crate::LobError>;
 }
 
 pub trait AssetLobV2 {
@@ -48,6 +48,6 @@ pub trait AssetLobV2 {
 
     fn symbol(&self) -> Symbol;
 
-    fn replay_events(&mut self, events: &[EntityReplayableEvent]) -> Result<(), LobError>;
-    fn replay_event(&mut self, event: &EntityReplayableEvent) -> Result<(), LobError>;
+    fn replay_events(&mut self, events: &[ReplayableDomainEvent]) -> Result<(), LobError>;
+    fn replay_event(&mut self, event: &ReplayableDomainEvent) -> Result<(), LobError>;
 }

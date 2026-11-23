@@ -1,4 +1,4 @@
-use crate::EntityReplayableEvent;
+use crate::ReplayableDomainEvent;
 
 /// 统一处理可回放实体事件的静态 handler 抽象。
 ///
@@ -10,6 +10,6 @@ pub trait EntityReplayableEventHandler {
 
     fn handle(
         &mut self,
-        event: &EntityReplayableEvent,
+        event: &ReplayableDomainEvent,
     ) -> Result<Option<Self::Output>, Self::Error>;
 }

@@ -1,5 +1,5 @@
 use common_entity::{
-    CommandMetadata, Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Fsm, LogAttr,
+    CommandMetadata, Entity, EntityError, EntityFieldChange, Fsm, LogAttr, ReplayBackedDomainEvent,
     ReplayableDomainEvent, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
@@ -83,15 +83,15 @@ pub enum BalanceV2Event {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceV2DomainEvent {
-    Frozen { replay_event: EntityReplayableEvent },
-    UnfrozenAndPaid { replay_event: EntityReplayableEvent },
-    FrozenDebited { replay_event: EntityReplayableEvent },
-    AvailableCredited { replay_event: EntityReplayableEvent },
-    AvailableDebited { replay_event: EntityReplayableEvent },
-    Closed { replay_event: EntityReplayableEvent },
+    Frozen { replay_event: ReplayableDomainEvent },
+    UnfrozenAndPaid { replay_event: ReplayableDomainEvent },
+    FrozenDebited { replay_event: ReplayableDomainEvent },
+    AvailableCredited { replay_event: ReplayableDomainEvent },
+    AvailableDebited { replay_event: ReplayableDomainEvent },
+    Closed { replay_event: ReplayableDomainEvent },
 }
 
-impl ReplayableDomainEvent<BalanceV2Event> for BalanceV2DomainEvent {
+impl ReplayBackedDomainEvent<BalanceV2Event> for BalanceV2DomainEvent {
     fn domain_event_type(command: &BalanceV2Event) -> u8 {
         match command {
             BalanceV2Event::Freeze { .. } => 1,
@@ -102,7 +102,7 @@ impl ReplayableDomainEvent<BalanceV2Event> for BalanceV2DomainEvent {
             BalanceV2Event::Close { .. } => 6,
         }
     }
-    fn from_command(command: BalanceV2Event, replay_event: EntityReplayableEvent) -> Self {
+    fn from_command(command: BalanceV2Event, replay_event: ReplayableDomainEvent) -> Self {
         match command {
             BalanceV2Event::Freeze { .. } => Self::Frozen { replay_event },
             BalanceV2Event::UnfreezeAndPay { .. } => Self::UnfrozenAndPaid { replay_event },
@@ -112,7 +112,7 @@ impl ReplayableDomainEvent<BalanceV2Event> for BalanceV2DomainEvent {
             BalanceV2Event::Close { .. } => Self::Closed { replay_event },
         }
     }
-    fn replayable_event(&self) -> &EntityReplayableEvent {
+    fn replayable_event(&self) -> &ReplayableDomainEvent {
         match self {
             Self::Frozen { replay_event }
             | Self::UnfrozenAndPaid { replay_event }

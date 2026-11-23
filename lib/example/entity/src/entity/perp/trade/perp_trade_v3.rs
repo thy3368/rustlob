@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
-    EntityReplayableEvent, FourColorArchetype, Fsm, LogAttr, ReplayableDomainEvent, Shard,
+    FourColorArchetype, Fsm, LogAttr, ReplayBackedDomainEvent, ReplayableDomainEvent, Shard,
     TrackDiff,
 };
 use rust_decimal::Decimal;
@@ -37,16 +37,16 @@ pub enum PerpTradeV3Event {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PerpTradeV3DomainEvent {
-    Settled { replay_event: EntityReplayableEvent },
+    Settled { replay_event: ReplayableDomainEvent },
 }
-impl ReplayableDomainEvent<PerpTradeV3Event> for PerpTradeV3DomainEvent {
+impl ReplayBackedDomainEvent<PerpTradeV3Event> for PerpTradeV3DomainEvent {
     fn domain_event_type(_: &PerpTradeV3Event) -> u8 {
         1
     }
-    fn from_command(_: PerpTradeV3Event, replay_event: EntityReplayableEvent) -> Self {
+    fn from_command(_: PerpTradeV3Event, replay_event: ReplayableDomainEvent) -> Self {
         Self::Settled { replay_event }
     }
-    fn replayable_event(&self) -> &EntityReplayableEvent {
+    fn replayable_event(&self) -> &ReplayableDomainEvent {
         let Self::Settled { replay_event } = self;
         replay_event
     }

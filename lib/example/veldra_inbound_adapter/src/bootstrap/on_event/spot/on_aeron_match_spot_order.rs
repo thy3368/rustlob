@@ -1,6 +1,6 @@
 use aeron_rs::utils::errors::AeronError;
 use aeron_rs::utils::types::Index;
-use common_entity::EntityReplayableEvent;
+use common_entity::ReplayableDomainEvent;
 use thiserror::Error;
 use use_case_executor::trading::spot::on_event::{
     DefaultMatchSpotOrderCreatedEventError, MatchSpotOrderCreatedEventHandler,
@@ -91,12 +91,12 @@ pub type MatchSpotOrderAeronError = AeronMatchSpotOrderError;
 
 pub fn decode_match_spot_order_event(
     payload: &[u8],
-) -> Result<EntityReplayableEvent, serde_json::Error> {
+) -> Result<ReplayableDomainEvent, serde_json::Error> {
     decode_entity_replayable_event(payload)
 }
 
 pub fn match_spot_order_command_from_event(
-    event: &EntityReplayableEvent,
+    event: &ReplayableDomainEvent,
 ) -> Result<Option<example_core_use_case::MatchSpotOrderV3Cmd>, MatchSpotOrderCreatedEventParseError>
 {
     command_from_event(event)

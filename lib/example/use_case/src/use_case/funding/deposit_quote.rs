@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityError, EntityReplayableEvent, Fsm, LogEntry, ReplayableChanges, StateDiff, TrackDiff,
+    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ pub struct DepositQuoteChanges {
 }
 
 impl ReplayableChanges for DepositQuoteChanges {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         Ok(vec![
             self.updated_quote_balance
                 .after
@@ -124,7 +124,7 @@ mod tests {
     use crate::use_case::support::field_as_u64;
 
     fn event_field<'a>(
-        event: &'a common_entity::EntityReplayableEvent,
+        event: &'a common_entity::ReplayableDomainEvent,
         field_name: &str,
     ) -> Option<&'a str> {
         event.field_changes.iter().find_map(|change| {

@@ -1,11 +1,8 @@
 use common_entity::Shard;
-use common_entity::fsm_v2::{CommandMetadata, Fsm, ReplayableDomainEvent, SequencedCommand};
+use common_entity::fsm_v2::{CommandMetadata, Fsm, SequencedCommand};
 use rust_decimal::Decimal;
 
-use super::{
-    SpotOrderV7, SpotOrderV7Command, SpotOrderV7DomainEvent, SpotOrderV7Output,
-    SpotOrderV7ReleaseRequirement,
-};
+use super::{SpotOrderV7, SpotOrderV7Command, SpotOrderV7Output, SpotOrderV7ReleaseRequirement};
 use crate::account::coin::Coin;
 use crate::account::symbol::Symbol;
 use crate::common::PriceType;
@@ -19,9 +16,8 @@ fn sequenced(command: SpotOrderV7Command) -> SequencedCommand<SpotOrderV7Command
     SequencedCommand::new(CommandMetadata::new(10, TIMESTAMP), command)
 }
 
-fn field_names(event: &SpotOrderV7DomainEvent) -> Vec<&str> {
+fn field_names(event: &common_entity::ReplayableDomainEvent) -> Vec<&str> {
     event
-        .replayable_event()
         .field_changes
         .iter()
         .map(|change| change.field_name_as_str().unwrap())
@@ -245,12 +241,12 @@ fn filled_sell_taker_returns_zero_base_release_requirement() {
 }
 
 #[test]
-fn sequenced_commands_emit_past_tense_events_with_replay_metadata() {
+fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
     let cases = [
         (
             order(OrderSide::Buy, SpotOrderStatus::Pending),
             SpotOrderV7Command::Activate,
-            "Activated",
+            1,
         ),
         (
             order(OrderSide::Buy, SpotOrderStatus::Open),
@@ -258,7 +254,7 @@ fn sequenced_commands_emit_past_tense_events_with_replay_metadata() {
                 filled_size: Decimal::ONE,
                 quote_fee: Decimal::ONE,
             },
-            "MatchedAsTaker",
+            2,
         ),
         (
             order(OrderSide::Sell, SpotOrderStatus::Open),
@@ -266,7 +262,7 @@ fn sequenced_commands_emit_past_tense_events_with_replay_metadata() {
                 filled_size: Decimal::ONE,
                 quote_fee: Decimal::ZERO,
             },
-            "MatchedAsMaker",
+            3,
         ),
         (
             {
@@ -277,7 +273,7 @@ fn sequenced_commands_emit_past_tense_events_with_replay_metadata() {
                 SpotOrderV7::from_record(record).unwrap()
             },
             SpotOrderV7Command::RejectedAsTaker,
-            "RejectedAsTaker",
+            4,
         ),
         (
             order(OrderSide::Buy, SpotOrderStatus::Open),
@@ -287,29 +283,20 @@ fn sequenced_commands_emit_past_tense_events_with_replay_metadata() {
                 tif: Some(OrderTif::Ioc),
                 cloid: Some("next-cloid".to_owned()),
             },
-            "Modified",
+            5,
         ),
         (
             order(OrderSide::Sell, SpotOrderStatus::Open),
             SpotOrderV7Command::Cancel,
-            "Canceled",
+            6,
         ),
     ];
 
-    for (event_type, (mut subject, command, expected_variant)) in (1_u8..).zip(cases.into_iter()) {
+    for (mut subject, command, event_type) in cases {
         let before = subject.clone();
         let result = subject.transition(sequenced(command)).unwrap();
         assert_eq!(result.state, subject.status());
-        let actual_variant = match &result.event {
-            SpotOrderV7DomainEvent::Activated { .. } => "Activated",
-            SpotOrderV7DomainEvent::MatchedAsTaker { .. } => "MatchedAsTaker",
-            SpotOrderV7DomainEvent::MatchedAsMaker { .. } => "MatchedAsMaker",
-            SpotOrderV7DomainEvent::RejectedAsTaker { .. } => "RejectedAsTaker",
-            SpotOrderV7DomainEvent::Modified { .. } => "Modified",
-            SpotOrderV7DomainEvent::Canceled { .. } => "Canceled",
-        };
-        assert_eq!(actual_variant, expected_variant);
-        let replay = result.event.replayable_event();
+        let replay = &result.event;
         assert_eq!(replay.t, subject.topic());
         assert_eq!(replay.p, subject.partition());
         assert_eq!(replay.previous_lsn, before.order_base().lsn);

@@ -27,7 +27,7 @@ impl EntityChangeType {
     }
 }
 
-/// Compact field change carried by an [`EntityReplayableEvent`].
+/// Compact field change carried by an [`ReplayableDomainEvent`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReplayFieldChange {
     pub field_name: [u8; 32],
@@ -120,7 +120,7 @@ impl ReplayFieldChange {
 
 /// Entity event optimized for deterministic replay and optimistic locking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EntityReplayableEvent {
+pub struct ReplayableDomainEvent {
     /// 实体类型内稳定、非零的领域事件类型码；`0` 保留给非 FSM 事件。
     pub domain_event_type: u8,
     ///topic
@@ -161,7 +161,7 @@ pub enum ReplayEventFieldParseError {
     },
 }
 
-impl EntityReplayableEvent {
+impl ReplayableDomainEvent {
     #[inline]
     pub fn new(
         timestamp: u64,
@@ -336,7 +336,7 @@ impl EntityReplayableEvent {
     }
 }
 
-impl crate::entity_v2::shard::Shard for EntityReplayableEvent {
+impl crate::entity_v2::shard::Shard for ReplayableDomainEvent {
     fn topic(&self) -> u8 {
         self.t
     }
@@ -437,8 +437,8 @@ mod tests {
         );
     }
 
-    fn event_with_fields(fields: &[(&str, &[u8])]) -> EntityReplayableEvent {
-        let mut event = EntityReplayableEvent::new_created(1, 1, 1);
+    fn event_with_fields(fields: &[(&str, &[u8])]) -> ReplayableDomainEvent {
+        let mut event = ReplayableDomainEvent::new_created(1, 1, 1);
         for (field_name, value) in fields {
             event.add_field_change(ReplayFieldChange::new(
                 ReplayFieldChange::field_name_from_str(field_name),
@@ -452,9 +452,9 @@ mod tests {
 
     #[test]
     fn max_entity_id_survives_serialization() {
-        let event = EntityReplayableEvent::new_created(1, u64::MAX, 7);
+        let event = ReplayableDomainEvent::new_created(1, u64::MAX, 7);
         let encoded = bincode::serialize(&event).unwrap();
-        let decoded: EntityReplayableEvent = bincode::deserialize(&encoded).unwrap();
+        let decoded: ReplayableDomainEvent = bincode::deserialize(&encoded).unwrap();
         assert_eq!(decoded.entity_id, u64::MAX);
         assert_eq!(decoded, event);
     }

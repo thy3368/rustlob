@@ -3,7 +3,7 @@ use anyhow::Error as AnyError;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, LogEntry, StateDiff, StateSink, StateSource,
+    ExecutionError, LogEntry, ReplayableDomainEvent, StateDiff, StateSink, StateSource,
     UseCaseExecutor,
 };
 use example_core_use_case::{
@@ -40,7 +40,7 @@ pub trait ExampleCliParseErrorMapping: std::error::Error {
 
 pub(crate) trait InboundReplyMapper {
     type Reply;
-    fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply;
+    fn map(&self, events: Vec<ReplayableDomainEvent>) -> Self::Reply;
 }
 
 pub trait ExampleBusinessErrorMapping: std::error::Error {
@@ -330,7 +330,7 @@ where
     execute_with_mapper(&WithdrawQuoteUseCase, command, outbound, mapper)
 }
 
-pub(crate) fn find_u64_field(events: &[EntityReplayableEvent], field_name: &str) -> Option<u64> {
+pub(crate) fn find_u64_field(events: &[ReplayableDomainEvent], field_name: &str) -> Option<u64> {
     events.iter().find_map(|event| {
         event.field_changes.iter().find_map(|change| {
             if change.field_name_as_str().ok() != Some(field_name) {
@@ -346,7 +346,7 @@ pub(crate) fn find_u64_field(events: &[EntityReplayableEvent], field_name: &str)
 }
 
 pub(crate) fn find_last_u64_field(
-    events: &[EntityReplayableEvent],
+    events: &[ReplayableDomainEvent],
     field_name: &str,
 ) -> Option<u64> {
     events.iter().rev().find_map(|event| {
@@ -367,7 +367,7 @@ pub(crate) fn find_last_u64_field(
 pub(crate) mod tests {
     use std::sync::{Mutex, MutexGuard};
 
-    use common_entity::{EntityReplayableEvent, LogEntry, StateSink, StateSource};
+    use common_entity::{LogEntry, ReplayableDomainEvent, StateSink, StateSource};
     use example_core_use_case::{
         BalanceV2, DepositQuoteCmd, DepositQuoteState, DepositQuoteUseCase,
         PlaceMatchSpotOrderV2State, PlaceMatchSpotOrderV2UseCase, PlaceOnlySpotOrderV2Cmd,
@@ -390,8 +390,8 @@ pub(crate) mod tests {
 
     #[derive(Debug, Default)]
     struct TestOutboundState {
-        persisted_events: Mutex<Vec<EntityReplayableEvent>>,
-        published_events: Mutex<Vec<EntityReplayableEvent>>,
+        persisted_events: Mutex<Vec<ReplayableDomainEvent>>,
+        published_events: Mutex<Vec<ReplayableDomainEvent>>,
     }
 
     impl TestOutboundState {
@@ -410,20 +410,20 @@ pub(crate) mod tests {
         }
 
         fn lock_events(
-            mutex: &Mutex<Vec<EntityReplayableEvent>>,
-        ) -> Result<MutexGuard<'_, Vec<EntityReplayableEvent>>, TestOutboundError> {
+            mutex: &Mutex<Vec<ReplayableDomainEvent>>,
+        ) -> Result<MutexGuard<'_, Vec<ReplayableDomainEvent>>, TestOutboundError> {
             mutex
                 .lock()
                 .map_err(|_| TestOutboundError::StoreUnavailable)
         }
 
-        fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), TestOutboundError> {
+        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), TestOutboundError> {
             let mut persisted = Self::lock_events(&self.persisted_events)?;
             persisted.extend(events.iter().cloned());
             Ok(())
         }
 
-        fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), TestOutboundError> {
+        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), TestOutboundError> {
             let mut published = Self::lock_events(&self.published_events)?;
             published.extend(events.iter().cloned());
             Ok(())
@@ -507,15 +507,15 @@ pub(crate) mod tests {
     impl StateSink<PlaceMatchSpotOrderV2UseCase> for PlaceOrderTestOutbound {
         type Error = TestOutboundError;
 
-        fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.state.persist(events)
         }
 
-        fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn replay(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.state.publish(events)
         }
     }
@@ -544,15 +544,15 @@ pub(crate) mod tests {
     impl StateSink<DepositQuoteUseCase> for DepositQuoteTestOutbound {
         type Error = TestOutboundError;
 
-        fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.state.persist(events)
         }
 
-        fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn replay(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.state.publish(events)
         }
     }
@@ -581,15 +581,15 @@ pub(crate) mod tests {
     impl StateSink<WithdrawQuoteUseCase> for WithdrawQuoteTestOutbound {
         type Error = TestOutboundError;
 
-        fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.state.persist(events)
         }
 
-        fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn replay(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.state.publish(events)
         }
     }

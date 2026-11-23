@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::entity_v2::entity_replayable_event::current_timestamp;
 use crate::entity_v2::shard::Shard;
 use crate::{
-    EntityChangeType, EntityError, EntityFieldChange, EntityReplayableEvent, ReplayFieldChange,
+    EntityChangeType, EntityError, EntityFieldChange, ReplayFieldChange, ReplayableDomainEvent,
 };
 
 /// 四色建模中的实体原型分类。
@@ -270,11 +270,11 @@ pub trait TrackDiff: Entity {
     }
 
     #[inline]
-    fn track_create_event(&self) -> Result<EntityReplayableEvent, EntityError>
+    fn track_create_event(&self) -> Result<ReplayableDomainEvent, EntityError>
     where
         Self: Sized,
     {
-        let mut event = EntityReplayableEvent::new_with_topic(
+        let mut event = ReplayableDomainEvent::new_with_topic(
             self.topic(),
             self.partition(),
             current_timestamp()?,
@@ -296,7 +296,7 @@ pub trait TrackDiff: Entity {
     }
 
     #[inline]
-    fn track_update_event<F>(&mut self, updater: F) -> Result<EntityReplayableEvent, EntityError>
+    fn track_update_event<F>(&mut self, updater: F) -> Result<ReplayableDomainEvent, EntityError>
     where
         Self: Sized,
         F: FnOnce(&mut Self),
@@ -317,7 +317,7 @@ pub trait TrackDiff: Entity {
     fn track_update_event_from(
         &self,
         old_state: &Self,
-    ) -> Result<EntityReplayableEvent, EntityError>
+    ) -> Result<ReplayableDomainEvent, EntityError>
     where
         Self: Sized,
     {
@@ -337,7 +337,7 @@ pub trait TrackDiff: Entity {
             return Err(EntityError::NoChangesDetected);
         }
 
-        let mut event = EntityReplayableEvent::new_with_topic(
+        let mut event = ReplayableDomainEvent::new_with_topic(
             self.topic(),
             self.partition(),
             current_timestamp()?,
@@ -364,7 +364,7 @@ pub trait TrackDiff: Entity {
         old_state: &Self,
         lsn: u64,
         logical_ts: u64,
-    ) -> Result<EntityReplayableEvent, EntityError>
+    ) -> Result<ReplayableDomainEvent, EntityError>
     where
         Self: Sized,
     {
@@ -387,7 +387,7 @@ pub trait TrackDiff: Entity {
             return Err(EntityError::NoChangesDetected);
         }
 
-        let mut event = EntityReplayableEvent::new_with_topic(
+        let mut event = ReplayableDomainEvent::new_with_topic(
             self.topic(),
             self.partition(),
             logical_ts,
@@ -407,12 +407,12 @@ pub trait TrackDiff: Entity {
     }
 
     #[inline]
-    fn track_delete_event(&self) -> Result<EntityReplayableEvent, EntityError>
+    fn track_delete_event(&self) -> Result<ReplayableDomainEvent, EntityError>
     where
         Self: Sized,
     {
         let old_version = self.lsn();
-        Ok(EntityReplayableEvent::new_with_topic(
+        Ok(ReplayableDomainEvent::new_with_topic(
             self.topic(),
             self.partition(),
             current_timestamp()?,

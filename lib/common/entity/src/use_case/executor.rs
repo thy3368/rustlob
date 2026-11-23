@@ -2,12 +2,12 @@ use std::collections::HashSet;
 
 use crate::entity_v2::shard::LogAttr;
 use crate::{
-    EntityError, EntityReplayableEvent, ReplayableChanges, SequencedDomainEvent, StateDiff,
+    EntityError, ReplayableChanges, ReplayableDomainEvent, SequencedDomainEvent, StateDiff,
 };
 
 /// 已在进入 executor 前完成定序的批命令。
 pub trait PresequencedCommand: LogAttr {
-    fn contains_event_metadata(&self, event: &EntityReplayableEvent) -> bool;
+    fn contains_event_metadata(&self, event: &ReplayableDomainEvent) -> bool;
 }
 
 /// 多聚合 MI state-machine family 的运行时编排器。
@@ -19,14 +19,14 @@ pub struct UseCaseExecutor;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionResult<C> {
     pub changes: C,
-    pub events: Vec<EntityReplayableEvent>,
+    pub events: Vec<ReplayableDomainEvent>,
 }
 
 /// 同时返回 replay 事实与业务订阅事实的执行结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainEventExecutionResult<C, E> {
     pub changes: C,
-    pub replay_events: Vec<EntityReplayableEvent>,
+    pub replay_events: Vec<ReplayableDomainEvent>,
     pub domain_events: Vec<SequencedDomainEvent<E>>,
 }
 
@@ -79,9 +79,9 @@ where
 {
     type Error: std::error::Error;
 
-    fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
-    fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
-    fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error>;
+    fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
+    fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
+    fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error>;
 }
 
 impl UseCaseExecutor {
@@ -263,7 +263,7 @@ impl UseCaseExecutor {
 }
 
 fn reject_duplicate_replay_keys<BE, OE>(
-    events: &[EntityReplayableEvent],
+    events: &[ReplayableDomainEvent],
 ) -> Result<(), ExecutionError<BE, OE>> {
     let mut keys = HashSet::with_capacity(events.len());
     for event in events {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use base_types_v2::{Coin, Symbol};
-use common_entity::{Entity, EntityReplayableEvent};
+use common_entity::{Entity, ReplayableDomainEvent};
 use example_core_use_case::{BalanceV2, MarketRules, SpotOrderV7, SpotTradeV3};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
@@ -15,8 +15,8 @@ pub(crate) struct StoreState {
     pub(crate) market_rules_by_symbol: HashMap<String, MarketRules>,
     pub(crate) orders: HashMap<u64, SpotOrderV7>,
     pub(crate) trades: HashMap<String, SpotTradeV3>,
-    pub(crate) persisted_events: Vec<EntityReplayableEvent>,
-    pub(crate) published_events: Vec<EntityReplayableEvent>,
+    pub(crate) persisted_events: Vec<ReplayableDomainEvent>,
+    pub(crate) published_events: Vec<ReplayableDomainEvent>,
     pub(crate) next_order_sequence: u64,
     pub(crate) lob: LocalLobBtree<SpotOrderV7>,
 }

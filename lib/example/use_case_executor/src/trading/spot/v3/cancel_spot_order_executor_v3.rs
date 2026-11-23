@@ -31,7 +31,7 @@ where
 mod tests {
     use std::sync::Mutex;
 
-    use common_entity::{EntityReplayableEvent, LogEntrySequencer, StateSink, StateSource};
+    use common_entity::{LogEntrySequencer, ReplayableDomainEvent, StateSink, StateSource};
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::identifiers::OrderId;
@@ -61,9 +61,9 @@ mod tests {
 
     #[derive(Default)]
     struct FakeOutbound {
-        persisted: Mutex<Vec<EntityReplayableEvent>>,
-        replayed: Mutex<Vec<EntityReplayableEvent>>,
-        published: Mutex<Vec<EntityReplayableEvent>>,
+        persisted: Mutex<Vec<ReplayableDomainEvent>>,
+        replayed: Mutex<Vec<ReplayableDomainEvent>>,
+        published: Mutex<Vec<ReplayableDomainEvent>>,
     }
 
     impl StateSource<CancelSpotOrderV3UseCase> for FakeOutbound {
@@ -92,7 +92,7 @@ mod tests {
     impl StateSink<CancelSpotOrderV3UseCase> for FakeOutbound {
         type Error = FakeOutboundError;
 
-        fn persist(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.persisted
                 .lock()
                 .map_err(|_| FakeOutboundError)?
@@ -100,7 +100,7 @@ mod tests {
             Ok(())
         }
 
-        fn replay(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.replayed
                 .lock()
                 .map_err(|_| FakeOutboundError)?
@@ -108,7 +108,7 @@ mod tests {
             Ok(())
         }
 
-        fn publish(&self, events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
             self.published
                 .lock()
                 .map_err(|_| FakeOutboundError)?

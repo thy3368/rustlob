@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, CommandMetadata, Entity, EntityError, EntityFieldChange, EntityMutationModel,
-    EntityReplayableEvent, FinancialClassification, FourColorArchetype, Fsm, LogAttr,
+    FinancialClassification, FourColorArchetype, Fsm, LogAttr, ReplayBackedDomainEvent,
     ReplayableDomainEvent, Shard, TrackDiff, UpdatedEntityPair,
 };
 use rust_decimal::Decimal;
@@ -27,16 +27,16 @@ pub enum BalanceLedgerV3Event {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceLedgerV3DomainEvent {
-    BalanceApplied { replay_event: EntityReplayableEvent },
+    BalanceApplied { replay_event: ReplayableDomainEvent },
 }
-impl ReplayableDomainEvent<BalanceLedgerV3Event> for BalanceLedgerV3DomainEvent {
+impl ReplayBackedDomainEvent<BalanceLedgerV3Event> for BalanceLedgerV3DomainEvent {
     fn domain_event_type(_: &BalanceLedgerV3Event) -> u8 {
         1
     }
-    fn from_command(_: BalanceLedgerV3Event, replay_event: EntityReplayableEvent) -> Self {
+    fn from_command(_: BalanceLedgerV3Event, replay_event: ReplayableDomainEvent) -> Self {
         Self::BalanceApplied { replay_event }
     }
-    fn replayable_event(&self) -> &EntityReplayableEvent {
+    fn replayable_event(&self) -> &ReplayableDomainEvent {
         let Self::BalanceApplied { replay_event } = self;
         replay_event
     }

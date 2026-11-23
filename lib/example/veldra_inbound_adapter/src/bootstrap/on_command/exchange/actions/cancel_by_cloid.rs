@@ -214,21 +214,21 @@ mod tests {
 
         fn persist(
             &self,
-            _events: &[common_entity::EntityReplayableEvent],
+            _events: &[common_entity::ReplayableDomainEvent],
         ) -> Result<(), Self::Error> {
             Ok(())
         }
 
         fn replay(
             &self,
-            _events: &[common_entity::EntityReplayableEvent],
+            _events: &[common_entity::ReplayableDomainEvent],
         ) -> Result<(), Self::Error> {
             Ok(())
         }
 
         fn publish(
             &self,
-            _events: &[common_entity::EntityReplayableEvent],
+            _events: &[common_entity::ReplayableDomainEvent],
         ) -> Result<(), Self::Error> {
             Ok(())
         }

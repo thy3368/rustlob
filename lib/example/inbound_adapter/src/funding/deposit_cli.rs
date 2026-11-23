@@ -1,5 +1,5 @@
 use common_entity::{
-    EntityReplayableEvent, ExecutionError, LogEntrySequencer, StateSink, StateSource,
+    ExecutionError, LogEntrySequencer, ReplayableDomainEvent, StateSink, StateSource,
 };
 use example_core_use_case::{DepositQuoteCmd, DepositQuoteError, DepositQuoteUseCase};
 use serde::Serialize;
@@ -123,7 +123,7 @@ struct DepositQuoteCliReplyMapper {
 impl InboundReplyMapper for DepositQuoteCliReplyMapper {
     type Reply = DepositQuoteCliResponse;
 
-    fn map(&self, events: Vec<EntityReplayableEvent>) -> Self::Reply {
+    fn map(&self, events: Vec<ReplayableDomainEvent>) -> Self::Reply {
         let account_id = self.account_id.clone();
         let available_quote = find_u64_field(&events, "available").unwrap_or(0);
         let frozen_quote = find_u64_field(&events, "frozen").unwrap_or(0);

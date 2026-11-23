@@ -1,5 +1,5 @@
 use super::shard::{LogAttr, Shard};
-use crate::{EntityError, EntityReplayableEvent, TrackDiff};
+use crate::{EntityError, ReplayableDomainEvent, TrackDiff};
 
 /// 已由日志定序器确定的命令元数据。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -117,10 +117,10 @@ pub struct Transition<S, O, E> {
 }
 
 /// 统一读取领域事件内嵌的实体 replay 事实。
-pub trait ReplayableDomainEvent<C>: Sized {
+pub trait ReplayBackedDomainEvent<C>: Sized {
     fn domain_event_type(command: &C) -> u8;
-    fn from_command(command: C, replay_event: EntityReplayableEvent) -> Self;
-    fn replayable_event(&self) -> &EntityReplayableEvent;
+    fn from_command(command: C, replay_event: ReplayableDomainEvent) -> Self;
+    fn replayable_event(&self) -> &ReplayableDomainEvent;
 }
 
 impl<S, O, E> Transition<S, O, E> {
@@ -137,7 +137,7 @@ impl<S, O, E> Transition<S, O, E> {
 pub trait Fsm: TrackDiff + Clone {
     type State;
     type Command: Clone;
-    type DomainEvent: ReplayableDomainEvent<Self::Command>;
+    type DomainEvent: ReplayBackedDomainEvent<Self::Command>;
     type Output;
     type Error: From<EntityError>;
 

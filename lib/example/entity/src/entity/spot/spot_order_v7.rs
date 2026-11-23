@@ -1,7 +1,5 @@
-use common_entity::fsm_v2::{CommandMetadata, Fsm, ReplayableDomainEvent};
-use common_entity::{
-    Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Shard, TrackDiff,
-};
+use common_entity::fsm_v2::{CommandMetadata, Fsm};
+use common_entity::{Entity, EntityError, EntityFieldChange, Shard, TrackDiff};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
 
@@ -34,41 +32,15 @@ pub enum SpotOrderV7Command {
     Cancel,
 }
 
-/// 现货订单成功迁移后成立的领域事实。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpotOrderV7DomainEvent {
-    Activated { replay_event: EntityReplayableEvent },
-    MatchedAsTaker { replay_event: EntityReplayableEvent },
-    MatchedAsMaker { replay_event: EntityReplayableEvent },
-    RejectedAsTaker { replay_event: EntityReplayableEvent },
-    Modified { replay_event: EntityReplayableEvent },
-    Canceled { replay_event: EntityReplayableEvent },
-}
-
-impl ReplayableDomainEvent<SpotOrderV7Command> for SpotOrderV7DomainEvent {
-    fn domain_event_type(command: &SpotOrderV7Command) -> u8 {
-        match command {
+impl SpotOrderV7Command {
+    const fn event_type(&self) -> u8 {
+        match self {
             SpotOrderV7Command::Activate => 1,
             SpotOrderV7Command::MatchedAsTaker { .. } => 2,
             SpotOrderV7Command::MatchedAsMaker { .. } => 3,
             SpotOrderV7Command::RejectedAsTaker => 4,
             SpotOrderV7Command::Modify { .. } => 5,
             SpotOrderV7Command::Cancel => 6,
-        }
-    }
-
-    fn from_command(command: SpotOrderV7Command, replay_event: EntityReplayableEvent) -> Self {
-        domain_event(command, replay_event)
-    }
-
-    fn replayable_event(&self) -> &EntityReplayableEvent {
-        match self {
-            Self::Activated { replay_event }
-            | Self::MatchedAsTaker { replay_event }
-            | Self::MatchedAsMaker { replay_event }
-            | Self::RejectedAsTaker { replay_event }
-            | Self::Modified { replay_event }
-            | Self::Canceled { replay_event } => replay_event,
         }
     }
 }
@@ -505,9 +477,12 @@ impl SpotOrderV7 {
 impl Fsm for SpotOrderV7 {
     type State = SpotOrderStatus;
     type Command = SpotOrderV7Command;
-    type DomainEvent = SpotOrderV7DomainEvent;
     type Output = SpotOrderV7Output;
     type Error = EntityError;
+
+    fn event_type(command: &SpotOrderV7Command) -> u8 {
+        command.event_type()
+    }
 
     fn transition_in_place(
         &mut self,
@@ -518,26 +493,6 @@ impl Fsm for SpotOrderV7 {
             self.compute_transition(&command, metadata.lsn, metadata.logical_ts)?;
         self.order_base = next;
         Ok((self.order_base.status, output))
-    }
-}
-
-fn domain_event(
-    command: SpotOrderV7Command,
-    replay_event: EntityReplayableEvent,
-) -> SpotOrderV7DomainEvent {
-    match command {
-        SpotOrderV7Command::Activate => SpotOrderV7DomainEvent::Activated { replay_event },
-        SpotOrderV7Command::MatchedAsTaker { .. } => {
-            SpotOrderV7DomainEvent::MatchedAsTaker { replay_event }
-        }
-        SpotOrderV7Command::MatchedAsMaker { .. } => {
-            SpotOrderV7DomainEvent::MatchedAsMaker { replay_event }
-        }
-        SpotOrderV7Command::RejectedAsTaker => {
-            SpotOrderV7DomainEvent::RejectedAsTaker { replay_event }
-        }
-        SpotOrderV7Command::Modify { .. } => SpotOrderV7DomainEvent::Modified { replay_event },
-        SpotOrderV7Command::Cancel => SpotOrderV7DomainEvent::Canceled { replay_event },
     }
 }
 
@@ -770,7 +725,7 @@ impl LobOrder for SpotOrderV7 {
         ) && self.order_base.size > Decimal::ZERO
     }
     fn from_replay_event(
-        _: &common_entity::EntityReplayableEvent,
+        _: &common_entity::ReplayableDomainEvent,
         _: u64,
     ) -> Result<Self, lob_repo_v2::LobError> {
         Err(lob_repo_v2::LobError::Event(
@@ -779,7 +734,7 @@ impl LobOrder for SpotOrderV7 {
     }
     fn apply_replay_event(
         self,
-        _: &common_entity::EntityReplayableEvent,
+        _: &common_entity::ReplayableDomainEvent,
     ) -> Result<Self, lob_repo_v2::LobError> {
         Err(lob_repo_v2::LobError::Event(
             "SpotOrderV7 replay update is not wired".into(),

@@ -1,7 +1,7 @@
 pub use entity_derive::{ActionType, ObjectType, action_type, function};
 
 mod entity_v2;
-pub mod fsm_v2;
+pub use entity_v2::fsm_v2;
 mod stable_id;
 pub use stable_id::stable_string_entity_id;
 
@@ -13,13 +13,13 @@ pub use entity_v2::entity::{
     TrackDiff,
 };
 pub use entity_v2::entity_replayable_event::{
-    EntityChangeType, EntityFieldChange, EntityReplayableEvent, ReplayEventFieldParseError,
-    ReplayFieldChange,
+    EntityChangeType, EntityFieldChange, ReplayEventFieldParseError, ReplayFieldChange,
+    ReplayableDomainEvent,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use entity_v2::shard::{LogAttr, Shard};
 pub use entity_v2::{
-    CommandMetadata, Fsm, IntoSequencedCommand, ReplayableDomainEvent, SequencedCommand,
+    CommandMetadata, Fsm, IntoSequencedCommand, ReplayBackedDomainEvent, SequencedCommand,
     SequencedDomainEvent, Transition,
 };
 pub use sequence::id_generator::EntityIdGenerator;

@@ -1,5 +1,5 @@
 use common_entity::{
-    CommandMetadata, Entity, EntityError, EntityFieldChange, EntityReplayableEvent, Fsm, LogAttr,
+    CommandMetadata, Entity, EntityError, EntityFieldChange, Fsm, LogAttr, ReplayBackedDomainEvent,
     ReplayableDomainEvent, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
@@ -110,13 +110,13 @@ pub enum PerpPositionV3Event {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PerpPositionV3DomainEvent {
-    TradeApplied { replay_event: EntityReplayableEvent },
-    FundingApplied { replay_event: EntityReplayableEvent },
-    FundingAmountApplied { replay_event: EntityReplayableEvent },
-    LeverageUpdated { replay_event: EntityReplayableEvent },
-    IsolatedMarginAdjusted { replay_event: EntityReplayableEvent },
+    TradeApplied { replay_event: ReplayableDomainEvent },
+    FundingApplied { replay_event: ReplayableDomainEvent },
+    FundingAmountApplied { replay_event: ReplayableDomainEvent },
+    LeverageUpdated { replay_event: ReplayableDomainEvent },
+    IsolatedMarginAdjusted { replay_event: ReplayableDomainEvent },
 }
-impl ReplayableDomainEvent<PerpPositionV3Event> for PerpPositionV3DomainEvent {
+impl ReplayBackedDomainEvent<PerpPositionV3Event> for PerpPositionV3DomainEvent {
     fn domain_event_type(c: &PerpPositionV3Event) -> u8 {
         match c {
             PerpPositionV3Event::TradeFilled { .. } => 1,
@@ -126,7 +126,7 @@ impl ReplayableDomainEvent<PerpPositionV3Event> for PerpPositionV3DomainEvent {
             PerpPositionV3Event::IsolatedMarginAdjusted { .. } => 5,
         }
     }
-    fn from_command(c: PerpPositionV3Event, replay_event: EntityReplayableEvent) -> Self {
+    fn from_command(c: PerpPositionV3Event, replay_event: ReplayableDomainEvent) -> Self {
         match c {
             PerpPositionV3Event::TradeFilled { .. } => Self::TradeApplied { replay_event },
             PerpPositionV3Event::FundingSettled { .. } => Self::FundingApplied { replay_event },
@@ -139,7 +139,7 @@ impl ReplayableDomainEvent<PerpPositionV3Event> for PerpPositionV3DomainEvent {
             }
         }
     }
-    fn replayable_event(&self) -> &EntityReplayableEvent {
+    fn replayable_event(&self) -> &ReplayableDomainEvent {
         match self {
             Self::TradeApplied { replay_event }
             | Self::FundingApplied { replay_event }

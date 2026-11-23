@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use common_entity::{EntityReplayableEvent, LogEntry, StateSink, StateSource};
+use common_entity::{LogEntry, ReplayableDomainEvent, StateSink, StateSource};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
     BalanceV2, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult,
@@ -196,13 +196,13 @@ impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
 }
 impl StateSink<SpotBlockUseCase> for DemoSpotBlockOutbound {
     type Error = DemoSpotBlockOutboundError;
-    fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn persist(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn replay(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
+    fn publish(&self, _events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
 }

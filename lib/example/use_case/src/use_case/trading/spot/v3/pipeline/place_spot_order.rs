@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::{
-    EntityError, EntityReplayableEvent, LogEntry, ReplayableChanges, StateDiff, TrackDiff,
+    EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
 use example_core_entity::spot::SpotTradeV3;
@@ -66,7 +66,7 @@ pub struct PlaceSpotOrderV3Changes {
 }
 
 impl ReplayableChanges for PlaceSpotOrderV3Changes {
-    fn to_replayable_events(&self) -> Result<Vec<EntityReplayableEvent>, EntityError> {
+    fn to_replayable_events(&self) -> Result<Vec<ReplayableDomainEvent>, EntityError> {
         let mut events = Vec::new();
         for order in &self.created_orders {
             events.push(order.track_create_event()?);

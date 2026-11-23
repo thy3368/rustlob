@@ -10,7 +10,7 @@ use aeron_rs::concurrent::logbuffer::header::Header;
 use aeron_rs::context::Context;
 use aeron_rs::utils::errors::AeronError;
 use aeron_rs::utils::types::Index;
-use common_entity::{EntityReplayableEvent, EntityReplayableEventHandler};
+use common_entity::{EntityReplayableEventHandler, ReplayableDomainEvent};
 use thiserror::Error;
 
 pub const DEFAULT_AERON_CHANNEL: &str = "aeron:ipc";
@@ -157,7 +157,7 @@ where
 
 pub fn decode_entity_replayable_event(
     payload: &[u8],
-) -> Result<EntityReplayableEvent, serde_json::Error> {
+) -> Result<ReplayableDomainEvent, serde_json::Error> {
     serde_json::from_slice(payload)
 }
 
