@@ -1,4 +1,4 @@
-use common_entity::fsm_v2::{CommandMetadata, Fsm};
+use common_entity::fsm_v2::{Fsm, SequencedCommand};
 use common_entity::{Entity, EntityError, EntityFieldChange, Shard, TrackDiff};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
@@ -512,9 +512,9 @@ impl Fsm for SpotOrderV7 {
 
     fn derive_transition(
         &self,
-        metadata: CommandMetadata,
-        command: SpotOrderV7Command,
+        command: SequencedCommand<SpotOrderV7Command>,
     ) -> Result<(Self, Self::Output), EntityError> {
+        let (metadata, command) = command.into_parts();
         let (next, output) =
             self.compute_transition(&command, metadata.position, metadata.logical_ts)?;
         Ok((

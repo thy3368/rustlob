@@ -121,8 +121,7 @@ pub trait Fsm: TrackDiff + Sized {
     #[doc(hidden)]
     fn derive_transition(
         &self,
-        metadata: CommandMetadata,
-        command: Self::Command,
+        command: SequencedCommand<Self::Command>,
     ) -> Result<(Self, Self::Output), Self::Error>;
 
     /// 返回 command 对应的稳定、非零业务事件码。
@@ -133,14 +132,13 @@ pub trait Fsm: TrackDiff + Sized {
         &self,
         command: SequencedCommand<Self::Command>,
     ) -> Result<(Self, ReplayableDomainEvent, Self::Output), Self::Error> {
-        let (metadata, payload) = command.into_parts();
-        let event_type = Self::event_type(&payload);
+        let event_type = Self::event_type(&command.payload);
         if event_type == 0 {
             return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
         }
-        let logical_ts = metadata.logical_ts;
-        let position = metadata.position;
-        let (after, output) = self.derive_transition(metadata, payload)?;
+        let logical_ts = command.metadata.logical_ts;
+        let position = command.metadata.position;
+        let (after, output) = self.derive_transition(command)?;
         let mut replay_event =
             after.track_update_event_from_at(self, self.event_position(), position, logical_ts)?;
         replay_event.domain_event_type = event_type;
@@ -154,7 +152,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-    use crate::{Entity, EntityFieldChange, LogAttr, Shard, TrackDiff};
+    use crate::{Entity, EntityFieldChange, EventPosition, LogAttr, Shard, TrackDiff};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum TestError {
@@ -179,6 +177,9 @@ mod tests {
         value: u64,
         lsn: u64,
         updated_at: u64,
+        topic: u8,
+        command_partition: u8,
+        party_id: String,
         clones: Arc<AtomicUsize>,
     }
 
@@ -189,6 +190,9 @@ mod tests {
                 value: self.value,
                 lsn: self.lsn,
                 updated_at: self.updated_at,
+                topic: self.topic,
+                command_partition: self.command_partition,
+                party_id: self.party_id.clone(),
                 clones: Arc::clone(&self.clones),
             }
         }
@@ -258,9 +262,9 @@ mod tests {
 
         fn derive_transition(
             &self,
-            metadata: CommandMetadata,
-            command: Command,
+            command: SequencedCommand<Command>,
         ) -> Result<(Self, Self::Output), Self::Error> {
+            let (metadata, command) = command.into_parts();
             let value = self.value.saturating_add(command.delta);
             if command.fail {
                 return Err(TestError::Business);
@@ -270,6 +274,9 @@ mod tests {
                     value,
                     lsn: metadata.lsn,
                     updated_at: metadata.logical_ts,
+                    topic: metadata.topic,
+                    command_partition: metadata.partition,
+                    party_id: metadata.party_id,
                     clones: Arc::clone(&self.clones),
                 },
                 command.delta,
@@ -282,6 +289,9 @@ mod tests {
             value: 10,
             lsn: 4,
             updated_at: 8,
+            topic: 0,
+            command_partition: 0,
+            party_id: String::new(),
             clones: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -293,7 +303,7 @@ mod tests {
         let result = FsmV2::transition(
             &subject,
             SequencedCommand::new(
-                CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
+                CommandMetadata::new_at(EventPosition::new(9, 4), 13, 2, 3, "5".to_owned()),
                 Command {
                     delta: 2,
                     fail: false,
@@ -311,7 +321,16 @@ mod tests {
             (after.value, after.lsn, after.updated_at, output),
             (12, 9, 13, 2)
         );
+        assert_eq!(
+            (
+                after.topic,
+                after.command_partition,
+                after.party_id.as_str()
+            ),
+            (2, 3, "5")
+        );
         assert_eq!(event.lsn, 9);
+        assert_eq!(event.position, EventPosition::new(9, 4));
         assert_eq!(event.logical_ts, 13);
         assert_eq!(event.domain_event_type, 7);
     }

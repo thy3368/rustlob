@@ -1,4 +1,4 @@
-use common_entity::fsm_v2::{CommandMetadata, Fsm};
+use common_entity::fsm_v2::{Fsm, SequencedCommand};
 use common_entity::{Entity, EntityError, EntityFieldChange, EventPosition, TrackDiff};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -168,9 +168,9 @@ impl Fsm for BalanceV2 {
     type Error = BalanceV2Error;
     fn derive_transition(
         &self,
-        metadata: CommandMetadata,
-        command: Self::Command,
+        command: SequencedCommand<Self::Command>,
     ) -> Result<(Self, Self::Output), Self::Error> {
+        let (metadata, command) = command.into_parts();
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);
         }
