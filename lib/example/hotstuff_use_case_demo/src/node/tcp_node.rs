@@ -75,7 +75,7 @@ pub fn run_tcp_node(config: TcpNodeConfig) -> DemoResult<()> {
         .configuration(configuration)
         .on_insert_block(move |event: &InsertBlockEvent| {
             let has_requests = decode_requests(&event.block.data)
-                .map(|requests| !requests.is_empty())
+                .map(|requests| !requests.items.is_empty())
                 .unwrap_or(false);
             if has_requests {
                 if let Ok(mut hashes) = inserted_payload_block_hashes.lock() {

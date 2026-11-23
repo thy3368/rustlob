@@ -3,6 +3,7 @@ pub use domain_service::atom_spot_order_domain_service::{
 };
 
 pub mod pipeline;
+pub use pipeline::*;
 
 pub mod domain_service;
 

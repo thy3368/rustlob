@@ -5,10 +5,8 @@ use std::time::Duration;
 use common_entity::{EntityReplayableEvent, LogEntry, StateSink, StateSource};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use example_core_use_case::{
-    ActivatePendingSpotOrderV2Input, BalanceV2, CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup,
-    OrderSide, OrderTif, OrderType, PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd,
-    SpotBlockAppliedChanges, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult,
-    SpotBlockState, SpotBlockUseCase, SpotOrderHoldAsset, SpotOrderV2,
+    BalanceV2, SpotBlockChanges, SpotBlockCmd, SpotBlockCommand, SpotBlockItemResult,
+    SpotBlockState, SpotBlockUseCase,
 };
 use hotstuff_rs::app::{
     App, ProduceBlockRequest, ProduceBlockResponse, ValidateBlockRequest, ValidateBlockResponse,
@@ -26,10 +24,9 @@ use serde::Serialize;
 use use_case_executor::trading::spot::spot_block_executor::execute_spot_block_with_outbound;
 
 pub type DemoResult<T> = Result<T, Box<dyn std::error::Error>>;
-
 pub const NODE_COUNT: usize = 3;
-pub const PLACE_RESULT_KEY: &[u8] = b"place:buyer:demo-place-1";
-pub const CANCEL_RESULT_KEY: &[u8] = b"cancel:buyer:77738308";
+pub const PLACE_RESULT_KEY: &[u8] = b"spot-block:place";
+pub const CANCEL_RESULT_KEY: &[u8] = b"spot-block:cancel";
 
 #[derive(Clone)]
 pub struct MemDB(Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>>);
@@ -67,7 +64,7 @@ impl KVStore for MemDB {
         }
     }
 
-    fn snapshot<'a>(&'a self) -> MemDBSnapshot<'a> {
+    fn snapshot(&self) -> MemDBSnapshot<'_> {
         MemDBSnapshot(lock_or_recover(&self.0))
     }
 }
@@ -90,12 +87,10 @@ impl WriteBatch for MemWriteBatch {
             deletions: HashSet::new(),
         }
     }
-
     fn set(&mut self, key: &[u8], value: &[u8]) {
         let _ = self.deletions.remove(key);
         self.insertions.insert(key.to_vec(), value.to_vec());
     }
-
     fn delete(&mut self, key: &[u8]) {
         let _ = self.insertions.remove(key);
         self.deletions.insert(key.to_vec());
@@ -103,7 +98,6 @@ impl WriteBatch for MemWriteBatch {
 }
 
 pub struct MemDBSnapshot<'a>(MutexGuard<'a, HashMap<Vec<u8>, Vec<u8>>>);
-
 impl KVGet for MemDBSnapshot<'_> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         self.0.get(key).cloned()
@@ -113,19 +107,10 @@ impl KVGet for MemDBSnapshot<'_> {
 #[derive(Debug, Serialize)]
 struct SpotBlockExecutionSummary {
     status: &'static str,
-    command_count: usize,
+    item_count: usize,
     applied_count: usize,
     rejected_count: usize,
     replayable_event_count: usize,
-    place_command_count: usize,
-    cancel_command_count: usize,
-    place_party_id: Option<String>,
-    place_asset: Option<u32>,
-    place_order_id: Option<String>,
-    place_cloid: Option<String>,
-    cancel_party_id: Option<String>,
-    cancel_asset: Option<u32>,
-    cancel_lookup: Option<CancelSpotOrderV2Lookup>,
 }
 
 #[derive(Clone)]
@@ -137,333 +122,110 @@ impl SpotOrderApp {
     pub fn new(request_queue: Arc<Mutex<Vec<SpotBlockCommand>>>) -> Self {
         Self { request_queue }
     }
-
     pub fn initial_app_state() -> AppStateUpdates {
         AppStateUpdates::new()
     }
 
-    fn execute(requests: &[SpotBlockCommand], block_height: u64) -> Option<AppStateUpdates> {
-        if requests.is_empty() {
+    fn execute(command: &SpotBlockCmd) -> Option<AppStateUpdates> {
+        if command.items.is_empty() {
             return None;
         }
-
-        let spot_block_command = SpotBlockCmd {
-            commands: requests.to_vec(),
-        };
-        let block_sequence = block_height.checked_add(1)?;
-        let logical_ts = block_sequence.checked_mul(1_000_000_000)?;
-        let entry = common_entity::LogEntrySequencer::from_metadata(
-            block_sequence,
-            logical_ts,
-            0,
-            block_sequence,
-            common_entity::SYSTEM_USER_ID.to_owned(),
-            spot_block_command,
-        );
-        let outbound = DemoSpotBlockOutbound;
-        let Ok(result) = execute_spot_block_with_outbound(&entry, &outbound) else {
-            return None;
-        };
-
-        let summary = SpotBlockExecutionSummary::from_result(requests, &result);
-        let Ok(value) = serde_json::to_vec(&summary) else {
-            return None;
-        };
-
-        let mut updates = AppStateUpdates::new();
-        for request in requests {
-            match request {
-                SpotBlockCommand::PlaceMatch(command) => {
-                    updates.insert(place_result_key(command), value.clone());
-                }
-                SpotBlockCommand::Cancel(command) => {
-                    updates.insert(cancel_result_key(command), value.clone());
-                }
-                SpotBlockCommand::Activate(_) | SpotBlockCommand::Modify(_) => {}
-            }
-        }
-
-        Some(updates)
-    }
-}
-
-impl SpotBlockExecutionSummary {
-    fn from_result(
-        requests: &[SpotBlockCommand],
-        result: &common_entity::ExecutionResult<SpotBlockChanges>,
-    ) -> Self {
-        let applied_count = result
-            .changes
-            .item_results
-            .iter()
-            .filter(|item| matches!(item, SpotBlockItemResult::Applied { .. }))
-            .count();
-        let rejected_count = result
-            .changes
-            .item_results
-            .iter()
-            .filter(|item| matches!(item, SpotBlockItemResult::Rejected { .. }))
-            .count();
-        let place_command_count = result
-            .changes
-            .item_results
-            .iter()
-            .filter(|item| {
-                matches!(
-                    item,
-                    SpotBlockItemResult::Applied {
-                        changes: SpotBlockAppliedChanges::PlaceMatch(_),
-                        ..
-                    } | SpotBlockItemResult::Rejected {
-                        command: SpotBlockCommand::PlaceMatch(_),
-                        ..
-                    }
-                )
-            })
-            .count();
-        let cancel_command_count = result
-            .changes
-            .item_results
-            .iter()
-            .filter(|item| {
-                matches!(
-                    item,
-                    SpotBlockItemResult::Applied {
-                        changes: SpotBlockAppliedChanges::Cancel(_),
-                        ..
-                    } | SpotBlockItemResult::Rejected {
-                        command: SpotBlockCommand::Cancel(_),
-                        ..
-                    }
-                )
-            })
-            .count();
-
-        let first_place = requests.iter().find_map(|request| match request {
-            SpotBlockCommand::PlaceMatch(command) => place_order_cmd(command),
-            SpotBlockCommand::Cancel(_)
-            | SpotBlockCommand::Activate(_)
-            | SpotBlockCommand::Modify(_) => None,
-        });
-        let first_cancel = requests.iter().find_map(|request| match request {
-            SpotBlockCommand::Cancel(command) => Some(command),
-            SpotBlockCommand::Activate(_)
-            | SpotBlockCommand::PlaceMatch(_)
-            | SpotBlockCommand::Modify(_) => None,
-        });
-
-        Self {
+        let result = execute_spot_block_with_outbound(command, &DemoSpotBlockOutbound).ok()?;
+        let summary = SpotBlockExecutionSummary {
             status: "executed",
-            command_count: result.changes.item_results.len(),
-            applied_count,
-            rejected_count,
+            item_count: result.changes.item_results.len(),
+            applied_count: result
+                .changes
+                .item_results
+                .iter()
+                .filter(|item| matches!(item, SpotBlockItemResult::Applied { .. }))
+                .count(),
+            rejected_count: result
+                .changes
+                .item_results
+                .iter()
+                .filter(|item| matches!(item, SpotBlockItemResult::Rejected { .. }))
+                .count(),
             replayable_event_count: result.events.len(),
-            place_command_count,
-            cancel_command_count,
-            place_party_id: first_place.map(|command| command.party_id.clone()),
-            place_asset: first_place.map(|command| command.asset),
-            place_order_id: first_place.map(|command| command.order_id.to_string()),
-            place_cloid: first_place.and_then(|command| command.cloid.clone()),
-            cancel_party_id: first_cancel.map(|command| command.party_id.clone()),
-            cancel_asset: first_cancel.map(|command| command.asset),
-            cancel_lookup: first_cancel.map(|command| command.lookup.clone()),
+        };
+        let value = serde_json::to_vec(&summary).ok()?;
+        let mut updates = AppStateUpdates::new();
+        if command
+            .items
+            .iter()
+            .any(|item| matches!(item.payload(), SpotBlockCommand::Place(_)))
+        {
+            updates.insert(PLACE_RESULT_KEY.to_vec(), value.clone());
         }
+        if command
+            .items
+            .iter()
+            .any(|item| matches!(item.payload(), SpotBlockCommand::Cancel(_)))
+        {
+            updates.insert(CANCEL_RESULT_KEY.to_vec(), value);
+        }
+        Some(updates)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DemoSpotBlockOutboundError;
-
 impl std::fmt::Display for DemoSpotBlockOutboundError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "demo spot block outbound error")
+        f.write_str("demo spot block outbound error")
     }
 }
-
 impl std::error::Error for DemoSpotBlockOutboundError {}
 
-#[derive(Debug, Default)]
 struct DemoSpotBlockOutbound;
-
 impl StateSource<SpotBlockUseCase> for DemoSpotBlockOutbound {
     type Error = DemoSpotBlockOutboundError;
-
-    fn load_given_state(
-        &self,
-        _request: &LogEntry<SpotBlockCmd>,
-    ) -> Result<SpotBlockState, Self::Error> {
-        let cancel_order = demo_buy_order()?;
-        let cancel_hold = cancel_order
-            .active_hold_requirements(5, 10)
-            .map_err(|_| DemoSpotBlockOutboundError)?
-            .ok_or(DemoSpotBlockOutboundError)?;
-        let buyer_frozen = cancel_hold
-            .principal
-            .amount
-            .checked_add(cancel_hold.fee.amount)
-            .ok_or(DemoSpotBlockOutboundError)?;
-
+    fn load_given_state(&self, _command: &SpotBlockCmd) -> Result<SpotBlockState, Self::Error> {
+        let buyer = common_entity::stable_string_entity_id("buyer");
         Ok(SpotBlockState {
-            orders: vec![demo_sell_order(2, "seller", 100, 1)?, cancel_order],
+            orders: Vec::new(),
             balances: vec![
-                BalanceV2::new(
-                    common_entity::stable_string_entity_id("buyer"),
-                    common_entity::stable_string_entity_id("buyer"),
-                    common_entity::stable_string_entity_id("USDT"),
-                    100_000,
-                    buyer_frozen,
-                    1,
-                ),
-                BalanceV2::new(
-                    common_entity::stable_string_entity_id("buyer"),
-                    common_entity::stable_string_entity_id("buyer"),
-                    common_entity::stable_string_entity_id("BTC"),
-                    0,
-                    0,
-                    1,
-                ),
-                BalanceV2::new(
-                    common_entity::stable_string_entity_id("seller"),
-                    common_entity::stable_string_entity_id("seller"),
-                    common_entity::stable_string_entity_id("BTC"),
-                    0,
-                    1,
-                    1,
-                ),
-                BalanceV2::new(
-                    common_entity::stable_string_entity_id("seller"),
-                    common_entity::stable_string_entity_id("seller"),
-                    common_entity::stable_string_entity_id("USDT"),
-                    0,
-                    1,
-                    1,
-                ),
-                BalanceV2::new(
-                    common_entity::stable_string_entity_id("fee"),
-                    common_entity::stable_string_entity_id("fee"),
-                    common_entity::stable_string_entity_id("USDT"),
-                    0,
-                    0,
-                    1,
-                ),
+                BalanceV2::new(buyer, buyer, 0, 10, 0, 1, 1),
+                BalanceV2::new(buyer, buyer, 1, 100_000, 0, 1, 1),
             ],
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            fee_account_id: "fee".to_string(),
+            trade_id_start: 1,
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         })
     }
 }
-
 impl StateSink<SpotBlockUseCase> for DemoSpotBlockOutbound {
     type Error = DemoSpotBlockOutboundError;
-
     fn persist(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
-
     fn replay(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
-
     fn publish(&self, _events: &[EntityReplayableEvent]) -> Result<(), Self::Error> {
         Ok(())
     }
 }
 
-fn demo_sell_order(
-    order_id: u64,
-    account_id: &str,
-    price: u64,
-    qty: u64,
-) -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
-    let mut order = SpotOrderV2::new_pending_limit(
-        order_id,
-        10_001,
-        account_id.to_string(),
-        "BTCUSDT".to_string(),
-        OrderSide::Sell,
-        qty,
-        price,
-        OrderType::Limit { tif: OrderTif::Gtc },
-        None,
-        0,
-        1,
-    );
-    let hold_requirements = order
-        .activate_pending(ActivatePendingSpotOrderV2Input {
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            maker_fee_bps: 1,
-            taker_fee_bps: 1,
-            timestamp: 1,
-        })
-        .map_err(|_| DemoSpotBlockOutboundError)?;
-    debug_assert_eq!(hold_requirements.principal.asset, SpotOrderHoldAsset::Base);
-    debug_assert_eq!(hold_requirements.principal.amount, qty);
-    Ok(order)
-}
-
-fn demo_buy_order() -> Result<SpotOrderV2, DemoSpotBlockOutboundError> {
-    let mut order = SpotOrderV2::new_pending_limit(
-        3,
-        10_001,
-        "buyer".to_string(),
-        "BTCUSDT".to_string(),
-        OrderSide::Buy,
-        2,
-        100,
-        OrderType::Limit { tif: OrderTif::Gtc },
-        Some("demo-cancel-1".to_string()),
-        0,
-        1,
-    );
-    order
-        .activate_pending(ActivatePendingSpotOrderV2Input {
-            base_asset_id: "BTC".to_string(),
-            quote_asset_id: "USDT".to_string(),
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-            timestamp: 1,
-        })
-        .map_err(|_| DemoSpotBlockOutboundError)?;
-    Ok(order)
-}
-
 impl App<MemDB> for SpotOrderApp {
     fn produce_block(&mut self, request: ProduceBlockRequest<MemDB>) -> ProduceBlockResponse {
-        let block_height = match request.parent_block() {
-            Some(parent) => request
-                .block_tree()
-                .block_height(&parent)
-                .ok()
-                .flatten()
-                .and_then(|height| height.int().checked_add(1)),
-            None => Some(0),
-        };
-        let Some(block_height) = block_height else {
-            let data = Data::new(Vec::new());
-            return ProduceBlockResponse {
-                data_hash: data_hash(&data),
-                data,
-                app_state_updates: None,
-                validator_set_updates: None,
-            };
-        };
-        let requests = self
+        let block_sequence = request
+            .parent_block()
+            .and_then(|parent| request.block_tree().block_height(&parent).ok().flatten())
+            .map_or(Some(1), |height| height.int().checked_add(2));
+        let commands = self
             .request_queue
             .lock()
             .map(|mut queue| queue.drain(..).collect::<Vec<_>>())
             .unwrap_or_default();
-        let data = encode_requests(&requests).unwrap_or_else(|_| Data::new(Vec::new()));
-        let data_hash = data_hash(&data);
-        let app_state_updates = Self::execute(&requests, block_height);
-
+        let command = block_sequence
+            .and_then(|sequence| presequence_commands(sequence, &commands).ok())
+            .unwrap_or(SpotBlockCmd { items: Vec::new() });
+        let data = encode_requests(&command).unwrap_or_else(|_| Data::new(Vec::new()));
         ProduceBlockResponse {
-            data_hash,
+            data_hash: data_hash(&data),
             data,
-            app_state_updates,
+            app_state_updates: Self::execute(&command),
             validator_set_updates: None,
         }
     }
@@ -480,30 +242,52 @@ impl App<MemDB> for SpotOrderApp {
         if block.data_hash != data_hash(&block.data) {
             return ValidateBlockResponse::Invalid;
         }
-
-        let Ok(requests) = decode_requests(&block.data) else {
+        let Ok(command) = decode_requests(&block.data) else {
             return ValidateBlockResponse::Invalid;
         };
-
         ValidateBlockResponse::Valid {
-            app_state_updates: Self::execute(&requests, block.height.int()),
+            app_state_updates: Self::execute(&command),
             validator_set_updates: None,
         }
     }
 }
 
-pub fn encode_requests(requests: &[SpotBlockCommand]) -> Result<Data, serde_json::Error> {
-    let payload = serde_json::to_vec(requests)?;
-    Ok(Data::new(vec![Datum::new(payload)]))
+pub fn presequence_commands(
+    block_sequence: u64,
+    commands: &[SpotBlockCommand],
+) -> Result<SpotBlockCmd, &'static str> {
+    if commands.len() > u32::MAX as usize || block_sequence > u32::MAX as u64 {
+        return Err("spot block sequence or item count overflows deterministic LSN layout");
+    }
+    let prefix = block_sequence
+        .checked_shl(32)
+        .ok_or("spot block sequence shift overflows")?;
+    let mut items = Vec::with_capacity(commands.len());
+    for (index, command) in commands.iter().cloned().enumerate() {
+        let ordinal = u64::try_from(index)
+            .ok()
+            .and_then(|value| value.checked_add(1))
+            .ok_or("spot block item index overflows")?;
+        let lsn = prefix
+            .checked_add(ordinal)
+            .ok_or("spot block LSN overflows")?;
+        let user = "buyer".to_owned();
+        items.push(common_entity::LogEntrySequencer::from_metadata_with_topic(
+            0, 0, lsn, lsn, 0, ordinal, user, command,
+        ));
+    }
+    Ok(SpotBlockCmd { items })
 }
 
-pub fn decode_requests(data: &Data) -> Result<Vec<SpotBlockCommand>, serde_json::Error> {
+pub fn encode_requests(command: &SpotBlockCmd) -> Result<Data, serde_json::Error> {
+    Ok(Data::new(vec![Datum::new(serde_json::to_vec(command)?)]))
+}
+pub fn decode_requests(data: &Data) -> Result<SpotBlockCmd, serde_json::Error> {
     let Some(datum) = data.vec().first() else {
-        return Ok(Vec::new());
+        return Ok(SpotBlockCmd { items: Vec::new() });
     };
     serde_json::from_slice(datum.bytes())
 }
-
 fn data_hash(data: &Data) -> CryptoHash {
     let mut hasher = CryptoHasher::new();
     for datum in data.iter() {
@@ -511,54 +295,14 @@ fn data_hash(data: &Data) -> CryptoHash {
     }
     CryptoHash::new(hasher.finalize().into())
 }
-
-fn cancel_result_key(command: &CancelSpotOrderV2Cmd) -> Vec<u8> {
-    match &command.lookup {
-        CancelSpotOrderV2Lookup::Oid(order_id) => {
-            format!("cancel:{}:{order_id}", command.party_id).into_bytes()
-        }
-        CancelSpotOrderV2Lookup::Cloid(cloid) => {
-            format!("cancel:{}:{cloid}", command.party_id).into_bytes()
-        }
-        CancelSpotOrderV2Lookup::Missing => {
-            format!("cancel:{}:missing", command.party_id).into_bytes()
-        }
-    }
-}
-
-fn place_result_key(command: &PlaceOnlySpotOrderV2Cmd) -> Vec<u8> {
-    let Some(order) = place_order_cmd(command) else {
-        return b"place:missing:missing".to_vec();
-    };
-    format!(
-        "place:{}:{}",
-        order.party_id,
-        order
-            .cloid
-            .clone()
-            .unwrap_or_else(|| order.order_id.to_string())
-    )
-    .into_bytes()
-}
-
-fn place_order_cmd(command: &PlaceOnlySpotOrderV2Cmd) -> Option<&PlaceOnlySpotOrderV2OrderCmd> {
-    match command {
-        PlaceOnlySpotOrderV2Cmd::Single(order) => Some(order),
-        PlaceOnlySpotOrderV2Cmd::NormalTpsl { parent, .. } => Some(parent),
-    }
-}
-
 pub fn get_from_snapshot<S: KVGet>(snapshot: &BlockTreeSnapshot<S>, key: &[u8]) -> Option<Vec<u8>> {
     snapshot.committed_app_state(key)
 }
-
 pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    match mutex.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    }
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
-
 pub fn demo_replica_configuration(signing_key: SigningKey) -> Configuration {
     Configuration::builder()
         .me(signing_key)
@@ -575,20 +319,13 @@ pub fn demo_replica_configuration(signing_key: SigningKey) -> Configuration {
         .log_events(false)
         .build()
 }
-
 pub fn demo_validator_set_state(verifying_keys: &[VerifyingKey]) -> ValidatorSetState {
-    let mut initial_validator_set = ValidatorSet::new();
-    for verifying_key in verifying_keys {
-        initial_validator_set.put(verifying_key, Power::new(1));
+    let mut set = ValidatorSet::new();
+    for key in verifying_keys {
+        set.put(key, Power::new(1));
     }
-    ValidatorSetState::new(
-        initial_validator_set.clone(),
-        initial_validator_set,
-        None,
-        true,
-    )
+    ValidatorSetState::new(set.clone(), set, None, true)
 }
-
 pub fn deterministic_signing_keys() -> Vec<SigningKey> {
     (1..=NODE_COUNT)
         .map(|seed| SigningKey::from_bytes(&[seed as u8; 32]))
@@ -597,27 +334,23 @@ pub fn deterministic_signing_keys() -> Vec<SigningKey> {
 
 #[cfg(test)]
 mod tests {
+    use example_core_use_case::entity::common::identifiers::OrderId;
+    use example_core_use_case::{CancelSpotOrderV3Cmd, SpotBlockCommand};
+
     use super::*;
 
     #[test]
-    fn demo_buy_order_has_expected_active_hold_requirements()
-    -> Result<(), DemoSpotBlockOutboundError> {
-        let order = demo_buy_order()?;
-        let requirements = order
-            .active_hold_requirements(5, 10)
-            .map_err(|_| DemoSpotBlockOutboundError)?
-            .ok_or(DemoSpotBlockOutboundError)?;
-        let total = requirements
-            .principal
-            .amount
-            .checked_add(requirements.fee.amount)
-            .ok_or(DemoSpotBlockOutboundError)?;
-
-        assert_eq!(requirements.principal.asset, SpotOrderHoldAsset::Quote);
-        assert_eq!(requirements.principal.amount, 200);
-        assert_eq!(requirements.fee.asset, SpotOrderHoldAsset::Quote);
-        assert_eq!(requirements.fee.amount, 1);
-        assert_eq!(total, 201);
-        Ok(())
+    fn deterministic_lsn_and_json_round_trip() {
+        let command = presequence_commands(
+            7,
+            &[SpotBlockCommand::Cancel(CancelSpotOrderV3Cmd {
+                order_id: OrderId::Oid(1),
+            })],
+        )
+        .expect("sequence must fit");
+        assert_eq!(command.items[0].lsn(), (7_u64 << 32) | 1);
+        let decoded = decode_requests(&encode_requests(&command).expect("encode must work"))
+            .expect("decode must work");
+        assert_eq!(decoded, command);
     }
 }

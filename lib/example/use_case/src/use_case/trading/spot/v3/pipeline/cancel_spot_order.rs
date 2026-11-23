@@ -4,13 +4,14 @@ use common_entity::{
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{BalanceV2, BalanceV2Error, OrderSide, SpotOrderStatus, SpotOrderV7};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::use_case::trading::spot::v3::domain_service::atom_spot_order_domain_service::{
     CancelSpotOrderV7Error, SpotOrderDomainService,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderV3Cmd {
     pub order_id: OrderId,
 }
@@ -87,13 +88,7 @@ impl UseCase for CancelSpotOrderV3UseCase {
     type StateChanged = CancelSpotOrderV3AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        match &cmd.payload().order_id {
-            OrderId::Oid(0) => Err(CancelSpotOrderV3Error::InvalidOid),
-            OrderId::Cloid(cloid) if cloid.trim().is_empty() => {
-                Err(CancelSpotOrderV3Error::EmptyCloid)
-            }
-            OrderId::Oid(_) | OrderId::Cloid(_) => Ok(()),
-        }
+        check_cancel_command(cmd)
     }
 
     fn validate_state_given(
@@ -101,43 +96,7 @@ impl UseCase for CancelSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        let order = state.order.order_base();
-        if order.owner.0 != common_entity::stable_string_entity_id(cmd.user_id()) {
-            return Err(CancelSpotOrderV3Error::OwnerMismatch);
-        }
-        match &cmd.payload().order_id {
-            OrderId::Oid(oid) if *oid != order.order_id => {
-                return Err(CancelSpotOrderV3Error::OrderLookupMismatch);
-            }
-            OrderId::Cloid(cloid) => match order.cloid.as_deref() {
-                None => return Err(CancelSpotOrderV3Error::OrderCloidMissing),
-                Some(loaded) if loaded != cloid => {
-                    return Err(CancelSpotOrderV3Error::OrderLookupMismatch);
-                }
-                Some(_) => {}
-            },
-            OrderId::Oid(_) => {}
-        }
-        if !matches!(
-            state.order.status(),
-            SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-        ) {
-            return Err(CancelSpotOrderV3Error::OrderNotCancelable);
-        }
-        if cmd.lsn() <= order.lsn {
-            return Err(CancelSpotOrderV3Error::StaleOrder);
-        }
-        if state.balance.party_id() != order.owner.0 {
-            return Err(CancelSpotOrderV3Error::PartyMismatch);
-        }
-        let held_coin = match order.side {
-            OrderSide::Buy => order.symbol.quote,
-            OrderSide::Sell => order.symbol.base,
-        };
-        if state.balance.coin_idx() != u64::from(held_coin.index()) {
-            return Err(CancelSpotOrderV3Error::CoinMismatch);
-        }
-        Ok(())
+        validate_cancel_state(cmd, state)
     }
 
     fn compute_state_changed_only(
@@ -145,19 +104,79 @@ impl UseCase for CancelSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let (order_after, balance_after) = SpotOrderDomainService::cancel(
-            state.order.clone(),
-            state.balance.clone(),
-            cmd.lsn(),
-            cmd.logical_ts(),
-        )
-        .map_err(map_cancel_error)?;
-        let balance_after = (balance_after != state.balance).then_some(balance_after);
-        Ok(CancelSpotOrderV3AfterChanges {
-            order_after,
-            balance_after,
-        })
+        compute_cancel_after(cmd, state)
     }
+}
+
+pub(crate) fn check_cancel_command(
+    cmd: &LogEntry<CancelSpotOrderV3Cmd>,
+) -> Result<(), CancelSpotOrderV3Error> {
+    match &cmd.payload().order_id {
+        OrderId::Oid(0) => Err(CancelSpotOrderV3Error::InvalidOid),
+        OrderId::Cloid(cloid) if cloid.trim().is_empty() => Err(CancelSpotOrderV3Error::EmptyCloid),
+        OrderId::Oid(_) | OrderId::Cloid(_) => Ok(()),
+    }
+}
+
+pub(crate) fn validate_cancel_state(
+    cmd: &LogEntry<CancelSpotOrderV3Cmd>,
+    state: &CancelSpotOrderV3State,
+) -> Result<(), CancelSpotOrderV3Error> {
+    let order = state.order.order_base();
+    if order.owner.0 != common_entity::stable_string_entity_id(cmd.user_id()) {
+        return Err(CancelSpotOrderV3Error::OwnerMismatch);
+    }
+    match &cmd.payload().order_id {
+        OrderId::Oid(oid) if *oid != order.order_id => {
+            return Err(CancelSpotOrderV3Error::OrderLookupMismatch);
+        }
+        OrderId::Cloid(cloid) => match order.cloid.as_deref() {
+            None => return Err(CancelSpotOrderV3Error::OrderCloidMissing),
+            Some(loaded) if loaded != cloid => {
+                return Err(CancelSpotOrderV3Error::OrderLookupMismatch);
+            }
+            Some(_) => {}
+        },
+        OrderId::Oid(_) => {}
+    }
+    if !matches!(
+        state.order.status(),
+        SpotOrderStatus::Pending | SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+    ) {
+        return Err(CancelSpotOrderV3Error::OrderNotCancelable);
+    }
+    if cmd.lsn() <= order.lsn {
+        return Err(CancelSpotOrderV3Error::StaleOrder);
+    }
+    if state.balance.party_id() != order.owner.0 {
+        return Err(CancelSpotOrderV3Error::PartyMismatch);
+    }
+    let held_coin = match order.side {
+        OrderSide::Buy => order.symbol.quote,
+        OrderSide::Sell => order.symbol.base,
+    };
+    if state.balance.coin_idx() != u64::from(held_coin.index()) {
+        return Err(CancelSpotOrderV3Error::CoinMismatch);
+    }
+    Ok(())
+}
+
+pub(crate) fn compute_cancel_after(
+    cmd: &LogEntry<CancelSpotOrderV3Cmd>,
+    state: &CancelSpotOrderV3State,
+) -> Result<CancelSpotOrderV3AfterChanges, CancelSpotOrderV3Error> {
+    let (order_after, balance_after) = SpotOrderDomainService::cancel(
+        state.order.clone(),
+        state.balance.clone(),
+        cmd.lsn(),
+        cmd.logical_ts(),
+    )
+    .map_err(map_cancel_error)?;
+    let balance_after = (balance_after != state.balance).then_some(balance_after);
+    Ok(CancelSpotOrderV3AfterChanges {
+        order_after,
+        balance_after,
+    })
 }
 
 impl StateDiff for CancelSpotOrderV3UseCase {
@@ -167,13 +186,30 @@ impl StateDiff for CancelSpotOrderV3UseCase {
         state: Self::StateGiven,
         changed: Self::StateChanged,
     ) -> Result<Self::StateDiff, Self::Error> {
-        Ok(CancelSpotOrderV3Changes {
-            updated_order: UpdatedEntityPair::new(state.order, changed.order_after),
-            updated_balance: changed
-                .balance_after
-                .map(|after| UpdatedEntityPair::new(state.balance, after)),
-        })
+        Ok(build_cancel_changes(state, changed))
     }
+}
+
+pub(crate) fn build_cancel_changes(
+    state: CancelSpotOrderV3State,
+    changed: CancelSpotOrderV3AfterChanges,
+) -> CancelSpotOrderV3Changes {
+    CancelSpotOrderV3Changes {
+        updated_order: UpdatedEntityPair::new(state.order, changed.order_after),
+        updated_balance: changed
+            .balance_after
+            .map(|after| UpdatedEntityPair::new(state.balance, after)),
+    }
+}
+
+pub(crate) fn compute_cancel_changes(
+    cmd: &LogEntry<CancelSpotOrderV3Cmd>,
+    state: CancelSpotOrderV3State,
+) -> Result<CancelSpotOrderV3Changes, CancelSpotOrderV3Error> {
+    check_cancel_command(cmd)?;
+    validate_cancel_state(cmd, &state)?;
+    let changed = compute_cancel_after(cmd, &state)?;
+    Ok(build_cancel_changes(state, changed))
 }
 
 fn map_cancel_error(error: CancelSpotOrderV7Error) -> CancelSpotOrderV3Error {

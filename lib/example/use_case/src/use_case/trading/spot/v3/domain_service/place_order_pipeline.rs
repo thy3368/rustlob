@@ -9,6 +9,7 @@ use example_core_entity::{
     SpotOrderV7,
 };
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::atom_spot_order_domain_service::{
@@ -17,7 +18,7 @@ use super::atom_spot_order_domain_service::{
 };
 use super::atom_spot_trade_domain_service::{SpotTradeDomainService, SpotTradeDomainServiceError};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceSpotOrderV3OrderCmd {
     pub party_id: u64,
     pub order_id: u64,

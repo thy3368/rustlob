@@ -3,6 +3,11 @@ use std::collections::HashSet;
 use crate::entity_v2::shard::LogAttr;
 use crate::{EntityError, EntityReplayableEvent, ReplayableChanges, StateDiff};
 
+/// 已在进入 executor 前完成定序的批命令。
+pub trait PresequencedCommand: LogAttr {
+    fn contains_event_metadata(&self, event: &EntityReplayableEvent) -> bool;
+}
+
 /// 多聚合 MI state-machine family 的运行时编排器。
 ///
 /// 该类型只固定 adapter / outbound 之间的执行顺序，不承载业务规则。
@@ -118,6 +123,55 @@ impl UseCaseExecutor {
             .publish(&events)
             .map_err(ExecutionError::Publish)?;
 
+        Ok(ExecutionResult { changes, events })
+    }
+
+    /// 执行已定序批命令，保留 changes 投影出的逐项事件元数据。
+    pub fn execute_presequenced<F, SS, OB>(
+        &self,
+        family: &F,
+        command: &F::Command,
+        state_source: &SS,
+        state_sink: &OB,
+    ) -> ExecutionOutcome<F::StateDiff, F::Error, OB::Error>
+    where
+        F: StateDiff,
+        F::Command: PresequencedCommand,
+        SS: StateSource<F, Error = OB::Error>,
+        OB: StateSink<F>,
+    {
+        family
+            .check_command(command)
+            .map_err(ExecutionError::Business)?;
+        let given_state = state_source
+            .load_given_state(command)
+            .map_err(ExecutionError::LoadState)?;
+        let changes = family
+            .compute_state_diff(command, given_state)
+            .map_err(ExecutionError::Business)?;
+        let events = changes
+            .to_replayable_events()
+            .map_err(ExecutionError::ProjectEvents)?;
+        let mut keys = HashSet::with_capacity(events.len());
+        for event in &events {
+            if !command.contains_event_metadata(event) {
+                return Err(ExecutionError::ProjectEvents(EntityError::Custom(
+                    "event metadata is not present in the presequenced command".to_owned(),
+                )));
+            }
+            if !keys.insert((event.lsn, event.entity_type, event.entity_id)) {
+                return Err(ExecutionError::ProjectEvents(EntityError::Custom(
+                    "duplicate event key in presequenced command".to_owned(),
+                )));
+            }
+        }
+        state_sink
+            .persist(&events)
+            .map_err(ExecutionError::Persist)?;
+        state_sink.replay(&events).map_err(ExecutionError::Replay)?;
+        state_sink
+            .publish(&events)
+            .map_err(ExecutionError::Publish)?;
         Ok(ExecutionResult { changes, events })
     }
 }

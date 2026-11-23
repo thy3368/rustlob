@@ -24,7 +24,7 @@ pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::executor::{
-    ExecutionError, ExecutionResult, StateSink, StateSource, UseCaseExecutor,
+    ExecutionError, ExecutionResult, PresequencedCommand, StateSink, StateSource, UseCaseExecutor,
 };
 pub use use_case::log_entry::LogEntry;
 pub use use_case::log_entry_repo::LogEntryRepo;

@@ -3,7 +3,7 @@ use crate::entity_v2::shard::{LogAttr, Shard};
 /// 真正的时标对象，全序唯一，可回放；内存中的有序日志条目，携带完整负载。
 ///
 /// 当前类型不定义持久化或传输格式；日志成为唯一真相源取决于后续写入链路。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LogEntry<P> {
     ///topic
     t: u8,

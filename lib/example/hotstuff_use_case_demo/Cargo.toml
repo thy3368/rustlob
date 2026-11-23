@@ -17,6 +17,7 @@ hotstuff_rs = { path = "../../common/hotstuff_rs" }
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+rust_decimal = "1"
 tokio = { version = "1", features = ["io-util", "net", "rt-multi-thread", "sync", "time"] }
 use_case_executor = { path = "../use_case_executor" }
 

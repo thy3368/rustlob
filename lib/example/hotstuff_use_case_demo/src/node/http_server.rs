@@ -84,33 +84,26 @@ pub fn start_http_server(
 
 #[cfg(test)]
 mod tests {
+    use example_core_use_case::entity::account::coin::Coin;
+    use example_core_use_case::entity::account::symbol::Symbol;
     use example_core_use_case::{
-        PlaceOnlySpotOrderV2Cmd, PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType,
+        OrderSide, OrderTif, OrderType, PlaceSpotOrderV3Cmd, PlaceSpotOrderV3OrderCmd,
     };
+    use rust_decimal::Decimal;
 
     use super::*;
 
     fn place_match_command(order_id: u64, cloid: &str) -> SpotBlockCommand {
-        SpotBlockCommand::PlaceMatch(PlaceOnlySpotOrderV2Cmd::Single(
-            PlaceOnlySpotOrderV2OrderCmd {
-                party_id: "buyer".to_string(),
-                asset: 10_001,
-                order_id,
-                symbol: "BTCUSDT".to_string(),
-                is_buy: true,
-                price: "100".to_string(),
-                size: "1".to_string(),
-                order_type: PlaceOnlySpotOrderV2OrderType::Limit {
-                    tif: "ioc".to_string(),
-                },
-                reduce_only: false,
-                cloid: Some(cloid.to_string()),
-                base_asset_id: "BTC".to_string(),
-                quote_asset_id: "USDT".to_string(),
-                maker_fee_bps: 5,
-                taker_fee_bps: 10,
-            },
-        ))
+        SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::Single(PlaceSpotOrderV3OrderCmd {
+            party_id: common_entity::stable_string_entity_id("buyer"),
+            order_id,
+            symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+            side: OrderSide::Buy,
+            price: Decimal::from(100),
+            size: Decimal::ONE,
+            order_type: OrderType::Limit { tif: OrderTif::Gtc },
+            cloid: Some(cloid.to_string()),
+        }))
     }
 
     #[test]

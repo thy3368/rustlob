@@ -7,6 +7,7 @@ use common_entity::{
 use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::{BalanceV2, OrderGroupRelation, OrderType, SpotOrderStatus, SpotOrderV7};
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::use_case::trading::spot::v3::domain_service::place_order_pipeline::{
@@ -17,7 +18,7 @@ pub use crate::use_case::trading::spot::v3::domain_service::place_order_pipeline
     PlaceSpotOrderV3OrderCmd, SpotOrderV3Balances,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaceSpotOrderV3Cmd {
     Single(PlaceSpotOrderV3OrderCmd),
     NormalTpsl {
@@ -113,39 +114,7 @@ impl UseCase for PlaceSpotOrderV3UseCase {
     type StateChanged = PlaceSpotOrderV3AfterChanges;
 
     fn check_command(&self, cmd: &Self::Command) -> Result<(), Self::Error> {
-        let orders = command_orders(cmd);
-        let mut ids = HashSet::with_capacity(orders.len());
-        for order in &orders {
-            if order.order_id == 0 || !ids.insert(order.order_id) {
-                return Err(Self::Error::InvalidOrderId);
-            }
-            if order.price <= Decimal::ZERO || order.size <= Decimal::ZERO {
-                return Err(Self::Error::InvalidAmount);
-            }
-            if matches!(
-                order.order_type,
-                OrderType::Trigger {
-                    trigger_price: 0,
-                    ..
-                }
-            ) {
-                return Err(Self::Error::InvalidAmount);
-            }
-        }
-        if let PlaceSpotOrderV3Cmd::NormalTpsl { parent, children } = cmd.payload() {
-            if children.is_empty()
-                || parent.order_type.is_trigger()
-                || children.iter().any(|child| {
-                    !child.order_type.is_trigger()
-                        || child.party_id != parent.party_id
-                        || child.symbol != parent.symbol
-                        || child.side == parent.side
-                })
-            {
-                return Err(Self::Error::InvalidGroup);
-            }
-        }
-        Ok(())
+        check_place_command(cmd)
     }
 
     fn validate_state_given(
@@ -153,37 +122,7 @@ impl UseCase for PlaceSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        let parent = parent_command(cmd);
-        if parent.order_type.is_trigger() {
-            return Ok(());
-        }
-        let mut order_ids = HashSet::from([parent.order_id]);
-        for maker in &state.maker_orders {
-            let value = maker.order_base();
-            if cmd.lsn() <= value.lsn {
-                return Err(Self::Error::StaleMaker);
-            }
-            if !order_ids.insert(value.order_id)
-                || value.symbol != parent.symbol
-                || value.side == parent.side
-                || !matches!(
-                    value.status,
-                    SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
-                )
-                || value.size <= Decimal::ZERO
-            {
-                return Err(Self::Error::InvalidMaker);
-            }
-        }
-        if state
-            .trade_id_start
-            .checked_add(state.maker_orders.len() as u64)
-            .is_none()
-        {
-            return Err(Self::Error::TradeIdOverflow);
-        }
-        validate_normal_bindings(parent, state)?;
-        Ok(())
+        validate_place_state(cmd, state)
     }
 
     fn compute_state_changed_only(
@@ -191,48 +130,127 @@ impl UseCase for PlaceSpotOrderV3UseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
-        let trigger = |order: &PlaceSpotOrderV3OrderCmd, relation| {
-            PlaceOrderPipeline::place_trigger_order_v2(PlaceTriggerSpotOrderV2Input {
-                order: order.clone(),
-                relation,
-                taker_fee_bps: state.taker_fee_bps,
-                lsn: cmd.lsn(),
-                timestamp: cmd.logical_ts(),
+        compute_place_after(cmd, state)
+    }
+}
+
+pub(crate) fn check_place_command(
+    cmd: &LogEntry<PlaceSpotOrderV3Cmd>,
+) -> Result<(), PlaceSpotOrderV3Error> {
+    let orders = command_orders(cmd);
+    let mut ids = HashSet::with_capacity(orders.len());
+    for order in &orders {
+        if order.order_id == 0 || !ids.insert(order.order_id) {
+            return Err(PlaceSpotOrderV3Error::InvalidOrderId);
+        }
+        if order.price <= Decimal::ZERO || order.size <= Decimal::ZERO {
+            return Err(PlaceSpotOrderV3Error::InvalidAmount);
+        }
+        if matches!(
+            order.order_type,
+            OrderType::Trigger {
+                trigger_price: 0,
+                ..
+            }
+        ) {
+            return Err(PlaceSpotOrderV3Error::InvalidAmount);
+        }
+    }
+    if let PlaceSpotOrderV3Cmd::NormalTpsl { parent, children } = cmd.payload() {
+        if children.is_empty()
+            || parent.order_type.is_trigger()
+            || children.iter().any(|child| {
+                !child.order_type.is_trigger()
+                    || child.party_id != parent.party_id
+                    || child.symbol != parent.symbol
+                    || child.side == parent.side
             })
-        };
-        match cmd.payload() {
-            PlaceSpotOrderV3Cmd::Single(order) if order.order_type.is_trigger() => {
-                Ok(PlaceSpotOrderV3AfterChanges::Trigger(trigger(
-                    order,
-                    OrderGroupRelation::Standalone,
-                )?))
-            }
-            PlaceSpotOrderV3Cmd::Single(order) => Ok(PlaceSpotOrderV3AfterChanges::Normal(
-                place_normal(order, OrderGroupRelation::Standalone, cmd, state)?,
-            )),
-            PlaceSpotOrderV3Cmd::NormalTpsl { parent, children } => {
-                let parent_after =
-                    place_normal(parent, OrderGroupRelation::NormalTpslParent, cmd, state)?;
-                let children_after = if normal_is_rejected(&parent_after) {
-                    Vec::new()
-                } else {
-                    children
-                        .iter()
-                        .map(|child| {
-                            trigger(
-                                child,
-                                OrderGroupRelation::NormalTpslChild {
-                                    parent_order_id: parent.order_id,
-                                },
-                            )
-                        })
-                        .collect::<Result<Vec<_>, _>>()?
-                };
-                Ok(PlaceSpotOrderV3AfterChanges::NormalTpsl {
-                    parent: parent_after,
-                    children: children_after,
-                })
-            }
+        {
+            return Err(PlaceSpotOrderV3Error::InvalidGroup);
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_place_state(
+    cmd: &LogEntry<PlaceSpotOrderV3Cmd>,
+    state: &PlaceSpotOrderV3State,
+) -> Result<(), PlaceSpotOrderV3Error> {
+    let parent = parent_command(cmd);
+    if parent.order_type.is_trigger() {
+        return Ok(());
+    }
+    let mut order_ids = HashSet::from([parent.order_id]);
+    for maker in &state.maker_orders {
+        let value = maker.order_base();
+        if cmd.lsn() <= value.lsn {
+            return Err(PlaceSpotOrderV3Error::StaleMaker);
+        }
+        if !order_ids.insert(value.order_id)
+            || value.symbol != parent.symbol
+            || value.side == parent.side
+            || !matches!(
+                value.status,
+                SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+            )
+            || value.size <= Decimal::ZERO
+        {
+            return Err(PlaceSpotOrderV3Error::InvalidMaker);
+        }
+    }
+    if state
+        .trade_id_start
+        .checked_add(state.maker_orders.len() as u64)
+        .is_none()
+    {
+        return Err(PlaceSpotOrderV3Error::TradeIdOverflow);
+    }
+    validate_normal_bindings(parent, state)?;
+    Ok(())
+}
+
+pub(crate) fn compute_place_after(
+    cmd: &LogEntry<PlaceSpotOrderV3Cmd>,
+    state: &PlaceSpotOrderV3State,
+) -> Result<PlaceSpotOrderV3AfterChanges, PlaceSpotOrderV3Error> {
+    let trigger = |order: &PlaceSpotOrderV3OrderCmd, relation| {
+        PlaceOrderPipeline::place_trigger_order_v2(PlaceTriggerSpotOrderV2Input {
+            order: order.clone(),
+            relation,
+            taker_fee_bps: state.taker_fee_bps,
+            lsn: cmd.lsn(),
+            timestamp: cmd.logical_ts(),
+        })
+    };
+    match cmd.payload() {
+        PlaceSpotOrderV3Cmd::Single(order) if order.order_type.is_trigger() => Ok(
+            PlaceSpotOrderV3AfterChanges::Trigger(trigger(order, OrderGroupRelation::Standalone)?),
+        ),
+        PlaceSpotOrderV3Cmd::Single(order) => Ok(PlaceSpotOrderV3AfterChanges::Normal(
+            place_normal(order, OrderGroupRelation::Standalone, cmd, state)?,
+        )),
+        PlaceSpotOrderV3Cmd::NormalTpsl { parent, children } => {
+            let parent_after =
+                place_normal(parent, OrderGroupRelation::NormalTpslParent, cmd, state)?;
+            let children_after = if normal_is_rejected(&parent_after) {
+                Vec::new()
+            } else {
+                children
+                    .iter()
+                    .map(|child| {
+                        trigger(
+                            child,
+                            OrderGroupRelation::NormalTpslChild {
+                                parent_order_id: parent.order_id,
+                            },
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            };
+            Ok(PlaceSpotOrderV3AfterChanges::NormalTpsl {
+                parent: parent_after,
+                children: children_after,
+            })
         }
     }
 }
@@ -244,33 +262,49 @@ impl StateDiff for PlaceSpotOrderV3UseCase {
         state: Self::StateGiven,
         changed: Self::StateChanged,
     ) -> Result<Self::StateDiff, Self::Error> {
-        let flattened = flatten_after_changes(changed);
-        let mut maker_orders_before = state
-            .maker_orders
-            .into_iter()
-            .map(|maker| (maker.order_base().order_id, maker))
-            .collect::<HashMap<_, _>>();
-        let mut updated_maker_orders =
-            Vec::with_capacity(flattened.updated_maker_orders_after.len());
-        for after in flattened.updated_maker_orders_after {
-            let before = maker_orders_before
-                .remove(&after.order_base().order_id)
-                .ok_or(PlaceSpotOrderV3Error::InvalidMaker)?;
-            updated_maker_orders.push(UpdatedEntityPair { before, after });
-        }
-        let mut updated_balances = Vec::new();
-        for after in flattened.updated_balances_after {
-            let before = find_bound_balance(&state.balances_by_order_id, &after)?;
-            updated_balances.push(UpdatedEntityPair { before, after });
-        }
-        Ok(PlaceSpotOrderV3Changes {
-            created_orders: flattened.created_orders,
-            updated_maker_orders,
-            settled_trades: flattened.settled_trades,
-            updated_balances,
-            result: flattened.result,
-        })
+        build_place_changes(state, changed)
     }
+}
+
+pub(crate) fn build_place_changes(
+    state: PlaceSpotOrderV3State,
+    changed: PlaceSpotOrderV3AfterChanges,
+) -> Result<PlaceSpotOrderV3Changes, PlaceSpotOrderV3Error> {
+    let flattened = flatten_after_changes(changed);
+    let mut maker_orders_before = state
+        .maker_orders
+        .into_iter()
+        .map(|maker| (maker.order_base().order_id, maker))
+        .collect::<HashMap<_, _>>();
+    let mut updated_maker_orders = Vec::with_capacity(flattened.updated_maker_orders_after.len());
+    for after in flattened.updated_maker_orders_after {
+        let before = maker_orders_before
+            .remove(&after.order_base().order_id)
+            .ok_or(PlaceSpotOrderV3Error::InvalidMaker)?;
+        updated_maker_orders.push(UpdatedEntityPair { before, after });
+    }
+    let mut updated_balances = Vec::new();
+    for after in flattened.updated_balances_after {
+        let before = find_bound_balance(&state.balances_by_order_id, &after)?;
+        updated_balances.push(UpdatedEntityPair { before, after });
+    }
+    Ok(PlaceSpotOrderV3Changes {
+        created_orders: flattened.created_orders,
+        updated_maker_orders,
+        settled_trades: flattened.settled_trades,
+        updated_balances,
+        result: flattened.result,
+    })
+}
+
+pub(crate) fn compute_place_changes(
+    cmd: &LogEntry<PlaceSpotOrderV3Cmd>,
+    state: PlaceSpotOrderV3State,
+) -> Result<PlaceSpotOrderV3Changes, PlaceSpotOrderV3Error> {
+    check_place_command(cmd)?;
+    validate_place_state(cmd, &state)?;
+    let changed = compute_place_after(cmd, &state)?;
+    build_place_changes(state, changed)
 }
 
 fn place_normal(

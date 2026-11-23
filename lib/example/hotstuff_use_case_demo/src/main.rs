@@ -3,9 +3,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use example_core_use_case::entity::account::coin::Coin;
+use example_core_use_case::entity::account::symbol::Symbol;
+use example_core_use_case::entity::common::identifiers::OrderId;
 use example_core_use_case::{
-    CancelSpotOrderV2Cmd, CancelSpotOrderV2Lookup, PlaceOnlySpotOrderV2Cmd,
-    PlaceOnlySpotOrderV2OrderCmd, PlaceOnlySpotOrderV2OrderType, SpotBlockCommand,
+    CancelSpotOrderV3Cmd, OrderSide, OrderTif, OrderType, PlaceSpotOrderV3Cmd,
+    PlaceSpotOrderV3OrderCmd, SpotBlockCommand,
 };
 use hotstuff_rs::events::{CommitBlockEvent, InsertBlockEvent};
 use hotstuff_rs::replica::{Replica, ReplicaSpec};
@@ -15,6 +18,7 @@ use hotstuff_use_case_demo::node::demo_runtime::{
     decode_requests, demo_replica_configuration, demo_validator_set_state, get_from_snapshot,
 };
 use hotstuff_use_case_demo::node::http_server::{DEFAULT_HTTP_ADDR, start_http_server};
+use rust_decimal::Decimal;
 
 fn main() -> DemoResult<()> {
     println!("[hotstuff_use_case_demo] 启动 3 节点 HotStuff spot order use case demo");
@@ -57,7 +61,7 @@ fn main() -> DemoResult<()> {
             .configuration(demo_replica_configuration(signing_keys[index].clone()))
             .on_insert_block(move |event: &InsertBlockEvent| {
                 let has_requests = decode_requests(&event.block.data)
-                    .map(|requests| !requests.is_empty())
+                    .map(|requests| !requests.items.is_empty())
                     .unwrap_or(false);
                 if has_requests {
                     if let Ok(mut count) = inserted_payload_blocks_for_handler.lock() {
@@ -94,28 +98,18 @@ fn main() -> DemoResult<()> {
         ),
     )?;
 
-    let place_command = PlaceOnlySpotOrderV2Cmd::Single(PlaceOnlySpotOrderV2OrderCmd {
-        party_id: "buyer".to_string(),
-        asset: 10_001,
+    let place_command = PlaceSpotOrderV3Cmd::Single(PlaceSpotOrderV3OrderCmd {
+        party_id: common_entity::stable_string_entity_id("buyer"),
         order_id: 1,
-        symbol: "BTCUSDT".to_string(),
-        is_buy: true,
-        price: "100".to_string(),
-        size: "2".to_string(),
-        order_type: PlaceOnlySpotOrderV2OrderType::Limit {
-            tif: "ioc".to_string(),
-        },
-        reduce_only: false,
+        symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+        side: OrderSide::Buy,
+        price: Decimal::from(100),
+        size: Decimal::from(2),
+        order_type: OrderType::Limit { tif: OrderTif::Gtc },
         cloid: Some("demo-place-1".to_string()),
-        base_asset_id: "BTC".to_string(),
-        quote_asset_id: "USDT".to_string(),
-        maker_fee_bps: 5,
-        taker_fee_bps: 10,
     });
-    let cancel_command = CancelSpotOrderV2Cmd {
-        party_id: "buyer".to_string(),
-        asset: 10_001,
-        lookup: CancelSpotOrderV2Lookup::Cloid("demo-cancel-1".to_string()),
+    let cancel_command = CancelSpotOrderV3Cmd {
+        order_id: OrderId::Cloid("demo-place-1".to_string()),
     };
     request_queues
         .first()
@@ -123,12 +117,10 @@ fn main() -> DemoResult<()> {
         .lock()
         .map_err(|_| "leader request queue poisoned")?
         .extend([
-            SpotBlockCommand::PlaceMatch(place_command),
+            SpotBlockCommand::Place(place_command),
             SpotBlockCommand::Cancel(cancel_command),
         ]);
-    println!(
-        "[hotstuff_use_case_demo] 已向 leader 队列提交 PlaceSpotOrderV2Cmd 和 CancelSpotOrderV2Cmd"
-    );
+    println!("[hotstuff_use_case_demo] 已向 leader 队列提交 V3 place/cancel");
 
     let start = Instant::now();
     let mut final_value = None;
