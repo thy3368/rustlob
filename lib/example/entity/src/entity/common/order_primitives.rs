@@ -129,9 +129,9 @@ impl OrderTriggerRole {
 /// 已进入执行流程的现货订单生命周期状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpotOrderStatus {
-    /// 条件单已接受，等待触发；尚未进入执行流程。
+    /// 条件单已接受，等待触发；或新建普通单，可以进行冻结了
     Pending,
-    /// 订单已进入执行流程，尚未成交。
+    /// 订单已进入执行流程，尚未成交。完成冻结，可以进行撮合了。
     Open,
     /// 订单已部分成交，剩余数量仍在业务上可撤。
     PartiallyFilled,

@@ -32,10 +32,12 @@ pub enum SpotOrderV7Command {
     Freeze,
     MatchedAsTaker {
         filled_size: Decimal,
+        quote_notional: Decimal,
         quote_fee: Decimal,
     },
     MatchedAsMaker {
         filled_size: Decimal,
+        quote_notional: Decimal,
         quote_fee: Decimal,
     },
     RejectedAsTaker,
@@ -99,7 +101,7 @@ pub struct FreezeSpotOrderV7Output {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplySpotOrderV7MatchOutput {
     pub order_after: SpotOrderV7,
-    /// taker 进入终态后应释放的冻结额；maker 或非终态 taker 为 `None`。
+    /// 订单进入终态后应释放的冻结额；非终态为 `None`。
     pub release_requirement: Option<SpotOrderV7ReleaseRequirement>,
 }
 
@@ -243,6 +245,11 @@ impl SpotOrderV7 {
             Decimal::ZERO
         };
         order.buy_quote_fee_reserve_consumed = Decimal::ZERO;
+        order.buy_quote_principal_frozen = Decimal::ZERO;
+        order.buy_quote_principal_paid = Decimal::ZERO;
+        order.buy_quote_principal_released = Decimal::ZERO;
+        order.buy_quote_fee_reserve_released = Decimal::ZERO;
+        order.sell_quote_fee_consumed = Decimal::ZERO;
         Self::from_record_at(order, position)
     }
 
@@ -391,6 +398,14 @@ impl SpotOrderV7 {
                 let freeze_requirement = freeze_requirement(&self.order_base)
                     .map_err(|error| err(&error.to_string()))?;
                 let mut next = self.order_base.clone();
+                if next.side == OrderSide::Buy {
+                    next.buy_quote_principal_frozen = match freeze_requirement {
+                        SpotOrderV7FreezeRequirement::Buy {
+                            quote_principal, ..
+                        } => quote_principal.amount(),
+                        SpotOrderV7FreezeRequirement::Sell { .. } => unreachable!(),
+                    };
+                }
                 next.status = SpotOrderStatus::Open;
                 next.updated_at = timestamp;
                 next.lsn = position.lsn;
@@ -401,12 +416,14 @@ impl SpotOrderV7 {
             }
             SpotOrderV7Command::MatchedAsTaker {
                 filled_size,
+                quote_notional,
                 quote_fee,
             } => {
                 self.validate_matchable_as_taker()?;
                 let next = matched_order(
                     &self.order_base,
                     *filled_size,
+                    *quote_notional,
                     *quote_fee,
                     position,
                     timestamp,
@@ -420,7 +437,7 @@ impl SpotOrderV7 {
                     order_after.status(),
                     SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
                 )
-                .then(|| match_release_requirement(&order_after))
+                .then(|| match_release_requirement_delta(&self.order_base, &order_after.order_base))
                 .transpose()?;
                 Ok((
                     next,
@@ -432,12 +449,14 @@ impl SpotOrderV7 {
             }
             SpotOrderV7Command::MatchedAsMaker {
                 filled_size,
+                quote_notional,
                 quote_fee,
             } => {
                 self.validate_matchable_as_maker()?;
                 let next = matched_order(
                     &self.order_base,
                     *filled_size,
+                    *quote_notional,
                     *quote_fee,
                     position,
                     timestamp,
@@ -447,11 +466,17 @@ impl SpotOrderV7 {
                     order_base: next.clone(),
                     position,
                 };
+                let release_requirement = matches!(
+                    order_after.status(),
+                    SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+                )
+                .then(|| match_release_requirement_delta(&self.order_base, &order_after.order_base))
+                .transpose()?;
                 Ok((
                     next,
                     SpotOrderV7Output::MatchedAsMaker(ApplySpotOrderV7MatchOutput {
                         order_after,
-                        release_requirement: None,
+                        release_requirement,
                     }),
                 ))
             }
@@ -462,13 +487,17 @@ impl SpotOrderV7 {
                 }
                 let mut next = self.order_base.clone();
                 next.status = SpotOrderStatus::Rejected;
+                settle_terminal_release(&mut next)?;
                 next.updated_at = timestamp;
                 next.lsn = position.lsn;
                 let order_after = Self {
                     order_base: next.clone(),
                     position,
                 };
-                let release_requirement = Some(match_release_requirement(&order_after)?);
+                let release_requirement = Some(match_release_requirement_delta(
+                    &self.order_base,
+                    &order_after.order_base,
+                )?);
                 Ok((
                     next,
                     SpotOrderV7Output::RejectedAsTaker(ApplySpotOrderV7MatchOutput {
@@ -494,6 +523,7 @@ impl SpotOrderV7 {
                 }
                 let hold_after = active_hold_requirement(&next)?;
                 let hold_adjustment = hold_adjustment(&self.order_base, hold_before, hold_after)?;
+                apply_buy_modify_counters(&mut next, hold_adjustment)?;
                 let order_after = Self {
                     order_base: next.clone(),
                     position,
@@ -508,7 +538,10 @@ impl SpotOrderV7 {
             }
             SpotOrderV7Command::Cancel => {
                 let was_pending = self.status() == SpotOrderStatus::Pending;
-                let next = canceled_order(&self.order_base, position, timestamp)?;
+                let mut next = canceled_order(&self.order_base, position, timestamp)?;
+                if !was_pending {
+                    settle_terminal_release(&mut next)?;
+                }
                 let order_after = Self {
                     order_base: next.clone(),
                     position,
@@ -516,7 +549,7 @@ impl SpotOrderV7 {
                 let release_requirement = if was_pending {
                     zero_release_requirement(&order_after)?
                 } else {
-                    entity_release_requirement(&order_after)?
+                    release_requirement_delta(&self.order_base, &order_after.order_base)?
                 };
                 Ok((
                     next,
@@ -565,12 +598,17 @@ enum MatchRole {
 fn matched_order(
     current: &OrderBase,
     filled_size: Decimal,
+    quote_notional: Decimal,
     quote_fee: Decimal,
     position: common_entity::EventPosition,
     timestamp: u64,
     role: MatchRole,
 ) -> Result<OrderBase, EntityError> {
-    if filled_size < Decimal::ZERO || filled_size > current.size || quote_fee < Decimal::ZERO {
+    if filled_size < Decimal::ZERO
+        || filled_size > current.size
+        || quote_notional < Decimal::ZERO
+        || quote_fee < Decimal::ZERO
+    {
         return Err(err("invalid match facts"));
     }
     if matches!(role, MatchRole::Maker) && filled_size == Decimal::ZERO {
@@ -578,11 +616,31 @@ fn matched_order(
     }
 
     let mut next = current.clone();
+    let limit_notional = current
+        .limit_px
+        .checked_mul(filled_size)
+        .ok_or_else(|| err("match notional overflow"))?;
+    if (next.side == OrderSide::Buy && quote_notional > limit_notional)
+        || (filled_size == Decimal::ZERO && quote_notional != Decimal::ZERO)
+    {
+        return Err(err("match notional exceeds buy limit principal"));
+    }
     next.size = next
         .size
         .checked_sub(filled_size)
         .ok_or_else(|| err("size underflow"))?;
     if next.side == OrderSide::Buy {
+        next.buy_quote_principal_paid = next
+            .buy_quote_principal_paid
+            .checked_add(quote_notional)
+            .ok_or_else(|| err("principal paid overflow"))?;
+        let price_improvement = limit_notional
+            .checked_sub(quote_notional)
+            .ok_or_else(|| err("price improvement underflow"))?;
+        next.buy_quote_principal_released = next
+            .buy_quote_principal_released
+            .checked_add(price_improvement)
+            .ok_or_else(|| err("principal release overflow"))?;
         next.buy_quote_fee_reserve_consumed = next
             .buy_quote_fee_reserve_consumed
             .checked_add(quote_fee)
@@ -590,6 +648,11 @@ fn matched_order(
         if next.buy_quote_fee_reserve_consumed > next.buy_quote_fee_reserve_limit {
             return Err(err("fee exceeds reserve"));
         }
+    } else {
+        next.sell_quote_fee_consumed = next
+            .sell_quote_fee_consumed
+            .checked_add(quote_fee)
+            .ok_or_else(|| err("sell fee overflow"))?;
     }
     next.status = if next.size == Decimal::ZERO {
         SpotOrderStatus::Filled
@@ -609,6 +672,12 @@ fn matched_order(
             MatchRole::Taker => SpotOrderStatus::PartiallyFilled,
         }
     };
+    if matches!(
+        next.status,
+        SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+    ) {
+        settle_terminal_release(&mut next)?;
+    }
     next.updated_at = timestamp;
     next.lsn = position.lsn;
     Ok(next)
@@ -681,6 +750,31 @@ impl TrackDiff for SpotOrderV7 {
                 "buy_quote_fee_reserve_consumed",
                 a.buy_quote_fee_reserve_consumed.to_string(),
                 b.buy_quote_fee_reserve_consumed.to_string(),
+            ),
+            (
+                "buy_quote_principal_frozen",
+                a.buy_quote_principal_frozen.to_string(),
+                b.buy_quote_principal_frozen.to_string(),
+            ),
+            (
+                "buy_quote_principal_paid",
+                a.buy_quote_principal_paid.to_string(),
+                b.buy_quote_principal_paid.to_string(),
+            ),
+            (
+                "buy_quote_principal_released",
+                a.buy_quote_principal_released.to_string(),
+                b.buy_quote_principal_released.to_string(),
+            ),
+            (
+                "buy_quote_fee_reserve_released",
+                a.buy_quote_fee_reserve_released.to_string(),
+                b.buy_quote_fee_reserve_released.to_string(),
+            ),
+            (
+                "sell_quote_fee_consumed",
+                a.sell_quote_fee_consumed.to_string(),
+                b.sell_quote_fee_consumed.to_string(),
             ),
             (
                 "updated_at",
@@ -831,6 +925,17 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
         || o.size < Decimal::ZERO
         || o.size > o.orig_size
         || o.limit_px <= Decimal::ZERO
+        || [
+            o.buy_quote_fee_reserve_limit,
+            o.buy_quote_fee_reserve_consumed,
+            o.buy_quote_principal_frozen,
+            o.buy_quote_principal_paid,
+            o.buy_quote_principal_released,
+            o.buy_quote_fee_reserve_released,
+            o.sell_quote_fee_consumed,
+        ]
+        .into_iter()
+        .any(|amount| amount < Decimal::ZERO)
     {
         return Err(err("invalid order facts"));
     }
@@ -894,10 +999,8 @@ fn release_requirement(
     let size = if original { o.orig_size } else { o.size };
     let amount = match o.side {
         OrderSide::Buy => o
-            .limit_px
-            .checked_mul(size)
-            .and_then(|x| x.checked_add(o.buy_quote_fee_reserve_limit))
-            .and_then(|x| x.checked_sub(o.buy_quote_fee_reserve_consumed))
+            .buy_quote_principal_released
+            .checked_add(o.buy_quote_fee_reserve_released)
             .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
         OrderSide::Sell => size,
     };
@@ -911,18 +1014,12 @@ fn release_requirement(
     )
     .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
 }
-fn entity_release_requirement(order: &SpotOrderV7) -> Result<CoinAmount, EntityError> {
-    order
-        .release_requirement()
-        .map_err(|error| err(&error.to_string()))
-}
-fn match_release_requirement(
-    order: &SpotOrderV7,
+fn match_release_requirement_delta(
+    before: &OrderBase,
+    after: &OrderBase,
 ) -> Result<SpotOrderV7ReleaseRequirement, EntityError> {
-    let amount = order
-        .release_requirement()
-        .map_err(|error| err(&error.to_string()))?;
-    Ok(match order.order_base.side {
+    let amount = release_requirement_delta(before, after)?;
+    Ok(match after.side {
         OrderSide::Buy => SpotOrderV7ReleaseRequirement::Buy {
             quote_amount: amount,
         },
@@ -930,6 +1027,27 @@ fn match_release_requirement(
             base_quantity: amount,
         },
     })
+}
+
+fn release_requirement_delta(
+    before: &OrderBase,
+    after: &OrderBase,
+) -> Result<CoinAmount, EntityError> {
+    let amount = match after.side {
+        OrderSide::Buy => after
+            .buy_quote_principal_released
+            .checked_sub(before.buy_quote_principal_released)
+            .and_then(|principal| {
+                after
+                    .buy_quote_fee_reserve_released
+                    .checked_sub(before.buy_quote_fee_reserve_released)
+                    .and_then(|fee| principal.checked_add(fee))
+            })
+            .filter(|amount| *amount >= Decimal::ZERO)
+            .ok_or_else(|| err("release delta overflow"))?,
+        OrderSide::Sell => after.size,
+    };
+    coin_amount(held_currency(after), amount).map_err(|error| err(&error.to_string()))
 }
 fn held_currency(o: &OrderBase) -> crate::account::coin::Coin {
     match o.side {
@@ -952,6 +1070,72 @@ fn active_hold_requirement(o: &OrderBase) -> Result<Option<Decimal>, EntityError
         OrderSide::Sell => o.size,
     };
     Ok(Some(amount))
+}
+
+fn apply_buy_modify_counters(
+    next: &mut OrderBase,
+    adjustment: SpotOrderV7HoldAdjustment,
+) -> Result<(), EntityError> {
+    if next.side != OrderSide::Buy {
+        return Ok(());
+    }
+    match adjustment {
+        SpotOrderV7HoldAdjustment::Increase { amount } => {
+            next.buy_quote_principal_frozen = next
+                .buy_quote_principal_frozen
+                .checked_add(amount.amount())
+                .ok_or_else(|| err("principal freeze overflow"))?;
+        }
+        SpotOrderV7HoldAdjustment::Decrease { amount } => {
+            next.buy_quote_principal_released = next
+                .buy_quote_principal_released
+                .checked_add(amount.amount())
+                .ok_or_else(|| err("principal release overflow"))?;
+        }
+        SpotOrderV7HoldAdjustment::Unchanged { .. } => {}
+    }
+    Ok(())
+}
+
+fn settle_terminal_release(next: &mut OrderBase) -> Result<(), EntityError> {
+    if next.side != OrderSide::Buy {
+        return Ok(());
+    }
+    let principal_accounted = next
+        .buy_quote_principal_paid
+        .checked_add(next.buy_quote_principal_released)
+        .ok_or_else(|| err("principal accounting overflow"))?;
+    let principal_release = next
+        .buy_quote_principal_frozen
+        .checked_sub(principal_accounted)
+        .filter(|amount| *amount >= Decimal::ZERO)
+        .ok_or_else(|| err("buy principal classification exceeds frozen principal"))?;
+    next.buy_quote_principal_released = next
+        .buy_quote_principal_released
+        .checked_add(principal_release)
+        .ok_or_else(|| err("principal release overflow"))?;
+
+    next.buy_quote_fee_reserve_released = next
+        .buy_quote_fee_reserve_limit
+        .checked_sub(next.buy_quote_fee_reserve_consumed)
+        .filter(|amount| *amount >= Decimal::ZERO)
+        .ok_or_else(|| err("fee classification exceeds reserve"))?;
+    validate_terminal_buy_conservation(next)
+}
+
+fn validate_terminal_buy_conservation(order: &OrderBase) -> Result<(), EntityError> {
+    let remainder = order
+        .buy_quote_principal_frozen
+        .checked_add(order.buy_quote_fee_reserve_limit)
+        .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_consumed))
+        .and_then(|amount| amount.checked_sub(order.buy_quote_principal_paid))
+        .and_then(|amount| amount.checked_sub(order.buy_quote_principal_released))
+        .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_released))
+        .ok_or_else(|| err("buy funds conservation overflow"))?;
+    if remainder != Decimal::ZERO {
+        return Err(err("terminal buy funds are not conserved"));
+    }
+    Ok(())
 }
 fn hold_adjustment(
     o: &OrderBase,

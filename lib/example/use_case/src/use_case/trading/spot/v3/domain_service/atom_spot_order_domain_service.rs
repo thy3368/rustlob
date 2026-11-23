@@ -201,6 +201,7 @@ impl SpotOrderDomainService {
         struct PlannedFill {
             maker_index: usize,
             size: Decimal,
+            quote_notional: Decimal,
             taker_fee: Decimal,
             maker_fee: Decimal,
             trade_id: u64,
@@ -237,6 +238,7 @@ impl SpotOrderDomainService {
             fills.push(PlannedFill {
                 maker_index,
                 size,
+                quote_notional: notional,
                 taker_fee,
                 maker_fee,
                 trade_id,
@@ -266,6 +268,7 @@ impl SpotOrderDomainService {
                     metadata,
                     SpotOrderV7Command::MatchedAsMaker {
                         filled_size: fill.size,
+                        quote_notional: fill.quote_notional,
                         quote_fee: fill.maker_fee,
                     },
                 ),
@@ -299,6 +302,7 @@ impl SpotOrderDomainService {
                 metadata,
                 SpotOrderV7Command::MatchedAsTaker {
                     filled_size,
+                    quote_notional: fills_quote_notional(&trades)?,
                     quote_fee: taker_fee_total,
                 },
             ),
@@ -502,6 +506,17 @@ fn match_fee(notional: Decimal, bps: u64, scale: u32) -> Result<Decimal, EntityE
             value.round_dp_with_strategy(scale, rust_decimal::RoundingStrategy::ToPositiveInfinity)
         })
         .ok_or_else(|| match_error("fee overflow"))
+}
+
+fn fills_quote_notional(trades: &[SpotTradeV3]) -> Result<Decimal, EntityError> {
+    trades.iter().try_fold(Decimal::ZERO, |total, trade| {
+        trade
+            .comon_trade
+            .price
+            .checked_mul(trade.comon_trade.size)
+            .and_then(|notional| total.checked_add(notional))
+            .ok_or_else(|| match_error("notional total overflow"))
+    })
 }
 
 fn match_error(message: &str) -> EntityError {

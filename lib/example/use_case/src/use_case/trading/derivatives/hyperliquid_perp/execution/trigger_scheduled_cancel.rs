@@ -255,6 +255,11 @@ mod tests {
     }
 
     fn order_base(id: u64, side: OrderSide) -> OrderBase {
+        let buy_quote_principal_frozen = if side == OrderSide::Buy {
+            Decimal::from(200)
+        } else {
+            Decimal::ZERO
+        };
         OrderBase {
             owner: USER,
             order_id: id,
@@ -264,6 +269,7 @@ mod tests {
             size: Decimal::from(2),
             orig_size: Decimal::from(2),
             status: SpotOrderStatus::Open,
+            buy_quote_principal_frozen,
             created_at: LOGICAL_TS - 10,
             updated_at: LOGICAL_TS - 10,
             ..OrderBase::default()

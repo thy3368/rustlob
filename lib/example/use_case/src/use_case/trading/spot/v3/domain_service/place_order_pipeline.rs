@@ -158,7 +158,7 @@ impl PlaceOrderPipeline {
             .into_iter()
             .map(|maker| (maker.order_base().order_id, maker))
             .collect::<HashMap<_, _>>();
-        let updated_maker_orders_after = input
+        let updated_maker_orders_after: Vec<SpotOrderV7> = input
             .maker_orders
             .iter()
             .filter_map(|before| {
@@ -195,6 +195,32 @@ impl PlaceOrderPipeline {
             balances.working[seller_base] = settled.seller_base_balance_after;
             balances.working[seller_quote] = settled.seller_quote_balance_after;
             settled_trades.push(settled.trade_after);
+        }
+        for maker_after in &updated_maker_orders_after {
+            let held_index = balances.held_index(
+                maker_after.order_base().order_id,
+                maker_after.order_base().side,
+            )?;
+            let maker_before = input
+                .maker_orders
+                .iter()
+                .find(|maker| maker.order_base().order_id == maker_after.order_base().order_id)
+                .ok_or(PlaceDomainServiceError::InvalidBalances)?;
+            let maker_hold_before = maker_before
+                .hold_requirement()
+                .map_err(|error| EntityError::Custom(error.to_string()))?
+                .amount();
+            let frozen_before_command = balances.originals[held_index]
+                .frozen()
+                .checked_sub(maker_hold_before)
+                .ok_or(PlaceDomainServiceError::InvalidBalances)?;
+            balances.working[held_index] = SpotOrderDomainService::reconcile_taker_hold(
+                maker_after,
+                balances.working[held_index].clone(),
+                frozen_before_command,
+                input.lsn,
+                input.timestamp,
+            )?;
         }
         balances.working[held_index] = SpotOrderDomainService::reconcile_taker_hold(
             &taker_after,

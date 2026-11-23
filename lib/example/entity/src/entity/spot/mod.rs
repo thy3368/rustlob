@@ -7,6 +7,7 @@ pub use spot_trade_v3::{
 };
 
 pub mod spot_order_v7;
+pub mod spot_order_v7_1;
 
 pub use spot_order_v7::{
     ApplySpotOrderV7MatchOutput, CancelSpotOrderV7Output, CreateSpotOrderV7Command,
