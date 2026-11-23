@@ -132,7 +132,11 @@ impl<S, O, E> Transition<S, O, E> {
     }
 }
 
-/// 实体状态机：命令表达意图，领域事件表达成功后成立的事实。
+/// 实体状态机兼容层。
+///
+/// `DomainEvent: From<Command>` 只保留旧 FSM 的 command 回显语义，不能用于构造
+/// [`EntityReplayableEvent`]。Replay event 必须由具体实体在成功计算 before/after 后投影，
+/// 再使用 [`CommandMetadata`] 覆盖确定性的 LSN 与逻辑时间。
 pub trait Fsm {
     type State;
     type Command: LogAttr + Clone;
@@ -154,8 +158,10 @@ pub trait Fsm {
         C: IntoSequencedCommand<Self::Command>,
     {
         let command = command.into_sequenced();
-        let event = Self::DomainEvent::from(command.payload.clone());
-        let (state, output) = self.transition_legacy(command.payload)?;
+        let payload = command.payload;
+        let (state, output) = self.transition_legacy(payload.clone())?;
+        // 兼容事件不包含实体 before/after，禁止将此处扩展为 replay event 构造。
+        let event = Self::DomainEvent::from(payload);
         Ok(Transition::new(state, output, event))
     }
 
