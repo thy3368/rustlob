@@ -686,38 +686,25 @@ mod tests {
     }
 
     fn pending_order(order_id: u64, side: OrderSide, lsn: u64) -> SpotOrderV7 {
-        SpotOrderV7::pending(
-            OrderBase {
-                owner: UserId(PARTY),
-                order_id,
-                symbol: symbol(),
-                side,
-                limit_px: Decimal::from(10),
-                size: Decimal::ONE,
-                orig_size: Decimal::ONE,
-                execution: PriceType::Limit,
-                tif: example_core_entity::OrderTif::Gtc,
-                trigger: Default::default(),
-                trigger_px: None,
-                group_relation: OrderGroupRelation::Standalone,
-                is_position_tpsl: false,
-                reduce_only: false,
-                status: SpotOrderStatus::Pending,
-                buy_quote_fee_reserve_limit: Decimal::ZERO,
-                buy_quote_fee_reserve_consumed: Decimal::ZERO,
-                cloid: None,
-                created_at: lsn,
-                updated_at: lsn,
-                lsn,
-            },
-            OrderType::Limit {
-                tif: example_core_entity::OrderTif::Gtc,
-            },
-            OrderGroupRelation::Standalone,
-            0,
-            lsn,
-            lsn,
-        )
+        SpotOrderV7::create(common_entity::fsm_v2::SequencedCommand::new(
+            common_entity::fsm_v2::CommandMetadata::new(lsn, lsn, 0, 0, PARTY.to_string()),
+            example_core_entity::SpotOrderV7Command::Create(
+                example_core_entity::CreateSpotOrderV7Command {
+                    party_id: PARTY,
+                    order_id,
+                    symbol: symbol(),
+                    side,
+                    price: Decimal::from(10),
+                    size: Decimal::ONE,
+                    order_type: OrderType::Limit {
+                        tif: example_core_entity::OrderTif::Gtc,
+                    },
+                    relation: OrderGroupRelation::Standalone,
+                    cloid: None,
+                    fee_bps: 0,
+                },
+            ),
+        ))
         .unwrap()
     }
 

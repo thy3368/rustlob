@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
 use common_entity::EntityError;
+use common_entity::fsm_v2::{CommandMetadata, SequencedCommand};
 use example_core_entity::account::symbol::Symbol;
-use example_core_entity::common::{OrderBase, PriceType, UserId};
 use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::{
-    BalanceV2, BalanceV2Error, OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus,
-    SpotOrderV7,
+    BalanceV2, BalanceV2Error, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide,
+    SpotOrderV7, SpotOrderV7Command,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::atom_spot_order_domain_service::{
-    ActivateSpotOrderV7Error, MatchSpotOrderV3Input, MatchSpotOrderV3Outcome,
+    FreezeSpotOrderV7Error, MatchSpotOrderV3Input, MatchSpotOrderV3Outcome,
     ReconcileSpotOrderHoldError, SpotOrderDomainService,
 };
 use super::atom_spot_trade_domain_service::{SpotTradeDomainService, SpotTradeDomainServiceError};
@@ -103,7 +103,7 @@ pub enum PlaceDomainServiceError {
     #[error(transparent)]
     Entity(#[from] EntityError),
     #[error(transparent)]
-    Activation(#[from] ActivateSpotOrderV7Error),
+    Freeze(#[from] FreezeSpotOrderV7Error),
     #[error(transparent)]
     Settlement(#[from] SpotTradeDomainServiceError),
     #[error(transparent)]
@@ -370,36 +370,21 @@ fn build_order(
     lsn: u64,
     timestamp: u64,
 ) -> Result<SpotOrderV7, EntityError> {
-    Ok(SpotOrderV7::pending(
-        OrderBase {
-            owner: UserId(cmd.party_id),
+    SpotOrderV7::create(SequencedCommand::new(
+        CommandMetadata::new(lsn, timestamp, 0, 0, cmd.party_id.to_string()),
+        SpotOrderV7Command::Create(CreateSpotOrderV7Command {
+            party_id: cmd.party_id,
             order_id: cmd.order_id,
             symbol: cmd.symbol,
             side: cmd.side,
-            limit_px: cmd.price,
+            price: cmd.price,
             size: cmd.size,
-            orig_size: cmd.size,
-            execution: PriceType::Limit,
-            tif: OrderTif::Gtc,
-            trigger: Default::default(),
-            trigger_px: None,
-            group_relation: OrderGroupRelation::Standalone,
-            is_position_tpsl: false,
-            reduce_only: false,
-            status: SpotOrderStatus::Pending,
-            buy_quote_fee_reserve_limit: Decimal::ZERO,
-            buy_quote_fee_reserve_consumed: Decimal::ZERO,
+            order_type: cmd.order_type,
+            relation,
             cloid: cmd.cloid.clone(),
-            created_at: timestamp,
-            updated_at: timestamp,
-            lsn,
-        },
-        cmd.order_type,
-        relation,
-        fee_bps,
-        timestamp,
-        lsn,
-    )?)
+            fee_bps,
+        }),
+    ))
 }
 
 enum NormalOutcomeKind {

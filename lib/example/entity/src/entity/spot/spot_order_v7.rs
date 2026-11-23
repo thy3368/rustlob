@@ -10,10 +10,26 @@ use crate::entity::common::order_primitives::{
     OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus,
 };
 
+/// 创建现货订单所需的业务事实。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateSpotOrderV7Command {
+    pub party_id: u64,
+    pub order_id: u64,
+    pub symbol: crate::account::symbol::Symbol,
+    pub side: OrderSide,
+    pub price: Decimal,
+    pub size: Decimal,
+    pub order_type: OrderType,
+    pub relation: OrderGroupRelation,
+    pub cloid: Option<String>,
+    pub fee_bps: u64,
+}
+
 /// 不含定序元数据的现货订单业务命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV7Command {
-    Activate,
+    Create(CreateSpotOrderV7Command),
+    Freeze,
     MatchedAsTaker {
         filled_size: Decimal,
         quote_fee: Decimal,
@@ -35,12 +51,13 @@ pub enum SpotOrderV7Command {
 impl SpotOrderV7Command {
     const fn event_type(&self) -> u8 {
         match self {
-            SpotOrderV7Command::Activate => 1,
-            SpotOrderV7Command::MatchedAsTaker { .. } => 2,
-            SpotOrderV7Command::MatchedAsMaker { .. } => 3,
-            SpotOrderV7Command::RejectedAsTaker => 4,
-            SpotOrderV7Command::Modify { .. } => 5,
-            SpotOrderV7Command::Cancel => 6,
+            SpotOrderV7Command::Create(_) => 1,
+            SpotOrderV7Command::Freeze => 2,
+            SpotOrderV7Command::MatchedAsTaker { .. } => 3,
+            SpotOrderV7Command::MatchedAsMaker { .. } => 4,
+            SpotOrderV7Command::RejectedAsTaker => 5,
+            SpotOrderV7Command::Modify { .. } => 6,
+            SpotOrderV7Command::Cancel => 7,
         }
     }
 }
@@ -74,7 +91,7 @@ impl SpotOrderV7FreezeRequirement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActivateSpotOrderV7Output {
+pub struct FreezeSpotOrderV7Output {
     pub freeze_requirement: SpotOrderV7FreezeRequirement,
 }
 
@@ -140,7 +157,7 @@ pub struct CancelSpotOrderV7Output {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV7Output {
-    Activated(ActivateSpotOrderV7Output),
+    Frozen(FreezeSpotOrderV7Output),
     MatchedAsTaker(ApplySpotOrderV7MatchOutput),
     MatchedAsMaker(ApplySpotOrderV7MatchOutput),
     RejectedAsTaker(ApplySpotOrderV7MatchOutput),
@@ -158,15 +175,13 @@ pub struct SpotOrderV7 {
 }
 
 impl SpotOrderV7 {
-    pub fn pending(
-        mut order: OrderBase,
-        order_type: OrderType,
-        relation: OrderGroupRelation,
-        fee_bps: u64,
-        timestamp: u64,
-        position: impl Into<common_entity::EventPosition>,
-    ) -> Result<Self, EntityError> {
-        let (execution, tif, trigger, trigger_px) = match order_type {
+    /// 由创建命令建立一个 `Pending` 订单。
+    pub fn create(command: SequencedCommand<SpotOrderV7Command>) -> Result<Self, EntityError> {
+        let (metadata, command) = command.into_parts();
+        let SpotOrderV7Command::Create(command) = command else {
+            return Err(err("spot order creation requires a create command"));
+        };
+        let (execution, tif, trigger, trigger_px) = match command.order_type {
             OrderType::Limit { tif } => (PriceType::Limit, tif, OrderTrigger::None, None),
             OrderType::Trigger {
                 is_market,
@@ -190,21 +205,32 @@ impl SpotOrderV7 {
                 Some(Decimal::from(trigger_price)),
             ),
         };
-        order.execution = execution;
-        order.tif = tif;
-        order.trigger = trigger;
-        order.trigger_px = trigger_px;
-        order.status = SpotOrderStatus::Pending;
-        order.group_relation = relation;
-        order.created_at = timestamp;
-        order.updated_at = timestamp;
-        let position = position.into();
-        order.lsn = position.lsn;
+        let position = metadata.position;
+        let mut order = OrderBase {
+            owner: crate::entity::common::UserId(command.party_id),
+            order_id: command.order_id,
+            symbol: command.symbol,
+            side: command.side,
+            limit_px: command.price,
+            size: command.size,
+            orig_size: command.size,
+            execution,
+            tif,
+            trigger,
+            trigger_px,
+            group_relation: command.relation,
+            status: SpotOrderStatus::Pending,
+            cloid: command.cloid,
+            created_at: metadata.logical_ts,
+            updated_at: metadata.logical_ts,
+            lsn: position.lsn,
+            ..OrderBase::default()
+        };
         order.buy_quote_fee_reserve_limit = if order.side == OrderSide::Buy {
             order
                 .limit_px
                 .checked_mul(order.size)
-                .and_then(|v| v.checked_mul(Decimal::from(fee_bps)))
+                .and_then(|v| v.checked_mul(Decimal::from(command.fee_bps)))
                 .and_then(|v| v.checked_div(Decimal::from(10_000u64)))
                 .map(|v| {
                     v.round_dp_with_strategy(
@@ -355,7 +381,10 @@ impl SpotOrderV7 {
             return Err(err("order is terminal"));
         }
         match command {
-            SpotOrderV7Command::Activate => {
+            SpotOrderV7Command::Create(_) => {
+                return Err(err("create cannot be applied to an existing order"));
+            }
+            SpotOrderV7Command::Freeze => {
                 if self.status() != SpotOrderStatus::Pending {
                     return Err(err("order is not pending"));
                 }
@@ -367,7 +396,7 @@ impl SpotOrderV7 {
                 next.lsn = position.lsn;
                 Ok((
                     next,
-                    SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }),
+                    SpotOrderV7Output::Frozen(FreezeSpotOrderV7Output { freeze_requirement }),
                 ))
             }
             SpotOrderV7Command::MatchedAsTaker {
@@ -796,7 +825,8 @@ fn err(s: &str) -> EntityError {
     EntityError::Custom(s.to_owned())
 }
 fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
-    if !o.has_consistent_execution_facts()
+    if o.order_id == 0
+        || !o.has_consistent_execution_facts()
         || o.orig_size <= Decimal::ZERO
         || o.size < Decimal::ZERO
         || o.size > o.orig_size

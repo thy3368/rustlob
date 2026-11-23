@@ -1,14 +1,19 @@
-use common_entity::Shard;
 use common_entity::fsm_v2::{CommandMetadata, Fsm, SequencedCommand};
+use common_entity::{Entity, Shard, TrackDiff};
 use rust_decimal::Decimal;
 
-use super::{SpotOrderV7, SpotOrderV7Command, SpotOrderV7Output, SpotOrderV7ReleaseRequirement};
+use super::{
+    CreateSpotOrderV7Command, SpotOrderV7, SpotOrderV7Command, SpotOrderV7Output,
+    SpotOrderV7ReleaseRequirement,
+};
 use crate::account::coin::Coin;
 use crate::account::symbol::Symbol;
 use crate::common::PriceType;
 use crate::entity::common::UserId;
 use crate::entity::common::common_order::OrderBase;
-use crate::entity::common::order_primitives::{OrderSide, OrderTif, SpotOrderStatus};
+use crate::entity::common::order_primitives::{
+    OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus,
+};
 
 const TIMESTAMP: u64 = 500;
 
@@ -44,6 +49,150 @@ fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {
         ..OrderBase::default()
     })
     .unwrap()
+}
+
+fn create_command(
+    order_id: u64,
+    side: OrderSide,
+    order_type: OrderType,
+) -> SequencedCommand<SpotOrderV7Command> {
+    SequencedCommand::new(
+        CommandMetadata::new(10, TIMESTAMP, 3, 4, "11".to_owned()),
+        SpotOrderV7Command::Create(CreateSpotOrderV7Command {
+            party_id: 11,
+            order_id,
+            symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+            side,
+            price: Decimal::from(100),
+            size: Decimal::from(2),
+            order_type,
+            relation: OrderGroupRelation::Standalone,
+            cloid: Some("client-1".to_owned()),
+            fee_bps: 25,
+        }),
+    )
+}
+
+#[test]
+fn create_builds_limit_buy_and_trigger_sell_from_command_metadata() {
+    let buy = SpotOrderV7::create(create_command(
+        7,
+        OrderSide::Buy,
+        OrderType::Limit { tif: OrderTif::Alo },
+    ))
+    .unwrap();
+    let base = buy.order_base();
+    assert_eq!(base.owner, UserId(11));
+    assert_eq!(base.status, SpotOrderStatus::Pending);
+    assert_eq!(base.orig_size, Decimal::from(2));
+    assert_eq!(base.tif, OrderTif::Alo);
+    assert_eq!(base.group_relation, OrderGroupRelation::Standalone);
+    assert_eq!(
+        base.buy_quote_fee_reserve_limit,
+        Decimal::from_str_exact("0.5").unwrap()
+    );
+    assert_eq!(base.created_at, TIMESTAMP);
+    assert_eq!(base.updated_at, TIMESTAMP);
+    assert_eq!(
+        buy.event_position(),
+        common_entity::EventPosition::new(10, 0)
+    );
+
+    let trigger = SpotOrderV7::create(create_command(
+        8,
+        OrderSide::Sell,
+        OrderType::Trigger {
+            is_market: true,
+            trigger_price: 90,
+            tpsl: OrderTriggerRole::StopLoss,
+        },
+    ))
+    .unwrap();
+    assert_eq!(trigger.order_base().execution, PriceType::Market);
+    assert_eq!(trigger.order_base().tif, OrderTif::Ioc);
+    assert_eq!(trigger.order_base().trigger_px, Some(Decimal::from(90)));
+    assert_eq!(
+        trigger.order_base().buy_quote_fee_reserve_limit,
+        Decimal::ZERO
+    );
+}
+
+#[test]
+fn create_rejects_invalid_facts_and_non_create_commands() {
+    for mutate in [0_u8, 1, 2] {
+        let command =
+            match create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc })
+                .into_parts()
+            {
+                (metadata, SpotOrderV7Command::Create(mut command)) => {
+                    match mutate {
+                        0 => command.order_id = 0,
+                        1 => command.price = Decimal::ZERO,
+                        _ => command.size = Decimal::ZERO,
+                    }
+                    SequencedCommand::new(metadata, SpotOrderV7Command::Create(command))
+                }
+                _ => unreachable!(),
+            };
+        assert!(SpotOrderV7::create(command).is_err());
+    }
+    assert!(
+        SpotOrderV7::create(create_command(
+            7,
+            OrderSide::Sell,
+            OrderType::Trigger {
+                is_market: false,
+                trigger_price: 0,
+                tpsl: OrderTriggerRole::TakeProfit,
+            },
+        ))
+        .is_err()
+    );
+    let (metadata, command) =
+        create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }).into_parts();
+    let SpotOrderV7Command::Create(mut command) = command else {
+        unreachable!()
+    };
+    command.price = Decimal::MAX;
+    command.size = Decimal::MAX;
+    assert!(
+        SpotOrderV7::create(SequencedCommand::new(
+            metadata,
+            SpotOrderV7Command::Create(command)
+        ))
+        .is_err()
+    );
+    assert!(SpotOrderV7::create(sequenced(SpotOrderV7Command::Freeze)).is_err());
+}
+
+#[test]
+fn create_event_and_freeze_update_have_lifecycle_event_codes() {
+    let created = SpotOrderV7::create(create_command(
+        7,
+        OrderSide::Buy,
+        OrderType::Limit { tif: OrderTif::Gtc },
+    ))
+    .unwrap();
+    let mut create_event = created.track_create_event().unwrap();
+    create_event.domain_event_type = SpotOrderV7Command::Create(CreateSpotOrderV7Command {
+        party_id: 11,
+        order_id: 7,
+        symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
+        side: OrderSide::Buy,
+        price: Decimal::from(100),
+        size: Decimal::from(2),
+        order_type: OrderType::Limit { tif: OrderTif::Gtc },
+        relation: OrderGroupRelation::Standalone,
+        cloid: None,
+        fee_bps: 0,
+    })
+    .event_type();
+    assert_eq!(create_event.domain_event_type, 1);
+
+    let (_, freeze_event, _) = created
+        .transition(sequenced(SpotOrderV7Command::Freeze))
+        .unwrap();
+    assert_eq!(freeze_event.domain_event_type, 2);
 }
 
 #[test]
@@ -144,7 +293,7 @@ fn command_lsn_can_jump_and_be_reused_within_one_command() {
     let (subject, _, _) = subject
         .transition(SequencedCommand::new(
             CommandMetadata::new(20, TIMESTAMP, 0, 1, String::new()),
-            SpotOrderV7Command::Activate,
+            SpotOrderV7Command::Freeze,
         ))
         .unwrap();
     let (subject, _, _) = subject
@@ -244,8 +393,8 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
     let cases = [
         (
             order(OrderSide::Buy, SpotOrderStatus::Pending),
-            SpotOrderV7Command::Activate,
-            1,
+            SpotOrderV7Command::Freeze,
+            2,
         ),
         (
             order(OrderSide::Buy, SpotOrderStatus::Open),
@@ -253,7 +402,7 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
                 filled_size: Decimal::ONE,
                 quote_fee: Decimal::ONE,
             },
-            2,
+            3,
         ),
         (
             order(OrderSide::Sell, SpotOrderStatus::Open),
@@ -261,7 +410,7 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
                 filled_size: Decimal::ONE,
                 quote_fee: Decimal::ZERO,
             },
-            3,
+            4,
         ),
         (
             {
@@ -272,7 +421,7 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
                 SpotOrderV7::from_record(record).unwrap()
             },
             SpotOrderV7Command::RejectedAsTaker,
-            4,
+            5,
         ),
         (
             order(OrderSide::Buy, SpotOrderStatus::Open),
@@ -282,12 +431,12 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
                 tif: Some(OrderTif::Ioc),
                 cloid: Some("next-cloid".to_owned()),
             },
-            5,
+            6,
         ),
         (
             order(OrderSide::Sell, SpotOrderStatus::Open),
             SpotOrderV7Command::Cancel,
-            6,
+            7,
         ),
     ];
 
@@ -351,7 +500,11 @@ fn modify_and_buy_match_replay_all_business_field_changes() {
 
 #[test]
 fn sequenced_failures_are_atomic() {
-    let cases = [
+    let cases = vec![
+        (
+            order(OrderSide::Buy, SpotOrderStatus::Pending),
+            create_command(8, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }),
+        ),
         (
             order(OrderSide::Buy, SpotOrderStatus::Open),
             SequencedCommand::new(

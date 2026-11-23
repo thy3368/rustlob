@@ -4,7 +4,7 @@ use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{EntityError, Shard};
 use example_core_entity::entity::common::common_trade::TradeBase;
 use example_core_entity::spot::spot_order_v7::{
-    ActivateSpotOrderV7Output, ApplySpotOrderV7MatchOutput, CancelSpotOrderV7Output,
+    ApplySpotOrderV7MatchOutput, CancelSpotOrderV7Output, FreezeSpotOrderV7Output,
     ModifySpotOrderV7Output, SpotOrderV7Output,
 };
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3};
@@ -18,7 +18,7 @@ use thiserror::Error;
 use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ActivateSpotOrderV7Error {
+pub enum FreezeSpotOrderV7Error {
     #[error("order id must be greater than zero")]
     InvalidOrderId,
     #[error("command order id does not match loaded order")]
@@ -416,21 +416,21 @@ impl SpotOrderDomainService {
         mut balance: BalanceV2,
         lsn: u64,
         timestamp: u64,
-    ) -> Result<(SpotOrderV7, BalanceV2), ActivateSpotOrderV7Error> {
+    ) -> Result<(SpotOrderV7, BalanceV2), FreezeSpotOrderV7Error> {
         let metadata = command_metadata(lsn, timestamp, &order);
         let (order_after, _, output) = FsmV2::transition(
             &order,
-            SequencedCommand::new(metadata, SpotOrderV7Command::Activate),
+            SequencedCommand::new(metadata, SpotOrderV7Command::Freeze),
         )?;
-        let SpotOrderV7Output::Activated(ActivateSpotOrderV7Output { freeze_requirement }) = output
+        let SpotOrderV7Output::Frozen(FreezeSpotOrderV7Output { freeze_requirement }) = output
         else {
             return Err(
-                EntityError::Custom("activate event produced mismatched output".into()).into(),
+                EntityError::Custom("freeze event produced mismatched output".into()).into(),
             );
         };
 
         if balance.coin_idx() != u64::from(freeze_requirement.currency().index()) {
-            return Err(ActivateSpotOrderV7Error::CoinMismatch);
+            return Err(FreezeSpotOrderV7Error::CoinMismatch);
         }
         balance = transition_balance(
             &balance,
