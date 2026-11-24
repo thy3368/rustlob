@@ -348,4 +348,3 @@ fn match_fee(notional: Decimal, bps: u64, scale: u32) -> Result<Decimal, EntityE
 fn match_error(message: &str) -> EntityError {
     EntityError::Custom(message.to_owned())
 }
-

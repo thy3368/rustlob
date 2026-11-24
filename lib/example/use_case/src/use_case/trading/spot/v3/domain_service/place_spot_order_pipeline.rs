@@ -358,4 +358,3 @@ fn last_position(changes: &impl ReplayableEntityChanges) -> Option<EventPosition
 fn invalid(message: impl Into<String>) -> PlaceSpotOrderPipelineError {
     PlaceSpotOrderPipelineError::InvalidInput(message.into())
 }
-

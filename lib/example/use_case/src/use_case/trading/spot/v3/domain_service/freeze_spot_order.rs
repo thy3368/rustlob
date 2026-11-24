@@ -115,4 +115,3 @@ fn map_balance_error(error: BalanceV2Error) -> EntityError {
         error => EntityError::Custom(format!("failed to freeze balance: {error}")),
     }
 }
-
