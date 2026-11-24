@@ -699,6 +699,168 @@ fn freeze_and_modify_classify_buy_principal_adjustments() {
 }
 
 #[test]
+fn pending_modify_is_rejected_without_mutating_order() {
+    let pending = order(OrderSide::Buy, SpotOrderStatus::Pending);
+    let before = pending.clone();
+
+    assert!(
+        pending
+            .transition(sequenced(SpotOrderV7Command::Modify {
+                price: Decimal::from(110),
+                size: Decimal::ONE,
+                tif: None,
+                cloid: None,
+            }))
+            .is_err()
+    );
+    assert_eq!(pending, before);
+}
+
+#[test]
+fn buy_modify_adjusts_principal_and_fee_from_cumulative_holds() {
+    let mut record = order(OrderSide::Buy, SpotOrderStatus::Open)
+        .order_base()
+        .clone();
+    record.buy_quote_fee_reserve_bps = 50;
+    record.buy_quote_fee_reserve_frozen = Decimal::ONE;
+    let open = SpotOrderV7::from_record(record).unwrap();
+
+    let (increased, _) = open
+        .transition(sequenced(SpotOrderV7Command::Modify {
+            price: Decimal::from(100),
+            size: Decimal::from(3),
+            tif: None,
+            cloid: None,
+        }))
+        .unwrap();
+    assert_eq!(
+        increased.order_base().buy_quote_principal_frozen,
+        Decimal::from(300)
+    );
+    assert_eq!(
+        increased.order_base().buy_quote_fee_reserve_frozen,
+        Decimal::new(15, 1)
+    );
+    assert_eq!(
+        increased.modify_freeze_delta(&open).unwrap().amount(),
+        Decimal::new(1005, 1)
+    );
+
+    let (decreased, _) = increased
+        .transition(sequenced(SpotOrderV7Command::Modify {
+            price: Decimal::from(100),
+            size: Decimal::ONE,
+            tif: None,
+            cloid: None,
+        }))
+        .unwrap();
+    assert_eq!(
+        decreased.order_base().buy_quote_principal_unfrozen,
+        Decimal::from(200)
+    );
+    assert_eq!(
+        decreased.order_base().buy_quote_fee_reserve_unfrozen,
+        Decimal::ONE
+    );
+    assert_eq!(
+        decreased.modify_freeze_delta(&increased).unwrap().amount(),
+        Decimal::new(-201, 0)
+    );
+}
+
+#[test]
+fn partially_filled_modify_does_not_deduct_paid_fee_from_remaining_target() {
+    let mut record = order(OrderSide::Buy, SpotOrderStatus::PartiallyFilled)
+        .order_base()
+        .clone();
+    record.size = Decimal::ONE;
+    record.buy_quote_fee_reserve_bps = 100;
+    record.buy_quote_principal_paid = Decimal::from(100);
+    record.buy_quote_fee_reserve_frozen = Decimal::from(2);
+    record.buy_quote_fee_reserve_paid = Decimal::ONE;
+    let partially_filled = SpotOrderV7::from_record(record).unwrap();
+
+    let (unchanged_hold, _) = partially_filled
+        .transition(sequenced(SpotOrderV7Command::Modify {
+            price: Decimal::from(100),
+            size: Decimal::ONE,
+            tif: None,
+            cloid: None,
+        }))
+        .unwrap();
+    assert_eq!(
+        unchanged_hold.order_base().buy_quote_fee_reserve_unfrozen,
+        Decimal::ZERO
+    );
+    assert_eq!(
+        unchanged_hold
+            .modify_freeze_delta(&partially_filled)
+            .unwrap()
+            .amount(),
+        Decimal::ZERO
+    );
+
+    let (reduced, _) = unchanged_hold
+        .transition(sequenced(SpotOrderV7Command::Modify {
+            price: Decimal::from(100),
+            size: Decimal::new(5, 1),
+            tif: None,
+            cloid: None,
+        }))
+        .unwrap();
+    assert_eq!(
+        reduced.order_base().buy_quote_fee_reserve_unfrozen,
+        Decimal::new(5, 1)
+    );
+    assert_eq!(
+        reduced
+            .modify_freeze_delta(&unchanged_hold)
+            .unwrap()
+            .amount(),
+        Decimal::new(-505, 1)
+    );
+}
+
+#[test]
+fn buy_modify_rounds_fee_target_up_and_is_atomic_on_overflow() {
+    let mut record = order(OrderSide::Buy, SpotOrderStatus::Open)
+        .order_base()
+        .clone();
+    record.limit_px = Decimal::ONE;
+    record.size = Decimal::new(1, 6);
+    record.orig_size = record.size;
+    record.buy_quote_principal_frozen = record.size;
+    record.buy_quote_fee_reserve_bps = 1;
+    record.buy_quote_fee_reserve_frozen = Decimal::ZERO;
+    let precise = SpotOrderV7::from_record(record).unwrap();
+    let (rounded, _) = precise
+        .transition(sequenced(SpotOrderV7Command::Modify {
+            price: Decimal::ONE,
+            size: Decimal::new(1, 6),
+            tif: None,
+            cloid: None,
+        }))
+        .unwrap();
+    assert_eq!(
+        rounded.order_base().buy_quote_fee_reserve_frozen,
+        Decimal::new(1, 6)
+    );
+
+    let before = rounded.clone();
+    assert!(
+        rounded
+            .transition(sequenced(SpotOrderV7Command::Modify {
+                price: Decimal::MAX,
+                size: Decimal::from(2),
+                tif: None,
+                cloid: None,
+            }))
+            .is_err()
+    );
+    assert_eq!(rounded, before);
+}
+
+#[test]
 fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
     let buyer = order(OrderSide::Buy, SpotOrderStatus::Open);
     let (buyer, first_event) = buyer

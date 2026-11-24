@@ -155,7 +155,7 @@ impl UseCase for TriggerScheduledCancelUseCase {
                 before,
                 SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
             )?;
-            let release = after.terminal_release_amount()?;
+            let release = after.terminal_unfreeze_delta(before)?;
             let coin_idx = u64::from(release.currency().index());
             let mut matching = balances_after.iter_mut().filter(|balance| {
                 balance.party_id() == cmd.user_id.0 && balance.coin_idx() == coin_idx

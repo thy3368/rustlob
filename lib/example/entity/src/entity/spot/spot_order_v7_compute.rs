@@ -1,3 +1,4 @@
+use super::spot_order_v7::buy_total_held;
 use crate::SpotOrderV7;
 use crate::account::coin::{CoinAmount, CoinAmountError};
 use crate::common::OrderBase;
@@ -42,20 +43,30 @@ impl SpotOrderV7 {
         if after.symbol != before.symbol || after.side != before.side {
             return Err(SpotAmountConversionError::SymbolMismatch);
         }
-        if matches!(before.status, SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected)
-            || !matches!(after.status, SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected)
-        {
+        if matches!(
+            before.status,
+            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+        ) || !matches!(
+            after.status,
+            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+        ) {
             return Err(SpotAmountConversionError::OrderNotCanceled);
         }
         let amount = match after.side {
-            OrderSide::Buy => after.buy_quote_principal_unfrozen
+            OrderSide::Buy => after
+                .buy_quote_principal_unfrozen
                 .checked_sub(before.buy_quote_principal_unfrozen)
-                .and_then(|v| after.buy_quote_fee_reserve_unfrozen
-                    .checked_sub(before.buy_quote_fee_reserve_unfrozen)
-                    .and_then(|fee| v.checked_add(fee)))
+                .and_then(|v| {
+                    after
+                        .buy_quote_fee_reserve_unfrozen
+                        .checked_sub(before.buy_quote_fee_reserve_unfrozen)
+                        .and_then(|fee| v.checked_add(fee))
+                })
                 .filter(|v| *v >= rust_decimal::Decimal::ZERO)
                 .ok_or(SpotAmountConversionError::InvalidAmount)?,
-            OrderSide::Sell if after.status == SpotOrderStatus::Filled => rust_decimal::Decimal::ZERO,
+            OrderSide::Sell if after.status == SpotOrderStatus::Filled => {
+                rust_decimal::Decimal::ZERO
+            }
             OrderSide::Sell => before.size,
         };
         CoinAmount::new(held_currency(after), amount)
@@ -89,12 +100,7 @@ impl SpotOrderV7 {
             return Err(SpotAmountConversionError::InvalidAmount);
         }
         let held = |order: &crate::entity::common::common_order::OrderBase| match order.side {
-            OrderSide::Buy => order
-                .limit_px
-                .checked_mul(order.size)
-                .and_then(|value| value.checked_add(order.buy_quote_fee_reserve_frozen))
-                .and_then(|value| value.checked_sub(order.buy_quote_fee_reserve_paid))
-                .ok_or(SpotAmountConversionError::ArithmeticOverflow),
+            OrderSide::Buy => buy_total_held(order),
             OrderSide::Sell => Ok(order.size),
         };
         let delta = held(after)?
@@ -271,14 +277,14 @@ mod tests {
         before.status = SpotOrderStatus::Open;
         let before = SpotOrderV7::from_record(before).unwrap();
 
-        for (size, expected) in [
-            (Decimal::from(3), Decimal::from(100)),
-            (Decimal::ONE, Decimal::from(-100)),
-            (Decimal::from(2), Decimal::ZERO),
+        for (principal_frozen, principal_unfrozen, expected) in [
+            (Decimal::from(300), Decimal::ZERO, Decimal::from(100)),
+            (Decimal::from(200), Decimal::from(100), Decimal::from(-100)),
+            (Decimal::from(200), Decimal::ZERO, Decimal::ZERO),
         ] {
             let mut after = before.order_base().clone();
-            after.size = size;
-            after.orig_size = size;
+            after.buy_quote_principal_frozen = principal_frozen;
+            after.buy_quote_principal_unfrozen = principal_unfrozen;
             let after = SpotOrderV7::from_record(after).unwrap();
             let before_snapshot = before.clone();
             let after_snapshot = after.clone();
@@ -334,8 +340,8 @@ mod tests {
         );
 
         let mut overflow = before.order_base().clone();
-        overflow.limit_px = Decimal::MAX;
-        overflow.size = Decimal::from(2);
+        overflow.buy_quote_principal_frozen = Decimal::MAX;
+        overflow.buy_quote_fee_reserve_frozen = Decimal::ONE;
         assert_eq!(
             SpotOrderV7::from_record(overflow)
                 .unwrap()
@@ -343,12 +349,9 @@ mod tests {
             Err(SpotAmountConversionError::ArithmeticOverflow)
         );
 
-        let mut precise_before = before.order_base().clone();
-        precise_before.limit_px = Decimal::ONE;
-        let precise_before = SpotOrderV7::from_record(precise_before).unwrap();
+        let precise_before = before.clone();
         let mut inexact = precise_before.order_base().clone();
-        inexact.size = Decimal::new(20_000_001, 7);
-        inexact.orig_size = inexact.size;
+        inexact.buy_quote_principal_frozen = Decimal::new(2_000_000_001, 7);
         assert_eq!(
             SpotOrderV7::from_record(inexact)
                 .unwrap()

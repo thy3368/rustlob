@@ -175,6 +175,7 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
                 reduce_only: cmd.reduce_only,
                 status: SpotOrderStatus::Pending,
                 buy_quote_fee_reserve_frozen: Decimal::ZERO,
+                buy_quote_fee_reserve_bps: 0,
                 buy_quote_fee_reserve_paid: Decimal::ZERO,
                 buy_quote_principal_frozen: Decimal::ZERO,
                 buy_quote_principal_paid: Decimal::ZERO,

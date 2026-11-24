@@ -34,7 +34,7 @@ pub fn cancel_spot_order(
         SequencedCommand::new(order_metadata, SpotOrderV7Command::Cancel),
     )?;
     let release_requirement = order_after
-        .terminal_release_amount()
+        .terminal_unfreeze_delta(order)
         .map_err(|error| EntityError::Custom(error.to_string()))?;
     order_event.t = topic;
     order_event.p = partition;

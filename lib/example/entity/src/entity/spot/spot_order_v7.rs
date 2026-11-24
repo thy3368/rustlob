@@ -208,12 +208,7 @@ impl SpotOrderV7 {
             );
         }
         let amount = match o.side {
-            OrderSide::Buy => o
-                .limit_px
-                .checked_mul(o.size)
-                .and_then(|v| v.checked_add(o.buy_quote_fee_reserve_frozen))
-                .and_then(|v| v.checked_sub(o.buy_quote_fee_reserve_paid))
-                .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
+            OrderSide::Buy => buy_total_held(o)?,
             OrderSide::Sell => o.size,
         };
         coin_amount(
@@ -333,6 +328,12 @@ impl SpotOrderV7 {
                 tif,
                 cloid,
             } => {
+                if !matches!(
+                    self.status(),
+                    SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
+                ) {
+                    return Err(err("order is not modifiable"));
+                }
                 let mut next =
                     modified_order(&self.order_base, *price, *size, position, timestamp)?;
                 if let Some(tif) = tif {
@@ -723,10 +724,12 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
     {
         return Err(err("invalid order facts"));
     }
-    let principal_accounted = o.buy_quote_principal_paid
+    let principal_accounted = o
+        .buy_quote_principal_paid
         .checked_add(o.buy_quote_principal_unfrozen)
         .ok_or_else(|| err("principal accounting overflow"))?;
-    let fee_accounted = o.buy_quote_fee_reserve_paid
+    let fee_accounted = o
+        .buy_quote_fee_reserve_paid
         .checked_add(o.buy_quote_fee_reserve_unfrozen)
         .ok_or_else(|| err("fee accounting overflow"))?;
     if principal_accounted > o.buy_quote_principal_frozen
@@ -745,8 +748,10 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
     {
         return Err(err("sell order contains buy fund facts"));
     }
-    if matches!(o.status, SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected)
-        && o.side == OrderSide::Buy
+    if matches!(
+        o.status,
+        SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+    ) && o.side == OrderSide::Buy
         && (principal_accounted != o.buy_quote_principal_frozen
             || fee_accounted != o.buy_quote_fee_reserve_frozen)
     {
@@ -777,47 +782,88 @@ fn apply_buy_modify_counters(before: &OrderBase, next: &mut OrderBase) -> Result
     if next.side != OrderSide::Buy {
         return Ok(());
     }
-    let principal_target = next.limit_px.checked_mul(next.size)
+    let principal_target = next
+        .limit_px
+        .checked_mul(next.size)
         .ok_or_else(|| err("principal target overflow"))?;
-    let principal_held = before.buy_quote_principal_frozen
+    let principal_held = before
+        .buy_quote_principal_frozen
         .checked_sub(before.buy_quote_principal_paid)
         .and_then(|v| v.checked_sub(before.buy_quote_principal_unfrozen))
         .filter(|v| *v >= Decimal::ZERO)
         .ok_or_else(|| err("invalid principal classification"))?;
-    adjust_counter(principal_held, principal_target, &mut next.buy_quote_principal_frozen,
-        &mut next.buy_quote_principal_unfrozen, "principal")?;
-    let fee_target = fee_reserve_target(next)?
-        .checked_sub(next.buy_quote_fee_reserve_paid)
-        .filter(|v| *v >= Decimal::ZERO)
-        .ok_or_else(|| err("fee target is below paid fee"))?;
-    let fee_held = before.buy_quote_fee_reserve_frozen
+    adjust_counter(
+        principal_held,
+        principal_target,
+        &mut next.buy_quote_principal_frozen,
+        &mut next.buy_quote_principal_unfrozen,
+        "principal",
+    )?;
+    let fee_target = fee_reserve_target(next)?;
+    let fee_held = before
+        .buy_quote_fee_reserve_frozen
         .checked_sub(before.buy_quote_fee_reserve_paid)
         .and_then(|v| v.checked_sub(before.buy_quote_fee_reserve_unfrozen))
         .filter(|v| *v >= Decimal::ZERO)
         .ok_or_else(|| err("invalid fee classification"))?;
-    adjust_counter(fee_held, fee_target, &mut next.buy_quote_fee_reserve_frozen,
-        &mut next.buy_quote_fee_reserve_unfrozen, "fee")?;
+    adjust_counter(
+        fee_held,
+        fee_target,
+        &mut next.buy_quote_fee_reserve_frozen,
+        &mut next.buy_quote_fee_reserve_unfrozen,
+        "fee",
+    )?;
     Ok(())
 }
 
-fn adjust_counter(current: Decimal, target: Decimal, frozen: &mut Decimal, unfrozen: &mut Decimal,
-    label: &str) -> Result<(), EntityError> {
+fn adjust_counter(
+    current: Decimal,
+    target: Decimal,
+    frozen: &mut Decimal,
+    unfrozen: &mut Decimal,
+    label: &str,
+) -> Result<(), EntityError> {
     if target > current {
-        *frozen = frozen.checked_add(target - current)
+        *frozen = frozen
+            .checked_add(target - current)
             .ok_or_else(|| err(&format!("{label} freeze overflow")))?;
     } else if target < current {
-        *unfrozen = unfrozen.checked_add(current - target)
+        *unfrozen = unfrozen
+            .checked_add(current - target)
             .ok_or_else(|| err(&format!("{label} unfreeze overflow")))?;
     }
     Ok(())
 }
 
 fn fee_reserve_target(order: &OrderBase) -> Result<Decimal, EntityError> {
-    order.limit_px.checked_mul(order.size)
+    order
+        .limit_px
+        .checked_mul(order.size)
         .and_then(|v| v.checked_mul(Decimal::from(order.buy_quote_fee_reserve_bps)))
         .and_then(|v| v.checked_div(Decimal::from(10_000u64)))
-        .map(|v| v.round_dp_with_strategy(order.symbol.quote.scale(), rust_decimal::RoundingStrategy::ToPositiveInfinity))
+        .map(|v| {
+            v.round_dp_with_strategy(
+                order.symbol.quote.scale(),
+                rust_decimal::RoundingStrategy::ToPositiveInfinity,
+            )
+        })
         .ok_or_else(|| err("fee reserve target overflow"))
+}
+
+pub(super) fn buy_total_held(order: &OrderBase) -> Result<Decimal, SpotAmountConversionError> {
+    let principal_held = order
+        .buy_quote_principal_frozen
+        .checked_sub(order.buy_quote_principal_paid)
+        .and_then(|amount| amount.checked_sub(order.buy_quote_principal_unfrozen))
+        .ok_or(SpotAmountConversionError::ArithmeticOverflow)?;
+    let fee_held = order
+        .buy_quote_fee_reserve_frozen
+        .checked_sub(order.buy_quote_fee_reserve_paid)
+        .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_unfrozen))
+        .ok_or(SpotAmountConversionError::ArithmeticOverflow)?;
+    principal_held
+        .checked_add(fee_held)
+        .ok_or(SpotAmountConversionError::ArithmeticOverflow)
 }
 
 fn settle_terminal_unfreeze(next: &mut OrderBase) -> Result<(), EntityError> {
@@ -838,7 +884,8 @@ fn settle_terminal_unfreeze(next: &mut OrderBase) -> Result<(), EntityError> {
         .checked_add(principal_release)
         .ok_or_else(|| err("principal unfreeze overflow"))?;
 
-    let fee_accounted = next.buy_quote_fee_reserve_paid
+    let fee_accounted = next
+        .buy_quote_fee_reserve_paid
         .checked_add(next.buy_quote_fee_reserve_unfrozen)
         .ok_or_else(|| err("fee accounting overflow"))?;
     let fee_unfreeze = next
@@ -846,7 +893,8 @@ fn settle_terminal_unfreeze(next: &mut OrderBase) -> Result<(), EntityError> {
         .checked_sub(fee_accounted)
         .filter(|amount| *amount >= Decimal::ZERO)
         .ok_or_else(|| err("fee classification exceeds reserve"))?;
-    next.buy_quote_fee_reserve_unfrozen = next.buy_quote_fee_reserve_unfrozen
+    next.buy_quote_fee_reserve_unfrozen = next
+        .buy_quote_fee_reserve_unfrozen
         .checked_add(fee_unfreeze)
         .ok_or_else(|| err("fee unfreeze overflow"))?;
     validate_terminal_buy_conservation(next)

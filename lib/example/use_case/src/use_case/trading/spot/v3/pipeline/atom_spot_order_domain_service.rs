@@ -179,7 +179,7 @@ impl SpotOrderDomainService {
                 SequencedCommand::new(metadata, SpotOrderV7Command::RejectedAsTaker),
             )?;
             let release_requirement = order_after
-                .terminal_release_amount()
+                .terminal_unfreeze_delta(&taker)
                 .map_err(|error| match_error(&error.to_string()))?;
             return Ok(MatchSpotOrderV3Outcome::Rejected {
                 rejected_taker_order_after: order_after,
@@ -300,7 +300,7 @@ impl SpotOrderDomainService {
         match taker_order_after.status() {
             SpotOrderStatus::Filled => {
                 let release_requirement = taker_order_after
-                    .terminal_release_amount()
+                    .terminal_unfreeze_delta(&taker)
                     .map_err(|error| match_error(&error.to_string()))?;
                 Ok(MatchSpotOrderV3Outcome::Filled {
                     filled_taker_order_after: taker_order_after,
@@ -311,7 +311,7 @@ impl SpotOrderDomainService {
             }
             SpotOrderStatus::Canceled => {
                 let release_requirement = taker_order_after
-                    .terminal_release_amount()
+                    .terminal_unfreeze_delta(&taker)
                     .map_err(|error| match_error(&error.to_string()))?;
                 Ok(MatchSpotOrderV3Outcome::CanceledAfterPartialFill {
                     canceled_taker_order_after: taker_order_after,
@@ -322,7 +322,7 @@ impl SpotOrderDomainService {
             }
             SpotOrderStatus::Rejected => {
                 let release_requirement = taker_order_after
-                    .terminal_release_amount()
+                    .terminal_unfreeze_delta(&taker)
                     .map_err(|error| match_error(&error.to_string()))?;
                 Ok(MatchSpotOrderV3Outcome::Rejected {
                     rejected_taker_order_after: taker_order_after,
@@ -438,7 +438,7 @@ impl SpotOrderDomainService {
             SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
         )?;
         let release_requirement = order_after
-            .terminal_release_amount()
+            .terminal_unfreeze_delta(&order)
             .map_err(|error| EntityError::Custom(error.to_string()))?;
 
         if balance.coin_idx() != u64::from(release_requirement.currency().index()) {

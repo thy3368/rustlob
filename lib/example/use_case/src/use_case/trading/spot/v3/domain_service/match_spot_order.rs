@@ -91,12 +91,12 @@ struct PlannedFill {
 
 /// 从只读订单快照生成一次现货撮合的实体变化与可重放事件。
 pub fn match_spot_order(
-    taker: &SpotOrderV7,
+    taker_before: &SpotOrderV7,
     makers: &[SpotOrderV7],
     input: MatchSpotOrderInput,
 ) -> Result<MatchSpotOrderChanges, EntityError> {
-    validate_orders(taker, makers)?;
-    let taker_facts = taker.order_base();
+    validate_orders(taker_before, makers)?;
+    let taker_facts = taker_before.order_base();
     let crosses = |maker: &SpotOrderV7| match taker_facts.side {
         OrderSide::Buy => taker_facts.limit_px >= maker.order_base().limit_px,
         OrderSide::Sell => taker_facts.limit_px <= maker.order_base().limit_px,
@@ -104,14 +104,14 @@ pub fn match_spot_order(
 
     if taker_facts.effective_tif() == OrderTif::Alo && makers.iter().any(crosses) {
         let taker = transition_order(
-            taker,
+            taker_before,
             SpotOrderV7Command::RejectedAsTaker,
             EventPosition::new(input.lsn, 0),
             input,
         )?;
         taker
             .after()
-            .terminal_release_amount()
+            .terminal_unfreeze_delta(taker_before)
             .map_err(|error| EntityError::Custom(error.to_string()))?;
         return Ok(MatchSpotOrderChanges::Rejected { taker });
     }
@@ -176,7 +176,7 @@ pub fn match_spot_order(
     }
 
     let taker = transition_order(
-        taker,
+        taker_before,
         SpotOrderV7Command::MatchedAsTaker {
             filled_size,
             quote_notional: quote_notional_total,
@@ -232,7 +232,7 @@ pub fn match_spot_order(
         SpotOrderStatus::Filled => {
             taker
                 .after()
-                .terminal_release_amount()
+                .terminal_unfreeze_delta(taker_before)
                 .map_err(|error| EntityError::Custom(error.to_string()))?;
             Ok(MatchSpotOrderChanges::Filled {
                 taker,
@@ -243,7 +243,7 @@ pub fn match_spot_order(
         SpotOrderStatus::Canceled => {
             taker
                 .after()
-                .terminal_release_amount()
+                .terminal_unfreeze_delta(taker_before)
                 .map_err(|error| EntityError::Custom(error.to_string()))?;
             Ok(MatchSpotOrderChanges::CanceledAfterPartialFill {
                 taker,
@@ -254,7 +254,7 @@ pub fn match_spot_order(
         SpotOrderStatus::Rejected => {
             taker
                 .after()
-                .terminal_release_amount()
+                .terminal_unfreeze_delta(taker_before)
                 .map_err(|error| EntityError::Custom(error.to_string()))?;
             Ok(MatchSpotOrderChanges::Rejected { taker })
         }
@@ -484,14 +484,14 @@ mod tests {
 
         // Then: 业务事实和成交价格采用 maker 价格。
         let MatchSpotOrderChanges::Filled {
-            taker,
+            taker: taker_changes,
             makers,
             trades,
         } = &changes
         else {
             panic!("taker 应完全成交")
         };
-        assert_eq!(taker.after().status(), SpotOrderStatus::Filled);
+        assert_eq!(taker_changes.after().status(), SpotOrderStatus::Filled);
         assert_eq!(makers.len(), 2);
         assert_eq!(trades.len(), 2);
         assert_eq!(trades[0].after().comon_trade.maker_order_id, 2);
@@ -501,9 +501,9 @@ mod tests {
         assert_eq!(trades[0].after().comon_trade.price, Decimal::from(100));
         assert_eq!(trades[1].after().comon_trade.price, Decimal::from(101));
         assert_eq!(
-            taker
+            taker_changes
                 .after()
-                .terminal_release_amount()
+                .terminal_unfreeze_delta(&taker)
                 .expect("终态释放金额应可派生")
                 .amount(),
             Decimal::new(37_698, 3)
@@ -552,14 +552,17 @@ mod tests {
         let changes = match_spot_order(&taker, &makers, input()).expect("ALO 应业务拒绝");
 
         // Then: taker 进入 Rejected，释放全部冻结且只有 index 0 事件。
-        let MatchSpotOrderChanges::Rejected { taker } = &changes else {
+        let MatchSpotOrderChanges::Rejected {
+            taker: taker_changes,
+        } = &changes
+        else {
             panic!("ALO 应返回拒绝")
         };
-        assert_eq!(taker.after().status(), SpotOrderStatus::Rejected);
+        assert_eq!(taker_changes.after().status(), SpotOrderStatus::Rejected);
         assert_eq!(
-            taker
+            taker_changes
                 .after()
-                .terminal_release_amount()
+                .terminal_unfreeze_delta(&taker)
                 .expect("拒绝终态释放金额应可派生")
                 .amount(),
             Decimal::from(110)
@@ -600,13 +603,13 @@ mod tests {
             panic!("空簿 IOC 应返回拒绝")
         };
         assert_eq!(taker.after().status(), SpotOrderStatus::Rejected);
-        assert!(taker.after().terminal_release_amount().is_ok());
+        assert!(taker.after().terminal_unfreeze_delta(&no_fill).is_ok());
         let MatchSpotOrderChanges::CanceledAfterPartialFill { taker, trades, .. } = canceled else {
             panic!("部分成交 IOC 应取消")
         };
         assert_eq!(taker.after().status(), SpotOrderStatus::Canceled);
         assert_eq!(taker.after().order_base().size, Decimal::ONE);
-        assert!(taker.after().terminal_release_amount().is_ok());
+        assert!(taker.after().terminal_unfreeze_delta(&partial).is_ok());
         assert_eq!(trades.len(), 1);
     }
 
@@ -792,6 +795,7 @@ mod tests {
             Decimal::ONE,
             OrderTif::Gtc,
         )];
+        let taker_before = taker.clone();
         let new_input = input();
 
         // When: 新旧实现处理相同订单和费用参数。
@@ -811,7 +815,7 @@ mod tests {
 
         // Then: 忽略事件包装后，订单、成交和释放金额一致。
         let MatchSpotOrderChanges::Filled {
-            taker,
+            taker: taker_changes,
             makers,
             trades,
         } = new
@@ -828,7 +832,7 @@ mod tests {
             panic!("旧服务应完全成交")
         };
         assert_eq!(
-            taker.after().order_base(),
+            taker_changes.after().order_base(),
             filled_taker_order_after.order_base()
         );
         assert_eq!(
@@ -851,9 +855,9 @@ mod tests {
         assert_eq!(new_trade.created_at, old_trade.created_at);
         assert_eq!(new_trade.updated_at, old_trade.updated_at);
         assert_eq!(
-            taker
+            taker_changes
                 .after()
-                .terminal_release_amount()
+                .terminal_unfreeze_delta(&taker_before)
                 .expect("终态释放金额应可派生"),
             release_requirement
         );
