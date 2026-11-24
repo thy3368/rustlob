@@ -101,16 +101,24 @@ pub trait Fsm: TrackDiff + Sized {
     ///
     /// 实现不得修改当前实体、发布事件或产生外部副作用。
     #[doc(hidden)]
-    fn derive_transition(&mut self, metadata: CommandMetadata, command: Self::Command);
+    fn derive_transition(&mut self, command: SequencedCommand<Self::Command>);
 
     /// 返回 command 对应的稳定、非零业务事件码。
     fn event_type(command: &Self::Command) -> u8;
+
+    /// 先纯计算 after entity，再完成 replay 投影；全部成功后才原子替换原实体。
+    fn verify(&self, command: SequencedCommand<Self::Command>) -> Result<(), Self::Error> {
+        ///主要问题，可能不原子， error报错，但self已经改了,先检查，再转移
+        todo!()
+    }
 
     /// 先纯计算 after entity，再完成 replay 投影；全部成功后才原子替换原实体。
     fn transition(
         &mut self,
         command: SequencedCommand<Self::Command>,
     ) -> Result<ReplayableDomainEvent, Self::Error> {
+        self.verify(command);
+        self.derive_transition(command.metadata, command.event);
         ///主要问题，可能不原子， error报错，但self已经改了,先检查，再转移
         todo!()
     }
