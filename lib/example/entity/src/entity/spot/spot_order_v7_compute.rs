@@ -154,12 +154,16 @@ mod tests {
     }
 
     fn assert_terminal_query_preserves_order(
-        order: &SpotOrderV7,
+        after: &SpotOrderV7,
+        before: &SpotOrderV7,
         expected: Result<CoinAmount, SpotAmountConversionError>,
     ) {
-        let before = order.clone();
-        assert_eq!(order.terminal_release_amount(), expected);
-        assert_eq!(order, &before);
+        let before_snapshot = before.clone();
+        let after_snapshot = after.clone();
+
+        assert_eq!(after.terminal_unfreeze_delta(before), expected);
+        assert_eq!(before, &before_snapshot);
+        assert_eq!(after, &after_snapshot);
     }
 
     #[test]
@@ -220,53 +224,63 @@ mod tests {
 
     #[test]
     fn terminal_release_reads_buy_sell_and_reject_facts_without_mutation() {
-        let mut buy = order(OrderSide::Buy).order_base().clone();
-        buy.status = SpotOrderStatus::Canceled;
-        buy.buy_quote_principal_unfrozen = Decimal::from(40);
-        buy.buy_quote_fee_reserve_unfrozen = Decimal::from(2);
-        let buy = SpotOrderV7::from_record(buy).unwrap();
+        let buy_before = order(OrderSide::Buy);
+        let mut buy_after = buy_before.order_base().clone();
+        buy_after.status = SpotOrderStatus::Canceled;
+        buy_after.buy_quote_principal_unfrozen = Decimal::from(40);
+        buy_after.buy_quote_fee_reserve_unfrozen = Decimal::from(2);
+        let buy_after = SpotOrderV7::from_record(buy_after).unwrap();
         assert_terminal_query_preserves_order(
-            &buy,
+            &buy_after,
+            &buy_before,
             Ok(CoinAmount::new(Coin::USDT, Decimal::from(42)).unwrap()),
         );
 
-        let mut sell = order(OrderSide::Sell).order_base().clone();
-        sell.status = SpotOrderStatus::Filled;
-        sell.size = Decimal::ZERO;
-        let sell = SpotOrderV7::from_record(sell).unwrap();
+        let sell_before = order(OrderSide::Sell);
+        let mut sell_after = sell_before.order_base().clone();
+        sell_after.status = SpotOrderStatus::Filled;
+        sell_after.size = Decimal::ZERO;
+        let sell_after = SpotOrderV7::from_record(sell_after).unwrap();
         assert_terminal_query_preserves_order(
-            &sell,
+            &sell_after,
+            &sell_before,
             Ok(CoinAmount::new(Coin::BTC, Decimal::ZERO).unwrap()),
         );
 
-        let mut rejected = order(OrderSide::Sell).order_base().clone();
-        rejected.status = SpotOrderStatus::Rejected;
-        rejected.size = Decimal::ZERO;
-        let rejected = SpotOrderV7::from_record(rejected).unwrap();
+        let rejected_before = order(OrderSide::Sell);
+        let mut rejected_after = rejected_before.order_base().clone();
+        rejected_after.status = SpotOrderStatus::Rejected;
+        rejected_after.size = Decimal::ZERO;
+        let rejected_after = SpotOrderV7::from_record(rejected_after).unwrap();
         assert_terminal_query_preserves_order(
-            &rejected,
+            &rejected_after,
+            &rejected_before,
             Ok(CoinAmount::new(Coin::BTC, Decimal::from(2)).unwrap()),
         );
     }
 
     #[test]
     fn terminal_release_rejects_non_terminal_order() {
+        let order = order(OrderSide::Buy);
         assert_terminal_query_preserves_order(
-            &order(OrderSide::Buy),
+            &order,
+            &order,
             Err(SpotAmountConversionError::OrderNotCanceled),
         );
     }
 
     #[test]
     fn terminal_release_reports_buy_addition_overflow_without_mutation() {
-        let mut record = order(OrderSide::Buy).order_base().clone();
+        let before = order(OrderSide::Buy);
+        let mut record = before.order_base().clone();
         record.status = SpotOrderStatus::Canceled;
         record.buy_quote_principal_unfrozen = Decimal::MAX;
         record.buy_quote_fee_reserve_unfrozen = Decimal::ONE;
-        let order = SpotOrderV7::from_record(record).unwrap();
+        let after = SpotOrderV7::from_record(record).unwrap();
 
         assert_terminal_query_preserves_order(
-            &order,
+            &after,
+            &before,
             Err(SpotAmountConversionError::ArithmeticOverflow),
         );
     }
