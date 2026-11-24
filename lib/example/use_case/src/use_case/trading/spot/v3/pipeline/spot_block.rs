@@ -669,6 +669,18 @@ mod tests {
         let maker = common_entity::stable_string_entity_id("maker");
         let taker = common_entity::stable_string_entity_id("taker");
         let symbol = Symbol::new(1, Coin::BTC, Coin::USDT);
+        let entry = |user: &str, lsn, payload| {
+            LogEntrySequencer::from_metadata_with_topic(
+                4,
+                2,
+                lsn,
+                lsn + 100,
+                9,
+                lsn,
+                user.to_owned(),
+                payload,
+            )
+        };
         let place_order = |party_id, order_id, side, size, cloid: &str| {
             SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::Single(PlaceSpotOrderV3OrderCmd {
                 party_id,
@@ -683,8 +695,16 @@ mod tests {
         };
         let command = SpotBlockCmd {
             items: vec![
-                item(10, place_order(maker, 7, OrderSide::Buy, 1, "maker-buy")),
-                item(11, place_order(taker, 8, OrderSide::Sell, 2, "taker-sell")),
+                entry(
+                    "maker",
+                    10,
+                    place_order(maker, 7, OrderSide::Buy, 1, "maker-buy"),
+                ),
+                entry(
+                    "taker",
+                    11,
+                    place_order(taker, 8, OrderSide::Sell, 2, "taker-sell"),
+                ),
             ],
         };
         let given = SpotBlockState {
@@ -707,16 +727,20 @@ mod tests {
 
         // Then: pipeline 保留部分成交分支、maker 终态及其解冻业务事实。
         let SpotBlockItemResult::Applied {
-            changes: SpotBlockAppliedChanges::Place(PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
-                matched,
-                settled,
-                unfrozen,
-                ..
-            }),
+            changes:
+                SpotBlockAppliedChanges::Place(PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
+                    matched,
+                    settled,
+                    unfrozen,
+                    ..
+                }),
             ..
         } = &changes.item_results[1]
         else {
-            panic!("expected partially-filled pipeline: {:?}", changes.item_results[1]);
+            panic!(
+                "expected partially-filled pipeline: {:?}",
+                changes.item_results[1]
+            );
         };
         let MatchSpotOrderPipeChanges::PartiallyFilled { taker, makers, .. } = matched else {
             panic!("expected partially-filled match");
@@ -736,11 +760,96 @@ mod tests {
         let unfreeze_event = unfrozen.replayable_events()[0];
         assert_eq!(unfreeze_event.command_index, settled_last + 1);
 
-        // And: spot_block 的内存投影也消费该解冻结果，后续取消不得再次释放 maker 余额。
+        // And: 事件元数据保持连续，spot_block 内存状态也消费该解冻结果。
         assert!(changes.replayable_events().windows(2).all(|events| {
             (events[0].lsn, events[0].command_index) < (events[1].lsn, events[1].command_index)
         }));
         assert_eq!(unfreeze_event.lsn, 11);
+        let mut projected = WorkingState::try_from(given).expect("given state must be valid");
+        for entry in command.items {
+            projected.apply(entry).expect("block item must project");
+        }
+        assert_eq!(
+            projected
+                .balance_for(maker, u64::from(Coin::USDT.index()))
+                .expect("maker quote balance must remain indexed")
+                .frozen(),
+            Decimal::ZERO
+        );
+    }
+
+    #[test]
+    fn partially_filled_taker_emits_no_unfreeze_when_filled_maker_has_no_reserve_left() {
+        // Rule: Filled maker 的冻结资金已被结算完全消耗时，不得生成零金额解冻事件。
+        // Given: 较小卖方 maker 冻结的 base 数量恰好全部成交。
+        let maker = common_entity::stable_string_entity_id("maker");
+        let taker = common_entity::stable_string_entity_id("taker");
+        let symbol = Symbol::new(1, Coin::BTC, Coin::USDT);
+        let entry = |user: &str, lsn, party_id, order_id, side, size, cloid: &str| {
+            LogEntrySequencer::from_metadata_with_topic(
+                4,
+                2,
+                lsn,
+                lsn + 100,
+                9,
+                lsn,
+                user.to_owned(),
+                SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::Single(PlaceSpotOrderV3OrderCmd {
+                    party_id,
+                    order_id,
+                    symbol,
+                    side,
+                    price: Decimal::from(10),
+                    size: Decimal::from(size),
+                    order_type: OrderType::Limit { tif: OrderTif::Gtc },
+                    cloid: Some(cloid.to_owned()),
+                })),
+            )
+        };
+        let items = vec![
+            entry("maker", 10, maker, 7, OrderSide::Sell, 1, "maker-sell"),
+            entry("taker", 11, taker, 8, OrderSide::Buy, 2, "taker-buy"),
+        ];
+        let mut projected = WorkingState::try_from(SpotBlockState {
+            orders: Vec::new(),
+            balances: vec![
+                BalanceV2::new(maker, maker, u64::from(Coin::BTC.index()), 1, 0, 1, 1),
+                BalanceV2::new(maker, maker, u64::from(Coin::USDT.index()), 0, 0, 1, 1),
+                BalanceV2::new(taker, taker, u64::from(Coin::BTC.index()), 0, 0, 1, 1),
+                BalanceV2::new(taker, taker, u64::from(Coin::USDT.index()), 100, 0, 1, 1),
+            ],
+            trade_id_start: 1,
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
+        })
+        .expect("given state must be valid");
+
+        // When: maker 挂单后被更大的 taker 完全吃掉。
+        projected.apply(items[0].clone()).expect("maker must rest");
+        let second = projected.apply(items[1].clone()).expect("taker must match");
+
+        // Then: 分支仍为 taker PartiallyFilled，但 maker 无剩余冻结额可解冻。
+        let SpotBlockAppliedChanges::Place(PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
+            matched,
+            unfrozen,
+            ..
+        }) = second
+        else {
+            panic!("expected partially-filled pipeline");
+        };
+        let MatchSpotOrderPipeChanges::PartiallyFilled { makers, .. } = matched else {
+            panic!("expected partially-filled match");
+        };
+        assert_eq!(makers[0].after().status(), SpotOrderStatus::Filled);
+        assert!(unfrozen.updated_balances.is_empty());
+        assert!(unfrozen.replayable_events().is_empty());
+        assert_eq!(
+            projected
+                .balance_for(maker, u64::from(Coin::BTC.index()))
+                .expect("maker base balance must remain indexed")
+                .frozen(),
+            Decimal::ZERO
+        );
     }
 
     #[test]
