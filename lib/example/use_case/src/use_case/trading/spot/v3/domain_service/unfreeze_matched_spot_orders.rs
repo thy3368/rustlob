@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-use common_entity::{Entity, UpdatedEntityEvents};
+use common_entity::{Entity, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderStatus, SpotOrderV7};
 use rust_decimal::Decimal;
 
@@ -18,6 +18,21 @@ pub enum SpotOrderHeldBalance {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnfreezeMatchedSpotOrdersError(pub String);
 
+/// 撮合终态订单解冻阶段产生的余额变化。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnfreezeMatchedSpotOrdersPipeChanges {
+    pub updated_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
+}
+
+impl ReplayableEntityChanges for UnfreezeMatchedSpotOrdersPipeChanges {
+    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
+        self.updated_balances
+            .iter()
+            .flat_map(ReplayableEntityChanges::replayable_events)
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone)]
 struct AggregatedRelease {
     balance: BalanceV2,
@@ -33,33 +48,6 @@ struct MatchEventMetadata {
     partition: u8,
 }
 
-/// 从撮合订单终态事实聚合释放额，并为每个余额生成至多一个事件。
-///
-/// 所有订单、余额和金额在余额 FSM 执行前完成校验，错误时不会返回部分结果。
-pub fn unfreeze_matched_spot_orders(
-    taker_before: &SpotOrderV7,
-    makers_before: &[SpotOrderV7],
-    matched: &MatchSpotOrderPipeChanges,
-    balances_by_order_id: &HashMap<u64, SpotOrderHeldBalance>,
-) -> Result<Vec<UpdatedEntityEvents<BalanceV2>>, UnfreezeMatchedSpotOrdersError> {
-    let changes = changed_orders(matched);
-    if changes.is_empty() {
-        return Ok(Vec::new());
-    }
-    let metadata = validate_match_event_metadata(&changes)?;
-    unfreeze_matched_spot_orders_at(
-        taker_before,
-        makers_before,
-        matched,
-        balances_by_order_id,
-        metadata.lsn,
-        metadata.last_command_index,
-        metadata.logical_ts,
-        metadata.topic,
-        metadata.partition,
-    )
-}
-
 /// 使用显式定序元数据释放终态订单仍持有的冻结资金。
 pub fn unfreeze_matched_spot_orders_at(
     taker_before: &SpotOrderV7,
@@ -71,10 +59,12 @@ pub fn unfreeze_matched_spot_orders_at(
     logical_ts: u64,
     topic: u8,
     partition: u8,
-) -> Result<Vec<UpdatedEntityEvents<BalanceV2>>, UnfreezeMatchedSpotOrdersError> {
+) -> Result<UnfreezeMatchedSpotOrdersPipeChanges, UnfreezeMatchedSpotOrdersError> {
     let changes = changed_orders(matched);
     if changes.is_empty() {
-        return Ok(Vec::new());
+        return Ok(UnfreezeMatchedSpotOrdersPipeChanges {
+            updated_balances: Vec::new(),
+        });
     }
     let matched_metadata = validate_match_event_metadata(&changes)?;
     if (previous_lsn, previous_command_index)
@@ -157,7 +147,9 @@ pub fn unfreeze_matched_spot_orders_at(
             )));
         }
     }
-    transition_balances(releases, metadata)
+    Ok(UnfreezeMatchedSpotOrdersPipeChanges {
+        updated_balances: transition_balances(releases, metadata)?,
+    })
 }
 
 fn changed_orders(matched: &MatchSpotOrderPipeChanges) -> Vec<&UpdatedEntityEvents<SpotOrderV7>> {
@@ -315,4 +307,71 @@ fn transition_balances(
 
 fn error(message: impl Into<String>) -> UnfreezeMatchedSpotOrdersError {
     UnfreezeMatchedSpotOrdersError(message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+    use common_entity::{Entity, ReplayableEntityChanges, UpdatedEntityEvents};
+    use example_core_entity::{BalanceV2, BalanceV2Command};
+    use rust_decimal::Decimal;
+
+    use super::UnfreezeMatchedSpotOrdersPipeChanges;
+
+    fn updated_balance(
+        party_id: u64,
+        coin_idx: u64,
+        command_index: u32,
+    ) -> UpdatedEntityEvents<BalanceV2> {
+        let before = BalanceV2::new(party_id, party_id, coin_idx, 10, 2, 1, 1);
+        let command = SequencedCommand::new(
+            CommandMetadata::new_at(2, command_index, 3, 4, 5, party_id.to_string()),
+            BalanceV2Command::UnfreezeAndPay {
+                unfreeze_amount: Decimal::ONE,
+                payment_amount: Decimal::ZERO,
+            },
+        );
+        let (after, event) = FsmV2::transition(&before, command).expect("余额解冻应成功");
+        UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index(), vec![event])
+            .expect("余额事件链应有效")
+    }
+
+    #[test]
+    fn no_unfreeze_changes_project_no_events() {
+        // Rule: 无需释放冻结资金时，阶段结果和事件投影都必须为空。
+        // Given: 解冻阶段没有产生余额变化。
+        let changes = UnfreezeMatchedSpotOrdersPipeChanges {
+            updated_balances: Vec::new(),
+        };
+
+        // When: 投影阶段事件。
+        let events = changes.replayable_events();
+
+        // Then: 业务变化和投影事件均为空。
+        assert!(changes.updated_balances.is_empty());
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn multiple_unfreeze_changes_preserve_balance_and_event_order() {
+        // Rule: 解冻事件必须按 updated_balances 的业务顺序稳定投影。
+        // Given: 两个余额依次完成解冻。
+        let first = updated_balance(10, 1, 7);
+        let second = updated_balance(20, 2, 8);
+        let expected_entity_ids = [first.after().entity_id(), second.after().entity_id()];
+        let changes = UnfreezeMatchedSpotOrdersPipeChanges {
+            updated_balances: vec![first, second],
+        };
+
+        // When: 投影阶段事件。
+        let events = changes.replayable_events();
+
+        // Then: 先保留完整余额变化，再以相同顺序展平底层事件。
+        assert_eq!(changes.updated_balances.len(), 2);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].entity_id, expected_entity_ids[0]);
+        assert_eq!(events[0].command_index, 7);
+        assert_eq!(events[1].entity_id, expected_entity_ids[1]);
+        assert_eq!(events[1].command_index, 8);
+    }
 }

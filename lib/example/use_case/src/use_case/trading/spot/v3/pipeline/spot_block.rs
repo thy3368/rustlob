@@ -575,15 +575,11 @@ fn unfrozen_changes(
     changes: &PlaceSpotOrderPipelineV2Changes,
 ) -> &[common_entity::UpdatedEntityEvents<BalanceV2>] {
     match changes {
-        PlaceSpotOrderPipelineV2Changes::Rejected {
-            unfrozen_balances, ..
+        PlaceSpotOrderPipelineV2Changes::Rejected { unfrozen, .. }
+        | PlaceSpotOrderPipelineV2Changes::Filled { unfrozen, .. }
+        | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill { unfrozen, .. } => {
+            &unfrozen.updated_balances
         }
-        | PlaceSpotOrderPipelineV2Changes::Filled {
-            unfrozen_balances, ..
-        }
-        | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill {
-            unfrozen_balances, ..
-        } => unfrozen_balances,
         PlaceSpotOrderPipelineV2Changes::Resting { .. }
         | PlaceSpotOrderPipelineV2Changes::PartiallyFilled { .. } => &[],
     }

@@ -12,7 +12,7 @@ pub use domain_service::settle_matched_spot_trades::{
     SpotOrderSettlementBalances, settle_matched_spot_trades, settle_matched_spot_trades_from,
 };
 pub use domain_service::unfreeze_matched_spot_orders::{
-    SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, unfreeze_matched_spot_orders,
+    SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, UnfreezeMatchedSpotOrdersPipeChanges,
     unfreeze_matched_spot_orders_at,
 };
 

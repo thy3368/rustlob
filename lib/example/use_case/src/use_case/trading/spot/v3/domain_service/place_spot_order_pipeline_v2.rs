@@ -1,9 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use common_entity::{
-    Entity, EntityError, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
-};
+use common_entity::{Entity, EntityError, ReplayableDomainEvent, ReplayableEntityChanges};
 use example_core_entity::{
     BalanceV2, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
 };
@@ -18,7 +16,8 @@ use super::settle_matched_spot_trades::{
     SpotOrderSettlementBalances, settle_matched_spot_trades_from,
 };
 use super::unfreeze_matched_spot_orders::{
-    SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, unfreeze_matched_spot_orders_at,
+    SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, UnfreezeMatchedSpotOrdersPipeChanges,
+    unfreeze_matched_spot_orders_at,
 };
 
 /// 独立现货下单 pipeline 的分支化业务事实。
@@ -32,7 +31,7 @@ pub enum PlaceSpotOrderPipelineV2Changes {
         created_order: PlaceSpotOrderPipeChanges,
         frozen: FreezeSpotOrderPipeChanges,
         matched: MatchSpotOrderPipeChanges,
-        unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
+        unfrozen: UnfreezeMatchedSpotOrdersPipeChanges,
     },
     PartiallyFilled {
         created_order: PlaceSpotOrderPipeChanges,
@@ -45,14 +44,14 @@ pub enum PlaceSpotOrderPipelineV2Changes {
         frozen: FreezeSpotOrderPipeChanges,
         matched: MatchSpotOrderPipeChanges,
         settled: SettleTradesPipeChanges,
-        unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
+        unfrozen: UnfreezeMatchedSpotOrdersPipeChanges,
     },
     CanceledAfterPartialFill {
         created_order: PlaceSpotOrderPipeChanges,
         frozen: FreezeSpotOrderPipeChanges,
         matched: MatchSpotOrderPipeChanges,
         settled: SettleTradesPipeChanges,
-        unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
+        unfrozen: UnfreezeMatchedSpotOrdersPipeChanges,
     },
 }
 
@@ -67,14 +66,8 @@ impl ReplayableEntityChanges for PlaceSpotOrderPipelineV2Changes {
                 created_order,
                 frozen,
                 matched,
-                unfrozen_balances,
-            } => (
-                created_order,
-                frozen,
-                Some(matched),
-                None,
-                Some(unfrozen_balances),
-            ),
+                unfrozen,
+            } => (created_order, frozen, Some(matched), None, Some(unfrozen)),
             Self::PartiallyFilled {
                 created_order,
                 frozen,
@@ -86,20 +79,20 @@ impl ReplayableEntityChanges for PlaceSpotOrderPipelineV2Changes {
                 frozen,
                 matched,
                 settled,
-                unfrozen_balances,
+                unfrozen,
             }
             | Self::CanceledAfterPartialFill {
                 created_order,
                 frozen,
                 matched,
                 settled,
-                unfrozen_balances,
+                unfrozen,
             } => (
                 created_order,
                 frozen,
                 Some(matched),
                 Some(settled),
-                Some(unfrozen_balances),
+                Some(unfrozen),
             ),
         };
         let mut events = Vec::new();
@@ -112,9 +105,7 @@ impl ReplayableEntityChanges for PlaceSpotOrderPipelineV2Changes {
             events.extend(changes.replayable_events());
         }
         if let Some(changes) = unfrozen {
-            for change in changes {
-                events.extend(change.replayable_events());
-            }
+            events.extend(changes.replayable_events());
         }
         events
     }
@@ -222,7 +213,7 @@ pub fn place_spot_order_pipeline_v2(
         .unwrap_or((lsn, settle_start.saturating_sub(1)));
     let held_by_order_id =
         build_held_balances(frozen.order.after(), maker_orders, &working_balances)?;
-    let unfrozen_balances = unfreeze_matched_spot_orders_at(
+    let unfrozen = unfreeze_matched_spot_orders_at(
         frozen.order.after(),
         maker_orders,
         &matched,
@@ -244,7 +235,7 @@ pub fn place_spot_order_pipeline_v2(
             created_order,
             frozen,
             matched,
-            unfrozen_balances,
+            unfrozen,
         },
         MatchSpotOrderPipeChanges::PartiallyFilled { .. } => {
             PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
@@ -259,7 +250,7 @@ pub fn place_spot_order_pipeline_v2(
             frozen,
             matched,
             settled,
-            unfrozen_balances,
+            unfrozen,
         },
         MatchSpotOrderPipeChanges::CanceledAfterPartialFill { .. } => {
             PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill {
@@ -267,7 +258,7 @@ pub fn place_spot_order_pipeline_v2(
                 frozen,
                 matched,
                 settled,
-                unfrozen_balances,
+                unfrozen,
             }
         }
     })
