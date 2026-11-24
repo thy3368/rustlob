@@ -358,8 +358,9 @@ fn taker_tif_controls_final_state() {
         .order_base()
         .clone();
     ioc_record.tif = OrderTif::Ioc;
-    let ioc = SpotOrderV7::from_record(ioc_record).unwrap();
-    let (ioc, _) = ioc
+    let ioc_before = SpotOrderV7::from_record(ioc_record).unwrap();
+    let (ioc, _) = ioc_before
+        .clone()
         .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(100),
@@ -368,7 +369,7 @@ fn taker_tif_controls_final_state() {
         .unwrap();
     assert_eq!(ioc.status(), SpotOrderStatus::Canceled);
     assert_eq!(
-        ioc.terminal_release_amount().unwrap().amount(),
+        ioc.terminal_unfreeze_delta(&ioc_before).unwrap().amount(),
         Decimal::from(103)
     );
 
@@ -376,21 +377,23 @@ fn taker_tif_controls_final_state() {
         .order_base()
         .clone();
     alo_record.tif = OrderTif::Alo;
-    let alo = SpotOrderV7::from_record(alo_record).unwrap();
-    let (alo, _) = alo
+    let alo_before = SpotOrderV7::from_record(alo_record).unwrap();
+    let (alo, _) = alo_before
+        .clone()
         .transition(sequenced(SpotOrderV7Command::RejectedAsTaker))
         .unwrap();
     assert_eq!(alo.status(), SpotOrderStatus::Rejected);
     assert_eq!(
-        alo.terminal_release_amount().unwrap().amount(),
+        alo.terminal_unfreeze_delta(&alo_before).unwrap().amount(),
         Decimal::from(203)
     );
 }
 
 #[test]
 fn filled_sell_taker_returns_zero_base_release_requirement() {
-    let seller = order(OrderSide::Sell, SpotOrderStatus::Open);
-    let (seller, _) = seller
+    let seller_before = order(OrderSide::Sell, SpotOrderStatus::Open);
+    let (seller, _) = seller_before
+        .clone()
         .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::from(2),
             quote_notional: Decimal::from(200),
@@ -399,7 +402,10 @@ fn filled_sell_taker_returns_zero_base_release_requirement() {
         .unwrap();
 
     assert_eq!(
-        seller.terminal_release_amount().unwrap().amount(),
+        seller
+            .terminal_unfreeze_delta(&seller_before)
+            .unwrap()
+            .amount(),
         Decimal::ZERO
     );
 }
@@ -615,10 +621,11 @@ fn sequenced_failures_are_atomic() {
 fn pending_cancel_releases_zero_and_exact_fee_reserve_is_allowed() {
     let pending = order(OrderSide::Sell, SpotOrderStatus::Pending);
     let (canceled, _) = pending
+        .clone()
         .transition(sequenced(SpotOrderV7Command::Cancel))
         .unwrap();
     assert_eq!(
-        canceled.terminal_release_amount().unwrap().amount(),
+        canceled.terminal_unfreeze_delta(&pending).unwrap().amount(),
         Decimal::ZERO
     );
 
@@ -882,7 +889,9 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
     assert!(fields.contains(&"buy_quote_principal_paid"));
     assert!(!fields.contains(&"buy_quote_principal_unfrozen"));
 
-    let (buyer, event) = buyer
+    let buyer_before_terminal = buyer;
+    let (buyer, event) = buyer_before_terminal
+        .clone()
         .transition(sequenced(SpotOrderV7Command::MatchedAsMaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(80),
@@ -890,7 +899,10 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
         }))
         .unwrap();
     assert_eq!(
-        buyer.terminal_release_amount().unwrap().amount(),
+        buyer
+            .terminal_unfreeze_delta(&buyer_before_terminal)
+            .unwrap()
+            .amount(),
         Decimal::from(31)
     );
     assert_eq!(

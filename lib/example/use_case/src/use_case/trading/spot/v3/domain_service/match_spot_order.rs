@@ -109,10 +109,6 @@ pub fn match_spot_order(
             EventPosition::new(input.lsn, 0),
             input,
         )?;
-        taker
-            .after()
-            .terminal_unfreeze_delta(taker_before)
-            .map_err(|error| EntityError::Custom(error.to_string()))?;
         return Ok(MatchSpotOrderChanges::Rejected { taker });
     }
 
@@ -229,35 +225,17 @@ pub fn match_spot_order(
     }
 
     match taker.after().status() {
-        SpotOrderStatus::Filled => {
-            taker
-                .after()
-                .terminal_unfreeze_delta(taker_before)
-                .map_err(|error| EntityError::Custom(error.to_string()))?;
-            Ok(MatchSpotOrderChanges::Filled {
-                taker,
-                makers: maker_changes,
-                trades,
-            })
-        }
-        SpotOrderStatus::Canceled => {
-            taker
-                .after()
-                .terminal_unfreeze_delta(taker_before)
-                .map_err(|error| EntityError::Custom(error.to_string()))?;
-            Ok(MatchSpotOrderChanges::CanceledAfterPartialFill {
-                taker,
-                makers: maker_changes,
-                trades,
-            })
-        }
-        SpotOrderStatus::Rejected => {
-            taker
-                .after()
-                .terminal_unfreeze_delta(taker_before)
-                .map_err(|error| EntityError::Custom(error.to_string()))?;
-            Ok(MatchSpotOrderChanges::Rejected { taker })
-        }
+        SpotOrderStatus::Filled => Ok(MatchSpotOrderChanges::Filled {
+            taker,
+            makers: maker_changes,
+            trades,
+        }),
+        SpotOrderStatus::Canceled => Ok(MatchSpotOrderChanges::CanceledAfterPartialFill {
+            taker,
+            makers: maker_changes,
+            trades,
+        }),
+        SpotOrderStatus::Rejected => Ok(MatchSpotOrderChanges::Rejected { taker }),
         SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderChanges::PartiallyFilled {
             taker,
             makers: maker_changes,
@@ -500,15 +478,6 @@ mod tests {
         assert_eq!(trades[1].after().comon_trade.trade_id, 101);
         assert_eq!(trades[0].after().comon_trade.price, Decimal::from(100));
         assert_eq!(trades[1].after().comon_trade.price, Decimal::from(101));
-        assert_eq!(
-            taker_changes
-                .after()
-                .terminal_unfreeze_delta(&taker)
-                .expect("终态释放金额应可派生")
-                .amount(),
-            Decimal::new(37_698, 3)
-        );
-
         // Then: 所有事件共享调用方元数据，位置从 0 到 4 连续且 update 保留加载位置。
         let events = changes.replayable_events();
         assert_eq!(events.len(), 5);
@@ -551,7 +520,7 @@ mod tests {
         // When: 执行撮合。
         let changes = match_spot_order(&taker, &makers, input()).expect("ALO 应业务拒绝");
 
-        // Then: taker 进入 Rejected，释放全部冻结且只有 index 0 事件。
+        // Then: taker 进入 Rejected 且只有 index 0 事件。
         let MatchSpotOrderChanges::Rejected {
             taker: taker_changes,
         } = &changes
@@ -559,14 +528,6 @@ mod tests {
             panic!("ALO 应返回拒绝")
         };
         assert_eq!(taker_changes.after().status(), SpotOrderStatus::Rejected);
-        assert_eq!(
-            taker_changes
-                .after()
-                .terminal_unfreeze_delta(&taker)
-                .expect("拒绝终态释放金额应可派生")
-                .amount(),
-            Decimal::from(110)
-        );
         assert_eq!(
             changes.replayable_events()[0].position,
             EventPosition::new(LSN, 0)
@@ -598,24 +559,22 @@ mod tests {
         let rejected = match_spot_order(&no_fill, &[], input()).expect("空簿 IOC 应拒绝");
         let canceled = match_spot_order(&partial, &makers, input()).expect("IOC 应部分成交后取消");
 
-        // Then: 两个终态明确，释放金额均可从 taker after 派生。
+        // Then: 两个终态明确，部分成交 IOC 仍创建一笔成交。
         let MatchSpotOrderChanges::Rejected { taker, .. } = rejected else {
             panic!("空簿 IOC 应返回拒绝")
         };
         assert_eq!(taker.after().status(), SpotOrderStatus::Rejected);
-        assert!(taker.after().terminal_unfreeze_delta(&no_fill).is_ok());
         let MatchSpotOrderChanges::CanceledAfterPartialFill { taker, trades, .. } = canceled else {
             panic!("部分成交 IOC 应取消")
         };
         assert_eq!(taker.after().status(), SpotOrderStatus::Canceled);
         assert_eq!(taker.after().order_base().size, Decimal::ONE);
-        assert!(taker.after().terminal_unfreeze_delta(&partial).is_ok());
         assert_eq!(trades.len(), 1);
     }
 
     #[test]
-    fn terminal_release_validation_error_is_propagated() {
-        // Rule: changes 不保存释放金额，但终态仍必须通过币种精度校验。
+    fn terminal_release_precision_does_not_reject_matching() {
+        // Rule: 撮合层只生成订单与成交事件，不承担解冻金额的币种精度校验。
         // Given: 卖方 ALO 的原始数量超过 BTC 支持的精度，且会穿过买方 maker。
         let taker = order(
             1,
@@ -632,8 +591,14 @@ mod tests {
             OrderTif::Gtc,
         )];
 
-        // When/Then: ALO 拒绝转换成功后，释放金额精度校验仍使撮合失败。
-        assert!(match_spot_order(&taker, &makers, input()).is_err());
+        // When: ALO 拒绝转换成功，即使后续资金层无法表示其解冻金额。
+        let changes = match_spot_order(&taker, &makers, input()).expect("撮合层不应计算解冻金额");
+
+        // Then: 撮合仍返回业务拒绝及对应订单事件。
+        let MatchSpotOrderChanges::Rejected { taker } = changes else {
+            panic!("ALO 应返回拒绝")
+        };
+        assert_eq!(taker.after().status(), SpotOrderStatus::Rejected);
     }
 
     #[test]
@@ -795,7 +760,6 @@ mod tests {
             Decimal::ONE,
             OrderTif::Gtc,
         )];
-        let taker_before = taker.clone();
         let new_input = input();
 
         // When: 新旧实现处理相同订单和费用参数。
@@ -826,7 +790,7 @@ mod tests {
             filled_taker_order_after,
             maker_orders_after,
             created_trades,
-            release_requirement,
+            ..
         } = old
         else {
             panic!("旧服务应完全成交")
@@ -854,13 +818,6 @@ mod tests {
         assert_eq!(new_trade.maker_fee, old_trade.maker_fee);
         assert_eq!(new_trade.created_at, old_trade.created_at);
         assert_eq!(new_trade.updated_at, old_trade.updated_at);
-        assert_eq!(
-            taker_changes
-                .after()
-                .terminal_unfreeze_delta(&taker_before)
-                .expect("终态释放金额应可派生"),
-            release_requirement
-        );
         assert_eq!(
             trades[0].after().settlement_status,
             SpotTradeSettlementStatus::Unsettled
