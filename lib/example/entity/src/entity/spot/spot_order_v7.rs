@@ -125,7 +125,7 @@ impl SpotOrderV7 {
             lsn: position.lsn,
             ..OrderBase::default()
         };
-        order.buy_quote_fee_reserve_limit = if order.side == OrderSide::Buy {
+        order.buy_quote_fee_reserve_frozen = if order.side == OrderSide::Buy {
             order
                 .limit_px
                 .checked_mul(order.size)
@@ -141,12 +141,12 @@ impl SpotOrderV7 {
         } else {
             Decimal::ZERO
         };
-        order.buy_quote_fee_reserve_consumed = Decimal::ZERO;
+        order.buy_quote_fee_reserve_paid = Decimal::ZERO;
         order.buy_quote_principal_frozen = Decimal::ZERO;
         order.buy_quote_principal_paid = Decimal::ZERO;
         order.buy_quote_principal_released = Decimal::ZERO;
         order.buy_quote_fee_reserve_released = Decimal::ZERO;
-        order.sell_quote_fee_consumed = Decimal::ZERO;
+        order.sell_quote_fee_paid = Decimal::ZERO;
         Self::from_record_at(order, position)
     }
 
@@ -221,8 +221,8 @@ impl SpotOrderV7 {
             OrderSide::Buy => o
                 .limit_px
                 .checked_mul(o.size)
-                .and_then(|v| v.checked_add(o.buy_quote_fee_reserve_limit))
-                .and_then(|v| v.checked_sub(o.buy_quote_fee_reserve_consumed))
+                .and_then(|v| v.checked_add(o.buy_quote_fee_reserve_frozen))
+                .and_then(|v| v.checked_sub(o.buy_quote_fee_reserve_paid))
                 .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
             OrderSide::Sell => o.size,
         };
@@ -443,16 +443,16 @@ fn matched_order(
             .buy_quote_principal_released
             .checked_add(price_improvement)
             .ok_or_else(|| err("principal release overflow"))?;
-        next.buy_quote_fee_reserve_consumed = next
-            .buy_quote_fee_reserve_consumed
+        next.buy_quote_fee_reserve_paid = next
+            .buy_quote_fee_reserve_paid
             .checked_add(quote_fee)
             .ok_or_else(|| err("fee overflow"))?;
-        if next.buy_quote_fee_reserve_consumed > next.buy_quote_fee_reserve_limit {
+        if next.buy_quote_fee_reserve_paid > next.buy_quote_fee_reserve_frozen {
             return Err(err("fee exceeds reserve"));
         }
     } else {
-        next.sell_quote_fee_consumed = next
-            .sell_quote_fee_consumed
+        next.sell_quote_fee_paid = next
+            .sell_quote_fee_paid
             .checked_add(quote_fee)
             .ok_or_else(|| err("sell fee overflow"))?;
     }
@@ -550,8 +550,8 @@ impl TrackDiff for SpotOrderV7 {
             ("cloid", format!("{:?}", a.cloid), format!("{:?}", b.cloid)),
             (
                 "buy_quote_fee_reserve_consumed",
-                a.buy_quote_fee_reserve_consumed.to_string(),
-                b.buy_quote_fee_reserve_consumed.to_string(),
+                a.buy_quote_fee_reserve_paid.to_string(),
+                b.buy_quote_fee_reserve_paid.to_string(),
             ),
             (
                 "buy_quote_principal_frozen",
@@ -575,8 +575,8 @@ impl TrackDiff for SpotOrderV7 {
             ),
             (
                 "sell_quote_fee_consumed",
-                a.sell_quote_fee_consumed.to_string(),
-                b.sell_quote_fee_consumed.to_string(),
+                a.sell_quote_fee_paid.to_string(),
+                b.sell_quote_fee_paid.to_string(),
             ),
             (
                 "updated_at",
@@ -728,13 +728,13 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
         || o.size > o.orig_size
         || o.limit_px <= Decimal::ZERO
         || [
-            o.buy_quote_fee_reserve_limit,
-            o.buy_quote_fee_reserve_consumed,
+            o.buy_quote_fee_reserve_frozen,
+            o.buy_quote_fee_reserve_paid,
             o.buy_quote_principal_frozen,
             o.buy_quote_principal_paid,
             o.buy_quote_principal_released,
             o.buy_quote_fee_reserve_released,
-            o.sell_quote_fee_consumed,
+            o.sell_quote_fee_paid,
         ]
         .into_iter()
         .any(|amount| amount < Decimal::ZERO)
@@ -770,8 +770,8 @@ fn active_hold_requirement(o: &OrderBase) -> Result<Option<Decimal>, EntityError
         OrderSide::Buy => o
             .limit_px
             .checked_mul(o.size)
-            .and_then(|principal| principal.checked_add(o.buy_quote_fee_reserve_limit))
-            .and_then(|reserved| reserved.checked_sub(o.buy_quote_fee_reserve_consumed))
+            .and_then(|principal| principal.checked_add(o.buy_quote_fee_reserve_frozen))
+            .and_then(|reserved| reserved.checked_sub(o.buy_quote_fee_reserve_paid))
             .filter(|amount| *amount >= Decimal::ZERO)
             .ok_or_else(|| err("invalid active buy freeze requirement"))?,
         OrderSide::Sell => o.size,
@@ -820,8 +820,8 @@ fn settle_terminal_release(next: &mut OrderBase) -> Result<(), EntityError> {
         .ok_or_else(|| err("principal release overflow"))?;
 
     next.buy_quote_fee_reserve_released = next
-        .buy_quote_fee_reserve_limit
-        .checked_sub(next.buy_quote_fee_reserve_consumed)
+        .buy_quote_fee_reserve_frozen
+        .checked_sub(next.buy_quote_fee_reserve_paid)
         .filter(|amount| *amount >= Decimal::ZERO)
         .ok_or_else(|| err("fee classification exceeds reserve"))?;
     validate_terminal_buy_conservation(next)
@@ -830,8 +830,8 @@ fn settle_terminal_release(next: &mut OrderBase) -> Result<(), EntityError> {
 fn validate_terminal_buy_conservation(order: &OrderBase) -> Result<(), EntityError> {
     let remainder = order
         .buy_quote_principal_frozen
-        .checked_add(order.buy_quote_fee_reserve_limit)
-        .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_consumed))
+        .checked_add(order.buy_quote_fee_reserve_frozen)
+        .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_paid))
         .and_then(|amount| amount.checked_sub(order.buy_quote_principal_paid))
         .and_then(|amount| amount.checked_sub(order.buy_quote_principal_released))
         .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_released))

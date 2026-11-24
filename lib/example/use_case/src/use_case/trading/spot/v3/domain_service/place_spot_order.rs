@@ -81,7 +81,7 @@ mod tests {
         assert_eq!(order.group_relation, OrderGroupRelation::Standalone);
         assert_eq!(order.cloid.as_deref(), Some("client-1"));
         assert_eq!(order.status, SpotOrderStatus::Pending);
-        assert_eq!(order.buy_quote_fee_reserve_limit, Decimal::new(5, 1));
+        assert_eq!(order.buy_quote_fee_reserve_frozen, Decimal::new(5, 1));
     }
 
     #[test]
@@ -108,7 +108,7 @@ mod tests {
             order.group_relation,
             OrderGroupRelation::NormalTpslChild { parent_order_id: 6 }
         );
-        assert_eq!(order.buy_quote_fee_reserve_limit, Decimal::ZERO);
+        assert_eq!(order.buy_quote_fee_reserve_frozen, Decimal::ZERO);
     }
 
     #[test]

@@ -32,8 +32,8 @@ fn field_names(event: &common_entity::ReplayableDomainEvent) -> Vec<&str> {
 fn assert_buy_conserved(order: &SpotOrderV7) {
     let order = order.order_base();
     assert_eq!(
-        order.buy_quote_principal_frozen + order.buy_quote_fee_reserve_limit
-            - order.buy_quote_fee_reserve_consumed
+        order.buy_quote_principal_frozen + order.buy_quote_fee_reserve_frozen
+            - order.buy_quote_fee_reserve_paid
             - order.buy_quote_principal_paid
             - order.buy_quote_principal_released
             - order.buy_quote_fee_reserve_released,
@@ -58,7 +58,7 @@ fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {
         tif: OrderTif::Gtc,
         status,
         execution: PriceType::Limit,
-        buy_quote_fee_reserve_limit: Decimal::from(3),
+        buy_quote_fee_reserve_frozen: Decimal::from(3),
         buy_quote_principal_frozen: frozen_principal,
         lsn: 4,
         ..OrderBase::default()
@@ -103,7 +103,7 @@ fn create_builds_limit_buy_and_trigger_sell_from_command_metadata() {
     assert_eq!(base.tif, OrderTif::Alo);
     assert_eq!(base.group_relation, OrderGroupRelation::Standalone);
     assert_eq!(
-        base.buy_quote_fee_reserve_limit,
+        base.buy_quote_fee_reserve_frozen,
         Decimal::from_str_exact("0.5").unwrap()
     );
     assert_eq!(base.created_at, TIMESTAMP);
@@ -127,7 +127,7 @@ fn create_builds_limit_buy_and_trigger_sell_from_command_metadata() {
     assert_eq!(trigger.order_base().tif, OrderTif::Ioc);
     assert_eq!(trigger.order_base().trigger_px, Some(Decimal::from(90)));
     assert_eq!(
-        trigger.order_base().buy_quote_fee_reserve_limit,
+        trigger.order_base().buy_quote_fee_reserve_frozen,
         Decimal::ZERO
     );
 }
@@ -253,7 +253,7 @@ fn buy_match_consumes_fee_reserve_and_sell_match_does_not() {
         }))
         .unwrap();
     assert_eq!(
-        buyer.order_base().buy_quote_fee_reserve_consumed,
+        buyer.order_base().buy_quote_fee_reserve_paid,
         Decimal::from(2)
     );
 
@@ -266,7 +266,7 @@ fn buy_match_consumes_fee_reserve_and_sell_match_does_not() {
         }))
         .unwrap();
     assert_eq!(
-        seller.order_base().buy_quote_fee_reserve_consumed,
+        seller.order_base().buy_quote_fee_reserve_paid,
         Decimal::ZERO
     );
 }
@@ -579,8 +579,8 @@ fn sequenced_failures_are_atomic() {
                 let mut record = order(OrderSide::Buy, SpotOrderStatus::Open)
                     .order_base()
                     .clone();
-                record.buy_quote_fee_reserve_consumed = Decimal::MAX;
-                record.buy_quote_fee_reserve_limit = Decimal::MAX;
+                record.buy_quote_fee_reserve_paid = Decimal::MAX;
+                record.buy_quote_fee_reserve_frozen = Decimal::MAX;
                 SpotOrderV7::from_record(record).unwrap()
             },
             sequenced(SpotOrderV7Command::MatchedAsTaker {
@@ -617,7 +617,7 @@ fn pending_cancel_releases_zero_and_exact_fee_reserve_is_allowed() {
         }))
         .unwrap();
     assert_eq!(
-        buyer.order_base().buy_quote_fee_reserve_consumed,
+        buyer.order_base().buy_quote_fee_reserve_paid,
         Decimal::from(3)
     );
 }
@@ -744,9 +744,9 @@ fn sell_match_accumulates_only_sell_fee() {
         }))
         .unwrap();
     let order = seller.order_base();
-    assert_eq!(order.sell_quote_fee_consumed, Decimal::from(2));
+    assert_eq!(order.sell_quote_fee_paid, Decimal::from(2));
     assert_eq!(order.buy_quote_principal_paid, Decimal::ZERO);
-    assert_eq!(order.buy_quote_fee_reserve_consumed, Decimal::ZERO);
+    assert_eq!(order.buy_quote_fee_reserve_paid, Decimal::ZERO);
     assert!(field_names(&event).contains(&"sell_quote_fee_consumed"));
 }
 
@@ -803,7 +803,7 @@ fn terminal_buy_conservation_rejects_unclassified_funds() {
         .clone();
     record.status = SpotOrderStatus::Filled;
     record.buy_quote_principal_paid = Decimal::from(199);
-    record.buy_quote_fee_reserve_consumed = Decimal::from(3);
+    record.buy_quote_fee_reserve_paid = Decimal::from(3);
 
     assert!(super::validate_terminal_buy_conservation(&record).is_err());
 }

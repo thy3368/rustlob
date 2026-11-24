@@ -135,7 +135,7 @@ mod tests {
             size: Decimal::from(3),
             orig_size: Decimal::from(3),
             status,
-            buy_quote_fee_reserve_limit: Decimal::from(2),
+            buy_quote_fee_reserve_frozen: Decimal::from(2),
             ..OrderBase::default()
         })
         .unwrap()

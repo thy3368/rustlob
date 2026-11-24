@@ -409,7 +409,7 @@ mod tests {
                 } else {
                     Decimal::ZERO
                 },
-                buy_quote_fee_reserve_limit: if side == OrderSide::Buy {
+                buy_quote_fee_reserve_frozen: if side == OrderSide::Buy {
                     Decimal::from(10)
                 } else {
                     Decimal::ZERO

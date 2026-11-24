@@ -73,20 +73,26 @@ pub struct OrderBase {
     pub reduce_only: bool,
     /// 本地生命周期状态。
     pub status: SpotOrderStatus,
-    /// 买单冻结的 quote 手续费预留上限；卖单不使用。
-    pub buy_quote_fee_reserve_limit: Decimal,
-    /// 买单已消耗的 quote 手续费预留。
-    pub buy_quote_fee_reserve_consumed: Decimal,
+
     /// 买单累计冻结的 quote 本金。
     pub buy_quote_principal_frozen: Decimal,
-    /// 买单累计支付的实际成交 quote 本金。
+
+    /// 买单冻结的 quote 手续费预留上限；卖单不使用。
+    pub buy_quote_fee_reserve_frozen: Decimal,
+
+    /// 买单成交累计支付的实际成交 quote 本金。
     pub buy_quote_principal_paid: Decimal,
+
+    /// 买单成交已支付的 quote 手续费。
+    pub buy_quote_fee_reserve_paid: Decimal,
+
     /// 买单累计释放的 quote 本金。
     pub buy_quote_principal_released: Decimal,
     /// 买单累计释放的未使用 quote 手续费预留。
     pub buy_quote_fee_reserve_released: Decimal,
-    /// 卖单累计支付的 quote 手续费。
-    pub sell_quote_fee_consumed: Decimal,
+
+    /// 卖单成交累计支付的 quote 手续费。
+    pub sell_quote_fee_paid: Decimal,
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub cloid: Option<String>,
     /// 订单创建时间，单位为 Unix 纳秒。
@@ -120,13 +126,13 @@ impl Default for OrderBase {
             is_position_tpsl: false,
             reduce_only: false,
             status: SpotOrderStatus::Pending,
-            buy_quote_fee_reserve_limit: Decimal::ZERO,
-            buy_quote_fee_reserve_consumed: Decimal::ZERO,
+            buy_quote_fee_reserve_frozen: Decimal::ZERO,
+            buy_quote_fee_reserve_paid: Decimal::ZERO,
             buy_quote_principal_frozen: Decimal::ZERO,
             buy_quote_principal_paid: Decimal::ZERO,
             buy_quote_principal_released: Decimal::ZERO,
             buy_quote_fee_reserve_released: Decimal::ZERO,
-            sell_quote_fee_consumed: Decimal::ZERO,
+            sell_quote_fee_paid: Decimal::ZERO,
             cloid: None,
             created_at: 0,
             updated_at: 0,

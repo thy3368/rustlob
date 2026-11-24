@@ -18,7 +18,7 @@ impl SpotOrderV7 {
                 let amount = order
                     .limit_px
                     .checked_mul(order.orig_size)
-                    .and_then(|principal| principal.checked_add(order.buy_quote_fee_reserve_limit))
+                    .and_then(|principal| principal.checked_add(order.buy_quote_fee_reserve_frozen))
                     .ok_or(SpotAmountConversionError::ArithmeticOverflow)?;
                 (order.symbol.quote, amount)
             }
@@ -81,8 +81,8 @@ impl SpotOrderV7 {
             OrderSide::Buy => order
                 .limit_px
                 .checked_mul(order.size)
-                .and_then(|value| value.checked_add(order.buy_quote_fee_reserve_limit))
-                .and_then(|value| value.checked_sub(order.buy_quote_fee_reserve_consumed))
+                .and_then(|value| value.checked_add(order.buy_quote_fee_reserve_frozen))
+                .and_then(|value| value.checked_sub(order.buy_quote_fee_reserve_paid))
                 .ok_or(SpotAmountConversionError::ArithmeticOverflow),
             OrderSide::Sell => Ok(order.size),
         };
@@ -120,7 +120,7 @@ mod tests {
             limit_px: Decimal::from(100),
             size: Decimal::from(2),
             orig_size: Decimal::from(2),
-            buy_quote_fee_reserve_limit: Decimal::from(3),
+            buy_quote_fee_reserve_frozen: Decimal::from(3),
             ..OrderBase::default()
         })
         .unwrap()
@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn buy_with_zero_fee_reserve_freezes_quote_principal() {
         let mut record = order(OrderSide::Buy).order_base().clone();
-        record.buy_quote_fee_reserve_limit = Decimal::ZERO;
+        record.buy_quote_fee_reserve_frozen = Decimal::ZERO;
         let order = SpotOrderV7::from_record(record).unwrap();
 
         assert_query_preserves_order(
@@ -183,7 +183,7 @@ mod tests {
         record.limit_px = Decimal::MAX;
         record.orig_size = Decimal::from(2);
         record.size = Decimal::from(2);
-        record.buy_quote_fee_reserve_limit = Decimal::ZERO;
+        record.buy_quote_fee_reserve_frozen = Decimal::ZERO;
         let order = SpotOrderV7::from_record(record).unwrap();
 
         assert_query_preserves_order(&order, Err(SpotAmountConversionError::ArithmeticOverflow));
@@ -195,7 +195,7 @@ mod tests {
         record.limit_px = Decimal::MAX;
         record.orig_size = Decimal::ONE;
         record.size = Decimal::ONE;
-        record.buy_quote_fee_reserve_limit = Decimal::ONE;
+        record.buy_quote_fee_reserve_frozen = Decimal::ONE;
         let order = SpotOrderV7::from_record(record).unwrap();
 
         assert_query_preserves_order(&order, Err(SpotAmountConversionError::ArithmeticOverflow));

@@ -132,7 +132,7 @@ mod tests {
                 tif: OrderTif::Gtc,
                 status,
                 execution: PriceType::Limit,
-                buy_quote_fee_reserve_limit: Decimal::from(3),
+                buy_quote_fee_reserve_frozen: Decimal::from(3),
                 lsn: position.lsn,
                 ..OrderBase::default()
             },
