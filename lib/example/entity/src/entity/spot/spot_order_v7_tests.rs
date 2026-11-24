@@ -695,7 +695,7 @@ fn freeze_and_modify_classify_buy_principal_adjustments() {
         decreased.order_base().buy_quote_principal_unfrozen,
         Decimal::from(120)
     );
-    assert!(field_names(&event).contains(&"buy_quote_principal_released"));
+    assert!(field_names(&event).contains(&"buy_quote_principal_unfrozen"));
 }
 
 #[test]
@@ -714,11 +714,11 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
     );
     assert_eq!(
         buyer.order_base().buy_quote_principal_unfrozen,
-        Decimal::from(10)
+        Decimal::ZERO
     );
     let fields = field_names(&first_event);
     assert!(fields.contains(&"buy_quote_principal_paid"));
-    assert!(fields.contains(&"buy_quote_principal_released"));
+    assert!(!fields.contains(&"buy_quote_principal_unfrozen"));
 
     let (buyer, event) = buyer
         .transition(sequenced(SpotOrderV7Command::MatchedAsMaker {
@@ -743,7 +743,7 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
         buyer.order_base().buy_quote_fee_reserve_unfrozen,
         Decimal::ONE
     );
-    assert!(field_names(&event).contains(&"buy_quote_fee_reserve_released"));
+    assert!(field_names(&event).contains(&"buy_quote_fee_reserve_unfrozen"));
     assert_buy_conserved(&buyer);
 }
 

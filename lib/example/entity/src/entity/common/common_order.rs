@@ -86,9 +86,9 @@ pub struct OrderBase {
     /// 买单成交已支付的 quote 手续费。
     pub buy_quote_fee_reserve_paid: Decimal,
 
-    /// 买单累计释放的 quote 本金。
+    /// 买单累计解冻的 quote 本金。
     pub buy_quote_principal_unfrozen: Decimal,
-    /// 买单累计释放的未使用 quote 手续费预留。
+    /// 买单累计解冻的未使用 quote 手续费预留。
     pub buy_quote_fee_reserve_unfrozen: Decimal,
 
     /// 卖单成交累计支付的 quote 手续费。

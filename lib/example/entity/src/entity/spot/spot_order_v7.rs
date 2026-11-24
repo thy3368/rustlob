@@ -437,13 +437,6 @@ fn matched_order(
             .buy_quote_principal_paid
             .checked_add(quote_notional)
             .ok_or_else(|| err("principal paid overflow"))?;
-        let price_improvement = limit_notional
-            .checked_sub(quote_notional)
-            .ok_or_else(|| err("price improvement underflow"))?;
-        next.buy_quote_principal_unfrozen = next
-            .buy_quote_principal_unfrozen
-            .checked_add(price_improvement)
-            .ok_or_else(|| err("principal release overflow"))?;
         next.buy_quote_fee_reserve_paid = next
             .buy_quote_fee_reserve_paid
             .checked_add(quote_fee)
@@ -565,12 +558,12 @@ impl TrackDiff for SpotOrderV7 {
                 b.buy_quote_principal_paid.to_string(),
             ),
             (
-                "buy_quote_principal_released",
+                "buy_quote_principal_unfrozen",
                 a.buy_quote_principal_unfrozen.to_string(),
                 b.buy_quote_principal_unfrozen.to_string(),
             ),
             (
-                "buy_quote_fee_reserve_released",
+                "buy_quote_fee_reserve_unfrozen",
                 a.buy_quote_fee_reserve_unfrozen.to_string(),
                 b.buy_quote_fee_reserve_unfrozen.to_string(),
             ),
@@ -795,7 +788,7 @@ fn apply_buy_modify_counters(next: &mut OrderBase, delta: Decimal) -> Result<(),
             next.buy_quote_principal_unfrozen = next
                 .buy_quote_principal_unfrozen
                 .checked_sub(delta)
-                .ok_or_else(|| err("principal release overflow"))?;
+                .ok_or_else(|| err("principal unfreeze overflow"))?;
         }
         std::cmp::Ordering::Equal => {}
     }
@@ -818,7 +811,7 @@ fn settle_terminal_release(next: &mut OrderBase) -> Result<(), EntityError> {
     next.buy_quote_principal_unfrozen = next
         .buy_quote_principal_unfrozen
         .checked_add(principal_release)
-        .ok_or_else(|| err("principal release overflow"))?;
+        .ok_or_else(|| err("principal unfreeze overflow"))?;
 
     next.buy_quote_fee_reserve_unfrozen = next
         .buy_quote_fee_reserve_frozen

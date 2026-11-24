@@ -29,9 +29,9 @@ impl SpotOrderV7 {
             .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
     }
 
-    /// 返回订单进入终态时应释放的累计冻结金额。
+    /// 返回订单进入终态时累计解冻的冻结金额。
     ///
-    /// 仅接受 `Canceled`、`Filled` 或 `Rejected` 订单。买单返回累计释放的 quote
+    /// 仅接受 `Canceled`、`Filled` 或 `Rejected` 订单。买单返回累计解冻的 quote
     /// 本金与手续费预留，卖单返回终态剩余 base 数量。本查询不修改订单。
     pub fn terminal_release_amount(&self) -> Result<CoinAmount, SpotAmountConversionError> {
         let order = self.order_base();
