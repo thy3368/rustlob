@@ -479,12 +479,12 @@ impl WorkingState {
         &mut self,
         changes: &PlaceSpotOrderPipelineV2Changes,
     ) -> Result<(), SpotBlockItemError> {
-        let (frozen_order, frozen_balance) = frozen_changes(changes);
+        let frozen = frozen_changes(changes);
         let taker = matched_changes(changes)
             .and_then(matched_taker)
-            .unwrap_or_else(|| frozen_order.after());
+            .unwrap_or_else(|| frozen.order.after());
         self.orders.push(taker.clone());
-        self.replace_balance(frozen_balance.after().clone())?;
+        self.replace_balance(frozen.balance.after().clone())?;
 
         if let Some(matched) = matched_changes(changes) {
             for maker in matched_makers(matched) {
@@ -505,36 +505,13 @@ impl WorkingState {
 
 fn frozen_changes(
     changes: &PlaceSpotOrderPipelineV2Changes,
-) -> (
-    &common_entity::UpdatedEntityEvents<SpotOrderV7>,
-    &common_entity::UpdatedEntityEvents<BalanceV2>,
-) {
+) -> &crate::use_case::trading::spot::v3::FreezeSpotOrderPipeChanges {
     match changes {
-        PlaceSpotOrderPipelineV2Changes::Resting {
-            frozen_order,
-            frozen_balance,
-            ..
-        }
-        | PlaceSpotOrderPipelineV2Changes::Rejected {
-            frozen_order,
-            frozen_balance,
-            ..
-        }
-        | PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
-            frozen_order,
-            frozen_balance,
-            ..
-        }
-        | PlaceSpotOrderPipelineV2Changes::Filled {
-            frozen_order,
-            frozen_balance,
-            ..
-        }
-        | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill {
-            frozen_order,
-            frozen_balance,
-            ..
-        } => (frozen_order, frozen_balance),
+        PlaceSpotOrderPipelineV2Changes::Resting { frozen, .. }
+        | PlaceSpotOrderPipelineV2Changes::Rejected { frozen, .. }
+        | PlaceSpotOrderPipelineV2Changes::PartiallyFilled { frozen, .. }
+        | PlaceSpotOrderPipelineV2Changes::Filled { frozen, .. }
+        | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill { frozen, .. } => frozen,
     }
 }
 

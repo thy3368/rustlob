@@ -24,18 +24,6 @@ impl ReplayableEntityChanges for FreezeSpotOrderPipeChanges {
     }
 }
 
-/// 激活 Pending 现货订单，同时冻结其作为 taker 所需的余额。
-pub fn freeze_spot_order(
-    order: &SpotOrderV7,
-    balance: &BalanceV2,
-    lsn: u64,
-    logical_ts: u64,
-    topic: u8,
-    partition: u8,
-) -> Result<FreezeSpotOrderPipeChanges, EntityError> {
-    freeze_spot_order_from(order, balance, lsn, 0, logical_ts, topic, partition)
-}
-
 /// 从指定 `command_index` 起连续生成订单和余额冻结事件。
 pub fn freeze_spot_order_from(
     order: &SpotOrderV7,
@@ -126,4 +114,3 @@ fn map_balance_error(error: BalanceV2Error) -> EntityError {
         error => EntityError::Custom(format!("failed to freeze balance: {error}")),
     }
 }
-

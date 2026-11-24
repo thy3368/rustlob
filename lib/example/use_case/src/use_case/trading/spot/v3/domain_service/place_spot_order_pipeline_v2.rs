@@ -26,35 +26,30 @@ use super::unfreeze_matched_spot_orders::{
 pub enum PlaceSpotOrderPipelineV2Changes {
     Resting {
         created_order: PlaceSpotOrderPipeChanges,
-        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
-        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        frozen: FreezeSpotOrderPipeChanges,
     },
     Rejected {
         created_order: PlaceSpotOrderPipeChanges,
-        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
-        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        frozen: FreezeSpotOrderPipeChanges,
         matched: MatchSpotOrderPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
     PartiallyFilled {
         created_order: PlaceSpotOrderPipeChanges,
-        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
-        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        frozen: FreezeSpotOrderPipeChanges,
         matched: MatchSpotOrderPipeChanges,
         settled: SettleTradesPipeChanges,
     },
     Filled {
         created_order: PlaceSpotOrderPipeChanges,
-        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
-        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        frozen: FreezeSpotOrderPipeChanges,
         matched: MatchSpotOrderPipeChanges,
         settled: SettleTradesPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
     CanceledAfterPartialFill {
         created_order: PlaceSpotOrderPipeChanges,
-        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
-        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        frozen: FreezeSpotOrderPipeChanges,
         matched: MatchSpotOrderPipeChanges,
         settled: SettleTradesPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
@@ -63,66 +58,45 @@ pub enum PlaceSpotOrderPipelineV2Changes {
 
 impl ReplayableEntityChanges for PlaceSpotOrderPipelineV2Changes {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
-        let (created, frozen_order, frozen_balance, matched, settled, unfrozen) = match self {
+        let (created, frozen, matched, settled, unfrozen) = match self {
             Self::Resting {
                 created_order,
-                frozen_order,
-                frozen_balance,
-            } => (
-                created_order,
-                frozen_order,
-                frozen_balance,
-                None,
-                None,
-                None,
-            ),
+                frozen,
+            } => (created_order, frozen, None, None, None),
             Self::Rejected {
                 created_order,
-                frozen_order,
-                frozen_balance,
+                frozen,
                 matched,
                 unfrozen_balances,
             } => (
                 created_order,
-                frozen_order,
-                frozen_balance,
+                frozen,
                 Some(matched),
                 None,
                 Some(unfrozen_balances),
             ),
             Self::PartiallyFilled {
                 created_order,
-                frozen_order,
-                frozen_balance,
+                frozen,
                 matched,
                 settled,
-            } => (
-                created_order,
-                frozen_order,
-                frozen_balance,
-                Some(matched),
-                Some(settled),
-                None,
-            ),
+            } => (created_order, frozen, Some(matched), Some(settled), None),
             Self::Filled {
                 created_order,
-                frozen_order,
-                frozen_balance,
+                frozen,
                 matched,
                 settled,
                 unfrozen_balances,
             }
             | Self::CanceledAfterPartialFill {
                 created_order,
-                frozen_order,
-                frozen_balance,
+                frozen,
                 matched,
                 settled,
                 unfrozen_balances,
             } => (
                 created_order,
-                frozen_order,
-                frozen_balance,
+                frozen,
                 Some(matched),
                 Some(settled),
                 Some(unfrozen_balances),
@@ -130,8 +104,7 @@ impl ReplayableEntityChanges for PlaceSpotOrderPipelineV2Changes {
         };
         let mut events = Vec::new();
         events.extend(created.replayable_events());
-        events.extend(frozen_order.replayable_events());
-        events.extend(frozen_balance.replayable_events());
+        events.extend(frozen.replayable_events());
         if let Some(changes) = matched {
             events.extend(changes.replayable_events());
         }
@@ -199,10 +172,7 @@ pub fn place_spot_order_pipeline_v2(
         .get(&command.order_id)
         .ok_or_else(|| invalid(format!("missing balances for order {}", command.order_id)))?;
     let held = held_balance(created_order.after(), pair);
-    let FreezeSpotOrderPipeChanges {
-        order: frozen_order,
-        balance: frozen_balance,
-    } = freeze_spot_order_from(
+    let frozen = freeze_spot_order_from(
         created_order.after(),
         held,
         lsn,
@@ -214,10 +184,10 @@ pub fn place_spot_order_pipeline_v2(
     .map_err(PlaceSpotOrderPipelineV2Error::Freeze)?;
 
     let mut working_balances = balances_by_order_id.clone();
-    replace_balance_snapshot(&mut working_balances, frozen_balance.after())?;
+    replace_balance_snapshot(&mut working_balances, frozen.balance.after())?;
     let match_start = 3;
     let matched = match_spot_order_from(
-        frozen_order.after(),
+        frozen.order.after(),
         maker_orders,
         MatchSpotOrderInput {
             lsn,
@@ -251,9 +221,9 @@ pub fn place_spot_order_pipeline_v2(
         .or_else(|| last_position(&matched))
         .unwrap_or((lsn, settle_start.saturating_sub(1)));
     let held_by_order_id =
-        build_held_balances(frozen_order.after(), maker_orders, &working_balances)?;
+        build_held_balances(frozen.order.after(), maker_orders, &working_balances)?;
     let unfrozen_balances = unfreeze_matched_spot_orders_at(
-        frozen_order.after(),
+        frozen.order.after(),
         maker_orders,
         &matched,
         &held_by_order_id,
@@ -268,29 +238,25 @@ pub fn place_spot_order_pipeline_v2(
     Ok(match &matched {
         MatchSpotOrderPipeChanges::Resting => PlaceSpotOrderPipelineV2Changes::Resting {
             created_order,
-            frozen_order,
-            frozen_balance,
+            frozen,
         },
         MatchSpotOrderPipeChanges::Rejected { .. } => PlaceSpotOrderPipelineV2Changes::Rejected {
             created_order,
-            frozen_order,
-            frozen_balance,
+            frozen,
             matched,
             unfrozen_balances,
         },
         MatchSpotOrderPipeChanges::PartiallyFilled { .. } => {
             PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
                 created_order,
-                frozen_order,
-                frozen_balance,
+                frozen,
                 matched,
                 settled,
             }
         }
         MatchSpotOrderPipeChanges::Filled { .. } => PlaceSpotOrderPipelineV2Changes::Filled {
             created_order,
-            frozen_order,
-            frozen_balance,
+            frozen,
             matched,
             settled,
             unfrozen_balances,
@@ -298,8 +264,7 @@ pub fn place_spot_order_pipeline_v2(
         MatchSpotOrderPipeChanges::CanceledAfterPartialFill { .. } => {
             PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill {
                 created_order,
-                frozen_order,
-                frozen_balance,
+                frozen,
                 matched,
                 settled,
                 unfrozen_balances,
