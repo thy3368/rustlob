@@ -576,12 +576,12 @@ fn unfrozen_changes(
 ) -> &[common_entity::UpdatedEntityEvents<BalanceV2>] {
     match changes {
         PlaceSpotOrderPipelineV2Changes::Rejected { unfrozen, .. }
+        | PlaceSpotOrderPipelineV2Changes::PartiallyFilled { unfrozen, .. }
         | PlaceSpotOrderPipelineV2Changes::Filled { unfrozen, .. }
         | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill { unfrozen, .. } => {
             &unfrozen.updated_balances
         }
-        PlaceSpotOrderPipelineV2Changes::Resting { .. }
-        | PlaceSpotOrderPipelineV2Changes::PartiallyFilled { .. } => &[],
+        PlaceSpotOrderPipelineV2Changes::Resting { .. } => &[],
     }
 }
 
@@ -660,6 +660,87 @@ mod tests {
             maker_fee_bps: 5,
             taker_fee_bps: 10,
         }
+    }
+
+    #[test]
+    fn partially_filled_taker_releases_filled_maker_fee_reserve_after_settlement() {
+        // Rule: taker 部分成交时，已完全成交 maker 的剩余费率预留仍必须在结算后解冻。
+        // Given: 较小买方 maker 先挂单，较大卖方 taker 随后只成交一部分。
+        let maker = common_entity::stable_string_entity_id("maker");
+        let taker = common_entity::stable_string_entity_id("taker");
+        let symbol = Symbol::new(1, Coin::BTC, Coin::USDT);
+        let place_order = |party_id, order_id, side, size, cloid: &str| {
+            SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::Single(PlaceSpotOrderV3OrderCmd {
+                party_id,
+                order_id,
+                symbol,
+                side,
+                price: Decimal::from(10),
+                size: Decimal::from(size),
+                order_type: OrderType::Limit { tif: OrderTif::Gtc },
+                cloid: Some(cloid.to_owned()),
+            }))
+        };
+        let command = SpotBlockCmd {
+            items: vec![
+                item(10, place_order(maker, 7, OrderSide::Buy, 1, "maker-buy")),
+                item(11, place_order(taker, 8, OrderSide::Sell, 2, "taker-sell")),
+            ],
+        };
+        let given = SpotBlockState {
+            orders: Vec::new(),
+            balances: vec![
+                BalanceV2::new(maker, maker, u64::from(Coin::BTC.index()), 0, 0, 1, 1),
+                BalanceV2::new(maker, maker, u64::from(Coin::USDT.index()), 100, 0, 1, 1),
+                BalanceV2::new(taker, taker, u64::from(Coin::BTC.index()), 10, 0, 1, 1),
+                BalanceV2::new(taker, taker, u64::from(Coin::USDT.index()), 0, 0, 1, 1),
+            ],
+            trade_id_start: 1,
+            maker_fee_bps: 5,
+            taker_fee_bps: 10,
+        };
+
+        // When: 同一 block 依次执行 maker 挂单和 taker 撮合。
+        let changes = SpotBlockUseCase
+            .validate_and_compute(&command, &given)
+            .expect("partial fill must apply");
+
+        // Then: pipeline 保留部分成交分支、maker 终态及其解冻业务事实。
+        let SpotBlockItemResult::Applied {
+            changes: SpotBlockAppliedChanges::Place(PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
+                matched,
+                settled,
+                unfrozen,
+                ..
+            }),
+            ..
+        } = &changes.item_results[1]
+        else {
+            panic!("expected partially-filled pipeline: {:?}", changes.item_results[1]);
+        };
+        let MatchSpotOrderPipeChanges::PartiallyFilled { taker, makers, .. } = matched else {
+            panic!("expected partially-filled match");
+        };
+        assert_eq!(taker.after().status(), SpotOrderStatus::PartiallyFilled);
+        assert_eq!(makers.len(), 1);
+        assert_eq!(makers[0].after().status(), SpotOrderStatus::Filled);
+        assert_eq!(unfrozen.updated_balances.len(), 1);
+        assert_eq!(unfrozen.updated_balances[0].after().frozen(), Decimal::ZERO);
+
+        let settled_last = settled
+            .replayable_events()
+            .into_iter()
+            .map(|event| event.command_index)
+            .max()
+            .expect("settlement must emit events");
+        let unfreeze_event = unfrozen.replayable_events()[0];
+        assert_eq!(unfreeze_event.command_index, settled_last + 1);
+
+        // And: spot_block 的内存投影也消费该解冻结果，后续取消不得再次释放 maker 余额。
+        assert!(changes.replayable_events().windows(2).all(|events| {
+            (events[0].lsn, events[0].command_index) < (events[1].lsn, events[1].command_index)
+        }));
+        assert_eq!(unfreeze_event.lsn, 11);
     }
 
     #[test]

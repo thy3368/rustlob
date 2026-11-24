@@ -13,7 +13,7 @@ pub use domain_service::settle_matched_spot_trades::{
 };
 pub use domain_service::unfreeze_matched_spot_orders::{
     SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, UnfreezeMatchedSpotOrdersPipeChanges,
-    unfreeze_matched_spot_orders_at,
+    unfreeze_matched_spot_orders,
 };
 
 pub mod pipeline;

@@ -49,7 +49,7 @@ struct MatchEventMetadata {
 }
 
 /// 使用显式定序元数据释放终态订单仍持有的冻结资金。
-pub fn unfreeze_matched_spot_orders_at(
+pub fn unfreeze_matched_spot_orders(
     taker_before: &SpotOrderV7,
     makers_before: &[SpotOrderV7],
     matched: &MatchSpotOrderPipeChanges,
@@ -91,7 +91,7 @@ pub fn unfreeze_matched_spot_orders_at(
         let after = changed.after();
         if !matches!(
             after.status(),
-            SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
         ) {
             continue;
         }

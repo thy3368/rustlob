@@ -17,7 +17,7 @@ use super::settle_matched_spot_trades::{
 };
 use super::unfreeze_matched_spot_orders::{
     SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, UnfreezeMatchedSpotOrdersPipeChanges,
-    unfreeze_matched_spot_orders_at,
+    unfreeze_matched_spot_orders,
 };
 
 /// 独立现货下单 pipeline 的分支化业务事实。
@@ -38,6 +38,7 @@ pub enum PlaceSpotOrderPipelineV2Changes {
         frozen: FreezeSpotOrderPipeChanges,
         matched: MatchSpotOrderPipeChanges,
         settled: SettleTradesPipeChanges,
+        unfrozen: UnfreezeMatchedSpotOrdersPipeChanges,
     },
     Filled {
         created_order: PlaceSpotOrderPipeChanges,
@@ -73,7 +74,14 @@ impl ReplayableEntityChanges for PlaceSpotOrderPipelineV2Changes {
                 frozen,
                 matched,
                 settled,
-            } => (created_order, frozen, Some(matched), Some(settled), None),
+                unfrozen,
+            } => (
+                created_order,
+                frozen,
+                Some(matched),
+                Some(settled),
+                Some(unfrozen),
+            ),
             Self::Filled {
                 created_order,
                 frozen,
@@ -213,7 +221,7 @@ pub fn place_spot_order_pipeline_v2(
         .unwrap_or((lsn, settle_start.saturating_sub(1)));
     let held_by_order_id =
         build_held_balances(frozen.order.after(), maker_orders, &working_balances)?;
-    let unfrozen = unfreeze_matched_spot_orders_at(
+    let unfrozen = unfreeze_matched_spot_orders(
         frozen.order.after(),
         maker_orders,
         &matched,
@@ -243,6 +251,7 @@ pub fn place_spot_order_pipeline_v2(
                 frozen,
                 matched,
                 settled,
+                unfrozen,
             }
         }
         MatchSpotOrderPipeChanges::Filled { .. } => PlaceSpotOrderPipelineV2Changes::Filled {
