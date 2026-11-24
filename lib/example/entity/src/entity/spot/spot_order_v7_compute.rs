@@ -29,25 +29,36 @@ impl SpotOrderV7 {
             .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
     }
 
-    /// 返回订单进入终态时累计解冻的冻结金额。
-    ///
-    /// 仅接受 `Canceled`、`Filled` 或 `Rejected` 订单。买单返回累计解冻的 quote
-    /// 本金与手续费预留，卖单返回终态剩余 base 数量。本查询不修改订单。
-    pub fn terminal_release_amount(&self) -> Result<CoinAmount, SpotAmountConversionError> {
-        let order = self.order_base();
-        let amount = match (order.status, order.side) {
-            (
-                SpotOrderStatus::Canceled | SpotOrderStatus::Filled | SpotOrderStatus::Rejected,
-                OrderSide::Buy,
-            ) => order
-                .buy_quote_principal_unfrozen
-                .checked_add(order.buy_quote_fee_reserve_unfrozen)
-                .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
-            (SpotOrderStatus::Rejected, OrderSide::Sell) => order.orig_size,
-            (SpotOrderStatus::Canceled | SpotOrderStatus::Filled, OrderSide::Sell) => order.size,
-            _ => return Err(SpotAmountConversionError::OrderNotCanceled),
+    /// 返回本次终态迁移新增的解冻金额。
+    pub fn terminal_unfreeze_delta(
+        &self,
+        before: &Self,
+    ) -> Result<CoinAmount, SpotAmountConversionError> {
+        let after = self.order_base();
+        let before = before.order_base();
+        if after.order_id != before.order_id || after.owner != before.owner {
+            return Err(SpotAmountConversionError::InvalidAmount);
+        }
+        if after.symbol != before.symbol || after.side != before.side {
+            return Err(SpotAmountConversionError::SymbolMismatch);
+        }
+        if matches!(before.status, SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected)
+            || !matches!(after.status, SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected)
+        {
+            return Err(SpotAmountConversionError::OrderNotCanceled);
+        }
+        let amount = match after.side {
+            OrderSide::Buy => after.buy_quote_principal_unfrozen
+                .checked_sub(before.buy_quote_principal_unfrozen)
+                .and_then(|v| after.buy_quote_fee_reserve_unfrozen
+                    .checked_sub(before.buy_quote_fee_reserve_unfrozen)
+                    .and_then(|fee| v.checked_add(fee)))
+                .filter(|v| *v >= rust_decimal::Decimal::ZERO)
+                .ok_or(SpotAmountConversionError::InvalidAmount)?,
+            OrderSide::Sell if after.status == SpotOrderStatus::Filled => rust_decimal::Decimal::ZERO,
+            OrderSide::Sell => before.size,
         };
-        CoinAmount::new(held_currency(order), amount)
+        CoinAmount::new(held_currency(after), amount)
             .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
     }
 

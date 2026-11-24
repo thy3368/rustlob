@@ -723,6 +723,35 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
     {
         return Err(err("invalid order facts"));
     }
+    let principal_accounted = o.buy_quote_principal_paid
+        .checked_add(o.buy_quote_principal_unfrozen)
+        .ok_or_else(|| err("principal accounting overflow"))?;
+    let fee_accounted = o.buy_quote_fee_reserve_paid
+        .checked_add(o.buy_quote_fee_reserve_unfrozen)
+        .ok_or_else(|| err("fee accounting overflow"))?;
+    if principal_accounted > o.buy_quote_principal_frozen
+        || fee_accounted > o.buy_quote_fee_reserve_frozen
+    {
+        return Err(err("buy fund classification exceeds frozen amount"));
+    }
+    if o.side == OrderSide::Sell
+        && (o.buy_quote_fee_reserve_bps != 0
+            || o.buy_quote_principal_frozen != Decimal::ZERO
+            || o.buy_quote_fee_reserve_frozen != Decimal::ZERO
+            || o.buy_quote_principal_paid != Decimal::ZERO
+            || o.buy_quote_fee_reserve_paid != Decimal::ZERO
+            || o.buy_quote_principal_unfrozen != Decimal::ZERO
+            || o.buy_quote_fee_reserve_unfrozen != Decimal::ZERO)
+    {
+        return Err(err("sell order contains buy fund facts"));
+    }
+    if matches!(o.status, SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected)
+        && o.side == OrderSide::Buy
+        && (principal_accounted != o.buy_quote_principal_frozen
+            || fee_accounted != o.buy_quote_fee_reserve_frozen)
+    {
+        return Err(err("terminal buy funds are not conserved"));
+    }
     Ok(())
 }
 fn validate_matchable(o: &OrderBase) -> Result<(), EntityError> {
