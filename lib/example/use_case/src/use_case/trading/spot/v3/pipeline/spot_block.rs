@@ -13,7 +13,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::cancel_spot_order_fsm_v3::{
+use super::cancel_spot_order::{
     CancelSpotOrderFsmV3Changes as CancelSpotOrderV3Changes,
     CancelSpotOrderFsmV3Cmd as CancelSpotOrderV3Cmd,
     CancelSpotOrderFsmV3Error as CancelSpotOrderV3Error,
