@@ -22,7 +22,7 @@ pub struct MatchSpotOrderInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MatchSpotOrderChanges {
+pub enum MatchSpotOrderPipeChanges {
     Resting,
     PartiallyFilled {
         taker: UpdatedEntityEvents<SpotOrderV7>,
@@ -44,7 +44,7 @@ pub enum MatchSpotOrderChanges {
     },
 }
 
-impl ReplayableEntityChanges for MatchSpotOrderChanges {
+impl ReplayableEntityChanges for MatchSpotOrderPipeChanges {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
         let (taker, makers, trades) = match self {
             Self::Resting => return Vec::new(),
@@ -94,7 +94,7 @@ pub fn match_spot_order(
     taker_before: &SpotOrderV7,
     makers: &[SpotOrderV7],
     input: MatchSpotOrderInput,
-) -> Result<MatchSpotOrderChanges, EntityError> {
+) -> Result<MatchSpotOrderPipeChanges, EntityError> {
     match_spot_order_from(taker_before, makers, input, 0)
 }
 
@@ -104,7 +104,7 @@ pub fn match_spot_order_from(
     makers: &[SpotOrderV7],
     input: MatchSpotOrderInput,
     command_index_start: u32,
-) -> Result<MatchSpotOrderChanges, EntityError> {
+) -> Result<MatchSpotOrderPipeChanges, EntityError> {
     validate_orders(taker_before, makers)?;
     let taker_facts = taker_before.order_base();
     let crosses = |maker: &SpotOrderV7| match taker_facts.side {
@@ -119,7 +119,7 @@ pub fn match_spot_order_from(
             EventPosition::new(input.lsn, command_index_start),
             input,
         )?;
-        return Ok(MatchSpotOrderChanges::Rejected { taker });
+        return Ok(MatchSpotOrderPipeChanges::Rejected { taker });
     }
 
     let mut remaining = taker_facts.size;
@@ -178,7 +178,7 @@ pub fn match_spot_order_from(
         .checked_sub(remaining)
         .ok_or_else(|| match_error("size underflow"))?;
     if filled_size == Decimal::ZERO && taker_facts.effective_tif() != OrderTif::Ioc {
-        return Ok(MatchSpotOrderChanges::Resting);
+        return Ok(MatchSpotOrderPipeChanges::Resting);
     }
 
     let taker = transition_order(
@@ -241,18 +241,18 @@ pub fn match_spot_order_from(
     }
 
     match taker.after().status() {
-        SpotOrderStatus::Filled => Ok(MatchSpotOrderChanges::Filled {
+        SpotOrderStatus::Filled => Ok(MatchSpotOrderPipeChanges::Filled {
             taker,
             makers: maker_changes,
             trades,
         }),
-        SpotOrderStatus::Canceled => Ok(MatchSpotOrderChanges::CanceledAfterPartialFill {
+        SpotOrderStatus::Canceled => Ok(MatchSpotOrderPipeChanges::CanceledAfterPartialFill {
             taker,
             makers: maker_changes,
             trades,
         }),
-        SpotOrderStatus::Rejected => Ok(MatchSpotOrderChanges::Rejected { taker }),
-        SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderChanges::PartiallyFilled {
+        SpotOrderStatus::Rejected => Ok(MatchSpotOrderPipeChanges::Rejected { taker }),
+        SpotOrderStatus::PartiallyFilled => Ok(MatchSpotOrderPipeChanges::PartiallyFilled {
             taker,
             makers: maker_changes,
             trades,

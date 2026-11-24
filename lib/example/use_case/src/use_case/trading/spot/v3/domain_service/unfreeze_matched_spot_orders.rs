@@ -5,7 +5,7 @@ use common_entity::{Entity, EventPosition, UpdatedEntityEvents};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderStatus, SpotOrderV7};
 use rust_decimal::Decimal;
 
-use super::match_spot_order::MatchSpotOrderChanges;
+use super::match_spot_order::MatchSpotOrderPipeChanges;
 
 /// 订单冻结资金所在的余额角色。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,7 +38,7 @@ struct MatchEventMetadata {
 pub fn unfreeze_matched_spot_orders(
     taker_before: &SpotOrderV7,
     makers_before: &[SpotOrderV7],
-    matched: &MatchSpotOrderChanges,
+    matched: &MatchSpotOrderPipeChanges,
     balances_by_order_id: &HashMap<u64, SpotOrderHeldBalance>,
 ) -> Result<Vec<UpdatedEntityEvents<BalanceV2>>, UnfreezeMatchedSpotOrdersError> {
     let changes = changed_orders(matched);
@@ -62,7 +62,7 @@ pub fn unfreeze_matched_spot_orders(
 pub fn unfreeze_matched_spot_orders_at(
     taker_before: &SpotOrderV7,
     makers_before: &[SpotOrderV7],
-    matched: &MatchSpotOrderChanges,
+    matched: &MatchSpotOrderPipeChanges,
     balances_by_order_id: &HashMap<u64, SpotOrderHeldBalance>,
     previous_position: EventPosition,
     logical_ts: u64,
@@ -154,13 +154,13 @@ pub fn unfreeze_matched_spot_orders_at(
     transition_balances(releases, metadata)
 }
 
-fn changed_orders(matched: &MatchSpotOrderChanges) -> Vec<&UpdatedEntityEvents<SpotOrderV7>> {
+fn changed_orders(matched: &MatchSpotOrderPipeChanges) -> Vec<&UpdatedEntityEvents<SpotOrderV7>> {
     match matched {
-        MatchSpotOrderChanges::Resting => Vec::new(),
-        MatchSpotOrderChanges::Rejected { taker } => vec![taker],
-        MatchSpotOrderChanges::PartiallyFilled { taker, makers, .. }
-        | MatchSpotOrderChanges::Filled { taker, makers, .. }
-        | MatchSpotOrderChanges::CanceledAfterPartialFill { taker, makers, .. } => {
+        MatchSpotOrderPipeChanges::Resting => Vec::new(),
+        MatchSpotOrderPipeChanges::Rejected { taker } => vec![taker],
+        MatchSpotOrderPipeChanges::PartiallyFilled { taker, makers, .. }
+        | MatchSpotOrderPipeChanges::Filled { taker, makers, .. }
+        | MatchSpotOrderPipeChanges::CanceledAfterPartialFill { taker, makers, .. } => {
             let mut changes = Vec::with_capacity(1 + makers.len());
             changes.push(taker);
             changes.extend(makers);

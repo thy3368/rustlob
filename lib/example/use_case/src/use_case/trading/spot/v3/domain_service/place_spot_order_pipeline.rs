@@ -11,11 +11,11 @@ use example_core_entity::{
 
 use crate::use_case::trading::spot::v3::domain_service::freeze_spot_order::freeze_spot_order_from;
 use crate::use_case::trading::spot::v3::domain_service::match_spot_order::{
-    MatchSpotOrderChanges, MatchSpotOrderInput, match_spot_order_from,
+    MatchSpotOrderPipeChanges, MatchSpotOrderInput, match_spot_order_from,
 };
 use crate::use_case::trading::spot::v3::domain_service::place_spot_order::place_spot_order_at;
 use crate::use_case::trading::spot::v3::domain_service::settle_matched_spot_trades::{
-    SettleMatchedSpotTradesChanges, SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput,
+    SettleTradesPipeChanges, SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput,
     SpotOrderSettlementBalances, settle_matched_spot_trades_from,
 };
 use crate::use_case::trading::spot::v3::domain_service::unfreeze_matched_spot_orders::{
@@ -32,36 +32,36 @@ pub enum PlaceSpotOrderPipelineChanges {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
+        matched: MatchSpotOrderPipeChanges,
     },
     Rejected {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
+        matched: MatchSpotOrderPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
     PartiallyFilled {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
-        settled: SettleMatchedSpotTradesChanges,
+        matched: MatchSpotOrderPipeChanges,
+        settled: SettleTradesPipeChanges,
     },
     Filled {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
-        settled: SettleMatchedSpotTradesChanges,
+        matched: MatchSpotOrderPipeChanges,
+        settled: SettleTradesPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
     CanceledAfterPartialFill {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
-        settled: SettleMatchedSpotTradesChanges,
+        matched: MatchSpotOrderPipeChanges,
+        settled: SettleTradesPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
 }
@@ -256,7 +256,7 @@ pub fn place_spot_order_pipeline(
         match_start,
     )
     .map_err(PlaceSpotOrderPipelineError::Match)?;
-    if matches!(matched, MatchSpotOrderChanges::Resting) {
+    if matches!(matched, MatchSpotOrderPipeChanges::Resting) {
         return Ok(PlaceSpotOrderPipelineChanges::Resting {
             created_order,
             frozen_order,
@@ -267,7 +267,7 @@ pub fn place_spot_order_pipeline(
 
     let settle_start = next_command_index(match_start, &matched)?;
 
-    if matches!(matched, MatchSpotOrderChanges::Rejected { .. }) {
+    if matches!(matched, MatchSpotOrderPipeChanges::Rejected { .. }) {
         let unfreeze_previous = last_position(&matched)
             .unwrap_or(EventPosition::new(lsn, settle_start.saturating_sub(1)));
         let held_by_order_id =
@@ -308,7 +308,7 @@ pub fn place_spot_order_pipeline(
         replace_balance_snapshot(&mut working_balances, balance.after())?;
     }
 
-    if matches!(matched, MatchSpotOrderChanges::PartiallyFilled { .. }) {
+    if matches!(matched, MatchSpotOrderPipeChanges::PartiallyFilled { .. }) {
         return Ok(PlaceSpotOrderPipelineChanges::PartiallyFilled {
             created_order,
             frozen_order,
@@ -336,7 +336,7 @@ pub fn place_spot_order_pipeline(
     .map_err(PlaceSpotOrderPipelineError::Unfreeze)?;
 
     let changes = match matched {
-        matched @ MatchSpotOrderChanges::Filled { .. } => PlaceSpotOrderPipelineChanges::Filled {
+        matched @ MatchSpotOrderPipeChanges::Filled { .. } => PlaceSpotOrderPipelineChanges::Filled {
             created_order,
             frozen_order,
             frozen_balance,
@@ -344,7 +344,7 @@ pub fn place_spot_order_pipeline(
             settled,
             unfrozen_balances,
         },
-        matched @ MatchSpotOrderChanges::CanceledAfterPartialFill { .. } => {
+        matched @ MatchSpotOrderPipeChanges::CanceledAfterPartialFill { .. } => {
             PlaceSpotOrderPipelineChanges::CanceledAfterPartialFill {
                 created_order,
                 frozen_order,

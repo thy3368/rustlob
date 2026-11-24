@@ -8,7 +8,7 @@ use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3, SpotTrad
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderV7};
 use rust_decimal::Decimal;
 
-use super::match_spot_order::MatchSpotOrderChanges;
+use super::match_spot_order::MatchSpotOrderPipeChanges;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SettleMatchedSpotTradesInput {
@@ -25,12 +25,12 @@ pub struct SpotOrderSettlementBalances {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SettleMatchedSpotTradesChanges {
+pub struct SettleTradesPipeChanges {
     pub settled_trades: Vec<UpdatedEntityEvents<SpotTradeV3>>,
     pub updated_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
 }
 
-impl ReplayableEntityChanges for SettleMatchedSpotTradesChanges {
+impl ReplayableEntityChanges for SettleTradesPipeChanges {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
         self.settled_trades
             .iter()
@@ -64,35 +64,35 @@ struct AggregatedBalanceChange {
 ///
 /// 函数在执行任何 FSM 前完成全部输入、金额、余额和位置校验；返回错误时不会暴露部分结果。
 pub fn settle_matched_spot_trades(
-    matched: &MatchSpotOrderChanges,
+    matched: &MatchSpotOrderPipeChanges,
     balances_by_order_id: &HashMap<u64, SpotOrderSettlementBalances>,
     input: SettleMatchedSpotTradesInput,
-) -> Result<SettleMatchedSpotTradesChanges, SettleMatchedSpotTradesError> {
+) -> Result<SettleTradesPipeChanges, SettleMatchedSpotTradesError> {
     settle_matched_spot_trades_from(matched, balances_by_order_id, input, 0)
 }
 
 /// 从指定 `command_index` 起结算撮合结果。
 pub fn settle_matched_spot_trades_from(
-    matched: &MatchSpotOrderChanges,
+    matched: &MatchSpotOrderPipeChanges,
     balances_by_order_id: &HashMap<u64, SpotOrderSettlementBalances>,
     input: SettleMatchedSpotTradesInput,
     command_index_start: u32,
-) -> Result<SettleMatchedSpotTradesChanges, SettleMatchedSpotTradesError> {
+) -> Result<SettleTradesPipeChanges, SettleMatchedSpotTradesError> {
     let (orders, trades) = match matched {
-        MatchSpotOrderChanges::Resting | MatchSpotOrderChanges::Rejected { .. } => {
+        MatchSpotOrderPipeChanges::Resting | MatchSpotOrderPipeChanges::Rejected { .. } => {
             return Ok(empty_changes());
         }
-        MatchSpotOrderChanges::PartiallyFilled {
+        MatchSpotOrderPipeChanges::PartiallyFilled {
             taker,
             makers,
             trades,
         }
-        | MatchSpotOrderChanges::Filled {
+        | MatchSpotOrderPipeChanges::Filled {
             taker,
             makers,
             trades,
         }
-        | MatchSpotOrderChanges::CanceledAfterPartialFill {
+        | MatchSpotOrderPipeChanges::CanceledAfterPartialFill {
             taker,
             makers,
             trades,
@@ -216,14 +216,14 @@ pub fn settle_matched_spot_trades_from(
         input,
         command_index_start,
     )?;
-    Ok(SettleMatchedSpotTradesChanges {
+    Ok(SettleTradesPipeChanges {
         settled_trades,
         updated_balances,
     })
 }
 
-fn empty_changes() -> SettleMatchedSpotTradesChanges {
-    SettleMatchedSpotTradesChanges {
+fn empty_changes() -> SettleTradesPipeChanges {
+    SettleTradesPipeChanges {
         settled_trades: Vec::new(),
         updated_balances: Vec::new(),
     }

@@ -45,15 +45,6 @@ pub fn freeze_spot_order_from(
             "balance owner does not match the order owner".to_owned(),
         ));
     }
-    let requirement = order
-        .taker_freeze_amount()
-        .map_err(|error| EntityError::Custom(format!("failed to derive freeze amount: {error}")))?;
-    if balance.coin_idx() != u64::from(requirement.currency().index()) {
-        return Err(EntityError::Custom(
-            "balance coin does not match the asset frozen by the order".to_owned(),
-        ));
-    }
-
     let order_loaded_position = order.event_position();
     let order_metadata = FsmCommandMetadata::new_at(
         EventPosition::new(lsn, command_index),
@@ -73,6 +64,15 @@ pub fn freeze_spot_order_from(
             .map_err(|error| {
                 EntityError::Custom(format!("invalid order event chain: {error:?}"))
             })?;
+    let requirement = order_changes
+        .after()
+        .taker_freeze_amount()
+        .map_err(|error| EntityError::Custom(format!("failed to derive freeze amount: {error}")))?;
+    if balance.coin_idx() != u64::from(requirement.currency().index()) {
+        return Err(EntityError::Custom(
+            "balance coin does not match the asset frozen by the order".to_owned(),
+        ));
+    }
 
     let balance_loaded_position = balance.event_position();
     let balance_metadata = FsmCommandMetadata::new_at(

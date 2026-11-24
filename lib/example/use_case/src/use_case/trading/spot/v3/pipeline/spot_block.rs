@@ -5,7 +5,11 @@ use common_entity::{
     UseCaseV3,
 };
 use example_core_entity::common::identifiers::OrderId;
-use example_core_entity::{BalanceV2, SpotOrderStatus, SpotOrderV7};
+use example_core_entity::{
+    BalanceV2, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide, OrderType, SpotOrderStatus,
+    SpotOrderV7,
+};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -15,10 +19,34 @@ use super::cancel_spot_order_fsm_v3::{
     CancelSpotOrderFsmV3Error as CancelSpotOrderV3Error,
     CancelSpotOrderFsmV3State as CancelSpotOrderV3State, CancelSpotOrderFsmV3UseCase,
 };
-use super::place_spot_order::{
-    PlaceSpotOrderV3Changes, PlaceSpotOrderV3Cmd, PlaceSpotOrderV3Error, PlaceSpotOrderV3OrderCmd,
-    PlaceSpotOrderV3State, SpotOrderV3Balances, compute_place_changes,
+use crate::use_case::trading::spot::v3::domain_service::match_spot_order::MatchSpotOrderPipeChanges;
+use crate::use_case::trading::spot::v3::domain_service::place_spot_order_pipeline_v2::{
+    PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error, place_spot_order_pipeline_v2,
 };
+use crate::use_case::trading::spot::v3::domain_service::settle_matched_spot_trades::{
+    SettleTradesPipeChanges, SpotOrderSettlementBalances,
+};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceSpotOrderV3OrderCmd {
+    pub party_id: u64,
+    pub order_id: u64,
+    pub symbol: example_core_entity::account::symbol::Symbol,
+    pub side: OrderSide,
+    pub price: Decimal,
+    pub size: Decimal,
+    pub order_type: OrderType,
+    pub cloid: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlaceSpotOrderV3Cmd {
+    Single(PlaceSpotOrderV3OrderCmd),
+    NormalTpsl {
+        parent: PlaceSpotOrderV3OrderCmd,
+        children: Vec<PlaceSpotOrderV3OrderCmd>,
+    },
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotBlockCmd {
@@ -94,20 +122,28 @@ pub enum SpotBlockItemResult {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotBlockAppliedChanges {
-    Place(PlaceSpotOrderV3Changes),
+    Place(PlaceSpotOrderPipelineV2Changes),
     Cancel(CancelSpotOrderV3Changes),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SpotBlockItemError {
     #[error(transparent)]
-    Place(#[from] PlaceSpotOrderV3Error),
+    Place(#[from] PlaceSpotOrderPipelineV2Error),
     #[error(transparent)]
     Cancel(#[from] CancelSpotOrderV3Error),
     #[error("order was not found")]
     OrderNotFound,
     #[error("balance was not found or is ambiguous")]
     BalanceNotFound,
+    #[error("TPSL and grouped orders are not supported")]
+    GroupedOrderNotSupported,
+    #[error("order id already exists")]
+    DuplicateOrderIdentity,
+    #[error("client order id already exists")]
+    DuplicateClientOrderId,
+    #[error("trade id range overflows")]
+    TradeIdOverflow,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -268,10 +304,13 @@ impl WorkingState {
         &mut self,
         item: LogEntry<SpotBlockCommand>,
     ) -> Result<SpotBlockAppliedChanges, SpotBlockItemError> {
-        match item.payload().clone() {
-            SpotBlockCommand::Place(command) => self.apply_place(item, command),
-            SpotBlockCommand::Cancel(command) => self.apply_cancel(item, command),
-        }
+        let mut staged = self.clone();
+        let changes = match item.payload().clone() {
+            SpotBlockCommand::Place(command) => staged.apply_place(item, command),
+            SpotBlockCommand::Cancel(command) => staged.apply_cancel(item, command),
+        }?;
+        *self = staged;
+        Ok(changes)
     }
 
     fn apply_place(
@@ -279,17 +318,26 @@ impl WorkingState {
         item: LogEntry<SpotBlockCommand>,
         command: PlaceSpotOrderV3Cmd,
     ) -> Result<SpotBlockAppliedChanges, SpotBlockItemError> {
-        let entry = common_entity::LogEntrySequencer::derive(&item, command);
-        let parent = place_orders(entry.payload())
-            .next()
-            .ok_or(PlaceSpotOrderV3Error::InvalidGroup)?;
+        let PlaceSpotOrderV3Cmd::Single(order) = command else {
+            return Err(SpotBlockItemError::GroupedOrderNotSupported);
+        };
+        if self.order_by_oid.contains_key(&order.order_id) {
+            return Err(SpotBlockItemError::DuplicateOrderIdentity);
+        }
+        if order
+            .cloid
+            .as_ref()
+            .is_some_and(|cloid| self.order_by_cloid.contains_key(cloid))
+        {
+            return Err(SpotBlockItemError::DuplicateClientOrderId);
+        }
         let maker_orders = self
             .orders
             .iter()
-            .filter(|order| {
-                let base = order.order_base();
-                base.symbol == parent.symbol
-                    && base.side != parent.side
+            .filter(|maker| {
+                let base = maker.order_base();
+                base.symbol == order.symbol
+                    && base.side != order.side
                     && matches!(
                         base.status,
                         SpotOrderStatus::Open | SpotOrderStatus::PartiallyFilled
@@ -299,37 +347,45 @@ impl WorkingState {
             .collect::<Vec<_>>();
         let mut balances_by_order_id = HashMap::with_capacity(maker_orders.len() + 1);
         balances_by_order_id.insert(
-            parent.order_id,
-            self.balances_for(parent.party_id, parent.symbol)?,
+            order.order_id,
+            self.balances_for(order.party_id, order.symbol)?,
         );
         for maker in &maker_orders {
             let base = maker.order_base();
             balances_by_order_id
                 .insert(base.order_id, self.balances_for(base.owner.0, base.symbol)?);
         }
-        let state = PlaceSpotOrderV3State {
-            maker_orders,
-            balances_by_order_id,
-            trade_id_start: self.next_trade_id,
-            maker_fee_bps: self.maker_fee_bps,
-            taker_fee_bps: self.taker_fee_bps,
+        let command = CreateSpotOrderV7Command {
+            party_id: order.party_id,
+            order_id: order.order_id,
+            symbol: order.symbol,
+            side: order.side,
+            price: order.price,
+            size: order.size,
+            order_type: order.order_type,
+            relation: OrderGroupRelation::Standalone,
+            cloid: order.cloid,
+            fee_bps: self.taker_fee_bps,
         };
-        let changes = compute_place_changes(&entry, &state)?;
+        let changes = place_spot_order_pipeline_v2(
+            command,
+            &maker_orders,
+            &balances_by_order_id,
+            self.next_trade_id,
+            self.maker_fee_bps,
+            self.taker_fee_bps,
+            item.lsn(),
+            item.logical_ts(),
+            item.topic(),
+            item.partition(),
+        )?;
+        let trade_count = matched_changes(&changes).map_or(0, match_trade_count);
         self.next_trade_id = self
             .next_trade_id
-            .checked_add(changes.settled_trades.len() as u64)
-            .ok_or(PlaceSpotOrderV3Error::TradeIdOverflow)?;
-        for pair in &changes.updated_maker_orders {
-            self.replace_order(pair.after().clone())?;
-        }
-        for order in &changes.created_orders {
-            self.orders.push(order.after().clone());
-        }
-        for pair in &changes.updated_balances {
-            self.replace_balance(pair.after().clone())?;
-        }
-        self.rebuild_indexes()
-            .map_err(|_| SpotBlockItemError::OrderNotFound)?;
+            .checked_add(trade_count)
+            .ok_or(SpotBlockItemError::TradeIdOverflow)?;
+        self.project_place_changes(&changes)?;
+        self.rebuild_indexes().map_err(map_index_error)?;
         Ok(SpotBlockAppliedChanges::Place(changes))
     }
 
@@ -376,8 +432,8 @@ impl WorkingState {
         &self,
         party_id: u64,
         symbol: example_core_entity::account::symbol::Symbol,
-    ) -> Result<SpotOrderV3Balances, SpotBlockItemError> {
-        Ok(SpotOrderV3Balances {
+    ) -> Result<SpotOrderSettlementBalances, SpotBlockItemError> {
+        Ok(SpotOrderSettlementBalances {
             base: self
                 .balance_for(party_id, u64::from(symbol.base.index()))?
                 .clone(),
@@ -417,6 +473,151 @@ impl WorkingState {
             .ok_or(SpotBlockItemError::BalanceNotFound)?;
         self.balances[index] = balance;
         Ok(())
+    }
+
+    fn project_place_changes(
+        &mut self,
+        changes: &PlaceSpotOrderPipelineV2Changes,
+    ) -> Result<(), SpotBlockItemError> {
+        let (frozen_order, frozen_balance) = frozen_changes(changes);
+        let taker = matched_changes(changes)
+            .and_then(matched_taker)
+            .unwrap_or_else(|| frozen_order.after());
+        self.orders.push(taker.clone());
+        self.replace_balance(frozen_balance.after().clone())?;
+
+        if let Some(matched) = matched_changes(changes) {
+            for maker in matched_makers(matched) {
+                self.replace_order(maker.after().clone())?;
+            }
+        }
+        if let Some(settled) = settled_changes(changes) {
+            for balance in &settled.updated_balances {
+                self.replace_balance(balance.after().clone())?;
+            }
+        }
+        for balance in unfrozen_changes(changes) {
+            self.replace_balance(balance.after().clone())?;
+        }
+        Ok(())
+    }
+}
+
+fn frozen_changes(
+    changes: &PlaceSpotOrderPipelineV2Changes,
+) -> (
+    &common_entity::UpdatedEntityEvents<SpotOrderV7>,
+    &common_entity::UpdatedEntityEvents<BalanceV2>,
+) {
+    match changes {
+        PlaceSpotOrderPipelineV2Changes::Resting {
+            frozen_order,
+            frozen_balance,
+            ..
+        }
+        | PlaceSpotOrderPipelineV2Changes::Rejected {
+            frozen_order,
+            frozen_balance,
+            ..
+        }
+        | PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
+            frozen_order,
+            frozen_balance,
+            ..
+        }
+        | PlaceSpotOrderPipelineV2Changes::Filled {
+            frozen_order,
+            frozen_balance,
+            ..
+        }
+        | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill {
+            frozen_order,
+            frozen_balance,
+            ..
+        } => (frozen_order, frozen_balance),
+    }
+}
+
+fn matched_changes(changes: &PlaceSpotOrderPipelineV2Changes) -> Option<&MatchSpotOrderPipeChanges> {
+    match changes {
+        PlaceSpotOrderPipelineV2Changes::Resting { .. } => None,
+        PlaceSpotOrderPipelineV2Changes::Rejected { matched, .. }
+        | PlaceSpotOrderPipelineV2Changes::PartiallyFilled { matched, .. }
+        | PlaceSpotOrderPipelineV2Changes::Filled { matched, .. }
+        | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill { matched, .. } => {
+            Some(matched)
+        }
+    }
+}
+
+fn matched_taker(changes: &MatchSpotOrderPipeChanges) -> Option<&SpotOrderV7> {
+    match changes {
+        MatchSpotOrderPipeChanges::Resting => None,
+        MatchSpotOrderPipeChanges::PartiallyFilled { taker, .. }
+        | MatchSpotOrderPipeChanges::Filled { taker, .. }
+        | MatchSpotOrderPipeChanges::CanceledAfterPartialFill { taker, .. }
+        | MatchSpotOrderPipeChanges::Rejected { taker } => Some(taker.after()),
+    }
+}
+
+fn matched_makers(
+    changes: &MatchSpotOrderPipeChanges,
+) -> &[common_entity::UpdatedEntityEvents<SpotOrderV7>] {
+    match changes {
+        MatchSpotOrderPipeChanges::PartiallyFilled { makers, .. }
+        | MatchSpotOrderPipeChanges::Filled { makers, .. }
+        | MatchSpotOrderPipeChanges::CanceledAfterPartialFill { makers, .. } => makers,
+        MatchSpotOrderPipeChanges::Resting | MatchSpotOrderPipeChanges::Rejected { .. } => &[],
+    }
+}
+
+fn match_trade_count(changes: &MatchSpotOrderPipeChanges) -> u64 {
+    match changes {
+        MatchSpotOrderPipeChanges::PartiallyFilled { trades, .. }
+        | MatchSpotOrderPipeChanges::Filled { trades, .. }
+        | MatchSpotOrderPipeChanges::CanceledAfterPartialFill { trades, .. } => trades.len() as u64,
+        MatchSpotOrderPipeChanges::Resting | MatchSpotOrderPipeChanges::Rejected { .. } => 0,
+    }
+}
+
+fn settled_changes(
+    changes: &PlaceSpotOrderPipelineV2Changes,
+) -> Option<&SettleTradesPipeChanges> {
+    match changes {
+        PlaceSpotOrderPipelineV2Changes::PartiallyFilled { settled, .. }
+        | PlaceSpotOrderPipelineV2Changes::Filled { settled, .. }
+        | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill { settled, .. } => {
+            Some(settled)
+        }
+        PlaceSpotOrderPipelineV2Changes::Resting { .. }
+        | PlaceSpotOrderPipelineV2Changes::Rejected { .. } => None,
+    }
+}
+
+fn unfrozen_changes(
+    changes: &PlaceSpotOrderPipelineV2Changes,
+) -> &[common_entity::UpdatedEntityEvents<BalanceV2>] {
+    match changes {
+        PlaceSpotOrderPipelineV2Changes::Rejected {
+            unfrozen_balances, ..
+        }
+        | PlaceSpotOrderPipelineV2Changes::Filled {
+            unfrozen_balances, ..
+        }
+        | PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill {
+            unfrozen_balances, ..
+        } => unfrozen_balances,
+        PlaceSpotOrderPipelineV2Changes::Resting { .. }
+        | PlaceSpotOrderPipelineV2Changes::PartiallyFilled { .. } => &[],
+    }
+}
+
+fn map_index_error(error: SpotBlockError) -> SpotBlockItemError {
+    match error {
+        SpotBlockError::DuplicateOrderIdentity => SpotBlockItemError::DuplicateOrderIdentity,
+        SpotBlockError::DuplicateClientOrderId => SpotBlockItemError::DuplicateClientOrderId,
+        SpotBlockError::DuplicateBalanceIdentity => SpotBlockItemError::BalanceNotFound,
+        _ => SpotBlockItemError::OrderNotFound,
     }
 }
 
@@ -529,7 +730,9 @@ mod tests {
             changes
                 .item_results
                 .iter()
-                .all(|item| matches!(item, SpotBlockItemResult::Applied { .. }))
+                .all(|item| matches!(item, SpotBlockItemResult::Applied { .. })),
+            "unexpected item result: {:?}",
+            changes.item_results
         );
 
         let events = changes.replayable_events();

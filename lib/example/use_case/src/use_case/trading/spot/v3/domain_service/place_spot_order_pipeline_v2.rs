@@ -10,10 +10,10 @@ use example_core_entity::{
 };
 
 use super::freeze_spot_order::freeze_spot_order_from;
-use super::match_spot_order::{MatchSpotOrderChanges, MatchSpotOrderInput, match_spot_order_from};
+use super::match_spot_order::{MatchSpotOrderPipeChanges, MatchSpotOrderInput, match_spot_order_from};
 use super::place_spot_order::place_spot_order_at;
 use super::settle_matched_spot_trades::{
-    SettleMatchedSpotTradesChanges, SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput,
+    SettleTradesPipeChanges, SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput,
     SpotOrderSettlementBalances, settle_matched_spot_trades_from,
 };
 use super::unfreeze_matched_spot_orders::{
@@ -32,30 +32,30 @@ pub enum PlaceSpotOrderPipelineV2Changes {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
+        matched: MatchSpotOrderPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
     PartiallyFilled {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
-        settled: SettleMatchedSpotTradesChanges,
+        matched: MatchSpotOrderPipeChanges,
+        settled: SettleTradesPipeChanges,
     },
     Filled {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
-        settled: SettleMatchedSpotTradesChanges,
+        matched: MatchSpotOrderPipeChanges,
+        settled: SettleTradesPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
     CanceledAfterPartialFill {
         created_order: CreatedEntityEvent<SpotOrderV7>,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
-        matched: MatchSpotOrderChanges,
-        settled: SettleMatchedSpotTradesChanges,
+        matched: MatchSpotOrderPipeChanges,
+        settled: SettleTradesPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
 }
@@ -267,19 +267,19 @@ pub fn place_spot_order_pipeline_v2(
     .map_err(PlaceSpotOrderPipelineV2Error::Unfreeze)?;
 
     Ok(match &matched {
-        MatchSpotOrderChanges::Resting => PlaceSpotOrderPipelineV2Changes::Resting {
+        MatchSpotOrderPipeChanges::Resting => PlaceSpotOrderPipelineV2Changes::Resting {
             created_order,
             frozen_order,
             frozen_balance,
         },
-        MatchSpotOrderChanges::Rejected { .. } => PlaceSpotOrderPipelineV2Changes::Rejected {
+        MatchSpotOrderPipeChanges::Rejected { .. } => PlaceSpotOrderPipelineV2Changes::Rejected {
             created_order,
             frozen_order,
             frozen_balance,
             matched,
             unfrozen_balances,
         },
-        MatchSpotOrderChanges::PartiallyFilled { .. } => {
+        MatchSpotOrderPipeChanges::PartiallyFilled { .. } => {
             PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
                 created_order,
                 frozen_order,
@@ -288,7 +288,7 @@ pub fn place_spot_order_pipeline_v2(
                 settled,
             }
         }
-        MatchSpotOrderChanges::Filled { .. } => PlaceSpotOrderPipelineV2Changes::Filled {
+        MatchSpotOrderPipeChanges::Filled { .. } => PlaceSpotOrderPipelineV2Changes::Filled {
             created_order,
             frozen_order,
             frozen_balance,
@@ -296,7 +296,7 @@ pub fn place_spot_order_pipeline_v2(
             settled,
             unfrozen_balances,
         },
-        MatchSpotOrderChanges::CanceledAfterPartialFill { .. } => {
+        MatchSpotOrderPipeChanges::CanceledAfterPartialFill { .. } => {
             PlaceSpotOrderPipelineV2Changes::CanceledAfterPartialFill {
                 created_order,
                 frozen_order,
