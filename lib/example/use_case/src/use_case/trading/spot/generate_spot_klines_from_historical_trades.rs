@@ -281,7 +281,8 @@ mod tests {
                 version: 1,
             },
             settlement_status: SpotTradeSettlementStatus::Unsettled,
-            position: common_entity::EventPosition::ZERO,
+            lsn: 0,
+            command_index: 0,
         }
     }
 

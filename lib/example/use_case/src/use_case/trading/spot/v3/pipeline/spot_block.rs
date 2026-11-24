@@ -538,7 +538,9 @@ fn frozen_changes(
     }
 }
 
-fn matched_changes(changes: &PlaceSpotOrderPipelineV2Changes) -> Option<&MatchSpotOrderPipeChanges> {
+fn matched_changes(
+    changes: &PlaceSpotOrderPipelineV2Changes,
+) -> Option<&MatchSpotOrderPipeChanges> {
     match changes {
         PlaceSpotOrderPipelineV2Changes::Resting { .. } => None,
         PlaceSpotOrderPipelineV2Changes::Rejected { matched, .. }
@@ -580,9 +582,7 @@ fn match_trade_count(changes: &MatchSpotOrderPipeChanges) -> u64 {
     }
 }
 
-fn settled_changes(
-    changes: &PlaceSpotOrderPipelineV2Changes,
-) -> Option<&SettleTradesPipeChanges> {
+fn settled_changes(changes: &PlaceSpotOrderPipelineV2Changes) -> Option<&SettleTradesPipeChanges> {
     match changes {
         PlaceSpotOrderPipelineV2Changes::PartiallyFilled { settled, .. }
         | PlaceSpotOrderPipelineV2Changes::Filled { settled, .. }
@@ -741,10 +741,20 @@ mod tests {
             .iter()
             .filter(|event| event.entity_type == order_type)
             .collect::<Vec<_>>();
-        assert_eq!(order_events.len(), 2);
+        assert_eq!(order_events.len(), 3);
         assert_eq!(order_events[0].lsn, 10);
-        assert_eq!(order_events[1].lsn, 11);
-        assert_eq!(order_events[1].previous_lsn, 10);
+        assert_eq!(order_events[1].lsn, 10);
+        assert_eq!(order_events[1].previous_lsn, order_events[0].lsn);
+        assert_eq!(
+            order_events[1].previous_command_index,
+            order_events[0].command_index
+        );
+        assert_eq!(order_events[2].lsn, 11);
+        assert_eq!(order_events[2].previous_lsn, order_events[1].lsn);
+        assert_eq!(
+            order_events[2].previous_command_index,
+            order_events[1].command_index
+        );
         assert!(events.iter().any(|event| {
             event.entity_type == <BalanceV2 as Entity>::entity_type() && event.lsn == 11
         }));
@@ -765,6 +775,83 @@ mod tests {
         ));
         assert!(matches!(
             changes.item_results[1],
+            SpotBlockItemResult::Applied { .. }
+        ));
+    }
+
+    #[test]
+    fn grouped_and_duplicate_orders_reject_only_the_current_item() {
+        let PlaceSpotOrderV3Cmd::Single(parent) = (match place(7) {
+            SpotBlockCommand::Place(command) => command,
+            SpotBlockCommand::Cancel(_) => unreachable!(),
+        }) else {
+            unreachable!()
+        };
+        let grouped = SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::NormalTpsl {
+            parent: parent.clone(),
+            children: vec![PlaceSpotOrderV3OrderCmd {
+                order_id: 8,
+                side: OrderSide::Sell,
+                order_type: OrderType::Trigger {
+                    is_market: true,
+                    trigger_price: 11,
+                    tpsl: example_core_entity::OrderTriggerRole::TakeProfit,
+                },
+                cloid: Some("child".to_owned()),
+                ..parent.clone()
+            }],
+        });
+        let command = SpotBlockCmd {
+            items: vec![
+                item(10, grouped),
+                item(11, place(7)),
+                item(12, place(7)),
+                item(13, {
+                    let mut duplicate_cloid = parent;
+                    duplicate_cloid.order_id = 9;
+                    SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::Single(duplicate_cloid))
+                }),
+                item(14, {
+                    let mut later = match place(10) {
+                        SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::Single(order)) => order,
+                        _ => unreachable!(),
+                    };
+                    later.cloid = Some("later".to_owned());
+                    SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::Single(later))
+                }),
+            ],
+        };
+        let changes = SpotBlockUseCase
+            .validate_and_compute(&command, &state())
+            .expect("item rejections must not fail the block");
+
+        assert!(matches!(
+            changes.item_results[0],
+            SpotBlockItemResult::Rejected {
+                error: SpotBlockItemError::GroupedOrderNotSupported,
+                ..
+            }
+        ));
+        assert!(matches!(
+            changes.item_results[1],
+            SpotBlockItemResult::Applied { .. }
+        ));
+        assert!(matches!(
+            changes.item_results[2],
+            SpotBlockItemResult::Rejected {
+                error: SpotBlockItemError::DuplicateOrderIdentity,
+                ..
+            }
+        ));
+        assert!(matches!(
+            changes.item_results[3],
+            SpotBlockItemResult::Rejected {
+                error: SpotBlockItemError::DuplicateClientOrderId,
+                ..
+            }
+        ));
+        assert!(matches!(
+            changes.item_results[4],
             SpotBlockItemResult::Applied { .. }
         ));
     }

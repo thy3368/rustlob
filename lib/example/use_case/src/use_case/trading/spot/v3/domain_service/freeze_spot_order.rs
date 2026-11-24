@@ -1,7 +1,7 @@
 use common_entity::fsm_v2::{
     CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
 };
-use common_entity::{EntityError, EventPosition, PositionedEntity, Shard, UpdatedEntityEvents};
+use common_entity::{EntityError, PositionedEntity, Shard, UpdatedEntityEvents};
 use example_core_entity::{
     BalanceV2, BalanceV2Command, BalanceV2Error, SpotOrderV7, SpotOrderV7Command,
 };
@@ -45,9 +45,10 @@ pub fn freeze_spot_order_from(
             "balance owner does not match the order owner".to_owned(),
         ));
     }
-    let order_loaded_position = order.event_position();
+    let order_loaded_position = (order.lsn(), order.command_index());
     let order_metadata = FsmCommandMetadata::new_at(
-        EventPosition::new(lsn, command_index),
+        lsn,
+        command_index,
         logical_ts,
         topic,
         partition,
@@ -59,11 +60,13 @@ pub fn freeze_spot_order_from(
     )?;
     order_event.t = topic;
     order_event.p = partition;
-    let order_changes =
-        UpdatedEntityEvents::try_new(order_after, order_loaded_position, vec![order_event])
-            .map_err(|error| {
-                EntityError::Custom(format!("invalid order event chain: {error:?}"))
-            })?;
+    let order_changes = UpdatedEntityEvents::try_new(
+        order_after,
+        order_loaded_position.0,
+        order_loaded_position.1,
+        vec![order_event],
+    )
+    .map_err(|error| EntityError::Custom(format!("invalid order event chain: {error:?}")))?;
     let requirement = order_changes
         .after()
         .taker_freeze_amount()
@@ -74,14 +77,12 @@ pub fn freeze_spot_order_from(
         ));
     }
 
-    let balance_loaded_position = balance.event_position();
+    let balance_loaded_position = (balance.lsn(), balance.command_index());
     let balance_metadata = FsmCommandMetadata::new_at(
-        EventPosition::new(
-            lsn,
-            command_index
-                .checked_add(1)
-                .ok_or_else(|| EntityError::Custom("freeze command index overflow".to_owned()))?,
-        ),
+        lsn,
+        command_index
+            .checked_add(1)
+            .ok_or_else(|| EntityError::Custom("freeze command index overflow".to_owned()))?,
         logical_ts,
         topic,
         partition,
@@ -101,7 +102,8 @@ pub fn freeze_spot_order_from(
     balance_event.p = partition;
     let balance_changes = UpdatedEntityEvents::try_new(
         balance_after,
-        balance_loaded_position,
+        balance_loaded_position.0,
+        balance_loaded_position.1,
         vec![balance_event],
     )
     .map_err(|error| EntityError::Custom(format!("invalid balance event chain: {error:?}")))?;

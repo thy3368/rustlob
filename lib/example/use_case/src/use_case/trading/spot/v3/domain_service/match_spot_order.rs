@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
 use common_entity::{
-    CreatedEntityEvent, EntityError, EventPosition, PositionedEntity, ReplayableDomainEvent,
+    CreatedEntityEvent, EntityError, PositionedEntity, ReplayableDomainEvent,
     ReplayableEntityChanges, Shard, TrackDiff, UpdatedEntityEvents,
 };
 use example_core_entity::entity::common::common_trade::TradeBase;
@@ -116,7 +116,8 @@ pub fn match_spot_order_from(
         let taker = transition_order(
             taker_before,
             SpotOrderV7Command::RejectedAsTaker,
-            EventPosition::new(input.lsn, command_index_start),
+            input.lsn,
+            command_index_start,
             input,
         )?;
         return Ok(MatchSpotOrderPipeChanges::Rejected { taker });
@@ -188,7 +189,8 @@ pub fn match_spot_order_from(
             quote_notional: quote_notional_total,
             quote_fee: taker_fee_total,
         },
-        EventPosition::new(input.lsn, command_index_start),
+        input.lsn,
+        command_index_start,
         input,
     )?;
 
@@ -209,7 +211,8 @@ pub fn match_spot_order_from(
                 quote_notional: fill.quote_notional,
                 quote_fee: fill.maker_fee,
             },
-            EventPosition::new(input.lsn, command_index),
+            input.lsn,
+            command_index,
             input,
         )?);
     }
@@ -235,7 +238,8 @@ pub fn match_spot_order_from(
             &taker,
             maker,
             *fill,
-            EventPosition::new(input.lsn, command_index),
+            input.lsn,
+            command_index,
             input,
         )?);
     }
@@ -282,11 +286,13 @@ fn validate_orders(taker: &SpotOrderV7, makers: &[SpotOrderV7]) -> Result<(), En
 fn transition_order(
     before: &SpotOrderV7,
     command: SpotOrderV7Command,
-    position: EventPosition,
+    lsn: u64,
+    command_index: u32,
     input: MatchSpotOrderInput,
 ) -> Result<UpdatedEntityEvents<SpotOrderV7>, EntityError> {
     let metadata = CommandMetadata::new_at(
-        position,
+        lsn,
+        command_index,
         input.logical_ts,
         input.topic,
         input.partition,
@@ -295,7 +301,7 @@ fn transition_order(
     let (after, mut event) = FsmV2::transition(before, SequencedCommand::new(metadata, command))?;
     event.t = input.topic;
     event.p = input.partition;
-    UpdatedEntityEvents::try_new(after, before.event_position(), vec![event])
+    UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index(), vec![event])
         .map_err(|error| match_error(&format!("invalid order event chain: {error:?}")))
 }
 
@@ -303,7 +309,8 @@ fn create_trade(
     taker: &UpdatedEntityEvents<SpotOrderV7>,
     maker: &SpotOrderV7,
     fill: PlannedFill,
-    position: EventPosition,
+    lsn: u64,
+    command_index: u32,
     input: MatchSpotOrderInput,
 ) -> Result<CreatedEntityEvent<SpotTradeV3>, EntityError> {
     let taker_facts = taker.after().order_base();
@@ -325,9 +332,10 @@ fn create_trade(
             version: input.lsn,
         },
         settlement_status: SpotTradeSettlementStatus::Unsettled,
-        position,
+        lsn,
+        command_index,
     };
-    let mut event = trade.track_create_event_at(position, input.logical_ts)?;
+    let mut event = trade.track_create_event_at(lsn, command_index, input.logical_ts)?;
     event.t = input.topic;
     event.p = input.partition;
     event.domain_event_type = 1;

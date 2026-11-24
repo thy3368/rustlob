@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-use common_entity::{Entity, EventPosition, UpdatedEntityEvents};
+use common_entity::{Entity, UpdatedEntityEvents};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderStatus, SpotOrderV7};
 use rust_decimal::Decimal;
 
@@ -26,7 +26,8 @@ struct AggregatedRelease {
 
 #[derive(Debug, Clone, Copy)]
 struct MatchEventMetadata {
-    last_position: EventPosition,
+    lsn: u64,
+    last_command_index: u32,
     logical_ts: u64,
     topic: u8,
     partition: u8,
@@ -51,7 +52,8 @@ pub fn unfreeze_matched_spot_orders(
         makers_before,
         matched,
         balances_by_order_id,
-        metadata.last_position,
+        metadata.lsn,
+        metadata.last_command_index,
         metadata.logical_ts,
         metadata.topic,
         metadata.partition,
@@ -64,7 +66,8 @@ pub fn unfreeze_matched_spot_orders_at(
     makers_before: &[SpotOrderV7],
     matched: &MatchSpotOrderPipeChanges,
     balances_by_order_id: &HashMap<u64, SpotOrderHeldBalance>,
-    previous_position: EventPosition,
+    previous_lsn: u64,
+    previous_command_index: u32,
     logical_ts: u64,
     topic: u8,
     partition: u8,
@@ -74,11 +77,14 @@ pub fn unfreeze_matched_spot_orders_at(
         return Ok(Vec::new());
     }
     let matched_metadata = validate_match_event_metadata(&changes)?;
-    if previous_position < matched_metadata.last_position {
+    if (previous_lsn, previous_command_index)
+        < (matched_metadata.lsn, matched_metadata.last_command_index)
+    {
         return Err(error("unfreeze position precedes matched order events"));
     }
     let metadata = MatchEventMetadata {
-        last_position: previous_position,
+        lsn: previous_lsn,
+        last_command_index: previous_command_index,
         logical_ts,
         topic,
         partition,
@@ -193,10 +199,10 @@ fn validate_changed_order(
         || before.order_base().owner != after.order_base().owner
         || before.order_base().symbol != after.order_base().symbol
         || before.order_base().side != after.order_base().side
-        || changed
-            .events()
-            .first()
-            .is_none_or(|event| event.previous_position != before.event_position())
+        || changed.events().first().is_none_or(|event| {
+            (event.previous_lsn, event.previous_command_index)
+                != (before.lsn(), before.command_index())
+        })
     {
         return Err(error(format!(
             "order identity or predecessor mismatch for order {}",
@@ -214,20 +220,21 @@ fn validate_match_event_metadata(
         .and_then(|change| change.events().first())
         .ok_or_else(|| error("matched order changes contain no event"))?;
     let mut metadata = MatchEventMetadata {
-        last_position: first.position,
+        lsn: first.lsn,
+        last_command_index: first.command_index,
         logical_ts: first.logical_ts,
         topic: first.t,
         partition: first.p,
     };
     for event in changes.iter().flat_map(|change| change.events()) {
-        if event.position.lsn != first.position.lsn
+        if event.lsn != first.lsn
             || event.logical_ts != first.logical_ts
             || event.t != first.t
             || event.p != first.p
         {
             return Err(error("matched order event metadata mismatch"));
         }
-        metadata.last_position = metadata.last_position.max(event.position);
+        metadata.last_command_index = metadata.last_command_index.max(event.command_index);
     }
     Ok(metadata)
 }
@@ -272,14 +279,13 @@ fn transition_balances(
         let increment =
             u32::try_from(offset + 1).map_err(|_| error("balance event position overflow"))?;
         let command_index = metadata
-            .last_position
-            .command_index
+            .last_command_index
             .checked_add(increment)
             .ok_or_else(|| error("balance event position overflow"))?;
-        let position = EventPosition::new(metadata.last_position.lsn, command_index);
         let command = SequencedCommand::new(
             CommandMetadata::new_at(
-                position,
+                metadata.lsn,
+                command_index,
                 metadata.logical_ts,
                 metadata.topic,
                 metadata.partition,
@@ -295,8 +301,13 @@ fn transition_balances(
         event.t = metadata.topic;
         event.p = metadata.partition;
         output.push(
-            UpdatedEntityEvents::try_new(after, release.balance.event_position(), vec![event])
-                .map_err(|cause| error(format!("invalid balance event: {cause:?}")))?,
+            UpdatedEntityEvents::try_new(
+                after,
+                release.balance.lsn(),
+                release.balance.command_index(),
+                vec![event],
+            )
+            .map_err(|cause| error(format!("invalid balance event: {cause:?}")))?,
         );
     }
     Ok(output)

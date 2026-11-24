@@ -1,9 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-use common_entity::{
-    Entity, EventPosition, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
-};
+use common_entity::{Entity, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents};
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3, SpotTradeV3Command};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderV7};
 use rust_decimal::Decimal;
@@ -124,7 +122,8 @@ pub fn settle_matched_spot_trades_from(
         }
         validate_trade(
             trade,
-            created.event().position,
+            created.event().lsn,
+            created.event().command_index,
             &orders,
             input,
             command_index_start,
@@ -146,10 +145,10 @@ pub fn settle_matched_spot_trades_from(
                 facts.trade_id
             )));
         }
-        let settlement_position = EventPosition::new(input.lsn, command_index_start);
-        let buyer_balances = validated_balances(buyer, balances_by_order_id, settlement_position)?;
+        let buyer_balances =
+            validated_balances(buyer, balances_by_order_id, input.lsn, command_index_start)?;
         let seller_balances =
-            validated_balances(seller, balances_by_order_id, settlement_position)?;
+            validated_balances(seller, balances_by_order_id, input.lsn, command_index_start)?;
         let amounts = trade.settlement_amounts().map_err(|cause| {
             error(format!(
                 "invalid settlement amounts for trade {}: {cause}",
@@ -231,7 +230,8 @@ fn empty_changes() -> SettleTradesPipeChanges {
 
 fn validate_trade<'a>(
     trade: &SpotTradeV3,
-    create_position: EventPosition,
+    create_lsn: u64,
+    create_command_index: u32,
     orders: &HashMap<u64, &'a SpotOrderV7>,
     input: SettleMatchedSpotTradesInput,
     command_index_start: u32,
@@ -243,8 +243,8 @@ fn validate_trade<'a>(
             facts.trade_id
         )));
     }
-    if trade.position != create_position
-        || EventPosition::new(input.lsn, command_index_start) <= create_position
+    if (trade.lsn, trade.command_index) != (create_lsn, create_command_index)
+        || (input.lsn, command_index_start) <= (create_lsn, create_command_index)
     {
         return Err(error(format!(
             "settlement lsn is not later than trade {}",
@@ -274,7 +274,8 @@ fn validate_trade<'a>(
 fn validated_balances<'a>(
     order: &SpotOrderV7,
     balances: &'a HashMap<u64, SpotOrderSettlementBalances>,
-    settlement_position: EventPosition,
+    settlement_lsn: u64,
+    settlement_command_index: u32,
 ) -> Result<&'a SpotOrderSettlementBalances, SettleMatchedSpotTradesError> {
     let facts = order.order_base();
     let pair = balances
@@ -307,7 +308,10 @@ fn validated_balances<'a>(
             facts.order_id
         )));
     }
-    if pair.base.position() >= settlement_position || pair.quote.position() >= settlement_position {
+    if (pair.base.lsn(), pair.base.command_index()) >= (settlement_lsn, settlement_command_index)
+        || (pair.quote.lsn(), pair.quote.command_index())
+            >= (settlement_lsn, settlement_command_index)
+    {
         return Err(error(format!(
             "stale settlement lsn for order {}",
             facts.order_id
@@ -365,7 +369,8 @@ fn transition_trades(
             .ok_or_else(|| error("event position overflow"))?;
         let trade = created.after();
         let metadata = CommandMetadata::new_at(
-            EventPosition::new(input.lsn, command_index),
+            input.lsn,
+            command_index,
             input.logical_ts,
             input.topic,
             input.partition,
@@ -379,7 +384,7 @@ fn transition_trades(
         event.t = input.topic;
         event.p = input.partition;
         output.push(
-            UpdatedEntityEvents::try_new(after, trade.event_position(), vec![event])
+            UpdatedEntityEvents::try_new(after, trade.lsn, trade.command_index, vec![event])
                 .map_err(|cause| error(format!("invalid trade event: {cause:?}")))?,
         );
     }
@@ -410,7 +415,8 @@ fn transition_balances(
             },
         };
         let metadata = CommandMetadata::new_at(
-            EventPosition::new(input.lsn, command_index),
+            input.lsn,
+            command_index,
             input.logical_ts,
             input.topic,
             input.partition,
@@ -422,8 +428,13 @@ fn transition_balances(
         event.t = input.topic;
         event.p = input.partition;
         output.push(
-            UpdatedEntityEvents::try_new(after, change.balance.event_position(), vec![event])
-                .map_err(|cause| error(format!("invalid balance event: {cause:?}")))?,
+            UpdatedEntityEvents::try_new(
+                after,
+                change.balance.lsn(),
+                change.balance.command_index(),
+                vec![event],
+            )
+            .map_err(|cause| error(format!("invalid balance event: {cause:?}")))?,
         );
     }
     Ok(output)

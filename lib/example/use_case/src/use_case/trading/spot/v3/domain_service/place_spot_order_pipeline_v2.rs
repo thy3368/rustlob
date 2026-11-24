@@ -2,18 +2,20 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use common_entity::{
-    CreatedEntityEvent, Entity, EntityError, EventPosition, ReplayableDomainEvent,
-    ReplayableEntityChanges, UpdatedEntityEvents,
+    CreatedEntityEvent, Entity, EntityError, ReplayableDomainEvent, ReplayableEntityChanges,
+    UpdatedEntityEvents,
 };
 use example_core_entity::{
     BalanceV2, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
 };
 
 use super::freeze_spot_order::freeze_spot_order_from;
-use super::match_spot_order::{MatchSpotOrderPipeChanges, MatchSpotOrderInput, match_spot_order_from};
+use super::match_spot_order::{
+    MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order_from,
+};
 use super::place_spot_order::place_spot_order_at;
 use super::settle_matched_spot_trades::{
-    SettleTradesPipeChanges, SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput,
+    SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput, SettleTradesPipeChanges,
     SpotOrderSettlementBalances, settle_matched_spot_trades_from,
 };
 use super::unfreeze_matched_spot_orders::{
@@ -192,14 +194,8 @@ pub fn place_spot_order_pipeline_v2(
         trade_id_start,
         lsn,
     )?;
-    let created_order = place_spot_order_at(
-        command.clone(),
-        EventPosition::new(lsn, 0),
-        logical_ts,
-        topic,
-        partition,
-    )
-    .map_err(PlaceSpotOrderPipelineV2Error::Place)?;
+    let created_order = place_spot_order_at(command.clone(), lsn, 0, logical_ts, topic, partition)
+        .map_err(PlaceSpotOrderPipelineV2Error::Place)?;
     let pair = balances_by_order_id
         .get(&command.order_id)
         .ok_or_else(|| invalid(format!("missing balances for order {}", command.order_id)))?;
@@ -251,7 +247,7 @@ pub fn place_spot_order_pipeline_v2(
     }
     let unfreeze_previous = last_position(&settled)
         .or_else(|| last_position(&matched))
-        .unwrap_or(EventPosition::new(lsn, settle_start.saturating_sub(1)));
+        .unwrap_or((lsn, settle_start.saturating_sub(1)));
     let held_by_order_id =
         build_held_balances(frozen_order.after(), maker_orders, &working_balances)?;
     let unfrozen_balances = unfreeze_matched_spot_orders_at(
@@ -259,7 +255,8 @@ pub fn place_spot_order_pipeline_v2(
         maker_orders,
         &matched,
         &held_by_order_id,
-        unfreeze_previous,
+        unfreeze_previous.0,
+        unfreeze_previous.1,
         logical_ts,
         topic,
         partition,
@@ -322,7 +319,7 @@ fn validate_inputs(
     if command.relation != OrderGroupRelation::Standalone {
         return Err(invalid("TPSL and grouped orders are not supported"));
     }
-    let first_position = EventPosition::new(lsn, 0);
+    let first_position = (lsn, 0);
     let mut order_ids = HashSet::with_capacity(makers.len() + 1);
     order_ids.insert(command.order_id);
     let taker_pair = balances
@@ -339,7 +336,7 @@ fn validate_inputs(
         if !order_ids.insert(id) {
             return Err(invalid(format!("duplicate order {id}")));
         }
-        if maker.event_position() >= first_position {
+        if (maker.lsn(), maker.command_index()) >= first_position {
             return Err(invalid(format!("stale pipeline position for order {id}")));
         }
         let pair = balances
@@ -362,7 +359,7 @@ fn validate_inputs(
     let mut snapshots = HashMap::<u64, &BalanceV2>::new();
     for (order_id, pair) in balances {
         for balance in [&pair.base, &pair.quote] {
-            if balance.event_position() >= first_position {
+            if (balance.lsn(), balance.command_index()) >= first_position {
                 return Err(invalid(format!(
                     "stale pipeline position for balance {}",
                     balance.entity_id()
@@ -460,11 +457,11 @@ fn next_command_index(
         .ok_or_else(|| invalid("command index overflow"))
 }
 
-fn last_position(changes: &impl ReplayableEntityChanges) -> Option<EventPosition> {
+fn last_position(changes: &impl ReplayableEntityChanges) -> Option<(u64, u32)> {
     changes
         .replayable_events()
         .into_iter()
-        .map(|event| event.position)
+        .map(|event| (event.lsn, event.command_index))
         .max()
 }
 

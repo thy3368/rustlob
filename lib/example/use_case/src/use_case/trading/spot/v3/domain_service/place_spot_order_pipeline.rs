@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use common_entity::{
-    CreatedEntityEvent, Entity, EntityError, EventPosition, ReplayableDomainEvent,
-    ReplayableEntityChanges, UpdatedEntityEvents,
+    CreatedEntityEvent, Entity, EntityError, ReplayableDomainEvent, ReplayableEntityChanges,
+    UpdatedEntityEvents,
 };
 use example_core_entity::{
     BalanceV2, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
@@ -11,11 +11,11 @@ use example_core_entity::{
 
 use crate::use_case::trading::spot::v3::domain_service::freeze_spot_order::freeze_spot_order_from;
 use crate::use_case::trading::spot::v3::domain_service::match_spot_order::{
-    MatchSpotOrderPipeChanges, MatchSpotOrderInput, match_spot_order_from,
+    MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order_from,
 };
 use crate::use_case::trading::spot::v3::domain_service::place_spot_order::place_spot_order_at;
 use crate::use_case::trading::spot::v3::domain_service::settle_matched_spot_trades::{
-    SettleTradesPipeChanges, SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput,
+    SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput, SettleTradesPipeChanges,
     SpotOrderSettlementBalances, settle_matched_spot_trades_from,
 };
 use crate::use_case::trading::spot::v3::domain_service::unfreeze_matched_spot_orders::{
@@ -198,14 +198,8 @@ pub fn place_spot_order_pipeline(
 ) -> Result<PlaceSpotOrderPipelineChanges, PlaceSpotOrderPipelineError> {
     validate_common_order(&command)?;
 
-    let created_order = place_spot_order_at(
-        command.clone(),
-        EventPosition::new(lsn, 0),
-        logical_ts,
-        topic,
-        partition,
-    )
-    .map_err(PlaceSpotOrderPipelineError::Place)?;
+    let created_order = place_spot_order_at(command.clone(), lsn, 0, logical_ts, topic, partition)
+        .map_err(PlaceSpotOrderPipelineError::Place)?;
 
     if !matches!(command.order_type, OrderType::Limit { .. }) {
         return Ok(PlaceSpotOrderPipelineChanges::PendingTrigger { created_order });
@@ -268,8 +262,8 @@ pub fn place_spot_order_pipeline(
     let settle_start = next_command_index(match_start, &matched)?;
 
     if matches!(matched, MatchSpotOrderPipeChanges::Rejected { .. }) {
-        let unfreeze_previous = last_position(&matched)
-            .unwrap_or(EventPosition::new(lsn, settle_start.saturating_sub(1)));
+        let unfreeze_previous =
+            last_position(&matched).unwrap_or((lsn, settle_start.saturating_sub(1)));
         let held_by_order_id =
             build_held_balances(frozen_order.after(), maker_orders, &working_balances)?;
         let unfrozen_balances = unfreeze_matched_spot_orders_at(
@@ -277,7 +271,8 @@ pub fn place_spot_order_pipeline(
             maker_orders,
             &matched,
             &held_by_order_id,
-            unfreeze_previous,
+            unfreeze_previous.0,
+            unfreeze_previous.1,
             logical_ts,
             topic,
             partition,
@@ -320,7 +315,7 @@ pub fn place_spot_order_pipeline(
 
     let unfreeze_previous = last_position(&settled)
         .or_else(|| last_position(&matched))
-        .unwrap_or(EventPosition::new(lsn, settle_start.saturating_sub(1)));
+        .unwrap_or((lsn, settle_start.saturating_sub(1)));
     let held_by_order_id =
         build_held_balances(frozen_order.after(), maker_orders, &working_balances)?;
     let unfrozen_balances = unfreeze_matched_spot_orders_at(
@@ -328,7 +323,8 @@ pub fn place_spot_order_pipeline(
         maker_orders,
         &matched,
         &held_by_order_id,
-        unfreeze_previous,
+        unfreeze_previous.0,
+        unfreeze_previous.1,
         logical_ts,
         topic,
         partition,
@@ -336,14 +332,16 @@ pub fn place_spot_order_pipeline(
     .map_err(PlaceSpotOrderPipelineError::Unfreeze)?;
 
     let changes = match matched {
-        matched @ MatchSpotOrderPipeChanges::Filled { .. } => PlaceSpotOrderPipelineChanges::Filled {
-            created_order,
-            frozen_order,
-            frozen_balance,
-            matched,
-            settled,
-            unfrozen_balances,
-        },
+        matched @ MatchSpotOrderPipeChanges::Filled { .. } => {
+            PlaceSpotOrderPipelineChanges::Filled {
+                created_order,
+                frozen_order,
+                frozen_balance,
+                matched,
+                settled,
+                unfrozen_balances,
+            }
+        }
         matched @ MatchSpotOrderPipeChanges::CanceledAfterPartialFill { .. } => {
             PlaceSpotOrderPipelineChanges::CanceledAfterPartialFill {
                 created_order,
@@ -375,7 +373,7 @@ fn validate_limit_execution(
     trade_id_start: u64,
     lsn: u64,
 ) -> Result<(), PlaceSpotOrderPipelineError> {
-    let first_position = EventPosition::new(lsn, 0);
+    let first_position = (lsn, 0);
     let mut order_ids = HashSet::with_capacity(makers.len() + 1);
     order_ids.insert(command.order_id);
     let taker_balances = balances
@@ -392,7 +390,7 @@ fn validate_limit_execution(
         if !order_ids.insert(id) {
             return Err(invalid(format!("duplicate order {id}")));
         }
-        if Entity::event_position(maker) >= first_position {
+        if (maker.lsn(), maker.command_index()) >= first_position {
             return Err(invalid(format!("stale pipeline position for order {id}")));
         }
         let pair = balances
@@ -415,7 +413,7 @@ fn validate_limit_execution(
     let mut snapshots = HashMap::<u64, &BalanceV2>::new();
     for (order_id, pair) in balances {
         for balance in [&pair.base, &pair.quote] {
-            if balance.position() >= first_position {
+            if (balance.lsn(), balance.command_index()) >= first_position {
                 return Err(invalid(format!(
                     "stale pipeline position for balance {}",
                     Entity::entity_id(balance)
@@ -516,11 +514,11 @@ fn next_command_index(
         .ok_or_else(|| invalid("command index overflow"))
 }
 
-fn last_position(changes: &impl ReplayableEntityChanges) -> Option<EventPosition> {
+fn last_position(changes: &impl ReplayableEntityChanges) -> Option<(u64, u32)> {
     changes
         .replayable_events()
         .into_iter()
-        .map(|event| event.position)
+        .map(|event| (event.lsn, event.command_index))
         .max()
 }
 
