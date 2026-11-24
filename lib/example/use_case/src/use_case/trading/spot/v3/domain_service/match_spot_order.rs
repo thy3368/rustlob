@@ -298,9 +298,7 @@ fn transition_order(
         input.partition,
         before.party_id(),
     );
-    let (after, mut event) = FsmV2::transition(before, SequencedCommand::new(metadata, command))?;
-    event.t = input.topic;
-    event.p = input.partition;
+    let (after, event) = FsmV2::transition(before, SequencedCommand::new(metadata, command))?;
     UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index(), vec![event])
         .map_err(|error| match_error(&format!("invalid order event chain: {error:?}")))
 }

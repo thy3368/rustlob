@@ -48,12 +48,10 @@ pub fn freeze_spot_order_from(
         partition,
         order.party_id(),
     );
-    let (order_after, mut order_event) = FsmV2::transition(
+    let (order_after, order_event) = FsmV2::transition(
         order,
         SequencedCommand::new(order_metadata, SpotOrderV7Command::Freeze),
     )?;
-    order_event.t = topic;
-    order_event.p = partition;
     let order_changes = UpdatedEntityEvents::try_new(
         order_after,
         order_loaded_position.0,
@@ -82,7 +80,7 @@ pub fn freeze_spot_order_from(
         partition,
         balance.party_id().to_string(),
     );
-    let (balance_after, mut balance_event) = FsmV2::transition(
+    let (balance_after, balance_event) = FsmV2::transition(
         balance,
         SequencedCommand::new(
             balance_metadata,
@@ -92,8 +90,6 @@ pub fn freeze_spot_order_from(
         ),
     )
     .map_err(map_balance_error)?;
-    balance_event.t = topic;
-    balance_event.p = partition;
     let balance_changes = UpdatedEntityEvents::try_new(
         balance_after,
         balance_loaded_position.0,

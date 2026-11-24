@@ -128,6 +128,9 @@ pub trait Fsm: TrackDiff + Sized {
     fn event_type(command: &Self::Command) -> u8;
 
     /// 先纯计算 after entity，再完成 replay 投影；原实体始终保持不变。
+    ///
+    /// replay event 的 `topic` 和 `partition` 以已定序 command metadata 为权威来源，
+    /// 不使用实体自身的 shard 覆盖日志路由。
     fn transition(
         &self,
         command: SequencedCommand<Self::Command>,
@@ -139,6 +142,8 @@ pub trait Fsm: TrackDiff + Sized {
         let logical_ts = command.metadata.logical_ts;
         let lsn = command.metadata.lsn;
         let command_index = command.metadata.command_index;
+        let topic = command.metadata.topic;
+        let partition = command.metadata.partition;
         let after = self.derive_transition(command)?;
         let mut replay_event = after.track_update_event_from_at(
             self,
@@ -148,7 +153,129 @@ pub trait Fsm: TrackDiff + Sized {
             command_index,
             logical_ts,
         )?;
+        replay_event.t = topic;
+        replay_event.p = partition;
         replay_event.domain_event_type = event_type;
         Ok((after, replay_event))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Entity, EntityFieldChange};
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct TestEntity {
+        value: u64,
+        lsn: u64,
+        command_index: u32,
+        logical_ts: u64,
+    }
+
+    impl Shard for TestEntity {
+        fn topic(&self) -> u8 {
+            1
+        }
+
+        fn partition(&self) -> u8 {
+            2
+        }
+
+        fn party_id(&self) -> String {
+            "entity-party".to_owned()
+        }
+    }
+
+    impl Entity for TestEntity {
+        fn entity_id(&self) -> u64 {
+            11
+        }
+
+        fn owner_id(&self) -> String {
+            "owner".to_owned()
+        }
+
+        fn op_id(&self) -> String {
+            "operator".to_owned()
+        }
+
+        fn lsn(&self) -> u64 {
+            self.lsn
+        }
+
+        fn command_index(&self) -> u32 {
+            self.command_index
+        }
+
+        fn created_at(&self) -> u64 {
+            3
+        }
+
+        fn updated_at(&self) -> u64 {
+            self.logical_ts
+        }
+
+        fn is_derived() -> bool {
+            false
+        }
+
+        fn entity_type() -> u8 {
+            12
+        }
+    }
+
+    impl TrackDiff for TestEntity {
+        fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
+            (self.value != other.value)
+                .then(|| {
+                    EntityFieldChange::new("value", self.value.to_string(), other.value.to_string())
+                })
+                .into_iter()
+                .collect()
+        }
+    }
+
+    impl Fsm for TestEntity {
+        type Command = u64;
+        type Error = EntityError;
+
+        fn derive_transition(
+            &self,
+            command: SequencedCommand<Self::Command>,
+        ) -> Result<Self, Self::Error> {
+            let mut after = self.clone();
+            after.value = command.payload;
+            after.lsn = command.metadata.lsn;
+            after.command_index = command.metadata.command_index;
+            after.logical_ts = command.metadata.logical_ts;
+            Ok(after)
+        }
+
+        fn event_type(_command: &Self::Command) -> u8 {
+            9
+        }
+    }
+
+    #[test]
+    fn transition_uses_command_routing_and_preserves_replay_metadata() {
+        let before = TestEntity {
+            value: 5,
+            lsn: 20,
+            command_index: 4,
+            logical_ts: 30,
+        };
+        let metadata = CommandMetadata::new_at(21, 7, 31, 8, 6, "command-party".to_owned());
+
+        let (after, event) = before
+            .transition(SequencedCommand::new(metadata, 6))
+            .expect("FSM transition should succeed");
+
+        assert_eq!(after.value, 6);
+        assert_eq!((event.t, event.p), (8, 6));
+        assert_eq!((event.lsn, event.command_index), (21, 7));
+        assert_eq!((event.previous_lsn, event.previous_command_index), (20, 4));
+        assert_eq!(event.logical_ts, 31);
+        assert_eq!(event.domain_event_type, 9);
     }
 }

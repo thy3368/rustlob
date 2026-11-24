@@ -24,15 +24,13 @@ pub fn cancel_spot_order(
     let order_loaded_position = (order.lsn(), order.command_index());
     let order_metadata =
         FsmCommandMetadata::new_at(lsn, 0, logical_ts, topic, partition, order.party_id());
-    let (order_after, mut order_event) = FsmV2::transition(
+    let (order_after, order_event) = FsmV2::transition(
         order,
         SequencedCommand::new(order_metadata, SpotOrderV7Command::Cancel),
     )?;
     let release_requirement = order_after
         .terminal_unfreeze_delta(order)
         .map_err(|error| EntityError::Custom(error.to_string()))?;
-    order_event.t = topic;
-    order_event.p = partition;
     let order = UpdatedEntityEvents::try_new(
         order_after,
         order_loaded_position.0,
@@ -59,7 +57,7 @@ pub fn cancel_spot_order(
             partition,
             balance.party_id().to_string(),
         );
-        let (after, mut event) = FsmV2::transition(
+        let (after, event) = FsmV2::transition(
             balance,
             SequencedCommand::new(
                 balance_metadata,
@@ -70,8 +68,6 @@ pub fn cancel_spot_order(
             ),
         )
         .map_err(map_balance_error)?;
-        event.t = topic;
-        event.p = partition;
         Some(
             UpdatedEntityEvents::try_new(after, loaded_position.0, loaded_position.1, vec![event])
                 .map_err(|error| {

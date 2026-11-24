@@ -288,10 +288,8 @@ fn transition_balances(
                 payment_amount: Decimal::ZERO,
             },
         );
-        let (after, mut event) = FsmV2::transition(&release.balance, command)
+        let (after, event) = FsmV2::transition(&release.balance, command)
             .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
-        event.t = metadata.topic;
-        event.p = metadata.partition;
         output.push(
             UpdatedEntityEvents::try_new(
                 after,

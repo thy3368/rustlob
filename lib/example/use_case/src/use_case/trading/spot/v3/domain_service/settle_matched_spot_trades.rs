@@ -376,13 +376,11 @@ fn transition_trades(
             input.partition,
             trade.comon_trade.taker_user.0.to_string(),
         );
-        let (after, mut event) = FsmV2::transition(
+        let (after, event) = FsmV2::transition(
             trade,
             SequencedCommand::new(metadata, SpotTradeV3Command::Settle),
         )
         .map_err(|cause| error(format!("trade transition failed: {cause}")))?;
-        event.t = input.topic;
-        event.p = input.partition;
         output.push(
             UpdatedEntityEvents::try_new(after, trade.lsn, trade.command_index, vec![event])
                 .map_err(|cause| error(format!("invalid trade event: {cause:?}")))?,
@@ -422,11 +420,9 @@ fn transition_balances(
             input.partition,
             change.balance.party_id().to_string(),
         );
-        let (after, mut event) =
+        let (after, event) =
             FsmV2::transition(&change.balance, SequencedCommand::new(metadata, command))
                 .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
-        event.t = input.topic;
-        event.p = input.partition;
         output.push(
             UpdatedEntityEvents::try_new(
                 after,
