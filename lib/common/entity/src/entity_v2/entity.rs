@@ -3,8 +3,7 @@ use std::fmt::Debug;
 use crate::entity_v2::entity_replayable_event::current_timestamp;
 use crate::entity_v2::shard::Shard;
 use crate::{
-    EntityChangeType, EntityError, EntityFieldChange, EventPosition, ReplayFieldChange,
-    ReplayableDomainEvent,
+    EntityChangeType, EntityError, EntityFieldChange, ReplayFieldChange, ReplayableDomainEvent,
 };
 
 /// 四色建模中的实体原型分类。
@@ -159,8 +158,8 @@ pub trait Entity: Shard + Clone + Debug + Send + Sync + 'static {
 
     fn lsn(&self) -> u64;
 
-    fn event_position(&self) -> EventPosition {
-        EventPosition::new(self.lsn(), 0)
+    fn command_index(&self) -> u32 {
+        0
     }
 
     fn created_at(&self) -> u64;
@@ -279,10 +278,11 @@ pub trait TrackDiff: Entity {
         Ok(event)
     }
 
-    /// 使用显式复合位置与逻辑时间确定性投影 create event。
+    /// 使用显式日志序号、command 内序号与逻辑时间确定性投影 create event。
     fn track_create_event_at(
         &self,
-        position: EventPosition,
+        lsn: u64,
+        command_index: u32,
         logical_ts: u64,
     ) -> Result<ReplayableDomainEvent, EntityError>
     where
@@ -292,8 +292,10 @@ pub trait TrackDiff: Entity {
             self.topic(),
             self.partition(),
             logical_ts,
-            EventPosition::ZERO,
-            position,
+            0,
+            0,
+            lsn,
+            command_index,
             self.entity_id(),
             Self::entity_type(),
             EntityChangeType::Created.as_tag(),
@@ -307,12 +309,14 @@ pub trait TrackDiff: Entity {
         Ok(event)
     }
 
-    /// 使用显式前驱位置、复合位置与逻辑时间确定性投影 update event。
+    /// 使用显式前驱与当前日志位置确定性投影 update event。
     fn track_update_event_from_at(
         &self,
         old_state: &Self,
-        previous_position: EventPosition,
-        position: EventPosition,
+        previous_lsn: u64,
+        previous_command_index: u32,
+        lsn: u64,
+        command_index: u32,
         logical_ts: u64,
     ) -> Result<ReplayableDomainEvent, EntityError>
     where
@@ -327,8 +331,10 @@ pub trait TrackDiff: Entity {
             self.topic(),
             self.partition(),
             logical_ts,
-            previous_position,
-            position,
+            previous_lsn,
+            previous_command_index,
+            lsn,
+            command_index,
             self.entity_id(),
             Self::entity_type(),
             EntityChangeType::Updated.as_tag(),

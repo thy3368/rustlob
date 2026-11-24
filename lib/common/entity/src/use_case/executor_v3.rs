@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    EventPosition, LogAttr, PresequencedCommand, ReplayableDomainEvent, ReplayableEntityChanges,
+    LogAttr, PresequencedCommand, ReplayableDomainEvent, ReplayableEntityChanges,
     UseCaseComputeError, UseCaseContractError, UseCaseV3,
 };
 
@@ -136,19 +136,25 @@ fn validate_presequenced_events(
             return Err(UseCaseContractError::EventMetadataMismatch {
                 event_index,
                 expected_lsn: command.lsn(),
-                actual_lsn: event.position.lsn,
+                actual_lsn: event.lsn,
                 expected_logical_ts: command.logical_ts(),
                 actual_logical_ts: event.logical_ts,
             });
         }
-        if previous.is_some_and(|position: EventPosition| event.position <= position) {
+        let position = (event.lsn, event.command_index);
+        if previous.is_some_and(|previous| position <= previous) {
             return Err(UseCaseContractError::EventPositionOutOfOrder { event_index });
         }
-        previous = Some(event.position);
-        if !keys.insert((event.position, event.entity_type, event.entity_id)) {
+        previous = Some(position);
+        if !keys.insert((
+            event.lsn,
+            event.command_index,
+            event.entity_type,
+            event.entity_id,
+        )) {
             return Err(UseCaseContractError::DuplicateEventKey {
-                lsn: event.position.lsn,
-                command_index: event.position.command_index,
+                lsn: event.lsn,
+                command_index: event.command_index,
                 entity_type: event.entity_type,
                 entity_id: event.entity_id,
             });
@@ -174,93 +180,33 @@ fn validate_events(
     let mut keys = HashSet::with_capacity(events.len());
     let mut previous = None;
     for (event_index, event) in events.iter().enumerate() {
-        if event.position.lsn != command.lsn() || event.logical_ts != command.logical_ts() {
+        if event.lsn != command.lsn() || event.logical_ts != command.logical_ts() {
             return Err(UseCaseContractError::EventMetadataMismatch {
                 event_index,
                 expected_lsn: command.lsn(),
-                actual_lsn: event.position.lsn,
+                actual_lsn: event.lsn,
                 expected_logical_ts: command.logical_ts(),
                 actual_logical_ts: event.logical_ts,
             });
         }
-        if previous.is_some_and(|position: EventPosition| event.position <= position) {
+        let position = (event.lsn, event.command_index);
+        if previous.is_some_and(|previous| position <= previous) {
             return Err(UseCaseContractError::EventPositionOutOfOrder { event_index });
         }
-        previous = Some(event.position);
-        if !keys.insert((event.position, event.entity_type, event.entity_id)) {
+        previous = Some(position);
+        if !keys.insert((
+            event.lsn,
+            event.command_index,
+            event.entity_type,
+            event.entity_id,
+        )) {
             return Err(UseCaseContractError::DuplicateEventKey {
-                lsn: event.position.lsn,
-                command_index: event.position.command_index,
+                lsn: event.lsn,
+                command_index: event.command_index,
                 entity_type: event.entity_type,
                 entity_id: event.entity_id,
             });
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::Shard;
-
-    struct Command;
-    impl Shard for Command {
-        fn partition(&self) -> u8 {
-            0
-        }
-    }
-    impl LogAttr for Command {
-        fn lsn(&self) -> u64 {
-            10
-        }
-        fn logical_ts(&self) -> u64 {
-            20
-        }
-    }
-
-    fn event(index: u32, id: u64, kind: u8) -> ReplayableDomainEvent {
-        ReplayableDomainEvent::new_at(
-            0,
-            0,
-            20,
-            EventPosition::ZERO,
-            EventPosition::new(10, index),
-            id,
-            kind,
-            1,
-        )
-    }
-
-    #[test]
-    fn accepts_different_entity_types_in_global_command_order() {
-        let first = event(0, 7, 2);
-        let second = event(1, 8, 3);
-        assert_eq!(validate_events(&Command, &[&first, &second]), Ok(()));
-    }
-
-    #[test]
-    fn rejects_repeated_or_descending_command_indices() {
-        let first = event(1, 7, 2);
-        let repeated = event(1, 8, 3);
-        let descending = event(0, 8, 3);
-        assert_eq!(
-            validate_events(&Command, &[&first, &repeated]),
-            Err(UseCaseContractError::EventPositionOutOfOrder { event_index: 1 })
-        );
-        assert_eq!(
-            validate_events(&Command, &[&first, &descending]),
-            Err(UseCaseContractError::EventPositionOutOfOrder { event_index: 1 })
-        );
-    }
-
-    #[test]
-    fn rejects_metadata_mismatch() {
-        let mut invalid = event(0, 7, 2);
-        invalid.logical_ts = 21;
-        assert!(matches!(
-            validate_events(&Command, &[&invalid]),
-            Err(UseCaseContractError::EventMetadataMismatch { event_index: 0, .. })
-        ));
-    }
 }

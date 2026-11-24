@@ -13,8 +13,8 @@ pub use entity_v2::entity::{
     TrackDiff,
 };
 pub use entity_v2::entity_replayable_event::{
-    EntityChangeType, EntityFieldChange, EventPosition, ReplayEventFieldParseError,
-    ReplayFieldChange, ReplayableDomainEvent,
+    EntityChangeType, EntityFieldChange, ReplayEventFieldParseError, ReplayFieldChange,
+    ReplayableDomainEvent,
 };
 pub use entity_v2::read_model::{DomainReadModel, DomainReadSnapshot};
 pub use entity_v2::shard::{LogAttr, Shard};

@@ -1,11 +1,11 @@
 use super::shard::{LogAttr, Shard};
-use crate::{EntityError, EventPosition, ReplayableDomainEvent, TrackDiff};
+use crate::{EntityError, ReplayableDomainEvent, TrackDiff};
 
 /// 已由日志定序器确定的命令元数据。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CommandMetadata {
     pub lsn: u64,
-    pub position: EventPosition,
+    pub command_index: u32,
     pub logical_ts: u64,
 }
 
@@ -13,15 +13,15 @@ impl CommandMetadata {
     pub const fn new(lsn: u64, logical_ts: u64) -> Self {
         Self {
             lsn,
-            position: EventPosition::new(lsn, 0),
+            command_index: 0,
             logical_ts,
         }
     }
 
-    pub const fn new_at(position: EventPosition, logical_ts: u64) -> Self {
+    pub const fn new_at(lsn: u64, command_index: u32, logical_ts: u64) -> Self {
         Self {
-            lsn: position.lsn,
-            position,
+            lsn,
+            command_index,
             logical_ts,
         }
     }
@@ -172,8 +172,14 @@ pub trait Fsm: TrackDiff + Clone {
         let before = self.clone();
         let mut working = before.clone();
         let (state, output) = working.transition_working(metadata, payload.clone())?;
-        let mut replay_event =
-            working.track_update_event_from_command(&before, metadata.lsn, metadata.logical_ts)?;
+        let mut replay_event = working.track_update_event_from_at(
+            &before,
+            before.lsn(),
+            before.command_index(),
+            metadata.lsn,
+            metadata.command_index,
+            metadata.logical_ts,
+        )?;
         let domain_event_type = Self::DomainEvent::domain_event_type(&payload);
         if domain_event_type == 0 {
             return Err(

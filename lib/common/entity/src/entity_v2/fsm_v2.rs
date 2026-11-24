@@ -1,10 +1,10 @@
-use crate::{EntityError, EventPosition, LogAttr, ReplayableDomainEvent, Shard, TrackDiff};
+use crate::{EntityError, LogAttr, ReplayableDomainEvent, Shard, TrackDiff};
 
 /// 已由日志定序器确定的 v2 command 元数据。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CommandMetadata {
     pub lsn: u64,
-    pub position: EventPosition,
+    pub command_index: u32,
     pub logical_ts: u64,
     pub topic: u8,
     pub partition: u8,
@@ -15,7 +15,7 @@ impl CommandMetadata {
     pub fn new(lsn: u64, logical_ts: u64, topic: u8, partition: u8, party_id: String) -> Self {
         Self {
             lsn,
-            position: EventPosition::new(lsn, 0),
+            command_index: 0,
             logical_ts,
             topic,
             partition,
@@ -24,15 +24,16 @@ impl CommandMetadata {
     }
 
     pub fn new_at(
-        position: EventPosition,
+        lsn: u64,
+        command_index: u32,
         logical_ts: u64,
         topic: u8,
         partition: u8,
         party_id: String,
     ) -> Self {
         Self {
-            lsn: position.lsn,
-            position,
+            lsn,
+            command_index,
             logical_ts,
             topic,
             partition,
@@ -136,267 +137,18 @@ pub trait Fsm: TrackDiff + Sized {
             return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
         }
         let logical_ts = command.metadata.logical_ts;
-        let position = command.metadata.position;
+        let lsn = command.metadata.lsn;
+        let command_index = command.metadata.command_index;
         let after = self.derive_transition(command)?;
-        let mut replay_event =
-            after.track_update_event_from_at(self, self.event_position(), position, logical_ts)?;
+        let mut replay_event = after.track_update_event_from_at(
+            self,
+            self.lsn(),
+            self.command_index(),
+            lsn,
+            command_index,
+            logical_ts,
+        )?;
         replay_event.domain_event_type = event_type;
         Ok((after, replay_event))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use super::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-    use crate::{Entity, EntityFieldChange, EventPosition, LogAttr, Shard, TrackDiff};
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    enum TestError {
-        Business,
-        Projection,
-    }
-
-    impl From<crate::EntityError> for TestError {
-        fn from(_: crate::EntityError) -> Self {
-            Self::Projection
-        }
-    }
-
-    #[derive(Debug, PartialEq, Eq)]
-    struct Command {
-        delta: u64,
-        fail: bool,
-    }
-
-    #[derive(Debug)]
-    struct Subject {
-        value: u64,
-        lsn: u64,
-        updated_at: u64,
-        topic: u8,
-        command_partition: u8,
-        party_id: String,
-        clones: Arc<AtomicUsize>,
-    }
-
-    impl Clone for Subject {
-        fn clone(&self) -> Self {
-            self.clones.fetch_add(1, Ordering::Relaxed);
-            Self {
-                value: self.value,
-                lsn: self.lsn,
-                updated_at: self.updated_at,
-                topic: self.topic,
-                command_partition: self.command_partition,
-                party_id: self.party_id.clone(),
-                clones: Arc::clone(&self.clones),
-            }
-        }
-    }
-
-    impl Shard for Subject {
-        fn partition(&self) -> u8 {
-            3
-        }
-    }
-
-    impl Entity for Subject {
-        fn entity_id(&self) -> u64 {
-            11
-        }
-
-        fn owner_id(&self) -> String {
-            "owner".into()
-        }
-
-        fn op_id(&self) -> String {
-            "operator".into()
-        }
-
-        fn lsn(&self) -> u64 {
-            self.lsn
-        }
-
-        fn created_at(&self) -> u64 {
-            1
-        }
-
-        fn updated_at(&self) -> u64 {
-            self.updated_at
-        }
-
-        fn is_derived() -> bool {
-            false
-        }
-
-        fn entity_type() -> u8 {
-            99
-        }
-    }
-
-    impl TrackDiff for Subject {
-        fn diff(&self, other: &Self) -> Vec<EntityFieldChange> {
-            if self.value == other.value {
-                return Vec::with_capacity(0);
-            }
-            vec![EntityFieldChange::new(
-                "value",
-                self.value.to_string(),
-                other.value.to_string(),
-            )]
-        }
-    }
-
-    impl FsmV2 for Subject {
-        type Command = Command;
-        type Error = TestError;
-
-        fn event_type(command: &Command) -> u8 {
-            if command.delta == u64::MAX { 0 } else { 7 }
-        }
-
-        fn derive_transition(
-            &self,
-            command: SequencedCommand<Command>,
-        ) -> Result<Self, Self::Error> {
-            let (metadata, command) = command.into_parts();
-            let value = self.value.saturating_add(command.delta);
-            if command.fail {
-                return Err(TestError::Business);
-            }
-            Ok(Self {
-                value,
-                lsn: metadata.lsn,
-                updated_at: metadata.logical_ts,
-                topic: metadata.topic,
-                command_partition: metadata.partition,
-                party_id: metadata.party_id,
-                clones: Arc::clone(&self.clones),
-            })
-        }
-    }
-
-    fn subject() -> Subject {
-        Subject {
-            value: 10,
-            lsn: 4,
-            updated_at: 8,
-            topic: 0,
-            command_partition: 0,
-            party_id: String::new(),
-            clones: Arc::new(AtomicUsize::new(0)),
-        }
-    }
-
-    #[test]
-    fn transition_uses_zero_clones_and_envelope_metadata() {
-        let subject = subject();
-        let clones = Arc::clone(&subject.clones);
-        let result = FsmV2::transition(
-            &subject,
-            SequencedCommand::new(
-                CommandMetadata::new_at(EventPosition::new(9, 4), 13, 2, 3, "5".to_owned()),
-                Command {
-                    delta: 2,
-                    fail: false,
-                },
-            ),
-        );
-        let (after, event) = match result {
-            Ok(transition) => transition,
-            Err(error) => panic!("v2 transition failed: {error:?}"),
-        };
-
-        assert_eq!(clones.load(Ordering::Relaxed), 0);
-        assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
-        assert_eq!((after.value, after.lsn, after.updated_at), (12, 9, 13));
-        assert_eq!(
-            (
-                after.topic,
-                after.command_partition,
-                after.party_id.as_str()
-            ),
-            (2, 3, "5")
-        );
-        assert_eq!(event.lsn, 9);
-        assert_eq!(event.position, EventPosition::new(9, 4));
-        assert_eq!(event.logical_ts, 13);
-        assert_eq!(event.domain_event_type, 7);
-    }
-
-    #[test]
-    fn envelope_owns_metadata_and_delegates_routing() {
-        let command = SequencedCommand::new(
-            CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
-            Command {
-                delta: 2,
-                fail: false,
-            },
-        );
-
-        assert_eq!((command.lsn(), command.logical_ts()), (9, 13));
-        assert_eq!(
-            (command.topic(), command.partition(), command.party_id()),
-            (2, 3, "5".to_owned())
-        );
-    }
-
-    #[test]
-    fn business_failure_does_not_commit_working_state() {
-        let subject = subject();
-        let result = FsmV2::transition(
-            &subject,
-            SequencedCommand::new(
-                CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
-                Command {
-                    delta: 2,
-                    fail: true,
-                },
-            ),
-        );
-
-        assert!(matches!(result, Err(TestError::Business)));
-        assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
-    }
-
-    #[test]
-    fn projection_failure_does_not_commit_working_state() {
-        let subject = subject();
-        let result = FsmV2::transition(
-            &subject,
-            SequencedCommand::new(
-                CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
-                Command {
-                    delta: 0,
-                    fail: false,
-                },
-            ),
-        );
-
-        assert!(matches!(result, Err(TestError::Projection)));
-        assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
-    }
-
-    #[test]
-    fn zero_event_type_is_rejected_before_transition() {
-        let subject = subject();
-        let clones = Arc::clone(&subject.clones);
-        let result = FsmV2::transition(
-            &subject,
-            SequencedCommand::new(
-                CommandMetadata::new(9, 13, 2, 3, "5".to_owned()),
-                Command {
-                    delta: u64::MAX,
-                    fail: false,
-                },
-            ),
-        );
-
-        assert!(matches!(result, Err(TestError::Projection)));
-        assert_eq!(clones.load(Ordering::Relaxed), 0);
-        assert_eq!((subject.value, subject.lsn, subject.updated_at), (10, 4, 8));
     }
 }

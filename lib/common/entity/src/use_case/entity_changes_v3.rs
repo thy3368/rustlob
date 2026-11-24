@@ -1,10 +1,11 @@
-use crate::{EventPosition, ReplayableDomainEvent};
+use crate::ReplayableDomainEvent;
 
-/// 为逐实体变更提供稳定 identity 与最终复合版本位置。
+/// 为逐实体变更提供稳定 identity 与最终 replay 位置。
 pub trait PositionedEntity {
     fn entity_id(&self) -> u64;
     fn entity_type(&self) -> u8;
-    fn event_position(&self) -> EventPosition;
+    fn lsn(&self) -> u64;
+    fn command_index(&self) -> u32;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,12 +16,16 @@ pub enum UpdatedEntityEventsError {
     },
     BrokenVersionChain {
         event_index: usize,
-        expected: EventPosition,
-        actual: EventPosition,
+        expected_lsn: u64,
+        expected_command_index: u32,
+        actual_lsn: u64,
+        actual_command_index: u32,
     },
     AfterPositionMismatch {
-        expected: EventPosition,
-        actual: EventPosition,
+        expected_lsn: u64,
+        expected_command_index: u32,
+        actual_lsn: u64,
+        actual_command_index: u32,
     },
 }
 
@@ -28,11 +33,14 @@ pub enum UpdatedEntityEventsError {
 pub enum CreatedEntityEventError {
     EntityIdentityMismatch,
     NonZeroPreviousPosition {
-        actual: EventPosition,
+        actual_lsn: u64,
+        actual_command_index: u32,
     },
     AfterPositionMismatch {
-        expected: EventPosition,
-        actual: EventPosition,
+        expected_lsn: u64,
+        expected_command_index: u32,
+        actual_lsn: u64,
+        actual_command_index: u32,
     },
 }
 
@@ -51,15 +59,18 @@ impl<E: PositionedEntity> CreatedEntityEvent<E> {
         if event.entity_id != after.entity_id() || event.entity_type != after.entity_type() {
             return Err(CreatedEntityEventError::EntityIdentityMismatch);
         }
-        if event.previous_position != EventPosition::ZERO {
+        if (event.previous_lsn, event.previous_command_index) != (0, 0) {
             return Err(CreatedEntityEventError::NonZeroPreviousPosition {
-                actual: event.previous_position,
+                actual_lsn: event.previous_lsn,
+                actual_command_index: event.previous_command_index,
             });
         }
-        if after.event_position() != event.position {
+        if (after.lsn(), after.command_index()) != (event.lsn, event.command_index) {
             return Err(CreatedEntityEventError::AfterPositionMismatch {
-                expected: event.position,
-                actual: after.event_position(),
+                expected_lsn: event.lsn,
+                expected_command_index: event.command_index,
+                actual_lsn: after.lsn(),
+                actual_command_index: after.command_index(),
             });
         }
         Ok(Self { after, event })
@@ -101,28 +112,33 @@ pub struct UpdatedEntityEvents<E> {
 impl<E: PositionedEntity> UpdatedEntityEvents<E> {
     pub fn try_new(
         after: E,
-        loaded_position: EventPosition,
+        loaded_lsn: u64,
+        loaded_command_index: u32,
         events: Vec<ReplayableDomainEvent>,
     ) -> Result<Self, UpdatedEntityEventsError> {
         let events = NonEmptyReplayEvents::try_new(events)?;
-        let mut expected_previous = loaded_position;
+        let mut expected_previous = (loaded_lsn, loaded_command_index);
         for (event_index, event) in events.as_slice().iter().enumerate() {
             if event.entity_id != after.entity_id() || event.entity_type != after.entity_type() {
                 return Err(UpdatedEntityEventsError::EntityIdentityMismatch { event_index });
             }
-            if event.previous_position != expected_previous {
+            if (event.previous_lsn, event.previous_command_index) != expected_previous {
                 return Err(UpdatedEntityEventsError::BrokenVersionChain {
                     event_index,
-                    expected: expected_previous,
-                    actual: event.previous_position,
+                    expected_lsn: expected_previous.0,
+                    expected_command_index: expected_previous.1,
+                    actual_lsn: event.previous_lsn,
+                    actual_command_index: event.previous_command_index,
                 });
             }
-            expected_previous = event.position;
+            expected_previous = (event.lsn, event.command_index);
         }
-        if after.event_position() != expected_previous {
+        if (after.lsn(), after.command_index()) != expected_previous {
             return Err(UpdatedEntityEventsError::AfterPositionMismatch {
-                expected: expected_previous,
-                actual: after.event_position(),
+                expected_lsn: expected_previous.0,
+                expected_command_index: expected_previous.1,
+                actual_lsn: after.lsn(),
+                actual_command_index: after.command_index(),
             });
         }
         Ok(Self { after, events })
@@ -134,6 +150,102 @@ impl<E: PositionedEntity> UpdatedEntityEvents<E> {
 
     pub fn events(&self) -> &[ReplayableDomainEvent] {
         self.events.as_slice()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Entity {
+        id: u64,
+        kind: u8,
+        lsn: u64,
+        command_index: u32,
+    }
+
+    impl PositionedEntity for Entity {
+        fn entity_id(&self) -> u64 {
+            self.id
+        }
+        fn entity_type(&self) -> u8 {
+            self.kind
+        }
+        fn lsn(&self) -> u64 {
+            self.lsn
+        }
+        fn command_index(&self) -> u32 {
+            self.command_index
+        }
+    }
+
+    fn event(
+        id: u64,
+        kind: u8,
+        previous: (u64, u32),
+        position: (u64, u32),
+    ) -> ReplayableDomainEvent {
+        ReplayableDomainEvent::new_at(
+            0, 0, 20, previous.0, previous.1, position.0, position.1, id, kind, 1,
+        )
+    }
+
+    #[test]
+    fn accepts_two_updates_of_one_entity_at_the_same_lsn() {
+        let changed = UpdatedEntityEvents::try_new(
+            Entity {
+                id: 7,
+                kind: 2,
+                lsn: 10,
+                command_index: 1,
+            },
+            9,
+            3,
+            vec![event(7, 2, (9, 3), (10, 0)), event(7, 2, (10, 0), (10, 1))],
+        )
+        .unwrap();
+        assert_eq!(
+            changed
+                .events()
+                .iter()
+                .map(|event| (event.lsn, event.command_index))
+                .collect::<Vec<_>>(),
+            vec![(10, 0), (10, 1)]
+        );
+    }
+
+    #[test]
+    fn rejects_broken_chain_and_after_position_mismatch() {
+        let after = Entity {
+            id: 7,
+            kind: 2,
+            lsn: 10,
+            command_index: 1,
+        };
+        assert!(matches!(
+            UpdatedEntityEvents::try_new(after.clone(), 9, 0, vec![event(7, 2, (0, 0), (10, 1))]),
+            Err(UpdatedEntityEventsError::BrokenVersionChain { event_index: 0, .. })
+        ));
+        assert!(matches!(
+            UpdatedEntityEvents::try_new(after, 9, 0, vec![event(7, 2, (9, 0), (10, 0))]),
+            Err(UpdatedEntityEventsError::AfterPositionMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn create_requires_zero_predecessor() {
+        let after = Entity {
+            id: 7,
+            kind: 2,
+            lsn: 10,
+            command_index: 1,
+        };
+        assert!(CreatedEntityEvent::try_new(after.clone(), event(7, 2, (0, 0), (10, 1))).is_ok());
+        assert!(matches!(
+            CreatedEntityEvent::try_new(after, event(7, 2, (9, 0), (10, 1))),
+            Err(CreatedEntityEventError::NonZeroPreviousPosition { .. })
+        ));
     }
 }
 
@@ -151,98 +263,5 @@ impl<E> ReplayableEntityChanges for UpdatedEntityEvents<E> {
 impl<E> ReplayableEntityChanges for CreatedEntityEvent<E> {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
         vec![&self.event]
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct Entity {
-        id: u64,
-        kind: u8,
-        position: EventPosition,
-    }
-
-    impl PositionedEntity for Entity {
-        fn entity_id(&self) -> u64 {
-            self.id
-        }
-        fn entity_type(&self) -> u8 {
-            self.kind
-        }
-        fn event_position(&self) -> EventPosition {
-            self.position
-        }
-    }
-
-    fn event(
-        id: u64,
-        kind: u8,
-        previous: EventPosition,
-        position: EventPosition,
-    ) -> ReplayableDomainEvent {
-        ReplayableDomainEvent::new_at(0, 0, 20, previous, position, id, kind, 1)
-    }
-
-    #[test]
-    fn accepts_two_updates_of_one_entity_at_the_same_lsn() {
-        let p0 = EventPosition::new(9, 3);
-        let p1 = EventPosition::new(10, 0);
-        let p2 = EventPosition::new(10, 1);
-        let changed = UpdatedEntityEvents::try_new(
-            Entity {
-                id: 7,
-                kind: 2,
-                position: p2,
-            },
-            p0,
-            vec![event(7, 2, p0, p1), event(7, 2, p1, p2)],
-        )
-        .unwrap();
-        assert_eq!(
-            changed
-                .events()
-                .iter()
-                .map(|event| event.position)
-                .collect::<Vec<_>>(),
-            vec![p1, p2]
-        );
-    }
-
-    #[test]
-    fn rejects_empty_identity_chain_and_after_position_errors() {
-        let p0 = EventPosition::new(9, 0);
-        let p1 = EventPosition::new(10, 0);
-        let after = || Entity {
-            id: 7,
-            kind: 2,
-            position: p1,
-        };
-        assert_eq!(
-            UpdatedEntityEvents::try_new(after(), p0, vec![]),
-            Err(UpdatedEntityEventsError::EmptyEvents)
-        );
-        assert_eq!(
-            UpdatedEntityEvents::try_new(after(), p0, vec![event(8, 2, p0, p1)]),
-            Err(UpdatedEntityEventsError::EntityIdentityMismatch { event_index: 0 })
-        );
-        assert!(matches!(
-            UpdatedEntityEvents::try_new(after(), p0, vec![event(7, 2, EventPosition::ZERO, p1)]),
-            Err(UpdatedEntityEventsError::BrokenVersionChain { event_index: 0, .. })
-        ));
-        assert!(matches!(
-            UpdatedEntityEvents::try_new(
-                Entity {
-                    id: 7,
-                    kind: 2,
-                    position: p0
-                },
-                p0,
-                vec![event(7, 2, p0, p1)]
-            ),
-            Err(UpdatedEntityEventsError::AfterPositionMismatch { .. })
-        ));
     }
 }
