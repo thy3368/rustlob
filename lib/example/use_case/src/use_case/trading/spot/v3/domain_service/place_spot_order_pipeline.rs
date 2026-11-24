@@ -22,30 +22,131 @@ use crate::use_case::trading::spot::v3::domain_service::unfreeze_matched_spot_or
     SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, unfreeze_matched_spot_orders_at,
 };
 
-/// 现货下单 pipeline 的唯一业务变化真相。
-///
-/// 各字段按创建、冻结、撮合、结算、终态解冻排列；更新事实由
-/// `UpdatedEntityEvents` 中的 before position、after entity 与事件链共同表达。
+/// 现货下单 pipeline 按实际执行路径划分的唯一业务变化真相。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlaceSpotOrderPipelineChanges {
-    pub created_order: CreatedEntityEvent<SpotOrderV7>,
-    pub frozen_order: UpdatedEntityEvents<SpotOrderV7>,
-    pub frozen_balance: UpdatedEntityEvents<BalanceV2>,
-    pub matched: MatchSpotOrderChanges,
-    pub settled: SettleMatchedSpotTradesChanges,
-    pub unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
+pub enum PlaceSpotOrderPipelineChanges {
+    PendingTrigger {
+        created_order: CreatedEntityEvent<SpotOrderV7>,
+    },
+    Resting {
+        created_order: CreatedEntityEvent<SpotOrderV7>,
+        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
+        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        matched: MatchSpotOrderChanges,
+    },
+    Rejected {
+        created_order: CreatedEntityEvent<SpotOrderV7>,
+        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
+        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        matched: MatchSpotOrderChanges,
+        unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
+    },
+    PartiallyFilled {
+        created_order: CreatedEntityEvent<SpotOrderV7>,
+        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
+        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        matched: MatchSpotOrderChanges,
+        settled: SettleMatchedSpotTradesChanges,
+    },
+    Filled {
+        created_order: CreatedEntityEvent<SpotOrderV7>,
+        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
+        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        matched: MatchSpotOrderChanges,
+        settled: SettleMatchedSpotTradesChanges,
+        unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
+    },
+    CanceledAfterPartialFill {
+        created_order: CreatedEntityEvent<SpotOrderV7>,
+        frozen_order: UpdatedEntityEvents<SpotOrderV7>,
+        frozen_balance: UpdatedEntityEvents<BalanceV2>,
+        matched: MatchSpotOrderChanges,
+        settled: SettleMatchedSpotTradesChanges,
+        unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
+    },
 }
 
 impl ReplayableEntityChanges for PlaceSpotOrderPipelineChanges {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
+        let (created, frozen, matched, settled, unfrozen) = match self {
+            Self::PendingTrigger { created_order } => (created_order, None, None, None, None),
+            Self::Resting {
+                created_order,
+                frozen_order,
+                frozen_balance,
+                matched,
+            } => (
+                created_order,
+                Some((frozen_order, frozen_balance)),
+                Some(matched),
+                None,
+                None,
+            ),
+            Self::Rejected {
+                created_order,
+                frozen_order,
+                frozen_balance,
+                matched,
+                unfrozen_balances,
+            } => (
+                created_order,
+                Some((frozen_order, frozen_balance)),
+                Some(matched),
+                None,
+                Some(unfrozen_balances),
+            ),
+            Self::PartiallyFilled {
+                created_order,
+                frozen_order,
+                frozen_balance,
+                matched,
+                settled,
+            } => (
+                created_order,
+                Some((frozen_order, frozen_balance)),
+                Some(matched),
+                Some(settled),
+                None,
+            ),
+            Self::Filled {
+                created_order,
+                frozen_order,
+                frozen_balance,
+                matched,
+                settled,
+                unfrozen_balances,
+            }
+            | Self::CanceledAfterPartialFill {
+                created_order,
+                frozen_order,
+                frozen_balance,
+                matched,
+                settled,
+                unfrozen_balances,
+            } => (
+                created_order,
+                Some((frozen_order, frozen_balance)),
+                Some(matched),
+                Some(settled),
+                Some(unfrozen_balances),
+            ),
+        };
         let mut events = Vec::new();
-        events.extend(self.created_order.replayable_events());
-        events.extend(self.frozen_order.replayable_events());
-        events.extend(self.frozen_balance.replayable_events());
-        events.extend(self.matched.replayable_events());
-        events.extend(self.settled.replayable_events());
-        for changes in &self.unfrozen_balances {
+        events.extend(created.replayable_events());
+        if let Some((order, balance)) = frozen {
+            events.extend(order.replayable_events());
+            events.extend(balance.replayable_events());
+        }
+        if let Some(changes) = matched {
             events.extend(changes.replayable_events());
+        }
+        if let Some(changes) = settled {
+            events.extend(changes.replayable_events());
+        }
+        if let Some(changes) = unfrozen {
+            for change in changes {
+                events.extend(change.replayable_events());
+            }
         }
         events
     }
@@ -77,10 +178,11 @@ impl fmt::Display for PlaceSpotOrderPipelineError {
 
 impl std::error::Error for PlaceSpotOrderPipelineError {}
 
-/// 纯计算地执行普通独立现货订单的创建、冻结、撮合、结算与终态解冻。
+/// 纯计算地执行独立现货订单实际需要的 pipeline 阶段。
 ///
-/// 调用方必须提供完整且权威的 maker 与订单余额快照。函数不加载或持久化状态，任一阶段
-/// 失败时不返回部分 changes，也不会修改输入快照。
+/// 普通限价单要求调用方提供完整且权威的 maker 与订单余额快照；条件单只执行 place，
+/// 不读取这些快照。函数不加载或持久化状态，任一阶段失败时不返回部分 changes，
+/// 也不会修改输入快照。
 #[allow(clippy::too_many_arguments)]
 pub fn place_spot_order_pipeline(
     command: CreateSpotOrderV7Command,
@@ -94,13 +196,7 @@ pub fn place_spot_order_pipeline(
     topic: u8,
     partition: u8,
 ) -> Result<PlaceSpotOrderPipelineChanges, PlaceSpotOrderPipelineError> {
-    validate_inputs(
-        &command,
-        maker_orders,
-        balances_by_order_id,
-        trade_id_start,
-        lsn,
-    )?;
+    validate_common_order(&command)?;
 
     let created_order = place_spot_order_at(
         command.clone(),
@@ -110,6 +206,18 @@ pub fn place_spot_order_pipeline(
         partition,
     )
     .map_err(PlaceSpotOrderPipelineError::Place)?;
+
+    if !matches!(command.order_type, OrderType::Limit { .. }) {
+        return Ok(PlaceSpotOrderPipelineChanges::PendingTrigger { created_order });
+    }
+
+    validate_limit_execution(
+        &command,
+        maker_orders,
+        balances_by_order_id,
+        trade_id_start,
+        lsn,
+    )?;
 
     let taker_balances = balances_by_order_id.get(&command.order_id).ok_or_else(|| {
         invalid(format!(
@@ -148,7 +256,41 @@ pub fn place_spot_order_pipeline(
         match_start,
     )
     .map_err(PlaceSpotOrderPipelineError::Match)?;
+    if matches!(matched, MatchSpotOrderChanges::Resting) {
+        return Ok(PlaceSpotOrderPipelineChanges::Resting {
+            created_order,
+            frozen_order,
+            frozen_balance,
+            matched,
+        });
+    }
+
     let settle_start = next_command_index(match_start, &matched)?;
+
+    if matches!(matched, MatchSpotOrderChanges::Rejected { .. }) {
+        let unfreeze_previous = last_position(&matched)
+            .unwrap_or(EventPosition::new(lsn, settle_start.saturating_sub(1)));
+        let held_by_order_id =
+            build_held_balances(frozen_order.after(), maker_orders, &working_balances)?;
+        let unfrozen_balances = unfreeze_matched_spot_orders_at(
+            frozen_order.after(),
+            maker_orders,
+            &matched,
+            &held_by_order_id,
+            unfreeze_previous,
+            logical_ts,
+            topic,
+            partition,
+        )
+        .map_err(PlaceSpotOrderPipelineError::Unfreeze)?;
+        return Ok(PlaceSpotOrderPipelineChanges::Rejected {
+            created_order,
+            frozen_order,
+            frozen_balance,
+            matched,
+            unfrozen_balances,
+        });
+    }
 
     let settled = settle_matched_spot_trades_from(
         &matched,
@@ -164,6 +306,16 @@ pub fn place_spot_order_pipeline(
     .map_err(PlaceSpotOrderPipelineError::Settle)?;
     for balance in &settled.updated_balances {
         replace_balance_snapshot(&mut working_balances, balance.after())?;
+    }
+
+    if matches!(matched, MatchSpotOrderChanges::PartiallyFilled { .. }) {
+        return Ok(PlaceSpotOrderPipelineChanges::PartiallyFilled {
+            created_order,
+            frozen_order,
+            frozen_balance,
+            matched,
+            settled,
+        });
     }
 
     let unfreeze_previous = last_position(&settled)
@@ -183,29 +335,46 @@ pub fn place_spot_order_pipeline(
     )
     .map_err(PlaceSpotOrderPipelineError::Unfreeze)?;
 
-    Ok(PlaceSpotOrderPipelineChanges {
-        created_order,
-        frozen_order,
-        frozen_balance,
-        matched,
-        settled,
-        unfrozen_balances,
-    })
+    let changes = match matched {
+        matched @ MatchSpotOrderChanges::Filled { .. } => PlaceSpotOrderPipelineChanges::Filled {
+            created_order,
+            frozen_order,
+            frozen_balance,
+            matched,
+            settled,
+            unfrozen_balances,
+        },
+        matched @ MatchSpotOrderChanges::CanceledAfterPartialFill { .. } => {
+            PlaceSpotOrderPipelineChanges::CanceledAfterPartialFill {
+                created_order,
+                frozen_order,
+                frozen_balance,
+                matched,
+                settled,
+                unfrozen_balances,
+            }
+        }
+        _ => return Err(invalid("unexpected match result after terminal processing")),
+    };
+    Ok(changes)
 }
 
-fn validate_inputs(
+fn validate_common_order(
+    command: &CreateSpotOrderV7Command,
+) -> Result<(), PlaceSpotOrderPipelineError> {
+    if command.relation != OrderGroupRelation::Standalone {
+        return Err(invalid("TPSL and grouped orders are not supported"));
+    }
+    Ok(())
+}
+
+fn validate_limit_execution(
     command: &CreateSpotOrderV7Command,
     makers: &[SpotOrderV7],
     balances: &HashMap<u64, SpotOrderSettlementBalances>,
     trade_id_start: u64,
     lsn: u64,
 ) -> Result<(), PlaceSpotOrderPipelineError> {
-    if !matches!(command.order_type, OrderType::Limit { .. }) {
-        return Err(invalid("trigger orders are not supported"));
-    }
-    if command.relation != OrderGroupRelation::Standalone {
-        return Err(invalid("TPSL and grouped orders are not supported"));
-    }
     let first_position = EventPosition::new(lsn, 0);
     let mut order_ids = HashSet::with_capacity(makers.len() + 1);
     order_ids.insert(command.order_id);
