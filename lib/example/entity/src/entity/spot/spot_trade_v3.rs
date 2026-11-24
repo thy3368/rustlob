@@ -392,11 +392,7 @@ mod tests {
 
         let max = trade(OrderSide::Buy, 1, 2);
         let (after, _) = max
-            .transition(command_at(
-                &max,
-                EventPosition::new(u64::MAX, u32::MAX),
-                7,
-            ))
+            .transition(command_at(&max, EventPosition::new(u64::MAX, u32::MAX), 7))
             .unwrap();
         assert_eq!(after.comon_trade.version, u64::MAX);
     }

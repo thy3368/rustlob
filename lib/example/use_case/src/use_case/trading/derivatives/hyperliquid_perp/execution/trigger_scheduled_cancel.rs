@@ -293,7 +293,7 @@ mod tests {
             )
             .expect("fixture should cancel");
             canceled
-                .terminal_release_amount()
+                .terminal_unfreeze_delta(&spot)
                 .expect("fixture should release")
         };
         let balance = BalanceV2::new(
