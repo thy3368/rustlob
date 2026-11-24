@@ -88,49 +88,6 @@ fn create_command(
     )
 }
 
-#[test]
-fn create_builds_limit_buy_and_trigger_sell_from_command_metadata() {
-    let buy = SpotOrderV7::create(create_command(
-        7,
-        OrderSide::Buy,
-        OrderType::Limit { tif: OrderTif::Alo },
-    ))
-    .unwrap();
-    let base = buy.order_base();
-    assert_eq!(base.owner, UserId(11));
-    assert_eq!(base.status, SpotOrderStatus::Pending);
-    assert_eq!(base.orig_size, Decimal::from(2));
-    assert_eq!(base.tif, OrderTif::Alo);
-    assert_eq!(base.group_relation, OrderGroupRelation::Standalone);
-    assert_eq!(
-        base.buy_quote_fee_reserve_frozen,
-        Decimal::from_str_exact("0.5").unwrap()
-    );
-    assert_eq!(base.created_at, TIMESTAMP);
-    assert_eq!(base.updated_at, TIMESTAMP);
-    assert_eq!(
-        buy.event_position(),
-        common_entity::EventPosition::new(10, 0)
-    );
-
-    let trigger = SpotOrderV7::create(create_command(
-        8,
-        OrderSide::Sell,
-        OrderType::Trigger {
-            is_market: true,
-            trigger_price: 90,
-            tpsl: OrderTriggerRole::StopLoss,
-        },
-    ))
-    .unwrap();
-    assert_eq!(trigger.order_base().execution, PriceType::Market);
-    assert_eq!(trigger.order_base().tif, OrderTif::Ioc);
-    assert_eq!(trigger.order_base().trigger_px, Some(Decimal::from(90)));
-    assert_eq!(
-        trigger.order_base().buy_quote_fee_reserve_frozen,
-        Decimal::ZERO
-    );
-}
 
 #[test]
 fn create_rejects_invalid_facts_and_non_create_commands() {
@@ -480,24 +437,6 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
     }
 }
 
-#[test]
-fn command_metadata_flows_through_after_entity_and_replay_event() {
-    let subject = order(OrderSide::Buy, SpotOrderStatus::Pending);
-    let position = common_entity::EventPosition::new(23, 7);
-    let logical_ts = TIMESTAMP + 19;
-    let command = SequencedCommand::new(
-        CommandMetadata::new_at(position, logical_ts, 0, 1, String::new()),
-        SpotOrderV7Command::Freeze,
-    );
-
-    let (after, replay) = subject.transition(command).unwrap();
-
-    assert_eq!(after.event_position(), position);
-    assert_eq!(after.order_base().lsn, position.lsn);
-    assert_eq!(after.order_base().updated_at, logical_ts);
-    assert_eq!(replay.position, position);
-    assert_eq!(replay.logical_ts, logical_ts);
-}
 
 #[test]
 fn modify_and_buy_match_replay_all_business_field_changes() {

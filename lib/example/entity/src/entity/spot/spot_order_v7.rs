@@ -70,7 +70,7 @@ impl SpotOrderV7Command {
 /// 3,cancel, 4.modify 用以创建balance的event
 pub struct SpotOrderV7 {
     order_base: OrderBase,
-    position: common_entity::EventPosition,
+    command_index: u32,
 }
 
 impl SpotOrderV7 {
@@ -104,7 +104,8 @@ impl SpotOrderV7 {
                 Some(Decimal::from(trigger_price)),
             ),
         };
-        let position = metadata.position;
+        let lsn = metadata.lsn;
+        let command_index = metadata.command_index;
         let mut order = OrderBase {
             owner: crate::entity::common::UserId(command.party_id),
             order_id: command.order_id,
@@ -122,7 +123,7 @@ impl SpotOrderV7 {
             cloid: command.cloid,
             created_at: metadata.logical_ts,
             updated_at: metadata.logical_ts,
-            lsn: position.lsn,
+            lsn,
             ..OrderBase::default()
         };
         order.buy_quote_fee_reserve_bps = if order.side == OrderSide::Buy {
@@ -139,16 +140,15 @@ impl SpotOrderV7 {
         order.sell_quote_fee_paid = Decimal::ZERO;
         order.sell_base_principal_frozen = Decimal::ZERO;
         order.sell_base_principal_unfrozen = Decimal::ZERO;
-        Self::from_record_at(order, position)
+        Self::from_record_at(order, command_index)
     }
 
     pub fn single(mut order: OrderBase) -> Self {
         order.status = SpotOrderStatus::Pending;
         order.group_relation = OrderGroupRelation::Standalone;
-        let position = common_entity::EventPosition::new(order.lsn, 0);
         Self {
             order_base: order,
-            position,
+            command_index: 0,
         }
     }
 
@@ -163,10 +163,9 @@ impl SpotOrderV7 {
                 child.group_relation = OrderGroupRelation::NormalTpslChild {
                     parent_order_id: id,
                 };
-                let position = common_entity::EventPosition::new(child.lsn, 0);
                 Self {
                     order_base: child,
-                    position,
+                    command_index: 0,
                 }
             })
             .collect();
@@ -174,18 +173,14 @@ impl SpotOrderV7 {
     }
 
     pub fn from_record(order: OrderBase) -> Result<Self, EntityError> {
-        let position = common_entity::EventPosition::new(order.lsn, 0);
-        Self::from_record_at(order, position)
+        Self::from_record_at(order, 0)
     }
 
-    pub fn from_record_at(
-        order: OrderBase,
-        position: common_entity::EventPosition,
-    ) -> Result<Self, EntityError> {
+    pub fn from_record_at(order: OrderBase, command_index: u32) -> Result<Self, EntityError> {
         validate_record(&order)?;
         Ok(Self {
             order_base: order,
-            position,
+            command_index,
         })
     }
     pub fn order_base(&self) -> &OrderBase {
@@ -242,9 +237,9 @@ impl SpotOrderV7 {
         command: SequencedCommand<SpotOrderV7Command>,
     ) -> Result<OrderBase, EntityError> {
         let (metadata, payload) = command.into_parts();
-        let position = metadata.position;
+        let position = (metadata.lsn, metadata.command_index);
         let timestamp = metadata.logical_ts;
-        if position < self.position {
+        if position < (self.order_base.lsn, self.command_index) {
             return Err(err("order command LSN is older than the current LSN"));
         }
         if matches!(
@@ -277,7 +272,7 @@ impl SpotOrderV7 {
                 }
                 next.status = SpotOrderStatus::Open;
                 next.updated_at = timestamp;
-                next.lsn = position.lsn;
+                next.lsn = position.0;
                 let _ = freeze_amount;
                 Ok(next)
             }
@@ -292,7 +287,7 @@ impl SpotOrderV7 {
                     *filled_size,
                     *quote_notional,
                     *quote_fee,
-                    position,
+                    position.0,
                     timestamp,
                     MatchRole::Taker,
                 )?;
@@ -309,7 +304,7 @@ impl SpotOrderV7 {
                     *filled_size,
                     *quote_notional,
                     *quote_fee,
-                    position,
+                    position.0,
                     timestamp,
                     MatchRole::Maker,
                 )?;
@@ -324,7 +319,7 @@ impl SpotOrderV7 {
                 next.status = SpotOrderStatus::Rejected;
                 settle_terminal_unfreeze(&mut next)?;
                 next.updated_at = timestamp;
-                next.lsn = position.lsn;
+                next.lsn = position.0;
                 Ok(next)
             }
             SpotOrderV7Command::Modify {
@@ -340,7 +335,7 @@ impl SpotOrderV7 {
                     return Err(err("order is not modifiable"));
                 }
                 let mut next =
-                    modified_order(&self.order_base, *price, *size, position, timestamp)?;
+                    modified_order(&self.order_base, *price, *size, position.0, timestamp)?;
                 if let Some(tif) = tif {
                     next.tif = *tif;
                 }
@@ -353,7 +348,7 @@ impl SpotOrderV7 {
             }
             SpotOrderV7Command::Cancel => {
                 let was_pending = self.status() == SpotOrderStatus::Pending;
-                let mut next = canceled_order(&self.order_base, position, timestamp)?;
+                let mut next = canceled_order(&self.order_base, position.0, timestamp)?;
                 if was_pending {
                     next.size = Decimal::ZERO;
                 } else {
@@ -377,11 +372,11 @@ impl Fsm for SpotOrderV7 {
         &self,
         command: SequencedCommand<SpotOrderV7Command>,
     ) -> Result<Self, EntityError> {
-        let position = command.metadata.position;
+        let command_index = command.metadata.command_index;
         let next = self.compute_transition(command)?;
         Ok(Self {
             order_base: next,
-            position,
+            command_index,
         })
     }
 }
@@ -397,7 +392,7 @@ fn matched_order(
     filled_size: Decimal,
     quote_notional: Decimal,
     quote_fee: Decimal,
-    position: common_entity::EventPosition,
+    lsn: u64,
     timestamp: u64,
     role: MatchRole,
 ) -> Result<OrderBase, EntityError> {
@@ -470,7 +465,7 @@ fn matched_order(
         settle_terminal_unfreeze(&mut next)?;
     }
     next.updated_at = timestamp;
-    next.lsn = position.lsn;
+    next.lsn = lsn;
     Ok(next)
 }
 
@@ -478,7 +473,7 @@ fn modified_order(
     current: &OrderBase,
     price: Decimal,
     size: Decimal,
-    position: common_entity::EventPosition,
+    lsn: u64,
     timestamp: u64,
 ) -> Result<OrderBase, EntityError> {
     let filled = current
@@ -495,19 +490,15 @@ fn modified_order(
         .checked_sub(filled)
         .ok_or_else(|| err("size overflow"))?;
     next.updated_at = timestamp;
-    next.lsn = position.lsn;
+    next.lsn = lsn;
     Ok(next)
 }
 
-fn canceled_order(
-    current: &OrderBase,
-    position: common_entity::EventPosition,
-    timestamp: u64,
-) -> Result<OrderBase, EntityError> {
+fn canceled_order(current: &OrderBase, lsn: u64, timestamp: u64) -> Result<OrderBase, EntityError> {
     let mut next = current.clone();
     next.status = SpotOrderStatus::Canceled;
     next.updated_at = timestamp;
-    next.lsn = position.lsn;
+    next.lsn = lsn;
     Ok(next)
 }
 
@@ -602,10 +593,10 @@ impl Entity for SpotOrderV7 {
         16
     }
     fn lsn(&self) -> u64 {
-        self.position.lsn
+        self.order_base.lsn
     }
-    fn event_position(&self) -> common_entity::EventPosition {
-        self.position
+    fn command_index(&self) -> u32 {
+        self.command_index
     }
     fn four_color_archetype() -> common_entity::FourColorArchetype {
         common_entity::FourColorArchetype::MomentInterval
@@ -650,8 +641,12 @@ impl common_entity::PositionedEntity for SpotOrderV7 {
         <Self as Entity>::entity_type()
     }
 
-    fn event_position(&self) -> common_entity::EventPosition {
-        self.position
+    fn lsn(&self) -> u64 {
+        self.order_base.lsn
+    }
+
+    fn command_index(&self) -> u32 {
+        self.command_index
     }
 }
 impl Shard for SpotOrderV7 {
@@ -690,7 +685,7 @@ impl LobOrder for SpotOrderV7 {
         self.order_base.created_at
     }
     fn entity_ver(&self) -> u64 {
-        self.position.lsn
+        self.order_base.lsn
     }
     fn is_active(&self) -> bool {
         matches!(

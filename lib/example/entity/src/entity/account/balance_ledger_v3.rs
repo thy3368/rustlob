@@ -189,7 +189,7 @@ impl Fsm for BalanceLedgerV3 {
         {
             return Err(BalanceLedgerV3Error::BalanceIdentityMismatch);
         }
-        if before.position().lsn > lsn || after.position().lsn != lsn {
+        if before.position().0 > lsn || after.position().0 != lsn {
             return Err(BalanceLedgerV3Error::BalanceVersionMismatch);
         }
         if applied_at < self.created_at || after.updated_at() != applied_at {

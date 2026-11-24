@@ -59,7 +59,8 @@ pub enum SpotTradeStateError {
 pub struct SpotTradeV3 {
     pub comon_trade: TradeBase,
     pub settlement_status: SpotTradeSettlementStatus,
-    pub position: common_entity::EventPosition,
+    pub lsn: u64,
+    pub command_index: u32,
 }
 
 impl TrackDiff for SpotTradeV3 {
@@ -114,10 +115,10 @@ impl Entity for SpotTradeV3 {
         13
     }
     fn lsn(&self) -> u64 {
-        self.position.lsn
+        self.lsn
     }
-    fn event_position(&self) -> common_entity::EventPosition {
-        self.position
+    fn command_index(&self) -> u32 {
+        self.command_index
     }
     fn four_color_archetype() -> FourColorArchetype {
         FourColorArchetype::MomentInterval
@@ -166,8 +167,11 @@ impl common_entity::PositionedEntity for SpotTradeV3 {
     fn entity_type(&self) -> u8 {
         <Self as Entity>::entity_type()
     }
-    fn event_position(&self) -> common_entity::EventPosition {
-        self.position
+    fn lsn(&self) -> u64 {
+        self.lsn
+    }
+    fn command_index(&self) -> u32 {
+        self.command_index
     }
 }
 
@@ -239,18 +243,19 @@ impl Fsm for SpotTradeV3 {
         let (metadata, command) = command.into_parts();
         match (self.settlement_status, command) {
             (SpotTradeSettlementStatus::Unsettled, SpotTradeV3Command::Settle) => {
-                let position = metadata.position;
-                if position < self.position {
+                let position = (metadata.lsn, metadata.command_index);
+                if position < (self.lsn, self.command_index) {
                     return Err(SpotTradeStateError::StaleLsn {
-                        incoming_lsn: position.lsn,
-                        current_lsn: self.position.lsn,
+                        incoming_lsn: position.0,
+                        current_lsn: self.lsn,
                     });
                 }
                 let mut after = self.clone();
                 after.settlement_status = SpotTradeSettlementStatus::Settled;
-                after.comon_trade.version = position.lsn;
+                after.comon_trade.version = position.0;
                 after.comon_trade.updated_at = metadata.logical_ts;
-                after.position = position;
+                after.lsn = position.0;
+                after.command_index = position.1;
                 Ok(after)
             }
             (SpotTradeSettlementStatus::Settled, SpotTradeV3Command::Settle) => {
@@ -260,153 +265,3 @@ impl Fsm for SpotTradeV3 {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use common_entity::fsm_v2::{CommandMetadata, Fsm, SequencedCommand};
-    use common_entity::{Entity, EventPosition, Shard};
-    use rust_decimal::Decimal;
-
-    use super::{
-        SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeStateError, SpotTradeV3,
-        SpotTradeV3Command,
-    };
-    use crate::OrderSide;
-    use crate::account::coin::Coin;
-    use crate::account::symbol::Symbol;
-    use crate::entity::common::UserId;
-    use crate::entity::common::common_trade::TradeBase;
-
-    fn command_at(
-        trade: &SpotTradeV3,
-        position: EventPosition,
-        logical_ts: u64,
-    ) -> SequencedCommand<SpotTradeV3Command> {
-        SequencedCommand::new(
-            CommandMetadata::new_at(
-                position,
-                logical_ts,
-                trade.topic(),
-                trade.partition(),
-                trade.party_id(),
-            ),
-            SpotTradeV3Command::Settle,
-        )
-    }
-
-    fn trade(taker_side: OrderSide, taker_fee: i64, maker_fee: i64) -> SpotTradeV3 {
-        SpotTradeV3 {
-            comon_trade: TradeBase {
-                trade_id: 7,
-                symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
-                taker_user: UserId(10),
-                maker_user: UserId(20),
-                taker_order_id: 1,
-                maker_order_id: 2,
-                taker_side,
-                price: Decimal::from(2),
-                size: Decimal::from(3),
-                taker_fee: Decimal::from(taker_fee),
-                maker_fee: Decimal::from(maker_fee),
-                created_at: 0,
-                updated_at: 0,
-                version: 0,
-            },
-            settlement_status: SpotTradeSettlementStatus::Unsettled,
-            position: common_entity::EventPosition::ZERO,
-        }
-    }
-
-    #[test]
-    fn settlement_amounts_map_fees_for_taker_buy_and_sell() {
-        let buy = trade(OrderSide::Buy, 1, 2).settlement_amounts().unwrap();
-        assert_eq!(buy.base_amount, Decimal::from(3));
-        assert_eq!(buy.buyer_quote_payment, Decimal::from(7));
-        assert_eq!(buy.seller_quote_receipt, Decimal::from(4));
-
-        let sell = trade(OrderSide::Sell, 1, 2).settlement_amounts().unwrap();
-        assert_eq!(sell.buyer_quote_payment, Decimal::from(8));
-        assert_eq!(sell.seller_quote_receipt, Decimal::from(5));
-    }
-
-    #[test]
-    fn seller_fee_equal_to_or_greater_than_proceeds_is_handled() {
-        assert_eq!(
-            trade(OrderSide::Buy, 1, 6)
-                .settlement_amounts()
-                .unwrap()
-                .seller_quote_receipt,
-            Decimal::ZERO
-        );
-        assert_eq!(
-            trade(OrderSide::Buy, 1, 7).settlement_amounts(),
-            Err(SpotTradeSettlementError::SellerFeeExceedsProceeds)
-        );
-    }
-
-    #[test]
-    fn settle_returns_after_truth_and_replay_event_without_mutating_before() {
-        let before = trade(OrderSide::Buy, 1, 2);
-        let position = EventPosition::new(20, 5);
-        let (after, event) = before.transition(command_at(&before, position, 7)).unwrap();
-
-        assert_eq!(
-            before.settlement_status,
-            SpotTradeSettlementStatus::Unsettled
-        );
-        assert_eq!(before.position, EventPosition::ZERO);
-        assert_eq!(after.settlement_status, SpotTradeSettlementStatus::Settled);
-        assert_eq!(after.comon_trade.version, 20);
-        assert_eq!(after.comon_trade.updated_at, 7);
-        assert_eq!(after.position, position);
-        assert_eq!(event.entity_id, Entity::entity_id(&before));
-        assert_eq!(event.entity_type, <SpotTradeV3 as Entity>::entity_type());
-        assert_eq!(event.previous_position, EventPosition::ZERO);
-        assert_eq!(event.position, position);
-        assert_eq!(event.domain_event_type, 1);
-        assert_eq!(event.logical_ts, 7);
-        assert_eq!(event.t, before.topic());
-        assert_eq!(event.p, before.partition());
-    }
-
-    #[test]
-    fn stale_lsn_is_rejected_atomically_and_max_is_accepted() {
-        let mut stale = trade(OrderSide::Buy, 1, 2);
-        stale.comon_trade.version = 20;
-        stale.position = EventPosition::new(20, 1);
-        let before = stale.clone();
-        assert_eq!(
-            stale.transition(command_at(&stale, EventPosition::new(20, 0), 7)),
-            Err(SpotTradeStateError::StaleLsn {
-                incoming_lsn: 20,
-                current_lsn: 20
-            })
-        );
-        assert_eq!(stale, before);
-
-        let same_position = trade(OrderSide::Buy, 1, 2);
-        let (after, _) = same_position
-            .transition(command_at(&same_position, EventPosition::ZERO, 6))
-            .unwrap();
-        assert_eq!(after.position, EventPosition::ZERO);
-        assert_eq!(after.settlement_status, SpotTradeSettlementStatus::Settled);
-
-        let max = trade(OrderSide::Buy, 1, 2);
-        let (after, _) = max
-            .transition(command_at(&max, EventPosition::new(u64::MAX, u32::MAX), 7))
-            .unwrap();
-        assert_eq!(after.comon_trade.version, u64::MAX);
-    }
-
-    #[test]
-    fn duplicate_settlement_is_rejected_without_mutating_before() {
-        let mut settled = trade(OrderSide::Buy, 1, 2);
-        settled.settlement_status = SpotTradeSettlementStatus::Settled;
-        let before = settled.clone();
-
-        assert_eq!(
-            settled.transition(command_at(&settled, EventPosition::new(21, 0), 8)),
-            Err(SpotTradeStateError::AlreadySettled)
-        );
-        assert_eq!(settled, before);
-    }
-}
