@@ -8,7 +8,7 @@ use example_core_entity::{
     BalanceV2, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
 };
 
-use super::freeze_spot_order::freeze_spot_order_from;
+use super::freeze_spot_order::{FreezeSpotOrderPipeChanges, freeze_spot_order_from};
 use super::match_spot_order::{
     MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order_from,
 };
@@ -199,7 +199,10 @@ pub fn place_spot_order_pipeline_v2(
         .get(&command.order_id)
         .ok_or_else(|| invalid(format!("missing balances for order {}", command.order_id)))?;
     let held = held_balance(created_order.after(), pair);
-    let (frozen_order, frozen_balance) = freeze_spot_order_from(
+    let FreezeSpotOrderPipeChanges {
+        order: frozen_order,
+        balance: frozen_balance,
+    } = freeze_spot_order_from(
         created_order.after(),
         held,
         lsn,

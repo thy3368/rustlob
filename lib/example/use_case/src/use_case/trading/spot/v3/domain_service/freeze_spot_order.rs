@@ -1,10 +1,28 @@
 use common_entity::fsm_v2::{
     CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
 };
-use common_entity::{EntityError, PositionedEntity, Shard, UpdatedEntityEvents};
+use common_entity::{
+    EntityError, PositionedEntity, ReplayableDomainEvent, ReplayableEntityChanges, Shard,
+    UpdatedEntityEvents,
+};
 use example_core_entity::{
     BalanceV2, BalanceV2Command, BalanceV2Error, SpotOrderV7, SpotOrderV7Command,
 };
+
+/// 冻结现货订单步骤产生的订单与余额变化。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FreezeSpotOrderPipeChanges {
+    pub order: UpdatedEntityEvents<SpotOrderV7>,
+    pub balance: UpdatedEntityEvents<BalanceV2>,
+}
+
+impl ReplayableEntityChanges for FreezeSpotOrderPipeChanges {
+    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
+        let mut events = self.order.replayable_events();
+        events.extend(self.balance.replayable_events());
+        events
+    }
+}
 
 /// 激活 Pending 现货订单，同时冻结其作为 taker 所需的余额。
 pub fn freeze_spot_order(
@@ -14,13 +32,7 @@ pub fn freeze_spot_order(
     logical_ts: u64,
     topic: u8,
     partition: u8,
-) -> Result<
-    (
-        UpdatedEntityEvents<SpotOrderV7>,
-        UpdatedEntityEvents<BalanceV2>,
-    ),
-    EntityError,
-> {
+) -> Result<FreezeSpotOrderPipeChanges, EntityError> {
     freeze_spot_order_from(order, balance, lsn, 0, logical_ts, topic, partition)
 }
 
@@ -33,13 +45,7 @@ pub fn freeze_spot_order_from(
     logical_ts: u64,
     topic: u8,
     partition: u8,
-) -> Result<
-    (
-        UpdatedEntityEvents<SpotOrderV7>,
-        UpdatedEntityEvents<BalanceV2>,
-    ),
-    EntityError,
-> {
+) -> Result<FreezeSpotOrderPipeChanges, EntityError> {
     if balance.party_id() != order.order_base().owner.0 {
         return Err(EntityError::Custom(
             "balance owner does not match the order owner".to_owned(),
@@ -108,7 +114,10 @@ pub fn freeze_spot_order_from(
     )
     .map_err(|error| EntityError::Custom(format!("invalid balance event chain: {error:?}")))?;
 
-    Ok((order_changes, balance_changes))
+    Ok(FreezeSpotOrderPipeChanges {
+        order: order_changes,
+        balance: balance_changes,
+    })
 }
 
 fn map_balance_error(error: BalanceV2Error) -> EntityError {
@@ -117,3 +126,4 @@ fn map_balance_error(error: BalanceV2Error) -> EntityError {
         error => EntityError::Custom(format!("failed to freeze balance: {error}")),
     }
 }
+

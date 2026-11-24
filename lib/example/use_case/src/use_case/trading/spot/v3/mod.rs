@@ -1,5 +1,7 @@
 pub use domain_service::cancel_spot_order::cancel_spot_order;
-pub use domain_service::freeze_spot_order::{freeze_spot_order, freeze_spot_order_from};
+pub use domain_service::freeze_spot_order::{
+    FreezeSpotOrderPipeChanges, freeze_spot_order, freeze_spot_order_from,
+};
 pub use domain_service::match_spot_order::{
     MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order, match_spot_order_from,
 };
