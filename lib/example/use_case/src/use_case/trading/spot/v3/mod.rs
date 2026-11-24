@@ -3,7 +3,7 @@ pub use domain_service::freeze_spot_order::{freeze_spot_order, freeze_spot_order
 pub use domain_service::match_spot_order::{
     MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order, match_spot_order_from,
 };
-pub use domain_service::place_spot_order::{place_spot_order, place_spot_order_at};
+pub use domain_service::place_spot_order::{PlaceSpotOrderPipeChanges, place_spot_order};
 pub use domain_service::place_spot_order_pipeline_v2::{
     PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error, place_spot_order_pipeline_v2,
 };

@@ -2,8 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use common_entity::{
-    CreatedEntityEvent, Entity, EntityError, ReplayableDomainEvent, ReplayableEntityChanges,
-    UpdatedEntityEvents,
+    Entity, EntityError, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
 };
 use example_core_entity::{
     BalanceV2, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
@@ -13,7 +12,7 @@ use super::freeze_spot_order::freeze_spot_order_from;
 use super::match_spot_order::{
     MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order_from,
 };
-use super::place_spot_order::place_spot_order_at;
+use super::place_spot_order::{PlaceSpotOrderPipeChanges, place_spot_order};
 use super::settle_matched_spot_trades::{
     SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput, SettleTradesPipeChanges,
     SpotOrderSettlementBalances, settle_matched_spot_trades_from,
@@ -26,26 +25,26 @@ use super::unfreeze_matched_spot_orders::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceSpotOrderPipelineV2Changes {
     Resting {
-        created_order: CreatedEntityEvent<SpotOrderV7>,
+        created_order: PlaceSpotOrderPipeChanges,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
     },
     Rejected {
-        created_order: CreatedEntityEvent<SpotOrderV7>,
+        created_order: PlaceSpotOrderPipeChanges,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
         matched: MatchSpotOrderPipeChanges,
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
     PartiallyFilled {
-        created_order: CreatedEntityEvent<SpotOrderV7>,
+        created_order: PlaceSpotOrderPipeChanges,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
         matched: MatchSpotOrderPipeChanges,
         settled: SettleTradesPipeChanges,
     },
     Filled {
-        created_order: CreatedEntityEvent<SpotOrderV7>,
+        created_order: PlaceSpotOrderPipeChanges,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
         matched: MatchSpotOrderPipeChanges,
@@ -53,7 +52,7 @@ pub enum PlaceSpotOrderPipelineV2Changes {
         unfrozen_balances: Vec<UpdatedEntityEvents<BalanceV2>>,
     },
     CanceledAfterPartialFill {
-        created_order: CreatedEntityEvent<SpotOrderV7>,
+        created_order: PlaceSpotOrderPipeChanges,
         frozen_order: UpdatedEntityEvents<SpotOrderV7>,
         frozen_balance: UpdatedEntityEvents<BalanceV2>,
         matched: MatchSpotOrderPipeChanges,
@@ -194,7 +193,7 @@ pub fn place_spot_order_pipeline_v2(
         trade_id_start,
         lsn,
     )?;
-    let created_order = place_spot_order_at(command.clone(), lsn, 0, logical_ts, topic, partition)
+    let created_order = place_spot_order(command.clone(), lsn, 0, logical_ts, topic, partition)
         .map_err(PlaceSpotOrderPipelineV2Error::Place)?;
     let pair = balances_by_order_id
         .get(&command.order_id)
