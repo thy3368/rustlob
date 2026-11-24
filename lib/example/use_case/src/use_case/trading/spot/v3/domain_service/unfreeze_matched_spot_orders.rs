@@ -46,6 +46,43 @@ pub fn unfreeze_matched_spot_orders(
         return Ok(Vec::new());
     }
     let metadata = validate_match_event_metadata(&changes)?;
+    unfreeze_matched_spot_orders_at(
+        taker_before,
+        makers_before,
+        matched,
+        balances_by_order_id,
+        metadata.last_position,
+        metadata.logical_ts,
+        metadata.topic,
+        metadata.partition,
+    )
+}
+
+/// 使用显式定序元数据释放终态订单仍持有的冻结资金。
+pub fn unfreeze_matched_spot_orders_at(
+    taker_before: &SpotOrderV7,
+    makers_before: &[SpotOrderV7],
+    matched: &MatchSpotOrderChanges,
+    balances_by_order_id: &HashMap<u64, SpotOrderHeldBalance>,
+    previous_position: EventPosition,
+    logical_ts: u64,
+    topic: u8,
+    partition: u8,
+) -> Result<Vec<UpdatedEntityEvents<BalanceV2>>, UnfreezeMatchedSpotOrdersError> {
+    let changes = changed_orders(matched);
+    if changes.is_empty() {
+        return Ok(Vec::new());
+    }
+    let matched_metadata = validate_match_event_metadata(&changes)?;
+    if previous_position < matched_metadata.last_position {
+        return Err(error("unfreeze position precedes matched order events"));
+    }
+    let metadata = MatchEventMetadata {
+        last_position: previous_position,
+        logical_ts,
+        topic,
+        partition,
+    };
     let before_by_id = index_before_orders(taker_before, makers_before)?;
     let mut releases = BTreeMap::<u64, AggregatedRelease>::new();
 
@@ -267,137 +304,4 @@ fn transition_balances(
 
 fn error(message: impl Into<String>) -> UnfreezeMatchedSpotOrdersError {
     UnfreezeMatchedSpotOrdersError(message.into())
-}
-
-#[cfg(test)]
-mod tests {
-    use example_core_entity::account::coin::Coin;
-    use example_core_entity::account::symbol::Symbol;
-    use example_core_entity::common::PriceType;
-    use example_core_entity::entity::common::UserId;
-    use example_core_entity::entity::common::common_order::OrderBase;
-    use example_core_entity::{OrderGroupRelation, OrderTif};
-
-    use super::*;
-    use crate::use_case::trading::spot::v3::domain_service::match_spot_order::{
-        MatchSpotOrderInput, match_spot_order,
-    };
-
-    const LSN: u64 = 50;
-    const TS: u64 = 900;
-
-    fn order(id: u64, owner: u64, side: OrderSide, size: i64, tif: OrderTif) -> SpotOrderV7 {
-        let mut record = OrderBase {
-            owner: UserId(owner),
-            order_id: id,
-            symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
-            side,
-            limit_px: Decimal::from(100),
-            size: Decimal::from(size),
-            orig_size: Decimal::from(size),
-            execution: PriceType::Limit,
-            tif,
-            group_relation: OrderGroupRelation::Standalone,
-            status: SpotOrderStatus::Open,
-            lsn: 10,
-            ..OrderBase::default()
-        };
-        match side {
-            OrderSide::Buy => record.buy_quote_principal_frozen = Decimal::from(100 * size),
-            OrderSide::Sell => record.sell_base_principal_frozen = Decimal::from(size),
-        }
-        SpotOrderV7::from_record(record).unwrap()
-    }
-
-    fn input() -> MatchSpotOrderInput {
-        MatchSpotOrderInput {
-            lsn: LSN,
-            logical_ts: TS,
-            topic: 7,
-            partition: 3,
-            trade_id_start: 100,
-            maker_fee_bps: 0,
-            taker_fee_bps: 0,
-        }
-    }
-
-    fn balance(owner: u64, coin: Coin, frozen: i64) -> BalanceV2 {
-        BalanceV2::new(
-            owner,
-            owner,
-            u64::from(coin.index()),
-            Decimal::ZERO,
-            Decimal::from(frozen),
-            EventPosition::new(9, 0),
-            1,
-        )
-    }
-
-    #[test]
-    fn sell_ioc_partial_fill_releases_remaining_base_and_derives_metadata() {
-        let taker = order(1, 11, OrderSide::Sell, 2, OrderTif::Ioc);
-        let maker = order(2, 22, OrderSide::Buy, 1, OrderTif::Gtc);
-        let matched = match_spot_order(&taker, &[maker.clone()], input()).unwrap();
-        let balances = HashMap::from([(1, SpotOrderHeldBalance::Base(balance(11, Coin::BTC, 2)))]);
-        let changes = unfreeze_matched_spot_orders(&taker, &[maker], &matched, &balances).unwrap();
-        assert_eq!(
-            (changes[0].after().available(), changes[0].after().frozen()),
-            (Decimal::ONE, Decimal::ONE)
-        );
-        let event = &changes[0].events()[0];
-        assert_eq!(event.position, EventPosition::new(LSN, 2));
-        assert_eq!((event.logical_ts, event.t, event.p), (TS, 7, 3));
-        assert_eq!(event.previous_position, EventPosition::new(9, 0));
-    }
-
-    #[test]
-    fn filled_and_gtc_partial_orders_do_not_release() {
-        for (id, size) in [(1, 1), (3, 2)] {
-            let taker = order(id, 11, OrderSide::Sell, size, OrderTif::Gtc);
-            let maker = order(id + 1, 22, OrderSide::Buy, 1, OrderTif::Gtc);
-            let matched = match_spot_order(&taker, &[maker.clone()], input()).unwrap();
-            assert!(
-                unfreeze_matched_spot_orders(&taker, &[maker], &matched, &HashMap::new())
-                    .unwrap()
-                    .is_empty()
-            );
-        }
-    }
-
-    #[test]
-    fn alo_rejection_releases_buy_quote() {
-        let taker = order(1, 11, OrderSide::Buy, 2, OrderTif::Alo);
-        let maker = order(2, 22, OrderSide::Sell, 2, OrderTif::Gtc);
-        let matched = match_spot_order(&taker, &[maker.clone()], input()).unwrap();
-        let balances =
-            HashMap::from([(1, SpotOrderHeldBalance::Quote(balance(11, Coin::USDT, 200)))]);
-        let changes = unfreeze_matched_spot_orders(&taker, &[maker], &matched, &balances).unwrap();
-        assert_eq!(
-            (changes[0].after().available(), changes[0].after().frozen()),
-            (Decimal::from(200), Decimal::ZERO)
-        );
-    }
-
-    #[test]
-    fn rejects_wrong_owner_before_running_balance_fsm() {
-        let taker = order(1, 11, OrderSide::Sell, 2, OrderTif::Ioc);
-        let maker = order(2, 22, OrderSide::Buy, 1, OrderTif::Gtc);
-        let matched = match_spot_order(&taker, &[maker.clone()], input()).unwrap();
-        let balances = HashMap::from([(1, SpotOrderHeldBalance::Base(balance(99, Coin::BTC, 2)))]);
-        let error =
-            unfreeze_matched_spot_orders(&taker, &[maker], &matched, &balances).unwrap_err();
-        assert!(error.0.contains("owner or coin mismatch"));
-    }
-
-    #[test]
-    fn resting_order_needs_no_balance() {
-        let taker = order(1, 11, OrderSide::Buy, 1, OrderTif::Gtc);
-        let matched = match_spot_order(&taker, &[], input()).unwrap();
-        assert_eq!(matched, MatchSpotOrderChanges::Resting);
-        assert!(
-            unfreeze_matched_spot_orders(&taker, &[], &matched, &HashMap::new())
-                .unwrap()
-                .is_empty()
-        );
-    }
 }

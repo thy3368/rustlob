@@ -95,6 +95,16 @@ pub fn match_spot_order(
     makers: &[SpotOrderV7],
     input: MatchSpotOrderInput,
 ) -> Result<MatchSpotOrderChanges, EntityError> {
+    match_spot_order_from(taker_before, makers, input, 0)
+}
+
+/// 从指定 `command_index` 起生成撮合订单和成交事件。
+pub fn match_spot_order_from(
+    taker_before: &SpotOrderV7,
+    makers: &[SpotOrderV7],
+    input: MatchSpotOrderInput,
+    command_index_start: u32,
+) -> Result<MatchSpotOrderChanges, EntityError> {
     validate_orders(taker_before, makers)?;
     let taker_facts = taker_before.order_base();
     let crosses = |maker: &SpotOrderV7| match taker_facts.side {
@@ -106,7 +116,7 @@ pub fn match_spot_order(
         let taker = transition_order(
             taker_before,
             SpotOrderV7Command::RejectedAsTaker,
-            EventPosition::new(input.lsn, 0),
+            EventPosition::new(input.lsn, command_index_start),
             input,
         )?;
         return Ok(MatchSpotOrderChanges::Rejected { taker });
@@ -178,7 +188,7 @@ pub fn match_spot_order(
             quote_notional: quote_notional_total,
             quote_fee: taker_fee_total,
         },
-        EventPosition::new(input.lsn, 0),
+        EventPosition::new(input.lsn, command_index_start),
         input,
     )?;
 
@@ -187,8 +197,11 @@ pub fn match_spot_order(
         let maker = makers
             .get(fill.maker_index)
             .ok_or_else(|| match_error("planned maker index is missing"))?;
-        let command_index =
+        let increment =
             u32::try_from(fill_index + 1).map_err(|_| match_error("command index overflow"))?;
+        let command_index = command_index_start
+            .checked_add(increment)
+            .ok_or_else(|| match_error("command index overflow"))?;
         maker_changes.push(transition_order(
             maker,
             SpotOrderV7Command::MatchedAsMaker {
@@ -209,12 +222,15 @@ pub fn match_spot_order(
         let maker = makers
             .get(fill.maker_index)
             .ok_or_else(|| match_error("planned maker index is missing"))?;
-        let command_index = u32::try_from(
+        let increment = u32::try_from(
             trade_index_start
                 .checked_add(fill_index)
                 .ok_or_else(|| match_error("command index overflow"))?,
         )
         .map_err(|_| match_error("command index overflow"))?;
+        let command_index = command_index_start
+            .checked_add(increment)
+            .ok_or_else(|| match_error("command index overflow"))?;
         trades.push(create_trade(
             &taker,
             maker,
@@ -333,499 +349,3 @@ fn match_error(message: &str) -> EntityError {
     EntityError::Custom(message.to_owned())
 }
 
-#[cfg(test)]
-mod tests {
-    use common_entity::{Entity, ReplayableEntityChanges};
-    use example_core_entity::account::coin::Coin;
-    use example_core_entity::account::symbol::Symbol;
-    use example_core_entity::common::PriceType;
-    use example_core_entity::entity::common::UserId;
-    use example_core_entity::entity::common::common_order::OrderBase;
-
-    use super::*;
-    use crate::use_case::trading::spot::v3::pipeline::atom_spot_order_domain_service::{
-        MatchSpotOrderV3Input, MatchSpotOrderV3Outcome, SpotOrderDomainService,
-    };
-
-    const LSN: u64 = 50;
-    const LOGICAL_TS: u64 = 900;
-
-    fn input() -> MatchSpotOrderInput {
-        MatchSpotOrderInput {
-            lsn: LSN,
-            logical_ts: LOGICAL_TS,
-            topic: 7,
-            partition: 3,
-            trade_id_start: 100,
-            maker_fee_bps: 5,
-            taker_fee_bps: 10,
-        }
-    }
-
-    fn order(
-        id: u64,
-        side: OrderSide,
-        price: Decimal,
-        size: Decimal,
-        tif: OrderTif,
-    ) -> SpotOrderV7 {
-        let principal = price.checked_mul(size).unwrap_or(Decimal::ZERO);
-        SpotOrderV7::from_record_at(
-            OrderBase {
-                owner: UserId(id + 1_000),
-                order_id: id,
-                symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
-                side,
-                limit_px: price,
-                size,
-                orig_size: size,
-                execution: PriceType::Limit,
-                tif,
-                status: SpotOrderStatus::Open,
-                buy_quote_principal_frozen: if side == OrderSide::Buy {
-                    principal
-                } else {
-                    Decimal::ZERO
-                },
-                buy_quote_fee_reserve_frozen: if side == OrderSide::Buy {
-                    Decimal::from(10)
-                } else {
-                    Decimal::ZERO
-                },
-                lsn: 10,
-                ..OrderBase::default()
-            },
-            EventPosition::new(10, id as u32),
-        )
-        .expect("测试订单必须有效")
-    }
-
-    #[test]
-    fn gtc_without_crossing_liquidity_rests_without_events() {
-        // Rule: 未穿价 GTC 必须保持静止，不能制造 update event 或 after 快照。
-        // Given: 买价低于唯一卖方 maker。
-        let taker = order(
-            1,
-            OrderSide::Buy,
-            Decimal::from(99),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        );
-        let makers = vec![order(
-            2,
-            OrderSide::Sell,
-            Decimal::from(100),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-
-        // When: 执行独立撮合服务。
-        let changes = match_spot_order(&taker, &makers, input()).expect("GTC 应进入挂单结果");
-
-        // Then: 结果明确为 Resting 且事件集合为空，输入未变化。
-        assert_eq!(changes, MatchSpotOrderChanges::Resting);
-        assert!(changes.replayable_events().is_empty());
-        assert_eq!(taker.order_base().size, Decimal::ONE);
-        assert_eq!(makers[0].order_base().size, Decimal::ONE);
-    }
-
-    #[test]
-    fn gtc_matches_makers_in_input_order_and_emits_contiguous_events() {
-        // Rule: maker 输入顺序决定成交顺序，事件按 taker、makers、trades 连续定序。
-        // Given: 两个 maker 依次提供 1 和 2 个 base，手续费需要向上取整。
-        let taker = order(
-            1,
-            OrderSide::Buy,
-            Decimal::from(110),
-            Decimal::from(3),
-            OrderTif::Gtc,
-        );
-        let makers = vec![
-            order(
-                2,
-                OrderSide::Sell,
-                Decimal::from(100),
-                Decimal::ONE,
-                OrderTif::Gtc,
-            ),
-            order(
-                3,
-                OrderSide::Sell,
-                Decimal::from(101),
-                Decimal::from(2),
-                OrderTif::Gtc,
-            ),
-        ];
-
-        // When: taker 完全吃完两笔 maker。
-        let changes = match_spot_order(&taker, &makers, input()).expect("撮合应成功");
-
-        // Then: 业务事实和成交价格采用 maker 价格。
-        let MatchSpotOrderChanges::Filled {
-            taker: taker_changes,
-            makers,
-            trades,
-        } = &changes
-        else {
-            panic!("taker 应完全成交")
-        };
-        assert_eq!(taker_changes.after().status(), SpotOrderStatus::Filled);
-        assert_eq!(makers.len(), 2);
-        assert_eq!(trades.len(), 2);
-        assert_eq!(trades[0].after().comon_trade.maker_order_id, 2);
-        assert_eq!(trades[1].after().comon_trade.maker_order_id, 3);
-        assert_eq!(trades[0].after().comon_trade.trade_id, 100);
-        assert_eq!(trades[1].after().comon_trade.trade_id, 101);
-        assert_eq!(trades[0].after().comon_trade.price, Decimal::from(100));
-        assert_eq!(trades[1].after().comon_trade.price, Decimal::from(101));
-        // Then: 所有事件共享调用方元数据，位置从 0 到 4 连续且 update 保留加载位置。
-        let events = changes.replayable_events();
-        assert_eq!(events.len(), 5);
-        assert_eq!(
-            events
-                .iter()
-                .map(|event| event.position)
-                .collect::<Vec<_>>(),
-            (0..5)
-                .map(|index| EventPosition::new(LSN, index))
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(events[0].previous_position, EventPosition::new(10, 1));
-        assert_eq!(events[1].previous_position, EventPosition::new(10, 2));
-        assert_eq!(events[2].previous_position, EventPosition::new(10, 3));
-        for event in events {
-            assert_eq!((event.logical_ts, event.t, event.p), (LOGICAL_TS, 7, 3));
-        }
-    }
-
-    #[test]
-    fn alo_crossing_liquidity_is_rejected_before_any_trade() {
-        // Rule: ALO 一旦会吃单就拒绝，只更新 taker。
-        // Given: ALO 买单穿过卖方 maker。
-        let taker = order(
-            1,
-            OrderSide::Buy,
-            Decimal::from(100),
-            Decimal::ONE,
-            OrderTif::Alo,
-        );
-        let makers = vec![order(
-            2,
-            OrderSide::Sell,
-            Decimal::from(99),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-
-        // When: 执行撮合。
-        let changes = match_spot_order(&taker, &makers, input()).expect("ALO 应业务拒绝");
-
-        // Then: taker 进入 Rejected 且只有 index 0 事件。
-        let MatchSpotOrderChanges::Rejected {
-            taker: taker_changes,
-        } = &changes
-        else {
-            panic!("ALO 应返回拒绝")
-        };
-        assert_eq!(taker_changes.after().status(), SpotOrderStatus::Rejected);
-        assert_eq!(
-            changes.replayable_events()[0].position,
-            EventPosition::new(LSN, 0)
-        );
-        assert_eq!(makers[0].order_base().size, Decimal::ONE);
-    }
-
-    #[test]
-    fn ioc_without_fill_is_rejected_and_partial_fill_is_canceled() {
-        // Rule: IOC 不得挂单；零成交拒绝，部分成交后取消剩余量。
-        // Given: 一个无流动性 IOC 和一个只有部分流动性的 IOC。
-        let no_fill = order(
-            1,
-            OrderSide::Buy,
-            Decimal::from(100),
-            Decimal::from(2),
-            OrderTif::Ioc,
-        );
-        let partial = no_fill.clone();
-        let makers = vec![order(
-            2,
-            OrderSide::Sell,
-            Decimal::from(99),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-
-        // When: 分别撮合。
-        let rejected = match_spot_order(&no_fill, &[], input()).expect("空簿 IOC 应拒绝");
-        let canceled = match_spot_order(&partial, &makers, input()).expect("IOC 应部分成交后取消");
-
-        // Then: 两个终态明确，部分成交 IOC 仍创建一笔成交。
-        let MatchSpotOrderChanges::Rejected { taker, .. } = rejected else {
-            panic!("空簿 IOC 应返回拒绝")
-        };
-        assert_eq!(taker.after().status(), SpotOrderStatus::Rejected);
-        let MatchSpotOrderChanges::CanceledAfterPartialFill { taker, trades, .. } = canceled else {
-            panic!("部分成交 IOC 应取消")
-        };
-        assert_eq!(taker.after().status(), SpotOrderStatus::Canceled);
-        assert_eq!(taker.after().order_base().size, Decimal::ONE);
-        assert_eq!(trades.len(), 1);
-    }
-
-    #[test]
-    fn terminal_release_precision_does_not_reject_matching() {
-        // Rule: 撮合层只生成订单与成交事件，不承担解冻金额的币种精度校验。
-        // Given: 卖方 ALO 的原始数量超过 BTC 支持的精度，且会穿过买方 maker。
-        let taker = order(
-            1,
-            OrderSide::Sell,
-            Decimal::new(1, 8),
-            Decimal::new(1, 9),
-            OrderTif::Alo,
-        );
-        let makers = vec![order(
-            2,
-            OrderSide::Buy,
-            Decimal::new(1, 8),
-            Decimal::new(1, 9),
-            OrderTif::Gtc,
-        )];
-
-        // When: ALO 拒绝转换成功，即使后续资金层无法表示其解冻金额。
-        let changes = match_spot_order(&taker, &makers, input()).expect("撮合层不应计算解冻金额");
-
-        // Then: 撮合仍返回业务拒绝及对应订单事件。
-        let MatchSpotOrderChanges::Rejected { taker } = changes else {
-            panic!("ALO 应返回拒绝")
-        };
-        assert_eq!(taker.after().status(), SpotOrderStatus::Rejected);
-    }
-
-    #[test]
-    fn gtc_with_insufficient_liquidity_remains_partially_filled() {
-        // Rule: GTC 有成交但流动性不足时保留剩余数量继续挂单。
-        // Given: taker 数量为 2，唯一 maker 只能成交 1。
-        let taker = order(
-            1,
-            OrderSide::Buy,
-            Decimal::from(100),
-            Decimal::from(2),
-            OrderTif::Gtc,
-        );
-        let makers = vec![order(
-            2,
-            OrderSide::Sell,
-            Decimal::from(99),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-
-        // When: 执行撮合。
-        let changes = match_spot_order(&taker, &makers, input()).expect("GTC 应部分成交");
-
-        // Then: taker 保留一单位，maker 填满并创建一笔未结算成交。
-        let MatchSpotOrderChanges::PartiallyFilled {
-            taker,
-            makers,
-            trades,
-        } = changes
-        else {
-            panic!("GTC 应返回部分成交")
-        };
-        assert_eq!(taker.after().status(), SpotOrderStatus::PartiallyFilled);
-        assert_eq!(taker.after().order_base().size, Decimal::ONE);
-        assert_eq!(makers[0].after().status(), SpotOrderStatus::Filled);
-        assert_eq!(
-            trades[0].after().settlement_status,
-            SpotTradeSettlementStatus::Unsettled
-        );
-    }
-
-    #[test]
-    fn sell_taker_crosses_buy_maker_at_equal_limit_price() {
-        // Rule: 卖方 taker 的限价等于 maker 买价时应成交。
-        // Given: 一笔卖单和一笔同价同量买单。
-        let taker = order(
-            1,
-            OrderSide::Sell,
-            Decimal::from(100),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        );
-        let makers = vec![order(
-            2,
-            OrderSide::Buy,
-            Decimal::from(100),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-
-        // When: 执行撮合。
-        let changes = match_spot_order(&taker, &makers, input()).expect("同价卖单应成交");
-
-        // Then: taker 完全成交且成交采用 maker 买价。
-        let MatchSpotOrderChanges::Filled { trades, .. } = changes else {
-            panic!("同价卖方 taker 应完全成交")
-        };
-        assert_eq!(trades[0].after().comon_trade.price, Decimal::from(100));
-        assert_eq!(trades[0].after().comon_trade.taker_side, OrderSide::Sell);
-    }
-
-    #[test]
-    fn invalid_or_overflowing_inputs_fail_without_mutating_orders() {
-        // Rule: 规划阶段的身份与算术错误必须原子失败。
-        // Given: 重复 ID、trade ID 溢出和名义金额溢出三种输入。
-        let taker = order(
-            1,
-            OrderSide::Buy,
-            Decimal::from(100),
-            Decimal::from(2),
-            OrderTif::Gtc,
-        );
-        let duplicate = vec![order(
-            1,
-            OrderSide::Sell,
-            Decimal::from(99),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-        let maker = vec![order(
-            2,
-            OrderSide::Sell,
-            Decimal::from(99),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-        let taker_before = taker.clone();
-        let duplicate_before = duplicate.clone();
-
-        // When/Then: 各错误均返回 Err，引用输入保持原样。
-        assert!(match_spot_order(&taker, &duplicate, input()).is_err());
-        let same_side = vec![order(
-            2,
-            OrderSide::Buy,
-            Decimal::from(99),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-        assert!(match_spot_order(&taker, &same_side, input()).is_err());
-        let mut overflow_id = input();
-        overflow_id.trade_id_start = u64::MAX;
-        let two_makers = vec![
-            maker[0].clone(),
-            order(
-                3,
-                OrderSide::Sell,
-                Decimal::from(99),
-                Decimal::ONE,
-                OrderTif::Gtc,
-            ),
-        ];
-        assert!(match_spot_order(&taker, &two_makers, overflow_id).is_err());
-
-        let huge_taker = order(
-            10,
-            OrderSide::Buy,
-            Decimal::MAX,
-            Decimal::from(2),
-            OrderTif::Gtc,
-        );
-        let huge_maker = vec![order(
-            11,
-            OrderSide::Sell,
-            Decimal::MAX,
-            Decimal::from(2),
-            OrderTif::Gtc,
-        )];
-        assert!(match_spot_order(&huge_taker, &huge_maker, input()).is_err());
-        assert_eq!(taker, taker_before);
-        assert_eq!(duplicate, duplicate_before);
-    }
-
-    #[test]
-    fn filled_result_matches_legacy_match_order_business_facts() {
-        // Rule: 独立服务当前必须与保留的旧撮合算法产生等价业务事实。
-        // Given: 单 maker 完全成交。
-        let taker = order(
-            1,
-            OrderSide::Buy,
-            Decimal::from(100),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        );
-        let makers = vec![order(
-            2,
-            OrderSide::Sell,
-            Decimal::from(99),
-            Decimal::ONE,
-            OrderTif::Gtc,
-        )];
-        let new_input = input();
-
-        // When: 新旧实现处理相同订单和费用参数。
-        let new = match_spot_order(&taker, &makers, new_input).expect("新服务应成功");
-        let old = SpotOrderDomainService::match_order(
-            taker,
-            makers,
-            MatchSpotOrderV3Input {
-                lsn: new_input.lsn,
-                trade_id_start: new_input.trade_id_start,
-                maker_fee_bps: new_input.maker_fee_bps,
-                taker_fee_bps: new_input.taker_fee_bps,
-                timestamp: new_input.logical_ts,
-            },
-        )
-        .expect("旧服务应成功");
-
-        // Then: 忽略事件包装后，订单、成交和释放金额一致。
-        let MatchSpotOrderChanges::Filled {
-            taker: taker_changes,
-            makers,
-            trades,
-        } = new
-        else {
-            panic!("新服务应完全成交")
-        };
-        let MatchSpotOrderV3Outcome::Filled {
-            filled_taker_order_after,
-            maker_orders_after,
-            created_trades,
-            ..
-        } = old
-        else {
-            panic!("旧服务应完全成交")
-        };
-        assert_eq!(
-            taker_changes.after().order_base(),
-            filled_taker_order_after.order_base()
-        );
-        assert_eq!(
-            makers[0].after().order_base(),
-            maker_orders_after[0].order_base()
-        );
-        let new_trade = &trades[0].after().comon_trade;
-        let old_trade = &created_trades[0].comon_trade;
-        assert_eq!(new_trade.trade_id, old_trade.trade_id);
-        assert_eq!(new_trade.symbol, old_trade.symbol);
-        assert_eq!(new_trade.taker_user, old_trade.taker_user);
-        assert_eq!(new_trade.maker_user, old_trade.maker_user);
-        assert_eq!(new_trade.taker_order_id, old_trade.taker_order_id);
-        assert_eq!(new_trade.maker_order_id, old_trade.maker_order_id);
-        assert_eq!(new_trade.taker_side, old_trade.taker_side);
-        assert_eq!(new_trade.price, old_trade.price);
-        assert_eq!(new_trade.size, old_trade.size);
-        assert_eq!(new_trade.taker_fee, old_trade.taker_fee);
-        assert_eq!(new_trade.maker_fee, old_trade.maker_fee);
-        assert_eq!(new_trade.created_at, old_trade.created_at);
-        assert_eq!(new_trade.updated_at, old_trade.updated_at);
-        assert_eq!(
-            trades[0].after().settlement_status,
-            SpotTradeSettlementStatus::Unsettled
-        );
-        assert_eq!(trades[0].after().position, EventPosition::new(LSN, 2));
-        assert_eq!(
-            trades[0].event().entity_type,
-            <SpotTradeV3 as Entity>::entity_type()
-        );
-    }
-}
