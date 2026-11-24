@@ -272,8 +272,8 @@ impl MySqlStore {
                             Decimal::ZERO
                         },
                         buy_quote_principal_paid: Decimal::ZERO,
-                        buy_quote_principal_released: Decimal::ZERO,
-                        buy_quote_fee_reserve_released: Decimal::ZERO,
+                        buy_quote_principal_unfrozen: Decimal::ZERO,
+                        buy_quote_fee_reserve_unfrozen: Decimal::ZERO,
                         sell_quote_fee_paid: Decimal::ZERO,
                         cloid: None,
                         created_at: 0,

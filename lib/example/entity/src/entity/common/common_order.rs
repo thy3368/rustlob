@@ -87,9 +87,9 @@ pub struct OrderBase {
     pub buy_quote_fee_reserve_paid: Decimal,
 
     /// 买单累计释放的 quote 本金。
-    pub buy_quote_principal_released: Decimal,
+    pub buy_quote_principal_unfrozen: Decimal,
     /// 买单累计释放的未使用 quote 手续费预留。
-    pub buy_quote_fee_reserve_released: Decimal,
+    pub buy_quote_fee_reserve_unfrozen: Decimal,
 
     /// 卖单成交累计支付的 quote 手续费。
     pub sell_quote_fee_paid: Decimal,
@@ -130,8 +130,8 @@ impl Default for OrderBase {
             buy_quote_fee_reserve_paid: Decimal::ZERO,
             buy_quote_principal_frozen: Decimal::ZERO,
             buy_quote_principal_paid: Decimal::ZERO,
-            buy_quote_principal_released: Decimal::ZERO,
-            buy_quote_fee_reserve_released: Decimal::ZERO,
+            buy_quote_principal_unfrozen: Decimal::ZERO,
+            buy_quote_fee_reserve_unfrozen: Decimal::ZERO,
             sell_quote_fee_paid: Decimal::ZERO,
             cloid: None,
             created_at: 0,

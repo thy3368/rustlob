@@ -35,8 +35,8 @@ fn assert_buy_conserved(order: &SpotOrderV7) {
         order.buy_quote_principal_frozen + order.buy_quote_fee_reserve_frozen
             - order.buy_quote_fee_reserve_paid
             - order.buy_quote_principal_paid
-            - order.buy_quote_principal_released
-            - order.buy_quote_fee_reserve_released,
+            - order.buy_quote_principal_unfrozen
+            - order.buy_quote_fee_reserve_unfrozen,
         Decimal::ZERO
     );
 }
@@ -243,7 +243,7 @@ fn admission_rejects_non_matchable_statuses_and_market_maker() {
 }
 
 #[test]
-fn buy_match_consumes_fee_reserve_and_sell_match_does_not() {
+fn buy_match_pays_from_fee_reserve_and_sell_match_does_not() {
     let buyer = order(OrderSide::Buy, SpotOrderStatus::Open);
     let (buyer, _) = buyer
         .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
@@ -281,6 +281,19 @@ fn match_failure_keeps_order_unchanged() {
                 filled_size: Decimal::ONE,
                 quote_notional: Decimal::from(100),
                 quote_fee: Decimal::from(4),
+            }))
+            .is_err()
+    );
+    assert_eq!(subject, before);
+
+    let subject = order(OrderSide::Buy, SpotOrderStatus::Open);
+    let before = subject.clone();
+    assert!(
+        subject
+            .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+                filled_size: Decimal::ZERO,
+                quote_notional: Decimal::ZERO,
+                quote_fee: Decimal::ONE,
             }))
             .is_err()
     );
@@ -515,12 +528,13 @@ fn modify_and_buy_match_replay_all_business_field_changes() {
     for expected in [
         "size",
         "status",
-        "buy_quote_fee_reserve_consumed",
+        "buy_quote_fee_reserve_paid",
         "buy_quote_principal_paid",
         "updated_at",
     ] {
         assert!(fields.contains(&expected), "missing {expected}: {fields:?}");
     }
+    assert_eq!(fields.len(), 5, "unexpected fields: {fields:?}");
 }
 
 #[test]
@@ -678,7 +692,7 @@ fn freeze_and_modify_classify_buy_principal_adjustments() {
         }))
         .unwrap();
     assert_eq!(
-        decreased.order_base().buy_quote_principal_released,
+        decreased.order_base().buy_quote_principal_unfrozen,
         Decimal::from(120)
     );
     assert!(field_names(&event).contains(&"buy_quote_principal_released"));
@@ -699,7 +713,7 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
         Decimal::from(90)
     );
     assert_eq!(
-        buyer.order_base().buy_quote_principal_released,
+        buyer.order_base().buy_quote_principal_unfrozen,
         Decimal::from(10)
     );
     let fields = field_names(&first_event);
@@ -722,11 +736,11 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
         Decimal::from(170)
     );
     assert_eq!(
-        buyer.order_base().buy_quote_principal_released,
+        buyer.order_base().buy_quote_principal_unfrozen,
         Decimal::from(30)
     );
     assert_eq!(
-        buyer.order_base().buy_quote_fee_reserve_released,
+        buyer.order_base().buy_quote_fee_reserve_unfrozen,
         Decimal::ONE
     );
     assert!(field_names(&event).contains(&"buy_quote_fee_reserve_released"));
@@ -747,7 +761,9 @@ fn sell_match_accumulates_only_sell_fee() {
     assert_eq!(order.sell_quote_fee_paid, Decimal::from(2));
     assert_eq!(order.buy_quote_principal_paid, Decimal::ZERO);
     assert_eq!(order.buy_quote_fee_reserve_paid, Decimal::ZERO);
-    assert!(field_names(&event).contains(&"sell_quote_fee_consumed"));
+    let fields = field_names(&event);
+    assert!(fields.contains(&"sell_quote_fee_paid"));
+    assert_eq!(fields.len(), 4, "unexpected fields: {fields:?}");
 }
 
 #[test]

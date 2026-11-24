@@ -144,8 +144,8 @@ impl SpotOrderV7 {
         order.buy_quote_fee_reserve_paid = Decimal::ZERO;
         order.buy_quote_principal_frozen = Decimal::ZERO;
         order.buy_quote_principal_paid = Decimal::ZERO;
-        order.buy_quote_principal_released = Decimal::ZERO;
-        order.buy_quote_fee_reserve_released = Decimal::ZERO;
+        order.buy_quote_principal_unfrozen = Decimal::ZERO;
+        order.buy_quote_fee_reserve_unfrozen = Decimal::ZERO;
         order.sell_quote_fee_paid = Decimal::ZERO;
         Self::from_record_at(order, position)
     }
@@ -423,7 +423,8 @@ fn matched_order(
         .checked_mul(filled_size)
         .ok_or_else(|| err("match notional overflow"))?;
     if (next.side == OrderSide::Buy && quote_notional > limit_notional)
-        || (filled_size == Decimal::ZERO && quote_notional != Decimal::ZERO)
+        || (filled_size == Decimal::ZERO
+            && (quote_notional != Decimal::ZERO || quote_fee != Decimal::ZERO))
     {
         return Err(err("match notional exceeds buy limit principal"));
     }
@@ -439,8 +440,8 @@ fn matched_order(
         let price_improvement = limit_notional
             .checked_sub(quote_notional)
             .ok_or_else(|| err("price improvement underflow"))?;
-        next.buy_quote_principal_released = next
-            .buy_quote_principal_released
+        next.buy_quote_principal_unfrozen = next
+            .buy_quote_principal_unfrozen
             .checked_add(price_improvement)
             .ok_or_else(|| err("principal release overflow"))?;
         next.buy_quote_fee_reserve_paid = next
@@ -549,7 +550,7 @@ impl TrackDiff for SpotOrderV7 {
             ("tif", format!("{:?}", a.tif), format!("{:?}", b.tif)),
             ("cloid", format!("{:?}", a.cloid), format!("{:?}", b.cloid)),
             (
-                "buy_quote_fee_reserve_consumed",
+                "buy_quote_fee_reserve_paid",
                 a.buy_quote_fee_reserve_paid.to_string(),
                 b.buy_quote_fee_reserve_paid.to_string(),
             ),
@@ -565,16 +566,16 @@ impl TrackDiff for SpotOrderV7 {
             ),
             (
                 "buy_quote_principal_released",
-                a.buy_quote_principal_released.to_string(),
-                b.buy_quote_principal_released.to_string(),
+                a.buy_quote_principal_unfrozen.to_string(),
+                b.buy_quote_principal_unfrozen.to_string(),
             ),
             (
                 "buy_quote_fee_reserve_released",
-                a.buy_quote_fee_reserve_released.to_string(),
-                b.buy_quote_fee_reserve_released.to_string(),
+                a.buy_quote_fee_reserve_unfrozen.to_string(),
+                b.buy_quote_fee_reserve_unfrozen.to_string(),
             ),
             (
-                "sell_quote_fee_consumed",
+                "sell_quote_fee_paid",
                 a.sell_quote_fee_paid.to_string(),
                 b.sell_quote_fee_paid.to_string(),
             ),
@@ -732,8 +733,8 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
             o.buy_quote_fee_reserve_paid,
             o.buy_quote_principal_frozen,
             o.buy_quote_principal_paid,
-            o.buy_quote_principal_released,
-            o.buy_quote_fee_reserve_released,
+            o.buy_quote_principal_unfrozen,
+            o.buy_quote_fee_reserve_unfrozen,
             o.sell_quote_fee_paid,
         ]
         .into_iter()
@@ -791,8 +792,8 @@ fn apply_buy_modify_counters(next: &mut OrderBase, delta: Decimal) -> Result<(),
                 .ok_or_else(|| err("principal freeze overflow"))?;
         }
         std::cmp::Ordering::Less => {
-            next.buy_quote_principal_released = next
-                .buy_quote_principal_released
+            next.buy_quote_principal_unfrozen = next
+                .buy_quote_principal_unfrozen
                 .checked_sub(delta)
                 .ok_or_else(|| err("principal release overflow"))?;
         }
@@ -807,19 +808,19 @@ fn settle_terminal_release(next: &mut OrderBase) -> Result<(), EntityError> {
     }
     let principal_accounted = next
         .buy_quote_principal_paid
-        .checked_add(next.buy_quote_principal_released)
+        .checked_add(next.buy_quote_principal_unfrozen)
         .ok_or_else(|| err("principal accounting overflow"))?;
     let principal_release = next
         .buy_quote_principal_frozen
         .checked_sub(principal_accounted)
         .filter(|amount| *amount >= Decimal::ZERO)
         .ok_or_else(|| err("buy principal classification exceeds frozen principal"))?;
-    next.buy_quote_principal_released = next
-        .buy_quote_principal_released
+    next.buy_quote_principal_unfrozen = next
+        .buy_quote_principal_unfrozen
         .checked_add(principal_release)
         .ok_or_else(|| err("principal release overflow"))?;
 
-    next.buy_quote_fee_reserve_released = next
+    next.buy_quote_fee_reserve_unfrozen = next
         .buy_quote_fee_reserve_frozen
         .checked_sub(next.buy_quote_fee_reserve_paid)
         .filter(|amount| *amount >= Decimal::ZERO)
@@ -833,8 +834,8 @@ fn validate_terminal_buy_conservation(order: &OrderBase) -> Result<(), EntityErr
         .checked_add(order.buy_quote_fee_reserve_frozen)
         .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_paid))
         .and_then(|amount| amount.checked_sub(order.buy_quote_principal_paid))
-        .and_then(|amount| amount.checked_sub(order.buy_quote_principal_released))
-        .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_released))
+        .and_then(|amount| amount.checked_sub(order.buy_quote_principal_unfrozen))
+        .and_then(|amount| amount.checked_sub(order.buy_quote_fee_reserve_unfrozen))
         .ok_or_else(|| err("buy funds conservation overflow"))?;
     if remainder != Decimal::ZERO {
         return Err(err("terminal buy funds are not conserved"));

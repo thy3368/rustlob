@@ -40,8 +40,8 @@ impl SpotOrderV7 {
                 SpotOrderStatus::Canceled | SpotOrderStatus::Filled | SpotOrderStatus::Rejected,
                 OrderSide::Buy,
             ) => order
-                .buy_quote_principal_released
-                .checked_add(order.buy_quote_fee_reserve_released)
+                .buy_quote_principal_unfrozen
+                .checked_add(order.buy_quote_fee_reserve_unfrozen)
                 .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
             (SpotOrderStatus::Rejected, OrderSide::Sell) => order.orig_size,
             (SpotOrderStatus::Canceled | SpotOrderStatus::Filled, OrderSide::Sell) => order.size,
@@ -205,8 +205,8 @@ mod tests {
     fn terminal_release_reads_buy_sell_and_reject_facts_without_mutation() {
         let mut buy = order(OrderSide::Buy).order_base().clone();
         buy.status = SpotOrderStatus::Canceled;
-        buy.buy_quote_principal_released = Decimal::from(40);
-        buy.buy_quote_fee_reserve_released = Decimal::from(2);
+        buy.buy_quote_principal_unfrozen = Decimal::from(40);
+        buy.buy_quote_fee_reserve_unfrozen = Decimal::from(2);
         let buy = SpotOrderV7::from_record(buy).unwrap();
         assert_terminal_query_preserves_order(
             &buy,
@@ -244,8 +244,8 @@ mod tests {
     fn terminal_release_reports_buy_addition_overflow_without_mutation() {
         let mut record = order(OrderSide::Buy).order_base().clone();
         record.status = SpotOrderStatus::Canceled;
-        record.buy_quote_principal_released = Decimal::MAX;
-        record.buy_quote_fee_reserve_released = Decimal::ONE;
+        record.buy_quote_principal_unfrozen = Decimal::MAX;
+        record.buy_quote_fee_reserve_unfrozen = Decimal::ONE;
         let order = SpotOrderV7::from_record(record).unwrap();
 
         assert_terminal_query_preserves_order(
