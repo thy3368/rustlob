@@ -77,6 +77,9 @@ pub struct OrderBase {
     /// 买单累计冻结的 quote 本金。
     pub buy_quote_principal_frozen: Decimal,
 
+    /// 创建买单时快照的 quote 手续费预留费率（基点）。
+    pub buy_quote_fee_reserve_bps: u64,
+
     /// 买单冻结的 quote 手续费预留上限；卖单不使用。
     pub buy_quote_fee_reserve_frozen: Decimal,
 
@@ -127,6 +130,7 @@ impl Default for OrderBase {
             reduce_only: false,
             status: SpotOrderStatus::Pending,
             buy_quote_fee_reserve_frozen: Decimal::ZERO,
+            buy_quote_fee_reserve_bps: 0,
             buy_quote_fee_reserve_paid: Decimal::ZERO,
             buy_quote_principal_frozen: Decimal::ZERO,
             buy_quote_principal_paid: Decimal::ZERO,
