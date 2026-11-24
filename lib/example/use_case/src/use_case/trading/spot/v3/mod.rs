@@ -4,6 +4,9 @@ pub use domain_service::match_spot_order::{
     MatchSpotOrderChanges, MatchSpotOrderInput, match_spot_order,
 };
 pub use domain_service::place_spot_order::place_spot_order;
+pub use domain_service::unfreeze_matched_spot_orders::{
+    SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, unfreeze_matched_spot_orders,
+};
 pub use pipeline::atom_spot_order_domain_service::{
     MatchSpotOrderV3Input, MatchSpotOrderV3Outcome,
 };

@@ -64,10 +64,11 @@ impl SpotOrderV7 {
                 })
                 .filter(|v| *v >= rust_decimal::Decimal::ZERO)
                 .ok_or(SpotAmountConversionError::InvalidAmount)?,
-            OrderSide::Sell if after.status == SpotOrderStatus::Filled => {
-                rust_decimal::Decimal::ZERO
-            }
-            OrderSide::Sell => before.size,
+            OrderSide::Sell => after
+                .sell_base_principal_unfrozen
+                .checked_sub(before.sell_base_principal_unfrozen)
+                .filter(|v| *v >= rust_decimal::Decimal::ZERO)
+                .ok_or(SpotAmountConversionError::InvalidAmount)?,
         };
         CoinAmount::new(held_currency(after), amount)
             .map_err(|_: CoinAmountError| SpotAmountConversionError::InexactConversion)
@@ -101,7 +102,17 @@ impl SpotOrderV7 {
         }
         let held = |order: &crate::entity::common::common_order::OrderBase| match order.side {
             OrderSide::Buy => buy_total_held(order),
-            OrderSide::Sell => Ok(order.size),
+            OrderSide::Sell => order
+                .sell_base_principal_frozen
+                .checked_sub(
+                    order
+                        .orig_size
+                        .checked_sub(order.size)
+                        .ok_or(SpotAmountConversionError::ArithmeticOverflow)?,
+                )
+                .and_then(|v| v.checked_sub(order.sell_base_principal_unfrozen))
+                .filter(|v| *v >= rust_decimal::Decimal::ZERO)
+                .ok_or(SpotAmountConversionError::ArithmeticOverflow),
         };
         let delta = held(after)?
             .checked_sub(held(before)?)

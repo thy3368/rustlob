@@ -94,7 +94,7 @@ impl<C> LogAttr for SequencedCommand<C> {
 pub trait Fsm: TrackDiff + Sized {
     type State;
     type Command;
-    type Output;
+
     type Error: From<EntityError>;
 
     /// 基于当前实体只读推导迁移后的完整实体、状态和业务输出。
@@ -107,10 +107,7 @@ pub trait Fsm: TrackDiff + Sized {
     fn event_type(command: &Self::Command) -> u8;
 
     /// 先纯计算 after entity，再完成 replay 投影；全部成功后才原子替换原实体。
-    fn verify(&self, command: SequencedCommand<Self::Command>) -> Result<(), Self::Error> {
-        ///主要问题，可能不原子， error报错，但self已经改了,先检查，再转移
-        todo!()
-    }
+    fn verify(&self, command: SequencedCommand<Self::Command>) -> Result<(), Self::Error>;
 
     /// 先纯计算 after entity，再完成 replay 投影；全部成功后才原子替换原实体。
     fn transition(

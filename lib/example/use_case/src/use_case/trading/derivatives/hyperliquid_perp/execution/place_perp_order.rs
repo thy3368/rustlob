@@ -182,6 +182,8 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
                 buy_quote_principal_unfrozen: Decimal::ZERO,
                 buy_quote_fee_reserve_unfrozen: Decimal::ZERO,
                 sell_quote_fee_paid: Decimal::ZERO,
+                sell_base_principal_frozen: Decimal::ZERO,
+                sell_base_principal_unfrozen: Decimal::ZERO,
                 cloid: cmd.cloid.clone(),
                 created_at: cmd.logical_ts(),
                 updated_at: cmd.logical_ts(),

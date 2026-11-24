@@ -265,6 +265,7 @@ impl MySqlStore {
                         reduce_only: false,
                         status: SpotOrderStatus::Open,
                         buy_quote_fee_reserve_frozen: Decimal::ZERO,
+                        buy_quote_fee_reserve_bps: 0,
                         buy_quote_fee_reserve_paid: Decimal::ZERO,
                         buy_quote_principal_frozen: if side == OrderSide::Buy {
                             Decimal::from(price).checked_mul(Decimal::from(qty))?
@@ -275,6 +276,12 @@ impl MySqlStore {
                         buy_quote_principal_unfrozen: Decimal::ZERO,
                         buy_quote_fee_reserve_unfrozen: Decimal::ZERO,
                         sell_quote_fee_paid: Decimal::ZERO,
+                        sell_base_principal_frozen: if side == OrderSide::Sell {
+                            Decimal::from(qty)
+                        } else {
+                            Decimal::ZERO
+                        },
+                        sell_base_principal_unfrozen: Decimal::ZERO,
                         cloid: None,
                         created_at: 0,
                         updated_at: 1,

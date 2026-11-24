@@ -96,6 +96,13 @@ pub struct OrderBase {
 
     /// 卖单成交累计支付的 quote 手续费。
     pub sell_quote_fee_paid: Decimal,
+
+    /// 卖单base冻结数。
+    pub sell_base_principal_frozen: Decimal,
+
+    /// 卖单累计base解冻数
+    pub sell_base_principal_unfrozen: Decimal,
+
     /// Hyperliquid `cloid`，客户端自定义订单 ID。
     pub cloid: Option<String>,
     /// 订单创建时间，单位为 Unix 纳秒。
@@ -137,6 +144,8 @@ impl Default for OrderBase {
             buy_quote_principal_unfrozen: Decimal::ZERO,
             buy_quote_fee_reserve_unfrozen: Decimal::ZERO,
             sell_quote_fee_paid: Decimal::ZERO,
+            sell_base_principal_frozen: Decimal::ZERO,
+            sell_base_principal_unfrozen: Decimal::ZERO,
             cloid: None,
             created_at: 0,
             updated_at: 0,

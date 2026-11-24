@@ -137,6 +137,8 @@ impl SpotOrderV7 {
         order.buy_quote_principal_unfrozen = Decimal::ZERO;
         order.buy_quote_fee_reserve_unfrozen = Decimal::ZERO;
         order.sell_quote_fee_paid = Decimal::ZERO;
+        order.sell_base_principal_frozen = Decimal::ZERO;
+        order.sell_base_principal_unfrozen = Decimal::ZERO;
         Self::from_record_at(order, position)
     }
 
@@ -269,6 +271,9 @@ impl SpotOrderV7 {
                         .checked_mul(next.orig_size)
                         .ok_or_else(|| err("freeze principal overflow"))?;
                     next.buy_quote_fee_reserve_frozen = fee_reserve_target(&next)?;
+                } else {
+                    next.sell_base_principal_frozen = next.orig_size;
+                    next.sell_base_principal_unfrozen = Decimal::ZERO;
                 }
                 next.status = SpotOrderStatus::Open;
                 next.updated_at = timestamp;
@@ -343,6 +348,7 @@ impl SpotOrderV7 {
                     next.cloid = Some(cloid.clone());
                 }
                 apply_buy_modify_counters(&self.order_base, &mut next)?;
+                apply_sell_modify_counters(&self.order_base, &mut next)?;
                 Ok(next)
             }
             SpotOrderV7Command::Cancel => {
@@ -562,6 +568,16 @@ impl TrackDiff for SpotOrderV7 {
                 b.sell_quote_fee_paid.to_string(),
             ),
             (
+                "sell_base_principal_frozen",
+                a.sell_base_principal_frozen.to_string(),
+                b.sell_base_principal_frozen.to_string(),
+            ),
+            (
+                "sell_base_principal_unfrozen",
+                a.sell_base_principal_unfrozen.to_string(),
+                b.sell_base_principal_unfrozen.to_string(),
+            ),
+            (
                 "updated_at",
                 a.updated_at.to_string(),
                 b.updated_at.to_string(),
@@ -718,6 +734,8 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
             o.buy_quote_principal_unfrozen,
             o.buy_quote_fee_reserve_unfrozen,
             o.sell_quote_fee_paid,
+            o.sell_base_principal_frozen,
+            o.sell_base_principal_unfrozen,
         ]
         .into_iter()
         .any(|amount| amount < Decimal::ZERO)
@@ -747,6 +765,38 @@ fn validate_record(o: &OrderBase) -> Result<(), EntityError> {
             || o.buy_quote_fee_reserve_unfrozen != Decimal::ZERO)
     {
         return Err(err("sell order contains buy fund facts"));
+    }
+    let sell_filled = o
+        .orig_size
+        .checked_sub(o.size)
+        .ok_or_else(|| err("sell fill underflow"))?;
+    if o.side == OrderSide::Buy
+        && (o.sell_base_principal_frozen != Decimal::ZERO
+            || o.sell_base_principal_unfrozen != Decimal::ZERO)
+    {
+        return Err(err("buy order contains sell fund facts"));
+    }
+    if o.side == OrderSide::Sell {
+        let accounted = sell_filled
+            .checked_add(o.sell_base_principal_unfrozen)
+            .and_then(|v| {
+                v.checked_add(
+                    o.sell_base_principal_frozen
+                        .checked_sub(sell_filled)
+                        .and_then(|v| v.checked_sub(o.sell_base_principal_unfrozen))?,
+                )
+            })
+            .ok_or_else(|| err("sell funds conservation overflow"))?;
+        if accounted != o.sell_base_principal_frozen {
+            return Err(err("sell funds are not conserved"));
+        }
+        if matches!(
+            o.status,
+            SpotOrderStatus::Filled | SpotOrderStatus::Canceled | SpotOrderStatus::Rejected
+        ) && o.sell_base_principal_frozen != sell_filled + o.sell_base_principal_unfrozen
+        {
+            return Err(err("terminal sell funds are not conserved"));
+        }
     }
     if matches!(
         o.status,
@@ -816,6 +866,29 @@ fn apply_buy_modify_counters(before: &OrderBase, next: &mut OrderBase) -> Result
     Ok(())
 }
 
+fn apply_sell_modify_counters(before: &OrderBase, next: &mut OrderBase) -> Result<(), EntityError> {
+    if next.side != OrderSide::Sell {
+        return Ok(());
+    }
+    let filled = before
+        .orig_size
+        .checked_sub(before.size)
+        .ok_or_else(|| err("invalid filled size"))?;
+    let current = before
+        .sell_base_principal_frozen
+        .checked_sub(filled)
+        .and_then(|v| v.checked_sub(before.sell_base_principal_unfrozen))
+        .filter(|v| *v >= Decimal::ZERO)
+        .ok_or_else(|| err("invalid sell principal classification"))?;
+    adjust_counter(
+        current,
+        next.size,
+        &mut next.sell_base_principal_frozen,
+        &mut next.sell_base_principal_unfrozen,
+        "sell principal",
+    )
+}
+
 fn adjust_counter(
     current: Decimal,
     target: Decimal,
@@ -867,6 +940,25 @@ pub(super) fn buy_total_held(order: &OrderBase) -> Result<Decimal, SpotAmountCon
 }
 
 fn settle_terminal_unfreeze(next: &mut OrderBase) -> Result<(), EntityError> {
+    if next.side == OrderSide::Sell {
+        if next.status != SpotOrderStatus::Filled {
+            let filled = next
+                .orig_size
+                .checked_sub(next.size)
+                .ok_or_else(|| err("sell fill underflow"))?;
+            let release = next
+                .sell_base_principal_frozen
+                .checked_sub(filled)
+                .and_then(|v| v.checked_sub(next.sell_base_principal_unfrozen))
+                .filter(|v| *v >= Decimal::ZERO)
+                .ok_or_else(|| err("sell principal classification exceeds frozen principal"))?;
+            next.sell_base_principal_unfrozen = next
+                .sell_base_principal_unfrozen
+                .checked_add(release)
+                .ok_or_else(|| err("sell unfreeze overflow"))?;
+        }
+        return Ok(());
+    }
     if next.side != OrderSide::Buy {
         return Ok(());
     }

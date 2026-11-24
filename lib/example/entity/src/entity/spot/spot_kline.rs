@@ -111,7 +111,7 @@ impl Entity for SpotKline {
         FourColorArchetype::MomentInterval
     }
     fn mutation_model() -> EntityMutationModel {
-        EntityMutationModel::DerivedReadModel
+        EntityMutationModel::AppendOnlyRecord
     }
     fn lsn(&self) -> u64 {
         1
@@ -195,6 +195,15 @@ mod tests {
                     |change| change.field_name_as_str().ok() == Some("open_time_ns")
                         && change.new_value_bytes() == b"120"
                 )
+        );
+    }
+
+    #[test]
+    fn metadata_separates_derivation_from_the_mutation_model() {
+        assert!(SpotKline::is_derived());
+        assert_eq!(
+            SpotKline::mutation_model(),
+            EntityMutationModel::AppendOnlyRecord
         );
     }
 }

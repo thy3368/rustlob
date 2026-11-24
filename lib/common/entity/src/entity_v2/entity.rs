@@ -13,7 +13,7 @@ use crate::{
 /// 它不参与 replay 事件编码、实体类型码分配，也不承诺持久化格式语义。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FourColorArchetype {
-    /// Moment-Interval：记录一次业务活动、事件或时间区间。
+    /// Moment-Interval：记录一次业务活动、事件或时间区间。主建模的主线
     MomentInterval,
     /// Party-Place-Thing：业务中的人、地点、物或组织等核心对象。
     PartyPlaceThing,
@@ -40,7 +40,7 @@ impl FourColorArchetype {
 
 /// 实体的变更模型分类。
 ///
-/// 该分类描述实体状态如何随业务事件演进，以及它是否作为业务事实来源。
+/// 该分类只描述实体状态如何随业务事件演进。
 /// 它独立于四色建模分类，也不参与 replay 事件编码、实体类型码分配或持久化格式语义。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EntityMutationModel {
@@ -57,29 +57,11 @@ pub enum EntityMutationModel {
     /// 这种实体代表一条已经发生的业务事实，创建后通常不再修改。后续修正不应该原地改写
     /// 旧记录，而应该追加新的冲正、补偿或关联记录。
     ///
-    /// 典型例子：成交、资金流水、结算流水、审计记录。
+    /// 时点快照也属于追加记录：每个截面作为一条新记录写入，而不是原地修改旧快照。
+    /// 实体是否由其他事实派生，应通过 [`Entity::is_derived`] 独立表达。
+    ///
+    /// 典型例子：成交、资金流水、结算流水、审计记录、时点快照。
     AppendOnlyRecord,
-    /// 某个时点的状态截面。
-    ///
-    /// 这种实体通常不是业务事实本身，而是为了重建、查询、风控计算或读取加速而保存的
-    /// 一份状态截面。重点不是“同一个快照被持续修改”，而是“在某个序列号或时间点生成了
-    /// 一份新的状态截面”。
-    ///
-    /// 判断规则：如果同一个业务 ID 后续会被命令修改状态，通常应使用 [`VersionedMutable`]；
-    /// 如果每条记录都代表某个时点的一份状态截面，通常应使用 [`Snapshot`]。
-    ///
-    /// 典型例子：盘口快照、账户风险快照、组合资产快照。
-    ///
-    /// [`VersionedMutable`]: Self::VersionedMutable
-    /// [`Snapshot`]: Self::Snapshot
-    Snapshot,
-    /// 派生读模型。
-    ///
-    /// 这种实体由其他业务事实、事件或快照投影而来，服务查询、展示或下游消费。
-    /// 它不应该作为最终业务事实来源；如果和源事实冲突，应以源事实为准并重新投影。
-    ///
-    /// 典型例子：用户当前挂单视图、行情展示视图、PnL 报表视图。
-    DerivedReadModel,
 }
 
 impl EntityMutationModel {
@@ -88,8 +70,6 @@ impl EntityMutationModel {
         match self {
             Self::VersionedMutable => "versioned_mutable",
             Self::AppendOnlyRecord => "append_only_record",
-            Self::Snapshot => "snapshot",
-            Self::DerivedReadModel => "derived_read_model",
         }
     }
 }
@@ -213,9 +193,8 @@ pub trait Entity: Shard + Clone + Debug + Send + Sync + 'static {
     ///
     /// 该元数据只用于领域模型治理，不改变 `track_create_event`、`track_update_event`
     /// 或 `track_delete_event` 的运行行为。若实体是成交、流水、审计记录等创建后不应原地修改的
-    /// 业务事实，应 override 为 [`EntityMutationModel::AppendOnlyRecord`]；若实体是一份时点截面，
-    /// 应 override 为 [`EntityMutationModel::Snapshot`]；若实体只是由其他事实投影出的查询模型，
-    /// 应 override 为 [`EntityMutationModel::DerivedReadModel`]。
+    /// 业务事实或时点截面，应 override 为 [`EntityMutationModel::AppendOnlyRecord`]。
+    /// 实体是否由其他事实派生，由 [`Entity::is_derived`] 独立表达，不属于变更模型。
     #[inline]
     fn mutation_model() -> EntityMutationModel
     where
@@ -512,5 +491,22 @@ where
         Ok(())
     } else {
         Err(EntityError::EntityIdMismatch { expected, actual })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EntityMutationModel;
+
+    #[test]
+    fn mutation_model_labels_cover_the_two_supported_models() {
+        assert_eq!(
+            EntityMutationModel::VersionedMutable.as_str(),
+            "versioned_mutable"
+        );
+        assert_eq!(
+            EntityMutationModel::AppendOnlyRecord.as_str(),
+            "append_only_record"
+        );
     }
 }
