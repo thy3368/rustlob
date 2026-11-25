@@ -3,7 +3,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use base_types_v2::{Coin, Symbol};
 use common_entity::{Entity, ReplayableDomainEvent};
-use example_core_use_case::{BalanceV2, MarketRules, SpotOrderV7, SpotTradeV3};
+use example_core_entity::spot::SpotTradeV3;
+use example_core_use_case::{BalanceV2, MarketRules, SpotOrderV7};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 
 use crate::StoreSnapshot;
