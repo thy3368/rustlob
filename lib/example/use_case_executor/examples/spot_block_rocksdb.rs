@@ -22,6 +22,7 @@ const SYMBOL_ID: u32 = 1;
 const MAKER_FEE_BPS: u64 = 5;
 const TAKER_FEE_BPS: u64 = 10;
 const INITIAL_BALANCE: u64 = 1_000_000;
+const ROCKSDB_PATH: &str = "/tmp/rustlob-spot-rocksdb";
 
 #[derive(Debug)]
 struct RunOutcome {
@@ -31,17 +32,7 @@ struct RunOutcome {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut args = std::env::args_os();
-    let program = args.next().unwrap_or_default();
-    let Some(path) = args.next() else {
-        eprintln!("用法: {} <rocksdb-path>", Path::new(&program).display());
-        return Err("缺少 RocksDB 路径".into());
-    };
-    if args.next().is_some() {
-        return Err("只接受一个 RocksDB 路径参数".into());
-    }
-
-    let outcome = run(Path::new(&path))?;
+    let outcome = run(Path::new(ROCKSDB_PATH))?;
     println!(
         "order_id={} cloid={} orders(created={}, updated={}) balances(created={}, updated={}) trades(created={}, updated={})",
         outcome.order_id,
