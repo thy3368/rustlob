@@ -2,7 +2,7 @@ use common_entity::fsm_v2::{CommandMetadata, Fsm, SequencedCommand};
 use common_entity::{Entity, Shard, TrackDiff};
 use rust_decimal::Decimal;
 
-use super::{CreateSpotOrderV7Command, SpotOrderV7, SpotOrderV7Command};
+use super::{PlaceSpotOrderPipelineV2Cmd, SpotOrderV7, SpotOrderV7Command};
 use crate::account::coin::Coin;
 use crate::account::symbol::Symbol;
 use crate::common::PriceType;
@@ -73,7 +73,7 @@ fn create_command(
 ) -> SequencedCommand<SpotOrderV7Command> {
     SequencedCommand::new(
         CommandMetadata::new(10, TIMESTAMP, 3, 4, "11".to_owned()),
-        SpotOrderV7Command::Create(CreateSpotOrderV7Command {
+        SpotOrderV7Command::Create(PlaceSpotOrderPipelineV2Cmd {
             party_id: 11,
             order_id,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
@@ -145,7 +145,7 @@ fn create_event_and_freeze_update_have_lifecycle_event_codes() {
     ))
     .unwrap();
     let mut create_event = created.track_create_event().unwrap();
-    create_event.domain_event_type = SpotOrderV7Command::Create(CreateSpotOrderV7Command {
+    create_event.domain_event_type = SpotOrderV7Command::Create(PlaceSpotOrderPipelineV2Cmd {
         party_id: 11,
         order_id: 7,
         symbol: Symbol::new(1, Coin::BTC, Coin::USDT),

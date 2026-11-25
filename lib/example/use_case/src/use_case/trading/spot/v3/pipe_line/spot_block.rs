@@ -6,7 +6,7 @@ use common_entity::{
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{
-    BalanceV2, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide, OrderType, SpotOrderStatus,
+    BalanceV2, PlaceSpotOrderPipelineV2Cmd, OrderGroupRelation, OrderSide, OrderType, SpotOrderStatus,
     SpotOrderV7,
 };
 use rust_decimal::Decimal;
@@ -105,6 +105,8 @@ pub struct SpotBlockState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotBlockChanges {
+    ///todo 每个command及对应的result
+    /// todo 整个block执行后对应的result
     pub item_results: Vec<SpotBlockItemResult>,
 }
 
@@ -355,7 +357,7 @@ impl WorkingState {
             balances_by_order_id
                 .insert(base.order_id, self.balances_for(base.owner.0, base.symbol)?);
         }
-        let command = CreateSpotOrderV7Command {
+        let command = PlaceSpotOrderPipelineV2Cmd {
             party_id: order.party_id,
             order_id: order.order_id,
             symbol: order.symbol,

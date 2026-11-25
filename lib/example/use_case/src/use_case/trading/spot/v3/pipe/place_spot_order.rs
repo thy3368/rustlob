@@ -2,7 +2,7 @@ use common_entity::fsm_v2::{CommandMetadata, SequencedCommand};
 use common_entity::{
     CreatedEntityEvent, EntityError, ReplayableDomainEvent, ReplayableEntityChanges, TrackDiff,
 };
-use example_core_entity::{CreateSpotOrderV7Command, SpotOrderV7, SpotOrderV7Command};
+use example_core_entity::{PlaceSpotOrderPipelineV2Cmd, SpotOrderV7, SpotOrderV7Command};
 
 /// 现货下单步骤的成功结果，内部 create event 是唯一业务真相。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,7 +24,7 @@ impl ReplayableEntityChanges for PlaceSpotOrderPipeChanges {
 
 /// 在显式事件位置创建一个 `Pending` 现货订单。
 pub fn place_spot_order(
-    command: CreateSpotOrderV7Command,
+    command: PlaceSpotOrderPipelineV2Cmd,
     lsn: u64,
     command_index: u32,
     logical_ts: u64,

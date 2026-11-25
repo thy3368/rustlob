@@ -26,6 +26,9 @@ match/maker/taker/(rest,reject,filled,)
 - command{state,resp}
 - command{state{ok/error}} ->resp
 
+- 每条command及对应的result
+- 整个block的result
+
 ## 客户端拿到resp
 
 - 返回place的resp

@@ -9,4 +9,4 @@ pub use spot_trade_v3::{
 pub mod spot_order_v7;
 pub mod spot_order_v7_compute;
 
-pub use spot_order_v7::{CreateSpotOrderV7Command, SpotOrderV7, SpotOrderV7Command};
+pub use spot_order_v7::{PlaceSpotOrderPipelineV2Cmd, SpotOrderV7, SpotOrderV7Command};

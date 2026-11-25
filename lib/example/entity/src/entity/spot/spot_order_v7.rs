@@ -12,7 +12,7 @@ use crate::entity::common::order_primitives::{
 
 /// 创建现货订单所需的业务事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CreateSpotOrderV7Command {
+pub struct PlaceSpotOrderPipelineV2Cmd {
     pub party_id: u64,
     pub order_id: u64,
     pub symbol: crate::account::symbol::Symbol,
@@ -28,7 +28,7 @@ pub struct CreateSpotOrderV7Command {
 /// 不含定序元数据的现货订单业务命令。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV7Command {
-    Create(CreateSpotOrderV7Command),
+    Create(PlaceSpotOrderPipelineV2Cmd),
     Freeze,
     MatchedAsTaker {
         filled_size: Decimal,

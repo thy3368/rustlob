@@ -3,7 +3,7 @@ use std::fmt;
 
 use common_entity::{Entity, EntityError, ReplayableDomainEvent, ReplayableEntityChanges};
 use example_core_entity::{
-    BalanceV2, CreateSpotOrderV7Command, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
+    BalanceV2, PlaceSpotOrderPipelineV2Cmd, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
 };
 
 use super::freeze_spot_order::{FreezeSpotOrderPipeChanges, freeze_spot_order_from};
@@ -147,7 +147,7 @@ impl std::error::Error for PlaceSpotOrderPipelineV2Error {}
 /// 纯计算地执行创建、冻结、撮合、结算与终态解冻。
 #[allow(clippy::too_many_arguments)]
 pub fn place_spot_order_pipeline_v2(
-    command: CreateSpotOrderV7Command,
+    command: PlaceSpotOrderPipelineV2Cmd,
     maker_orders: &[SpotOrderV7],
     balances_by_order_id: &HashMap<u64, SpotOrderSettlementBalances>,
     trade_id_start: u64,
@@ -274,11 +274,18 @@ pub fn place_spot_order_pipeline_v2(
 }
 
 fn validate_inputs(
-    command: &CreateSpotOrderV7Command,
+    command: &PlaceSpotOrderPipelineV2Cmd,
     makers: &[SpotOrderV7],
     balances: &HashMap<u64, SpotOrderSettlementBalances>,
     trade_id_start: u64,
     lsn: u64,
+) -> Result<(), PlaceSpotOrderPipelineV2Error> {
+    validate_place_spot_order_pipeline_v2_command(command)?;
+    validate_place_spot_order_pipeline_v2_state(command, makers, balances, trade_id_start, lsn)
+}
+
+pub(crate) fn validate_place_spot_order_pipeline_v2_command(
+    command: &PlaceSpotOrderPipelineV2Cmd,
 ) -> Result<(), PlaceSpotOrderPipelineV2Error> {
     if !matches!(command.order_type, OrderType::Limit { .. }) {
         return Err(invalid("trigger orders are not supported"));
@@ -286,6 +293,28 @@ fn validate_inputs(
     if command.relation != OrderGroupRelation::Standalone {
         return Err(invalid("TPSL and grouped orders are not supported"));
     }
+    if command.order_id == 0 {
+        return Err(invalid("order id must be greater than zero"));
+    }
+    if command.party_id == 0 {
+        return Err(invalid("party id must be greater than zero"));
+    }
+    if command.price <= rust_decimal::Decimal::ZERO {
+        return Err(invalid("price must be greater than zero"));
+    }
+    if command.size <= rust_decimal::Decimal::ZERO {
+        return Err(invalid("size must be greater than zero"));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_place_spot_order_pipeline_v2_state(
+    command: &PlaceSpotOrderPipelineV2Cmd,
+    makers: &[SpotOrderV7],
+    balances: &HashMap<u64, SpotOrderSettlementBalances>,
+    trade_id_start: u64,
+    lsn: u64,
+) -> Result<(), PlaceSpotOrderPipelineV2Error> {
     let first_position = (lsn, 0);
     let mut order_ids = HashSet::with_capacity(makers.len() + 1);
     order_ids.insert(command.order_id);

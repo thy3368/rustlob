@@ -9,7 +9,7 @@ pub struct LogEntry<P> {
     t: u8,
     ///partition
     p: u8,
-    /// 全局单调递增的序列号，是全序的依据。
+    /// 全局单调递增的序列号，是全序的依据---重要。
     lsn: u64,
     /// 由定序器分配的逻辑时间戳。
     logical_ts: u64,
