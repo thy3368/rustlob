@@ -18,6 +18,7 @@ example_core_entity = { path = "../entity" }
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }
 rstest = "0.23"
 rust_decimal = "1"
+lob_repo_v2 = { path = "../../common/lob_repo_v2" }
 
 [lints]
 workspace = true

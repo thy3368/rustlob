@@ -5,22 +5,21 @@ use example_core_use_case::{SpotBlockChanges, SpotBlockCmd, SpotBlockError, Spot
 
 pub fn execute_spot_block_with_outbound<OB>(
     command: &SpotBlockCmd,
-    outbound: &OB,
+    outbound: &mut OB,
 ) -> Result<
     ExecutionResultV3<SpotBlockChanges>,
     ExecutionErrorV3<
         SpotBlockError,
         <OB as StateSourceV3<SpotBlockUseCase>>::Error,
-        <OB as StateSinkV3>::Error,
+        <OB as StateSinkV3<SpotBlockUseCase>>::Error,
     >,
 >
 where
-    OB: StateSourceV3<SpotBlockUseCase> + StateSinkV3,
+    OB: StateSourceV3<SpotBlockUseCase> + StateSinkV3<SpotBlockUseCase>,
 {
-    UseCaseExecutorV3.execute_presequenced::<SpotBlockUseCase, OB, OB>(
+    UseCaseExecutorV3.execute_presequenced_with_outbound::<SpotBlockUseCase, OB>(
         &SpotBlockUseCase,
         command,
-        outbound,
         outbound,
     )
 }

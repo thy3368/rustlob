@@ -130,7 +130,7 @@ impl SpotOrderApp {
         if command.items.is_empty() {
             return None;
         }
-        let result = execute_spot_block_with_outbound(command, &DemoSpotBlockOutbound).ok()?;
+        let result = execute_spot_block_with_outbound(command, &mut DemoSpotBlockOutbound).ok()?;
         let summary = SpotBlockExecutionSummary {
             status: "executed",
             item_count: result.changes.item_results.len(),
