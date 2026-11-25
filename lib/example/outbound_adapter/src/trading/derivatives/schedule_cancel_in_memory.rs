@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::fsm_v2::Fsm as FsmV2;
+use common_entity::LogEntrySequencer;
 use common_entity::{Entity, Fsm, LogEntry, ReplayableDomainEvent, Shard, StateSink, StateSource};
 use example_core_use_case::{
     BalanceV2, BalanceV2Command, DueScheduledCancelSource, PerpOrderV3, PerpOrderV3Event,
@@ -258,17 +259,18 @@ fn replay_events(
                 .get_mut(&event.entity_id)
                 .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
             check_version(event, order.order_base().lsn)?;
-            let metadata = CommandMetadata::new(
-                event.lsn,
-                event.logical_ts,
+            let command = LogEntrySequencer::from_metadata_with_topic_at(
                 order.topic(),
                 order.partition(),
+                event.lsn,
+                event.command_index,
+                event.logical_ts,
+                0,
+                0,
                 order.party_id(),
+                SpotOrderV7Command::Cancel,
             );
-            let (after, _) = FsmV2::transition(
-                &*order,
-                SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
-            )
+            let (after, _) = FsmV2::transition(&*order, command)
             .map_err(|error| {
                 HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
             })?;
@@ -344,23 +346,21 @@ fn replay_balance(
     let unfreeze = available
         .checked_sub(balance.available())
         .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
-    let metadata = CommandMetadata::new(
-        event.lsn,
-        event.logical_ts,
+    let command = LogEntrySequencer::from_metadata_with_topic_at(
         balance.topic(),
         balance.partition(),
+        event.lsn,
+        event.command_index,
+        event.logical_ts,
+        0,
+        0,
         balance.party_id().to_string(),
+        BalanceV2Command::UnfreezeAndPay {
+            unfreeze_amount: unfreeze,
+            payment_amount: Decimal::ZERO,
+        },
     );
-    let (after, _) = FsmV2::transition(
-        &*balance,
-        SequencedCommand::new(
-            metadata,
-            BalanceV2Command::UnfreezeAndPay {
-                unfreeze_amount: unfreeze,
-                payment_amount: Decimal::ZERO,
-            },
-        ),
-    )
+    let (after, _) = FsmV2::transition(&*balance, command)
     .map_err(|error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()))?;
     *balance = after;
     if balance.available() != available || balance.frozen() != frozen {
@@ -428,12 +428,11 @@ mod tests {
         let spot = SpotOrderV7::from_record(order_base(11, OrderSide::Buy))
             .expect("spot fixture should be valid");
         let release = {
-            let metadata =
-                CommandMetadata::new(9, DUE_MS, spot.topic(), spot.partition(), spot.party_id());
-            let (canceled, _) = FsmV2::transition(
-                &spot,
-                SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
-            )
+            let command = LogEntrySequencer::from_metadata_with_topic(
+                spot.topic(), spot.partition(), 9, DUE_MS, 0, 0, spot.party_id(),
+                SpotOrderV7Command::Cancel,
+            );
+            let (canceled, _) = FsmV2::transition(&spot, command)
             .expect("fixture should cancel");
             canceled
                 .terminal_unfreeze_delta(&spot)

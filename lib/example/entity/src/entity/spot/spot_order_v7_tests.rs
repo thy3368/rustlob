@@ -1,5 +1,5 @@
-use common_entity::fsm_v2::{CommandMetadata, Fsm, SequencedCommand};
-use common_entity::{Entity, Shard, TrackDiff};
+use common_entity::fsm_v2::Fsm;
+use common_entity::{Entity, LogEntry, LogEntrySequencer, Shard, TrackDiff};
 use rust_decimal::Decimal;
 
 use super::{PlaceSpotOrderPipelineV2Cmd, SpotOrderV7, SpotOrderV7Command};
@@ -14,11 +14,8 @@ use crate::entity::common::order_primitives::{
 
 const TIMESTAMP: u64 = 500;
 
-fn sequenced(command: SpotOrderV7Command) -> SequencedCommand<SpotOrderV7Command> {
-    SequencedCommand::new(
-        CommandMetadata::new(10, TIMESTAMP, 0, 1, String::new()),
-        command,
-    )
+fn sequenced(command: SpotOrderV7Command) -> LogEntry<SpotOrderV7Command> {
+    LogEntrySequencer::from_metadata_with_topic(0, 1, 10, TIMESTAMP, 0, 0, String::new(), command)
 }
 
 fn field_names(event: &common_entity::ReplayableDomainEvent) -> Vec<&str> {
@@ -70,10 +67,9 @@ fn create_command(
     order_id: u64,
     side: OrderSide,
     order_type: OrderType,
-) -> SequencedCommand<SpotOrderV7Command> {
-    SequencedCommand::new(
-        CommandMetadata::new(10, TIMESTAMP, 3, 4, "11".to_owned()),
-        SpotOrderV7Command::Create(PlaceSpotOrderPipelineV2Cmd {
+) -> SpotOrderV7Command {
+    SpotOrderV7Command::Create(LogEntrySequencer::from_metadata_with_topic(
+        3, 4, 10, TIMESTAMP, 0, 0, "11".to_owned(), PlaceSpotOrderPipelineV2Cmd {
             party_id: 11,
             order_id,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
@@ -84,24 +80,24 @@ fn create_command(
             relation: OrderGroupRelation::Standalone,
             cloid: Some("client-1".to_owned()),
             fee_bps: 25,
-        }),
-    )
+        },
+    ))
 }
 
 #[test]
 fn create_rejects_invalid_facts_and_non_create_commands() {
     for mutate in [0_u8, 1, 2] {
-        let command =
-            match create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc })
-                .into_parts()
-            {
-                (metadata, SpotOrderV7Command::Create(mut command)) => {
+        let command = match create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }) {
+                SpotOrderV7Command::Create(entry) => {
+                    let mut command = entry.into_payload();
                     match mutate {
                         0 => command.order_id = 0,
                         1 => command.price = Decimal::ZERO,
                         _ => command.size = Decimal::ZERO,
                     }
-                    SequencedCommand::new(metadata, SpotOrderV7Command::Create(command))
+                    SpotOrderV7Command::Create(LogEntrySequencer::from_metadata_with_topic(
+                        3, 4, 10, TIMESTAMP, 0, 0, "11".to_owned(), command,
+                    ))
                 }
                 _ => unreachable!(),
             };
@@ -119,21 +115,22 @@ fn create_rejects_invalid_facts_and_non_create_commands() {
         ))
         .is_err()
     );
-    let (metadata, command) =
-        create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }).into_parts();
-    let SpotOrderV7Command::Create(mut command) = command else {
+    let SpotOrderV7Command::Create(entry) =
+        create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }) else {
         unreachable!()
     };
+    let mut command = entry.into_payload();
     command.price = Decimal::MAX;
     command.size = Decimal::MAX;
     assert!(
-        SpotOrderV7::create(SequencedCommand::new(
-            metadata,
-            SpotOrderV7Command::Create(command)
+        SpotOrderV7::create(SpotOrderV7Command::Create(
+            LogEntrySequencer::from_metadata_with_topic(
+                3, 4, 10, TIMESTAMP, 0, 0, "11".to_owned(), command,
+            )
         ))
         .is_err()
     );
-    assert!(SpotOrderV7::create(sequenced(SpotOrderV7Command::Freeze)).is_err());
+    assert!(SpotOrderV7::create(SpotOrderV7Command::Freeze).is_err());
 }
 
 #[test]
