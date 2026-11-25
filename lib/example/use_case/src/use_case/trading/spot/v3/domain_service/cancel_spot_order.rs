@@ -1,11 +1,32 @@
 use common_entity::fsm_v2::{
     CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
 };
-use common_entity::{EntityError, PositionedEntity, Shard, UpdatedEntityEvents};
+use common_entity::{
+    EntityError, PositionedEntity, ReplayableDomainEvent, ReplayableEntityChanges, Shard,
+    UpdatedEntityEvents,
+};
 use example_core_entity::{
     BalanceV2, BalanceV2Command, BalanceV2Error, SpotOrderV7, SpotOrderV7Command,
 };
 use rust_decimal::Decimal;
+
+/// 取消现货订单步骤产生的订单与可选余额变化。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancelSpotOrderPipeChanges {
+    pub order: UpdatedEntityEvents<SpotOrderV7>,
+    pub balance: Option<UpdatedEntityEvents<BalanceV2>>,
+}
+
+impl ReplayableEntityChanges for CancelSpotOrderPipeChanges {
+    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
+        let mut events = self.order.replayable_events();
+        if let Some(balance) = &self.balance {
+            events.extend(balance.replayable_events());
+        }
+        events
+    }
+}
+
 /// 取消现货订单，并按同一日志序号生成订单与可选余额事件。
 pub fn cancel_spot_order(
     order: &SpotOrderV7,
@@ -14,13 +35,7 @@ pub fn cancel_spot_order(
     logical_ts: u64,
     topic: u8,
     partition: u8,
-) -> Result<
-    (
-        UpdatedEntityEvents<SpotOrderV7>,
-        Option<UpdatedEntityEvents<BalanceV2>>,
-    ),
-    EntityError,
-> {
+) -> Result<CancelSpotOrderPipeChanges, EntityError> {
     let order_loaded_position = (order.lsn(), order.command_index());
     let order_metadata =
         FsmCommandMetadata::new_at(lsn, 0, logical_ts, topic, partition, order.party_id());
@@ -76,7 +91,7 @@ pub fn cancel_spot_order(
         )
     };
 
-    Ok((order, balance))
+    Ok(CancelSpotOrderPipeChanges { order, balance })
 }
 
 fn map_balance_error(error: BalanceV2Error) -> EntityError {

@@ -17,6 +17,7 @@ pub use domain_service::unfreeze_matched_spot_orders::{
 };
 
 pub mod pipeline;
+pub mod settle_matched_spot_trades2;
 pub use pipeline::*;
 
 pub mod domain_service;

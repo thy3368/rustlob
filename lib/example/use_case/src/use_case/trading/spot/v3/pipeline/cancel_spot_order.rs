@@ -1,13 +1,12 @@
-use common_entity::{
-    EntityError, LogEntry, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
-    UseCaseV3,
-};
+use common_entity::{EntityError, LogEntry, UseCaseV3};
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{BalanceV2, OrderSide, SpotOrderStatus, SpotOrderV7};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::use_case::trading::spot::v3::domain_service::cancel_spot_order::cancel_spot_order;
+use crate::use_case::trading::spot::v3::domain_service::cancel_spot_order::{
+    CancelSpotOrderPipeChanges, cancel_spot_order,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CancelSpotOrderFsmV3Cmd {
@@ -21,11 +20,7 @@ pub struct CancelSpotOrderFsmV3State {
 }
 
 /// 取消后的聚合状态与 FSM 原生 replay 事件。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CancelSpotOrderFsmV3Changes {
-    pub order: UpdatedEntityEvents<SpotOrderV7>,
-    pub balance: Option<UpdatedEntityEvents<BalanceV2>>,
-}
+pub type CancelSpotOrderFsmV3Changes = CancelSpotOrderPipeChanges;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CancelSpotOrderFsmV3Error {
@@ -53,18 +48,6 @@ pub enum CancelSpotOrderFsmV3Error {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CancelSpotOrderFsmV3UseCase;
-
-impl ReplayableEntityChanges for CancelSpotOrderFsmV3Changes {
-    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
-        let capacity = if self.balance.is_some() { 2 } else { 1 };
-        let mut events = Vec::with_capacity(capacity);
-        events.extend(self.order.events());
-        if let Some(balance) = &self.balance {
-            events.extend(balance.events());
-        }
-        events
-    }
-}
 
 impl UseCaseV3 for CancelSpotOrderFsmV3UseCase {
     type Command = LogEntry<CancelSpotOrderFsmV3Cmd>;
@@ -146,13 +129,13 @@ fn compute_changes(
     cmd: &LogEntry<CancelSpotOrderFsmV3Cmd>,
     state: &CancelSpotOrderFsmV3State,
 ) -> Result<CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Error> {
-    let (order, balance) = cancel_spot_order(
+    cancel_spot_order(
         &state.order,
         &state.balance,
         cmd.lsn(),
         cmd.logical_ts(),
         cmd.topic(),
         cmd.partition(),
-    )?;
-    Ok(CancelSpotOrderFsmV3Changes { order, balance })
+    )
+    .map_err(CancelSpotOrderFsmV3Error::from)
 }
