@@ -1,10 +1,11 @@
 use common_entity::{
     ExecutionErrorV3, ExecutionResultV3, LogEntry, StateSinkV3, StateSourceV3, UseCaseExecutorV3,
 };
-use example_core_use_case::pipe_line::place_spot_order::{
-    PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error, PlaceSpotOrderPipelineV2UseCase,
-};
 use example_core_entity::PlaceSpotOrderPipelineV2Cmd;
+use example_core_use_case::pipe::place_spot_order_pipeline_v2::{
+    PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error,
+};
+use example_core_use_case::pipe_line::place_spot_order_pipeline_v2::PlaceSpotOrderPipelineV2UseCase;
 use example_outbound_adapter::database::State4BuildBlock;
 
 /// 使用共享运行时执行 Place Spot Order V3，并将同一 outbound 用于状态读写和事件副作用。

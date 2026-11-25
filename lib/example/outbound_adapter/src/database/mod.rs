@@ -4,11 +4,11 @@ pub mod mysql_store;
 pub mod store_snapshot;
 
 pub mod build_block_data;
-pub mod build_block_place_spot_order;
 pub mod build_block_data_state;
-pub use build_block_place_spot_order::{
-    PlaceSpotOrderBuildBlockSinkError, PlaceSpotOrderBuildBlockSourceError,
-};
+pub mod build_block_place_spot_order;
 pub use build_block_data_state::{
     CancelSpotOrderBuildBlockSinkError, CancelSpotOrderBuildBlockSourceError, State4BuildBlock,
+};
+pub use build_block_place_spot_order::{
+    PlaceSpotOrderBuildBlockSinkError, PlaceSpotOrderBuildBlockSourceError,
 };
