@@ -13,12 +13,14 @@ thiserror = "2"
 serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
+base_types_v2 = { path = "../../common/base_types_v2" }
 bumpalo = { version = "3.19", features = ["collections"] }
 example_core_entity = { path = "../entity" }
 example_outbound_adapter = { path = "../outbound_adapter", features = ["test-support"] }
 rstest = "0.23"
 rust_decimal = "1"
 lob_repo_v2 = { path = "../../common/lob_repo_v2" }
+tempfile = "3"
 
 [lints]
 workspace = true

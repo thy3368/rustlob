@@ -103,4 +103,3 @@ pub fn execute_spot_block_v3(
 }
 
 // RocksDB 持久化由调用方在执行完成后通过 outbound adapter 显式完成第二阶段。
-//plan 写个例子 从rocksdb 读， 调用 execute_spot_block_v3， 再写db

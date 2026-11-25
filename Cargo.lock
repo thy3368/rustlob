@@ -10002,6 +10002,7 @@ dependencies = [
 name = "use_case_executor"
 version = "0.1.0"
 dependencies = [
+ "base_types_v2",
  "bumpalo",
  "entity",
  "example_core_entity",
@@ -10011,6 +10012,7 @@ dependencies = [
  "rstest",
  "rust_decimal",
  "serde",
+ "tempfile",
  "thiserror 2.0.18",
 ]
 
