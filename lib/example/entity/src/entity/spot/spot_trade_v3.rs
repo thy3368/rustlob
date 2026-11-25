@@ -264,4 +264,3 @@ impl Fsm for SpotTradeV3 {
         }
     }
 }
-

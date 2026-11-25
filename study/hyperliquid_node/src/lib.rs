@@ -12,5 +12,6 @@
 //! # }
 //! ```
 
+pub mod explorer_block;
 pub mod hl_node_outputs;
 pub mod replica_rpc;

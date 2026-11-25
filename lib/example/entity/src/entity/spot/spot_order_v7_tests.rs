@@ -88,7 +88,6 @@ fn create_command(
     )
 }
 
-
 #[test]
 fn create_rejects_invalid_facts_and_non_create_commands() {
     for mutate in [0_u8, 1, 2] {
@@ -436,7 +435,6 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
         assert!(!replay.field_changes.is_empty());
     }
 }
-
 
 #[test]
 fn modify_and_buy_match_replay_all_business_field_changes() {

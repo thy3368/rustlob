@@ -268,4 +268,3 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
         })
     }
 }
-

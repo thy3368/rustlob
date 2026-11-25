@@ -1,0 +1,16 @@
+{
+  "time": 1774234417452,
+  "user": "0x7d0c59691fec7f3fea385cdc3126c37a41d91b28",
+  "action": {
+    "type": "cancelByCloid",
+    "cancels": [
+      {
+        "asset": 6,
+        "cloid": "0x0000000000000000189eef2b97471d0e"
+      }
+    ]
+  },
+  "block": 932387680,
+  "hash": "0x7a66bf325fc36ea07be00437931b60020c540017fac68d721e2f6a851ec7488b",
+  "error": null
+}
