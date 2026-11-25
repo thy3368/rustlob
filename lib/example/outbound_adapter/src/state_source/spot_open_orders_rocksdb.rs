@@ -4,7 +4,7 @@ use common_entity::{LogEntry, StateSource, stable_string_entity_id};
 use example_core_entity::common::OrderBase;
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{BalanceV2, OrderSide, SpotOrderV7};
-use example_core_use_case::pipeline::cancel_spot_order::{
+use example_core_use_case::pipe_line::cancel_spot_order::{
     CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
 };
 use rocksdb::{DB, Options, WriteBatch};

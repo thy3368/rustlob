@@ -1,7 +1,7 @@
 use common_entity::{
     ExecutionErrorV3, ExecutionResultV3, LogEntry, StateSinkV3, StateSourceV3, UseCaseExecutorV3,
 };
-use example_core_use_case::pipeline::place_spot_order::{
+use example_core_use_case::pipe_line::place_spot_order::{
     PlaceSpotOrderV3Changes, PlaceSpotOrderV3Cmd, PlaceSpotOrderV3Error, PlaceSpotOrderV3UseCase,
 };
 

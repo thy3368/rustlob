@@ -14,7 +14,7 @@ type SharedKLineEventHandler = Arc<dyn Fn(KLineUpdateEvent) + Send + Sync>;
 static AGGREGATOR_THREAD_POOL: Lazy<Result<ThreadPool, String>> = Lazy::new(|| {
     rayon::ThreadPoolBuilder::new()
         .num_threads(4)
-        .thread_name(|i| format!("kline-pipeline-{}", i))
+        .thread_name(|i| format!("kline-pipe_line-{}", i))
         .build()
         .map_err(|err| format!("failed to create KLine aggregator thread pool: {err}"))
 });

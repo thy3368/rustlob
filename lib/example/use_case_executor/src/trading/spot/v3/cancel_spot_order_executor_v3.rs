@@ -1,26 +1,28 @@
 use common_entity::{
-    ExecutionError, ExecutionResult, LogEntry, StateSink, StateSource, UseCaseExecutor,
+    ExecutionErrorV3, ExecutionResultV3, LogEntry, StateSinkV3, StateSourceV3, UseCaseExecutorV3,
 };
-use example_core_use_case::pipeline::cancel_spot_order::{
-    CancelSpotOrderV3Changes, CancelSpotOrderV3Cmd, CancelSpotOrderV3Error,
-    CancelSpotOrderV3UseCase,
+use example_core_use_case::pipe_line::cancel_spot_order::{
+    CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Cmd, CancelSpotOrderFsmV3Error,
+    CancelSpotOrderFsmV3UseCase,
 };
 
+/// 使用共享 V3 runtime 执行 Cancel Spot Order，并复用 outbound 完成状态读写与事件副作用。
 pub fn execute_cancel_spot_order_v3_with_outbound<OB>(
-    command: &LogEntry<CancelSpotOrderV3Cmd>,
+    command: &LogEntry<CancelSpotOrderFsmV3Cmd>,
     outbound: &OB,
 ) -> Result<
-    ExecutionResult<CancelSpotOrderV3Changes>,
-    ExecutionError<CancelSpotOrderV3Error, <OB as StateSink<CancelSpotOrderV3UseCase>>::Error>,
+    ExecutionResultV3<CancelSpotOrderFsmV3Changes>,
+    ExecutionErrorV3<
+        CancelSpotOrderFsmV3Error,
+        <OB as StateSourceV3<CancelSpotOrderFsmV3UseCase>>::Error,
+        <OB as StateSinkV3>::Error,
+    >,
 >
 where
-    OB: StateSource<
-            CancelSpotOrderV3UseCase,
-            Error = <OB as StateSink<CancelSpotOrderV3UseCase>>::Error,
-        > + StateSink<CancelSpotOrderV3UseCase>,
+    OB: StateSourceV3<CancelSpotOrderFsmV3UseCase> + StateSinkV3,
 {
-    UseCaseExecutor.execute::<CancelSpotOrderV3UseCase, OB, OB>(
-        &CancelSpotOrderV3UseCase,
+    UseCaseExecutorV3.execute::<CancelSpotOrderFsmV3UseCase, OB, OB>(
+        &CancelSpotOrderFsmV3UseCase,
         command,
         outbound,
         outbound,
@@ -31,7 +33,9 @@ where
 mod tests {
     use std::sync::Mutex;
 
-    use common_entity::{LogEntrySequencer, ReplayableDomainEvent, StateSink, StateSource};
+    use common_entity::{
+        ExecutionErrorV3, LogEntrySequencer, ReplayableDomainEvent, StateSinkV3, StateSourceV3,
+    };
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
     use example_core_entity::common::identifiers::OrderId;
@@ -41,8 +45,8 @@ mod tests {
     };
     use example_core_entity::spot::spot_order_v7::SpotOrderV7;
     use example_core_entity::{BalanceV2, OrderGroupRelation};
-    use example_core_use_case::{
-        CancelSpotOrderV3Cmd, CancelSpotOrderV3State, CancelSpotOrderV3UseCase,
+    use example_core_use_case::pipe_line::cancel_spot_order::{
+        CancelSpotOrderFsmV3Cmd, CancelSpotOrderFsmV3State, CancelSpotOrderFsmV3UseCase,
     };
     use rust_decimal::Decimal;
 
@@ -61,19 +65,24 @@ mod tests {
 
     #[derive(Default)]
     struct FakeOutbound {
+        calls: Mutex<Vec<&'static str>>,
         persisted: Mutex<Vec<ReplayableDomainEvent>>,
         replayed: Mutex<Vec<ReplayableDomainEvent>>,
         published: Mutex<Vec<ReplayableDomainEvent>>,
     }
 
-    impl StateSource<CancelSpotOrderV3UseCase> for FakeOutbound {
+    impl StateSourceV3<CancelSpotOrderFsmV3UseCase> for FakeOutbound {
         type Error = FakeOutboundError;
 
         fn load_given_state(
             &self,
-            _cmd: &LogEntry<CancelSpotOrderV3Cmd>,
-        ) -> Result<CancelSpotOrderV3State, Self::Error> {
-            Ok(CancelSpotOrderV3State {
+            _cmd: &LogEntry<CancelSpotOrderFsmV3Cmd>,
+        ) -> Result<CancelSpotOrderFsmV3State, Self::Error> {
+            self.calls
+                .lock()
+                .map_err(|_| FakeOutboundError)?
+                .push("load");
+            Ok(CancelSpotOrderFsmV3State {
                 order: SpotOrderV7::from_record(order(SpotOrderStatus::Open))
                     .map_err(|_| FakeOutboundError)?,
                 balance: BalanceV2::new(
@@ -89,30 +98,34 @@ mod tests {
         }
     }
 
-    impl StateSink<CancelSpotOrderV3UseCase> for FakeOutbound {
+    impl StateSinkV3 for FakeOutbound {
         type Error = FakeOutboundError;
 
-        fn persist(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
-            self.persisted
-                .lock()
-                .map_err(|_| FakeOutboundError)?
-                .extend_from_slice(events);
-            Ok(())
+        fn persist(&self, events: &[&ReplayableDomainEvent]) -> Result<(), Self::Error> {
+            self.record("persist", events, &self.persisted)
         }
 
-        fn replay(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
-            self.replayed
-                .lock()
-                .map_err(|_| FakeOutboundError)?
-                .extend_from_slice(events);
-            Ok(())
+        fn replay(&self, events: &[&ReplayableDomainEvent]) -> Result<(), Self::Error> {
+            self.record("replay", events, &self.replayed)
         }
 
-        fn publish(&self, events: &[ReplayableDomainEvent]) -> Result<(), Self::Error> {
-            self.published
+        fn publish(&self, events: &[&ReplayableDomainEvent]) -> Result<(), Self::Error> {
+            self.record("publish", events, &self.published)
+        }
+    }
+
+    impl FakeOutbound {
+        fn record(
+            &self,
+            call: &'static str,
+            events: &[&ReplayableDomainEvent],
+            destination: &Mutex<Vec<ReplayableDomainEvent>>,
+        ) -> Result<(), FakeOutboundError> {
+            self.calls.lock().map_err(|_| FakeOutboundError)?.push(call);
+            destination
                 .lock()
                 .map_err(|_| FakeOutboundError)?
-                .extend_from_slice(events);
+                .extend(events.iter().map(|event| (*event).clone()));
             Ok(())
         }
     }
@@ -134,7 +147,7 @@ mod tests {
             is_position_tpsl: false,
             reduce_only: false,
             status,
-            buy_quote_fee_reserve_frozen: Decimal::ZERO,
+            buy_quote_fee_reserve_frozen: Decimal::from(100),
             buy_quote_fee_reserve_paid: Decimal::ZERO,
             cloid: Some("client-order-11".to_string()),
             created_at: 1,
@@ -143,19 +156,19 @@ mod tests {
         }
     }
 
-    fn command(order_id: OrderId) -> LogEntry<CancelSpotOrderV3Cmd> {
+    fn command(order_id: OrderId) -> LogEntry<CancelSpotOrderFsmV3Cmd> {
         LogEntrySequencer::from_metadata(
             7,
             100,
             1,
             2,
             "trader-1".to_owned(),
-            CancelSpotOrderV3Cmd { order_id },
+            CancelSpotOrderFsmV3Cmd { order_id },
         )
     }
 
     #[test]
-    fn cancel_executor_projects_and_sends_update_event() {
+    fn cancel_by_cloid_releases_balance_and_sends_order_event_first() {
         let outbound = FakeOutbound::default();
         let result = execute_cancel_spot_order_v3_with_outbound(
             &command(OrderId::Cloid("client-order-11".into())),
@@ -164,22 +177,29 @@ mod tests {
         .expect("cancel should execute");
 
         assert_eq!(
-            result.changes.updated_order.before.order_base().status,
-            SpotOrderStatus::Open
-        );
-        assert_eq!(
-            result.changes.updated_order.after.order_base().status,
+            result.state_changed.order.after().status(),
             SpotOrderStatus::Canceled
         );
-        assert_eq!(result.changes.updated_balance.after.frozen(), Decimal::ZERO);
+        let balance = result
+            .state_changed
+            .balance
+            .as_ref()
+            .expect("frozen balance should be released");
+        assert_eq!(balance.after().frozen(), Decimal::ZERO);
+        assert_eq!(balance.after().available(), Decimal::from(100));
+
+        let persisted = outbound.persisted.lock().expect("persist lock");
+        let replayed = outbound.replayed.lock().expect("replay lock");
+        let published = outbound.published.lock().expect("publish lock");
+        assert_eq!(persisted.len(), 2);
+        assert_eq!(persisted[0].entity_type, 16);
+        assert_eq!(persisted[1].entity_type, 12);
+        assert_eq!(*replayed, *persisted);
+        assert_eq!(*published, *persisted);
         assert_eq!(
-            result.changes.updated_balance.after.available(),
-            Decimal::from(100)
+            *outbound.calls.lock().expect("calls lock"),
+            ["load", "persist", "replay", "publish"]
         );
-        assert_eq!(result.events.len(), 2);
-        assert_eq!(outbound.persisted.lock().expect("persist lock").len(), 2);
-        assert_eq!(outbound.replayed.lock().expect("replay lock").len(), 2);
-        assert_eq!(outbound.published.lock().expect("publish lock").len(), 2);
     }
 
     #[test]
@@ -192,9 +212,14 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(ExecutionError::Business(CancelSpotOrderV3Error::EmptyCloid))
+            Err(ExecutionErrorV3::Business(
+                CancelSpotOrderFsmV3Error::EmptyCloid
+            ))
         ));
+        assert!(outbound.calls.lock().expect("calls lock").is_empty());
         assert!(outbound.persisted.lock().expect("persist lock").is_empty());
+        assert!(outbound.replayed.lock().expect("replay lock").is_empty());
+        assert!(outbound.published.lock().expect("publish lock").is_empty());
     }
 
     #[test]
@@ -202,6 +227,7 @@ mod tests {
         let outbound = FakeOutbound::default();
         let result =
             execute_cancel_spot_order_v3_with_outbound(&command(OrderId::Oid(11)), &outbound);
+
         assert!(result.is_ok());
     }
 }

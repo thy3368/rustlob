@@ -20,7 +20,7 @@ use super::unfreeze_matched_spot_orders::{
     unfreeze_matched_spot_orders,
 };
 
-/// 独立现货下单 pipeline 的分支化业务事实。
+/// 独立现货下单 pipe_line 的分支化业务事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaceSpotOrderPipelineV2Changes {
     Resting {
@@ -132,7 +132,7 @@ pub enum PlaceSpotOrderPipelineV2Error {
 impl fmt::Display for PlaceSpotOrderPipelineV2Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidInput(message) => write!(f, "invalid pipeline input: {message}"),
+            Self::InvalidInput(message) => write!(f, "invalid pipe_line input: {message}"),
             Self::Place(error) => write!(f, "place order failed: {error}"),
             Self::Freeze(error) => write!(f, "freeze order failed: {error}"),
             Self::Match(error) => write!(f, "match order failed: {error}"),
@@ -304,7 +304,7 @@ fn validate_inputs(
             return Err(invalid(format!("duplicate order {id}")));
         }
         if (maker.lsn(), maker.command_index()) >= first_position {
-            return Err(invalid(format!("stale pipeline position for order {id}")));
+            return Err(invalid(format!("stale pipe_line position for order {id}")));
         }
         let pair = balances
             .get(&id)
@@ -328,7 +328,7 @@ fn validate_inputs(
         for balance in [&pair.base, &pair.quote] {
             if (balance.lsn(), balance.command_index()) >= first_position {
                 return Err(invalid(format!(
-                    "stale pipeline position for balance {}",
+                    "stale pipe_line position for balance {}",
                     balance.entity_id()
                 )));
             }

@@ -681,7 +681,7 @@ impl<F: Field> Circuit<F> for RecursiveVerificationCircuit<F> {
     }
 }
 
-/// Proof aggregation pipeline
+/// Proof aggregation pipe_line
 pub struct ProofAggregator;
 
 impl ProofAggregator {

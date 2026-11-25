@@ -19,11 +19,11 @@ use super::cancel_spot_order::{
     CancelSpotOrderFsmV3Error as CancelSpotOrderV3Error,
     CancelSpotOrderFsmV3State as CancelSpotOrderV3State, CancelSpotOrderFsmV3UseCase,
 };
-use crate::use_case::trading::spot::v3::domain_service::match_spot_order::MatchSpotOrderPipeChanges;
-use crate::use_case::trading::spot::v3::domain_service::place_spot_order_pipeline_v2::{
+use crate::use_case::trading::spot::v3::pipe::match_spot_order::MatchSpotOrderPipeChanges;
+use crate::use_case::trading::spot::v3::pipe::place_spot_order_pipeline_v2::{
     PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error, place_spot_order_pipeline_v2,
 };
-use crate::use_case::trading::spot::v3::domain_service::settle_matched_spot_trades::{
+use crate::use_case::trading::spot::v3::pipe::settle_matched_spot_trades::{
     SettleTradesPipeChanges, SpotOrderSettlementBalances,
 };
 
@@ -725,7 +725,7 @@ mod tests {
             .validate_and_compute(&command, &given)
             .expect("partial fill must apply");
 
-        // Then: pipeline 保留部分成交分支、maker 终态及其解冻业务事实。
+        // Then: pipe_line 保留部分成交分支、maker 终态及其解冻业务事实。
         let SpotBlockItemResult::Applied {
             changes:
                 SpotBlockAppliedChanges::Place(PlaceSpotOrderPipelineV2Changes::PartiallyFilled {
@@ -738,7 +738,7 @@ mod tests {
         } = &changes.item_results[1]
         else {
             panic!(
-                "expected partially-filled pipeline: {:?}",
+                "expected partially-filled pipe_line: {:?}",
                 changes.item_results[1]
             );
         };
@@ -835,7 +835,7 @@ mod tests {
             ..
         }) = second
         else {
-            panic!("expected partially-filled pipeline");
+            panic!("expected partially-filled pipe_line");
         };
         let MatchSpotOrderPipeChanges::PartiallyFilled { makers, .. } = matched else {
             panic!("expected partially-filled match");

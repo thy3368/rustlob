@@ -4,7 +4,7 @@ use example_core_entity::{BalanceV2, OrderSide, SpotOrderStatus, SpotOrderV7};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::use_case::trading::spot::v3::domain_service::cancel_spot_order::{
+use crate::use_case::trading::spot::v3::pipe::cancel_spot_order::{
     CancelSpotOrderPipeChanges, cancel_spot_order,
 };
 
