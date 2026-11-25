@@ -102,4 +102,5 @@ pub fn execute_spot_block_v3(
     Ok(SpotBlockExecutionV3 { command_results })
 }
 
-///todo 增加函数 比如 State4BuildBlock 前后 生成diff, 找出create/update的entity, 写入rocks_db
+// RocksDB 持久化由调用方在执行完成后通过 outbound adapter 显式完成第二阶段。
+//plan 写个例子 从rocksdb 读， 调用 execute_spot_block_v3， 再写db

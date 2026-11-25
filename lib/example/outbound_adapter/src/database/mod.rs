@@ -6,9 +6,14 @@ pub mod store_snapshot;
 pub mod build_block_data;
 pub mod build_block_data_state;
 pub mod build_block_place_spot_order;
+pub mod build_block_rocksdb;
 pub use build_block_data_state::{
     CancelSpotOrderBuildBlockSinkError, CancelSpotOrderBuildBlockSourceError, State4BuildBlock,
 };
 pub use build_block_place_spot_order::{
     PlaceSpotOrderBuildBlockSinkError, PlaceSpotOrderBuildBlockSourceError,
+};
+pub use build_block_rocksdb::{
+    BuildBlockRocksDb, BuildBlockRocksDbError, BuildBlockStateDiff, BuildBlockWriteSummary,
+    diff_build_block_state,
 };
