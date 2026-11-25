@@ -1,5 +1,5 @@
-use common_entity::Shard;
-use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::fsm_v2::Fsm as FsmV2;
+use common_entity::{LogEntrySequencer, Shard};
 use example_core_entity::{BalanceV2, BalanceV2Command, BalanceV2Error};
 
 pub(crate) fn transition_balance(
@@ -8,14 +8,17 @@ pub(crate) fn transition_balance(
     logical_ts: u64,
     command: BalanceV2Command,
 ) -> Result<BalanceV2, BalanceV2Error> {
-    let metadata = CommandMetadata::new(
-        lsn,
-        logical_ts,
+    let command = LogEntrySequencer::from_metadata_with_topic(
         balance.topic(),
         balance.partition(),
+        lsn,
+        logical_ts,
+        0,
+        0,
         balance.party_id().to_string(),
+        command,
     );
-    FsmV2::transition(balance, SequencedCommand::new(metadata, command)).map(|(after, _)| after)
+    FsmV2::transition(balance, command).map(|(after, _)| after)
 }
 
 pub(crate) fn concat2(a: &str, b: &str) -> String {

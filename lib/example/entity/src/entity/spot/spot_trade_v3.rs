@@ -1,7 +1,7 @@
-use common_entity::fsm_v2::{Fsm, SequencedCommand};
+use common_entity::fsm_v2::Fsm;
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
-    Shard, TrackDiff,
+    LogEntry, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -238,12 +238,13 @@ impl Fsm for SpotTradeV3 {
     /// 使用 envelope 中的权威位置与逻辑时间纯计算结算后的成交事实。
     fn derive_transition(
         &self,
-        command: SequencedCommand<Self::Command>,
+        command: LogEntry<Self::Command>,
     ) -> Result<Self, Self::Error> {
-        let (metadata, command) = command.into_parts();
+        let position = (command.lsn(), command.command_index());
+        let logical_ts = command.logical_ts();
+        let command = command.into_payload();
         match (self.settlement_status, command) {
             (SpotTradeSettlementStatus::Unsettled, SpotTradeV3Command::Settle) => {
-                let position = (metadata.lsn, metadata.command_index);
                 if position < (self.lsn, self.command_index) {
                     return Err(SpotTradeStateError::StaleLsn {
                         incoming_lsn: position.0,
@@ -253,7 +254,7 @@ impl Fsm for SpotTradeV3 {
                 let mut after = self.clone();
                 after.settlement_status = SpotTradeSettlementStatus::Settled;
                 after.comon_trade.version = position.0;
-                after.comon_trade.updated_at = metadata.logical_ts;
+                after.comon_trade.updated_at = logical_ts;
                 after.lsn = position.0;
                 after.command_index = position.1;
                 Ok(after)

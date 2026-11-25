@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
-use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::fsm_v2::Fsm as FsmV2;
+use common_entity::LogEntrySequencer;
 use common_entity::{
     EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, Shard, StateDiff,
     UpdatedEntityPair, UseCase,
@@ -144,17 +145,17 @@ impl UseCase for TriggerScheduledCancelUseCase {
         let mut balances_after = state.spot_balances.clone();
         let mut canceled_spot_orders = Vec::with_capacity(state.spot_orders.len());
         for before in &state.spot_orders {
-            let metadata = CommandMetadata::new(
-                cmd.lsn(),
-                cmd.logical_ts(),
+            let command = LogEntrySequencer::from_metadata_with_topic(
                 before.topic(),
                 before.partition(),
+                cmd.lsn(),
+                cmd.logical_ts(),
+                cmd.client_id(),
+                cmd.request_id(),
                 before.party_id(),
+                SpotOrderV7Command::Cancel,
             );
-            let (after, _) = FsmV2::transition(
-                before,
-                SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
-            )?;
+            let (after, _) = FsmV2::transition(before, command)?;
             let release = after.terminal_unfreeze_delta(before)?;
             let coin_idx = u64::from(release.currency().index());
             let mut matching = balances_after.iter_mut().filter(|balance| {
@@ -280,17 +281,17 @@ mod tests {
         let spot = SpotOrderV7::from_record(order_base(11, OrderSide::Buy))
             .expect("spot fixture should be valid");
         let release = {
-            let metadata = CommandMetadata::new(
-                9,
-                LOGICAL_TS,
+            let command = LogEntrySequencer::from_metadata_with_topic(
                 spot.topic(),
                 spot.partition(),
+                9,
+                LOGICAL_TS,
+                0,
+                0,
                 spot.party_id(),
+                SpotOrderV7Command::Cancel,
             );
-            let (canceled, _) = FsmV2::transition(
-                &spot,
-                SequencedCommand::new(metadata, SpotOrderV7Command::Cancel),
-            )
+            let (canceled, _) = FsmV2::transition(&spot, command)
             .expect("fixture should cancel");
             canceled
                 .terminal_unfreeze_delta(&spot)

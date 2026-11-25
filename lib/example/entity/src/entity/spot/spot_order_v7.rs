@@ -1,7 +1,8 @@
-use common_entity::fsm_v2::{Fsm, SequencedCommand};
-use common_entity::{Entity, EntityError, EntityFieldChange, Shard, TrackDiff};
+use common_entity::fsm_v2::Fsm;
+use common_entity::{Entity, EntityError, EntityFieldChange, LogEntry, Shard, TrackDiff};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 
 use crate::account::coin::{CoinAmount, CoinAmountError};
 use crate::common::PriceType;
@@ -11,7 +12,7 @@ use crate::entity::common::order_primitives::{
 };
 
 /// 创建现货订单所需的业务事实。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceSpotOrderPipelineV2Cmd {
     pub party_id: u64,
     pub order_id: u64,
@@ -25,10 +26,10 @@ pub struct PlaceSpotOrderPipelineV2Cmd {
     pub fee_bps: u64,
 }
 
-/// 不含定序元数据的现货订单业务命令。
+/// 现货订单业务命令；创建分支直接携带入口日志。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpotOrderV7Command {
-    Create(PlaceSpotOrderPipelineV2Cmd),
+    Create(LogEntry<PlaceSpotOrderPipelineV2Cmd>),
     Freeze,
     MatchedAsTaker {
         filled_size: Decimal,
@@ -75,11 +76,14 @@ pub struct SpotOrderV7 {
 
 impl SpotOrderV7 {
     /// 由创建命令建立一个 `Pending` 订单。
-    pub fn create(command: SequencedCommand<SpotOrderV7Command>) -> Result<Self, EntityError> {
-        let (metadata, command) = command.into_parts();
+    pub fn create(command: SpotOrderV7Command) -> Result<Self, EntityError> {
         let SpotOrderV7Command::Create(command) = command else {
             return Err(err("spot order creation requires a create command"));
         };
+        let lsn = command.lsn();
+        let command_index = command.command_index();
+        let logical_ts = command.logical_ts();
+        let command = command.into_payload();
         let (execution, tif, trigger, trigger_px) = match command.order_type {
             OrderType::Limit { tif } => (PriceType::Limit, tif, OrderTrigger::None, None),
             OrderType::Trigger {
@@ -104,8 +108,6 @@ impl SpotOrderV7 {
                 Some(Decimal::from(trigger_price)),
             ),
         };
-        let lsn = metadata.lsn;
-        let command_index = metadata.command_index;
         let mut order = OrderBase {
             owner: crate::entity::common::UserId(command.party_id),
             order_id: command.order_id,
@@ -121,8 +123,8 @@ impl SpotOrderV7 {
             group_relation: command.relation,
             status: SpotOrderStatus::Pending,
             cloid: command.cloid,
-            created_at: metadata.logical_ts,
-            updated_at: metadata.logical_ts,
+            created_at: logical_ts,
+            updated_at: logical_ts,
             lsn,
             ..OrderBase::default()
         };
@@ -234,11 +236,11 @@ impl SpotOrderV7 {
 
     fn compute_transition(
         &self,
-        command: SequencedCommand<SpotOrderV7Command>,
+        command: LogEntry<SpotOrderV7Command>,
     ) -> Result<OrderBase, EntityError> {
-        let (metadata, payload) = command.into_parts();
-        let position = (metadata.lsn, metadata.command_index);
-        let timestamp = metadata.logical_ts;
+        let position = (command.lsn(), command.command_index());
+        let timestamp = command.logical_ts();
+        let payload = command.into_payload();
         if position < (self.order_base.lsn, self.command_index) {
             return Err(err("order command LSN is older than the current LSN"));
         }
@@ -370,9 +372,9 @@ impl Fsm for SpotOrderV7 {
 
     fn derive_transition(
         &self,
-        command: SequencedCommand<SpotOrderV7Command>,
+        command: LogEntry<SpotOrderV7Command>,
     ) -> Result<Self, EntityError> {
-        let command_index = command.metadata.command_index;
+        let command_index = command.command_index();
         let next = self.compute_transition(command)?;
         Ok(Self {
             order_base: next,

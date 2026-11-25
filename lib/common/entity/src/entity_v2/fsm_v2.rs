@@ -1,116 +1,9 @@
-use crate::{EntityError, LogAttr, ReplayableDomainEvent, Shard, TrackDiff};
-
-/// 已由日志定序器确定的 v2 command 元数据。
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CommandMetadata {
-    pub lsn: u64,
-    pub command_index: u32,
-    pub logical_ts: u64,
-    pub topic: u8,
-    pub partition: u8,
-    pub party_id: String,
-}
-
-impl CommandMetadata {
-    pub fn new(lsn: u64, logical_ts: u64, topic: u8, partition: u8, party_id: String) -> Self {
-        Self {
-            lsn,
-            command_index: 0,
-            logical_ts,
-            topic,
-            partition,
-            party_id,
-        }
-    }
-
-    pub fn new_at(
-        lsn: u64,
-        command_index: u32,
-        logical_ts: u64,
-        topic: u8,
-        partition: u8,
-        party_id: String,
-    ) -> Self {
-        Self {
-            lsn,
-            command_index,
-            logical_ts,
-            topic,
-            partition,
-            party_id,
-        }
-    }
-}
-
-impl Shard for CommandMetadata {
-    fn topic(&self) -> u8 {
-        self.topic
-    }
-
-    fn partition(&self) -> u8 {
-        self.partition
-    }
-
-    fn party_id(&self) -> String {
-        self.party_id.clone()
-    }
-}
-
-impl LogAttr for CommandMetadata {
-    fn lsn(&self) -> u64 {
-        self.lsn
-    }
-
-    fn logical_ts(&self) -> u64 {
-        self.logical_ts
-    }
-}
-
-/// v2 FSM 唯一接受的业务命令 envelope。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SequencedCommand<C> {
-    pub metadata: CommandMetadata,
-    pub payload: C,
-}
-
-impl<C> SequencedCommand<C> {
-    pub const fn new(metadata: CommandMetadata, payload: C) -> Self {
-        Self { metadata, payload }
-    }
-
-    pub fn into_parts(self) -> (CommandMetadata, C) {
-        (self.metadata, self.payload)
-    }
-}
-
-impl<C> Shard for SequencedCommand<C> {
-    fn topic(&self) -> u8 {
-        self.metadata.topic()
-    }
-
-    fn partition(&self) -> u8 {
-        self.metadata.partition()
-    }
-
-    fn party_id(&self) -> String {
-        self.metadata.party_id()
-    }
-}
-
-impl<C> LogAttr for SequencedCommand<C> {
-    fn lsn(&self) -> u64 {
-        self.metadata.lsn
-    }
-
-    fn logical_ts(&self) -> u64 {
-        self.metadata.logical_ts
-    }
-}
+use crate::{EntityError, LogEntry, ReplayableDomainEvent, TrackDiff};
 
 /// FSM v2：只接受已定序 command envelope 的单一路径。
 ///
 /// 该契约独立定义完整执行路径。实现方必须提供 v2 自己的无提交业务迁移入口；
-/// 新调用方显式构造 [`SequencedCommand`]。
+/// 新调用方显式传入 [`LogEntry`]。
 pub trait Fsm: TrackDiff + Sized {
     type Command;
     type Error: From<EntityError>;
@@ -121,7 +14,7 @@ pub trait Fsm: TrackDiff + Sized {
     #[doc(hidden)]
     fn derive_transition(
         &self,
-        command: SequencedCommand<Self::Command>,
+        command: LogEntry<Self::Command>,
     ) -> Result<Self, Self::Error>;
 
     /// 返回 command 对应的稳定、非零业务事件码。
@@ -133,17 +26,17 @@ pub trait Fsm: TrackDiff + Sized {
     /// 不使用实体自身的 shard 覆盖日志路由。
     fn transition(
         &self,
-        command: SequencedCommand<Self::Command>,
+        command: LogEntry<Self::Command>,
     ) -> Result<(Self, ReplayableDomainEvent), Self::Error> {
-        let event_type = Self::event_type(&command.payload);
+        let event_type = Self::event_type(command.payload());
         if event_type == 0 {
             return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
         }
-        let logical_ts = command.metadata.logical_ts;
-        let lsn = command.metadata.lsn;
-        let command_index = command.metadata.command_index;
-        let topic = command.metadata.topic;
-        let partition = command.metadata.partition;
+        let logical_ts = command.logical_ts();
+        let lsn = command.lsn();
+        let command_index = command.command_index();
+        let topic = command.topic();
+        let partition = command.partition();
         let after = self.derive_transition(command)?;
         let mut replay_event = after.track_update_event_from_at(
             self,
@@ -163,7 +56,7 @@ pub trait Fsm: TrackDiff + Sized {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Entity, EntityFieldChange};
+    use crate::{Entity, EntityFieldChange, LogEntrySequencer, Shard};
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct TestEntity {
@@ -242,13 +135,13 @@ mod tests {
 
         fn derive_transition(
             &self,
-            command: SequencedCommand<Self::Command>,
+            command: LogEntry<Self::Command>,
         ) -> Result<Self, Self::Error> {
             let mut after = self.clone();
-            after.value = command.payload;
-            after.lsn = command.metadata.lsn;
-            after.command_index = command.metadata.command_index;
-            after.logical_ts = command.metadata.logical_ts;
+            after.value = *command.payload();
+            after.lsn = command.lsn();
+            after.command_index = command.command_index();
+            after.logical_ts = command.logical_ts();
             Ok(after)
         }
 
@@ -265,10 +158,20 @@ mod tests {
             command_index: 4,
             logical_ts: 30,
         };
-        let metadata = CommandMetadata::new_at(21, 7, 31, 8, 6, "command-party".to_owned());
+        let command = LogEntrySequencer::from_metadata_with_topic_at(
+            8,
+            6,
+            21,
+            7,
+            31,
+            0,
+            0,
+            "command-party".to_owned(),
+            6,
+        );
 
         let (after, event) = before
-            .transition(SequencedCommand::new(metadata, 6))
+            .transition(command)
             .expect("FSM transition should succeed");
 
         assert_eq!(after.value, 6);

@@ -65,6 +65,24 @@ impl LogEntrySequencer {
         LogEntry::new(lsn, logical_ts, client_id, request_id, user_id, payload)
     }
 
+    /// 使用已有权威元数据及同一 LSN 内序号创建日志。
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_metadata_at<P>(
+        lsn: u64,
+        command_index: u32,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+        user_id: String,
+        payload: P,
+    ) -> LogEntry<P> {
+        let mut entry = Self::from_metadata(
+            lsn, logical_ts, client_id, request_id, user_id, payload,
+        );
+        entry.command_index = command_index;
+        entry
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn from_metadata_with_topic<P>(
         t: u8,
@@ -81,12 +99,47 @@ impl LogEntrySequencer {
         )
     }
 
+    /// 使用已有权威路由元数据及同一 LSN 内序号创建日志。
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_metadata_with_topic_at<P>(
+        t: u8,
+        p: u8,
+        lsn: u64,
+        command_index: u32,
+        logical_ts: u64,
+        client_id: u64,
+        request_id: u64,
+        user_id: String,
+        payload: P,
+    ) -> LogEntry<P> {
+        let mut entry = Self::from_metadata_with_topic(
+            t, p, lsn, logical_ts, client_id, request_id, user_id, payload,
+        );
+        entry.command_index = command_index;
+        entry
+    }
+
     /// 为子命令复用父日志的元数据，不分配新的序号。
     pub fn derive<P, Q>(parent: &LogEntry<P>, payload: Q) -> LogEntry<Q> {
         Self::from_metadata_with_topic(
             parent.topic(),
             parent.partition(),
             parent.lsn(),
+            parent.logical_ts(),
+            parent.client_id(),
+            parent.request_id(),
+            parent.user_id().to_owned(),
+            payload,
+        )
+    }
+
+    /// 为流水线子命令复用父日志元数据，并显式设置同一 LSN 内序号。
+    pub fn derive_at<P, Q>(parent: &LogEntry<P>, command_index: u32, payload: Q) -> LogEntry<Q> {
+        Self::from_metadata_with_topic_at(
+            parent.topic(),
+            parent.partition(),
+            parent.lsn(),
+            command_index,
             parent.logical_ts(),
             parent.client_id(),
             parent.request_id(),
@@ -272,5 +325,32 @@ mod tests {
         assert_eq!(child.into_payload(), "child");
         assert_eq!(parent.user_id(), "alice");
         assert_eq!(sequencer.last_committed(), Some((7, 20)));
+    }
+
+    #[test]
+    fn explicit_command_index_and_derive_at_preserve_parent_metadata() {
+        let parent = LogEntrySequencer::from_metadata_with_topic_at(
+            8, 6, 42, 3, 123, 4, 5, "alice".into(), "parent",
+        );
+        let child = LogEntrySequencer::derive_at(&parent, 9, "child");
+        assert_eq!((parent.lsn(), parent.command_index()), (42, 3));
+        assert_eq!((child.lsn(), child.command_index()), (42, 9));
+        assert_eq!((child.topic(), child.partition()), (8, 6));
+        assert_eq!((child.logical_ts(), child.client_id(), child.request_id()), (123, 4, 5));
+        assert_eq!(child.user_id(), "alice");
+    }
+
+    #[test]
+    fn serde_defaults_missing_command_index_and_round_trips_explicit_index() {
+        let legacy = r#"{"t":1,"p":2,"lsn":3,"logical_ts":4,"client_id":5,"request_id":6,"op_id":"alice","payload":"x"}"#;
+        let decoded: LogEntry<String> = serde_json::from_str(legacy).unwrap();
+        assert_eq!(decoded.command_index(), 0);
+
+        let entry = LogEntrySequencer::from_metadata_with_topic_at(
+            1, 2, 3, 7, 4, 5, 6, "alice".into(), "x".to_owned(),
+        );
+        let round_trip: LogEntry<String> =
+            serde_json::from_str(&serde_json::to_string(&entry).unwrap()).unwrap();
+        assert_eq!(round_trip, entry);
     }
 }

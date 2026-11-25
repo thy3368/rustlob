@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
-use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::fsm_v2::Fsm as FsmV2;
+use common_entity::LogEntrySequencer;
 use common_entity::{Entity, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderStatus, SpotOrderV7};
 use rust_decimal::Decimal;
@@ -274,15 +275,15 @@ fn transition_balances(
             .last_command_index
             .checked_add(increment)
             .ok_or_else(|| error("balance event position overflow"))?;
-        let command = SequencedCommand::new(
-            CommandMetadata::new_at(
-                metadata.lsn,
-                command_index,
-                metadata.logical_ts,
-                metadata.topic,
-                metadata.partition,
-                release.balance.party_id().to_string(),
-            ),
+        let command = LogEntrySequencer::from_metadata_with_topic_at(
+            metadata.topic,
+            metadata.partition,
+            metadata.lsn,
+            command_index,
+            metadata.logical_ts,
+            0,
+            0,
+            release.balance.party_id().to_string(),
             BalanceV2Command::UnfreezeAndPay {
                 unfreeze_amount: release.amount,
                 payment_amount: Decimal::ZERO,
@@ -309,8 +310,8 @@ fn error(message: impl Into<String>) -> UnfreezeMatchedSpotOrdersError {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
-    use common_entity::{Entity, ReplayableEntityChanges, UpdatedEntityEvents};
+    use common_entity::fsm_v2::Fsm as FsmV2;
+    use common_entity::{Entity, LogEntrySequencer, ReplayableEntityChanges, UpdatedEntityEvents};
     use example_core_entity::{BalanceV2, BalanceV2Command};
     use rust_decimal::Decimal;
 
@@ -322,8 +323,8 @@ mod tests {
         command_index: u32,
     ) -> UpdatedEntityEvents<BalanceV2> {
         let before = BalanceV2::new(party_id, party_id, coin_idx, 10, 2, 1, 1);
-        let command = SequencedCommand::new(
-            CommandMetadata::new_at(2, command_index, 3, 4, 5, party_id.to_string()),
+        let command = LogEntrySequencer::from_metadata_with_topic_at(
+            4, 5, 2, command_index, 3, 0, 0, party_id.to_string(),
             BalanceV2Command::UnfreezeAndPay {
                 unfreeze_amount: Decimal::ONE,
                 payment_amount: Decimal::ZERO,

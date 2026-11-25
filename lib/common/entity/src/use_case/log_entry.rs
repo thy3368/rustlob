@@ -11,6 +11,9 @@ pub struct LogEntry<P> {
     p: u8,
     /// 全局单调递增的序列号，是全序的依据---重要。
     lsn: u64,
+    /// 同一 LSN 内流水线子命令的稳定序号。
+    #[serde(default)]
+    pub(crate) command_index: u32,
     /// 由定序器分配的逻辑时间戳。
     logical_ts: u64,
     /// 用于幂等去重的客户端标识。
@@ -39,6 +42,10 @@ impl<P> Shard for LogEntry<P> {
     fn partition(&self) -> u8 {
         self.p
     }
+
+    fn party_id(&self) -> String {
+        self.op_id.clone()
+    }
 }
 
 impl<P> std::ops::Deref for LogEntry<P> {
@@ -65,6 +72,7 @@ impl<P> LogEntry<P> {
             t,
             p,
             lsn,
+            command_index: 0,
             logical_ts,
             client_id,
             request_id,
@@ -84,6 +92,7 @@ impl<P> LogEntry<P> {
             t: 0,
             p: 0,
             lsn,
+            command_index: 0,
             logical_ts,
             client_id,
             request_id,
@@ -94,6 +103,9 @@ impl<P> LogEntry<P> {
 
     pub const fn lsn(&self) -> u64 {
         self.lsn
+    }
+    pub const fn command_index(&self) -> u32 {
+        self.command_index
     }
     pub const fn logical_ts(&self) -> u64 {
         self.logical_ts

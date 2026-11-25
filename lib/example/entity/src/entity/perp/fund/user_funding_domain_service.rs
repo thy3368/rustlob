@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::fsm_v2::Fsm as FsmV2;
+use common_entity::LogEntrySequencer;
 use common_entity::{Fsm, Shard, UpdatedEntityPair, stable_string_entity_id};
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -268,14 +269,17 @@ pub fn settle_user_funding_batch(
             )?;
             BalanceV2Command::DebitAvailable { amount }
         };
-        let metadata = CommandMetadata::new(
-            lsn,
-            settled_at,
+        let command = LogEntrySequencer::from_metadata_with_topic(
             before.topic(),
             before.partition(),
+            lsn,
+            settled_at,
+            0,
+            0,
             before.party_id().to_string(),
+            event,
         );
-        let (after, _) = FsmV2::transition(before, SequencedCommand::new(metadata, event))
+        let (after, _) = FsmV2::transition(before, command)
             .map_err(|error| map_balance_error(error, before.account_id()))?;
         changed_balances.push(UpdatedEntityPair::new(before.clone(), after));
     }
@@ -611,18 +615,17 @@ mod settle_user_funding_batch_tests {
         assert_eq!((fundings, positions, balances), before);
 
         let before_close = balance(Decimal::ZERO, 4);
-        let metadata = CommandMetadata::new(
-            COMMAND_LSN,
-            110,
+        let command = LogEntrySequencer::from_metadata_with_topic(
             before_close.topic(),
             before_close.partition(),
+            COMMAND_LSN,
+            110,
+            0,
+            0,
             before_close.party_id().to_string(),
+            BalanceV2Command::Close,
         );
-        let (closed, _) = FsmV2::transition(
-            &before_close,
-            SequencedCommand::new(metadata, BalanceV2Command::Close),
-        )
-        .unwrap();
+        let (closed, _) = FsmV2::transition(&before_close, command).unwrap();
         assert_eq!(
             settle_user_funding_batch(
                 &[funding(1, Decimal::ONE)],

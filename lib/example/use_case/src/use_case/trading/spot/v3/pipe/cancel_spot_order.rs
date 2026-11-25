@@ -1,9 +1,7 @@
-use common_entity::fsm_v2::{
-    CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
-};
+use common_entity::fsm_v2::Fsm as FsmV2;
 use common_entity::{
-    EntityError, PositionedEntity, ReplayableDomainEvent, ReplayableEntityChanges, Shard,
-    UpdatedEntityEvents,
+    EntityError, LogEntrySequencer, PositionedEntity, ReplayableDomainEvent,
+    ReplayableEntityChanges, Shard, UpdatedEntityEvents,
 };
 use example_core_entity::{
     BalanceV2, BalanceV2Command, BalanceV2Error, SpotOrderV7, SpotOrderV7Command,
@@ -37,12 +35,10 @@ pub fn cancel_spot_order(
     partition: u8,
 ) -> Result<CancelSpotOrderPipeChanges, EntityError> {
     let order_loaded_position = (order.lsn(), order.command_index());
-    let order_metadata =
-        FsmCommandMetadata::new_at(lsn, 0, logical_ts, topic, partition, order.party_id());
-    let (order_after, order_event) = FsmV2::transition(
-        order,
-        SequencedCommand::new(order_metadata, SpotOrderV7Command::Cancel),
-    )?;
+    let order_command = LogEntrySequencer::from_metadata_with_topic_at(
+        topic, partition, lsn, 0, logical_ts, 0, 0, order.party_id(), SpotOrderV7Command::Cancel,
+    );
+    let (order_after, order_event) = FsmV2::transition(order, order_command)?;
     let release_requirement = order_after
         .terminal_unfreeze_delta(order)
         .map_err(|error| EntityError::Custom(error.to_string()))?;
@@ -64,24 +60,21 @@ pub fn cancel_spot_order(
             ));
         }
         let loaded_position = (balance.lsn(), balance.command_index());
-        let balance_metadata = FsmCommandMetadata::new_at(
+        let balance_command = LogEntrySequencer::from_metadata_with_topic_at(
+            topic,
+            partition,
             lsn,
             1,
             logical_ts,
-            topic,
-            partition,
+            0,
+            0,
             balance.party_id().to_string(),
+            BalanceV2Command::UnfreezeAndPay {
+                unfreeze_amount: release_amount,
+                payment_amount: Decimal::ZERO,
+            },
         );
-        let (after, event) = FsmV2::transition(
-            balance,
-            SequencedCommand::new(
-                balance_metadata,
-                BalanceV2Command::UnfreezeAndPay {
-                    unfreeze_amount: release_amount,
-                    payment_amount: Decimal::ZERO,
-                },
-            ),
-        )
+        let (after, event) = FsmV2::transition(balance, balance_command)
         .map_err(map_balance_error)?;
         Some(
             UpdatedEntityEvents::try_new(after, loaded_position.0, loaded_position.1, vec![event])

@@ -1,5 +1,5 @@
-use common_entity::fsm_v2::{Fsm, SequencedCommand};
-use common_entity::{Entity, EntityError, EntityFieldChange, TrackDiff};
+use common_entity::fsm_v2::Fsm;
+use common_entity::{Entity, EntityError, EntityFieldChange, LogEntry, TrackDiff};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -169,13 +169,14 @@ impl Fsm for BalanceV2 {
     type Error = BalanceV2Error;
     fn derive_transition(
         &self,
-        command: SequencedCommand<Self::Command>,
+        command: LogEntry<Self::Command>,
     ) -> Result<Self, Self::Error> {
-        let (metadata, command) = command.into_parts();
+        let position = (command.lsn(), command.command_index());
+        let logical_ts = command.logical_ts();
+        let command = command.into_payload();
         if self.status() == BalanceV2Status::Closed {
             return Err(BalanceV2Error::BalanceClosed);
         }
-        let position = (metadata.lsn, metadata.command_index);
         if position < (self.lsn, self.command_index) {
             return Err(BalanceV2Error::StaleLsn {
                 incoming_lsn: position.0,
@@ -259,7 +260,7 @@ impl Fsm for BalanceV2 {
             lsn: position.0,
             command_index: position.1,
             created_at: self.created_at,
-            updated_at: metadata.logical_ts,
+            updated_at: logical_ts,
         };
         Ok(after)
     }
@@ -416,7 +417,8 @@ impl common_entity::PositionedEntity for BalanceV2 {
 
 #[cfg(test)]
 mod tests {
-    use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+    use common_entity::fsm_v2::Fsm as FsmV2;
+    use common_entity::{LogEntry, LogEntrySequencer};
     use rust_decimal::Decimal;
 
     use super::{BalanceV2, BalanceV2Command, BalanceV2Error, BalanceV2Status};
@@ -432,10 +434,9 @@ mod tests {
         BalanceV2::new(1, 2, 3, decimal(available), decimal(frozen), version, 7)
     }
 
-    fn sequenced(command: BalanceV2Command) -> SequencedCommand<BalanceV2Command> {
-        SequencedCommand::new(
-            CommandMetadata::new(LSN, LOGICAL_TS, 0, 2, "1".to_owned()),
-            command,
+    fn sequenced(command: BalanceV2Command) -> LogEntry<BalanceV2Command> {
+        LogEntrySequencer::from_metadata_with_topic(
+            0, 2, LSN, LOGICAL_TS, 0, 0, "1".to_owned(), command,
         )
     }
 

@@ -1,6 +1,6 @@
-use common_entity::fsm_v2::{CommandMetadata, SequencedCommand};
 use common_entity::{
-    CreatedEntityEvent, EntityError, ReplayableDomainEvent, ReplayableEntityChanges, TrackDiff,
+    CreatedEntityEvent, EntityError, LogEntry, ReplayableDomainEvent, ReplayableEntityChanges,
+    TrackDiff,
 };
 use example_core_entity::{PlaceSpotOrderPipelineV2Cmd, SpotOrderV7, SpotOrderV7Command};
 
@@ -24,25 +24,14 @@ impl ReplayableEntityChanges for PlaceSpotOrderPipeChanges {
 
 /// 在显式事件位置创建一个 `Pending` 现货订单。
 pub fn place_spot_order(
-    command: PlaceSpotOrderPipelineV2Cmd,
-    lsn: u64,
-    command_index: u32,
-    logical_ts: u64,
-    topic: u8,
-    partition: u8,
+    command: LogEntry<PlaceSpotOrderPipelineV2Cmd>,
 ) -> Result<PlaceSpotOrderPipeChanges, EntityError> {
-    let metadata = CommandMetadata::new_at(
-        lsn,
-        command_index,
-        logical_ts,
-        topic,
-        partition,
-        command.party_id.to_string(),
-    );
-    let order = SpotOrderV7::create(SequencedCommand::new(
-        metadata,
-        SpotOrderV7Command::Create(command),
-    ))?;
+    let lsn = command.lsn();
+    let command_index = command.command_index();
+    let logical_ts = command.logical_ts();
+    let topic = command.topic();
+    let partition = command.partition();
+    let order = SpotOrderV7::create(SpotOrderV7Command::Create(command))?;
     let mut event = order.track_create_event_at(lsn, command_index, logical_ts)?;
     event.t = topic;
     event.p = partition;

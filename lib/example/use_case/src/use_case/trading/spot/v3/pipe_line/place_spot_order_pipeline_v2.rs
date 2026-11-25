@@ -58,16 +58,12 @@ impl UseCaseV3 for PlaceSpotOrderPipelineV2UseCase {
         state: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         place_spot_order_pipeline_v2(
-            cmd.payload().clone(),
+            cmd.clone(),
             &state.maker_orders,
             &state.balances_by_order_id,
             state.trade_id_start,
             state.maker_fee_bps,
             state.taker_fee_bps,
-            cmd.lsn(),
-            cmd.logical_ts(),
-            cmd.topic(),
-            cmd.partition(),
         )
     }
 }

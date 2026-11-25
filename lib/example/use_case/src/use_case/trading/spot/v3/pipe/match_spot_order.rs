@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
-use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::fsm_v2::Fsm as FsmV2;
+use common_entity::LogEntrySequencer;
 use common_entity::{
     CreatedEntityEvent, EntityError, PositionedEntity, ReplayableDomainEvent,
     ReplayableEntityChanges, Shard, TrackDiff, UpdatedEntityEvents,
@@ -290,15 +291,18 @@ fn transition_order(
     command_index: u32,
     input: MatchSpotOrderInput,
 ) -> Result<UpdatedEntityEvents<SpotOrderV7>, EntityError> {
-    let metadata = CommandMetadata::new_at(
+    let command = LogEntrySequencer::from_metadata_with_topic_at(
+        input.topic,
+        input.partition,
         lsn,
         command_index,
         input.logical_ts,
-        input.topic,
-        input.partition,
+        0,
+        0,
         before.party_id(),
+        command,
     );
-    let (after, event) = FsmV2::transition(before, SequencedCommand::new(metadata, command))?;
+    let (after, event) = FsmV2::transition(before, command)?;
     UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index(), vec![event])
         .map_err(|error| match_error(&format!("invalid order event chain: {error:?}")))
 }

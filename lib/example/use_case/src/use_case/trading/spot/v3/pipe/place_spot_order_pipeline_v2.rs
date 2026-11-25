@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use common_entity::{Entity, EntityError, ReplayableDomainEvent, ReplayableEntityChanges};
+use common_entity::{
+    Entity, EntityError, LogEntry, LogEntrySequencer, ReplayableDomainEvent,
+    ReplayableEntityChanges,
+};
 use example_core_entity::{
     BalanceV2, PlaceSpotOrderPipelineV2Cmd, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
 };
@@ -147,26 +150,30 @@ impl std::error::Error for PlaceSpotOrderPipelineV2Error {}
 /// 纯计算地执行创建、冻结、撮合、结算与终态解冻。
 #[allow(clippy::too_many_arguments)]
 pub fn place_spot_order_pipeline_v2(
-    command: PlaceSpotOrderPipelineV2Cmd,
+    command: LogEntry<PlaceSpotOrderPipelineV2Cmd>,
     maker_orders: &[SpotOrderV7],
     balances_by_order_id: &HashMap<u64, SpotOrderSettlementBalances>,
     trade_id_start: u64,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
-    lsn: u64,
-    logical_ts: u64,
-    topic: u8,
-    partition: u8,
 ) -> Result<PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error> {
+    let lsn = command.lsn();
+    let logical_ts = command.logical_ts();
+    let topic = command.topic();
+    let partition = command.partition();
     validate_inputs(
-        &command,
+        command.payload(),
         maker_orders,
         balances_by_order_id,
         trade_id_start,
         lsn,
     )?;
-    let created_order = place_spot_order(command.clone(), lsn, 0, logical_ts, topic, partition)
-        .map_err(PlaceSpotOrderPipelineV2Error::Place)?;
+    let created_order = place_spot_order(LogEntrySequencer::derive_at(
+        &command,
+        0,
+        command.payload().clone(),
+    ))
+    .map_err(PlaceSpotOrderPipelineV2Error::Place)?;
     let pair = balances_by_order_id
         .get(&command.order_id)
         .ok_or_else(|| invalid(format!("missing balances for order {}", command.order_id)))?;

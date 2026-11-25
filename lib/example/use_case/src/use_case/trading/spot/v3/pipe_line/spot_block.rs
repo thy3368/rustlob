@@ -370,16 +370,12 @@ impl WorkingState {
             fee_bps: self.taker_fee_bps,
         };
         let changes = place_spot_order_pipeline_v2(
-            command,
+            common_entity::LogEntrySequencer::derive_at(&item, 0, command),
             &maker_orders,
             &balances_by_order_id,
             self.next_trade_id,
             self.maker_fee_bps,
             self.taker_fee_bps,
-            item.lsn(),
-            item.logical_ts(),
-            item.topic(),
-            item.partition(),
         )?;
         let trade_count = matched_changes(&changes).map_or(0, match_trade_count);
         self.next_trade_id = self

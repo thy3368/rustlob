@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use common_entity::fsm_v2::{CommandMetadata, Fsm as FsmV2, SequencedCommand};
+use common_entity::fsm_v2::Fsm as FsmV2;
+use common_entity::LogEntrySequencer;
 use common_entity::{Entity, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents};
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3, SpotTradeV3Command};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderV7};
@@ -368,18 +369,18 @@ fn transition_trades(
             .checked_add(increment)
             .ok_or_else(|| error("event position overflow"))?;
         let trade = created.after();
-        let metadata = CommandMetadata::new_at(
+        let command = LogEntrySequencer::from_metadata_with_topic_at(
+            input.topic,
+            input.partition,
             input.lsn,
             command_index,
             input.logical_ts,
-            input.topic,
-            input.partition,
+            0,
+            0,
             trade.comon_trade.taker_user.0.to_string(),
+            SpotTradeV3Command::Settle,
         );
-        let (after, event) = FsmV2::transition(
-            trade,
-            SequencedCommand::new(metadata, SpotTradeV3Command::Settle),
-        )
+        let (after, event) = FsmV2::transition(trade, command)
         .map_err(|cause| error(format!("trade transition failed: {cause}")))?;
         output.push(
             UpdatedEntityEvents::try_new(after, trade.lsn, trade.command_index, vec![event])
@@ -412,16 +413,18 @@ fn transition_balances(
                 amount: change.amount,
             },
         };
-        let metadata = CommandMetadata::new_at(
+        let command = LogEntrySequencer::from_metadata_with_topic_at(
+            input.topic,
+            input.partition,
             input.lsn,
             command_index,
             input.logical_ts,
-            input.topic,
-            input.partition,
+            0,
+            0,
             change.balance.party_id().to_string(),
+            command,
         );
-        let (after, event) =
-            FsmV2::transition(&change.balance, SequencedCommand::new(metadata, command))
+        let (after, event) = FsmV2::transition(&change.balance, command)
                 .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
         output.push(
             UpdatedEntityEvents::try_new(

@@ -1,9 +1,7 @@
-use common_entity::fsm_v2::{
-    CommandMetadata as FsmCommandMetadata, Fsm as FsmV2, SequencedCommand,
-};
+use common_entity::fsm_v2::Fsm as FsmV2;
 use common_entity::{
-    EntityError, PositionedEntity, ReplayableDomainEvent, ReplayableEntityChanges, Shard,
-    UpdatedEntityEvents,
+    EntityError, LogEntrySequencer, PositionedEntity, ReplayableDomainEvent,
+    ReplayableEntityChanges, Shard, UpdatedEntityEvents,
 };
 use example_core_entity::{
     BalanceV2, BalanceV2Command, BalanceV2Error, SpotOrderV7, SpotOrderV7Command,
@@ -40,18 +38,18 @@ pub fn freeze_spot_order_from(
         ));
     }
     let order_loaded_position = (order.lsn(), order.command_index());
-    let order_metadata = FsmCommandMetadata::new_at(
+    let order_command = LogEntrySequencer::from_metadata_with_topic_at(
+        topic,
+        partition,
         lsn,
         command_index,
         logical_ts,
-        topic,
-        partition,
+        0,
+        0,
         order.party_id(),
+        SpotOrderV7Command::Freeze,
     );
-    let (order_after, order_event) = FsmV2::transition(
-        order,
-        SequencedCommand::new(order_metadata, SpotOrderV7Command::Freeze),
-    )?;
+    let (order_after, order_event) = FsmV2::transition(order, order_command)?;
     let order_changes = UpdatedEntityEvents::try_new(
         order_after,
         order_loaded_position.0,
@@ -70,25 +68,22 @@ pub fn freeze_spot_order_from(
     }
 
     let balance_loaded_position = (balance.lsn(), balance.command_index());
-    let balance_metadata = FsmCommandMetadata::new_at(
+    let balance_command = LogEntrySequencer::from_metadata_with_topic_at(
+        topic,
+        partition,
         lsn,
         command_index
             .checked_add(1)
             .ok_or_else(|| EntityError::Custom("freeze command index overflow".to_owned()))?,
         logical_ts,
-        topic,
-        partition,
+        0,
+        0,
         balance.party_id().to_string(),
+        BalanceV2Command::Freeze {
+            amount: requirement.amount(),
+        },
     );
-    let (balance_after, balance_event) = FsmV2::transition(
-        balance,
-        SequencedCommand::new(
-            balance_metadata,
-            BalanceV2Command::Freeze {
-                amount: requirement.amount(),
-            },
-        ),
-    )
+    let (balance_after, balance_event) = FsmV2::transition(balance, balance_command)
     .map_err(map_balance_error)?;
     let balance_changes = UpdatedEntityEvents::try_new(
         balance_after,
