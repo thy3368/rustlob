@@ -146,7 +146,7 @@ fn ensure_demo_state(state: &mut State4BuildBlock) {
             BalanceV2::new(
                 party_id,
                 party_id,
-                stable_string_entity_id("BTC"),
+                u64::from(symbol.base.index()),
                 INITIAL_BALANCE,
                 0_u64,
                 0,
@@ -160,7 +160,7 @@ fn ensure_demo_state(state: &mut State4BuildBlock) {
             BalanceV2::new(
                 party_id,
                 party_id,
-                stable_string_entity_id("USDT"),
+                u64::from(symbol.quote.index()),
                 INITIAL_BALANCE,
                 0_u64,
                 0,
@@ -245,16 +245,11 @@ mod tests {
 
         assert_eq!(outcome.order_id, 1);
         assert!(state.spot_symbol_lob.contains_key(&spot_symbol()));
-        assert!(
-            state
-                .user_symbol_base_balance
-                .contains_key(&(USER_ID.to_owned(), spot_symbol()))
-        );
-        assert!(
-            state
-                .user_symbol_quote_balance
-                .contains_key(&(USER_ID.to_owned(), spot_symbol()))
-        );
+        let key = (USER_ID.to_owned(), spot_symbol());
+        let base_balance = state.user_symbol_base_balance.get(&key).unwrap();
+        let quote_balance = state.user_symbol_quote_balance.get(&key).unwrap();
+        assert_eq!(base_balance.coin_idx(), u64::from(Coin::BTC.index()));
+        assert_eq!(quote_balance.coin_idx(), u64::from(Coin::USDT.index()));
         assert_eq!(state.user_symbol_orders.values().flatten().count(), 1);
     }
 
