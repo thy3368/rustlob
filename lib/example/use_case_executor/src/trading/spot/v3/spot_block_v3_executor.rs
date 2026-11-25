@@ -8,7 +8,6 @@ use example_core_use_case::pipe::place_spot_order_pipeline_v2::{
 use example_core_use_case::pipe_line::cancel_spot_order::{
     CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Cmd, CancelSpotOrderFsmV3Error,
 };
-use example_core_use_case::pipe_line::{SpotBlockCmdV2, SpotBlockCommandV2, SpotBlockErrorV2};
 use example_outbound_adapter::database::{
     CancelSpotOrderBuildBlockSinkError, CancelSpotOrderBuildBlockSourceError,
     PlaceSpotOrderBuildBlockSinkError, PlaceSpotOrderBuildBlockSourceError, State4BuildBlock,
@@ -16,6 +15,9 @@ use example_outbound_adapter::database::{
 
 use super::cancel_spot_order_executor_v3::execute_cancel_spot_order_v3_in_build_block;
 use super::place_spot_order_executor_v3::execute_place_spot_order_v3;
+use crate::trading::spot::v3::spot_block_v2::{
+    SpotBlockCmdV2, SpotBlockCommandV2, SpotBlockErrorV2,
+};
 
 pub type PlaceSpotBlockExecutionResult = Result<
     ExecutionResultV3<PlaceSpotOrderPipelineV2Changes>,
@@ -36,7 +38,7 @@ pub type CancelSpotBlockExecutionResult = Result<
 >;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpotBlockCommandExecutionV2 {
+pub enum SpotBlockCommandExecutionV3 {
     Place {
         command: LogEntry<PlaceSpotOrderPipelineV2Cmd>,
         result: PlaceSpotBlockExecutionResult,
@@ -48,19 +50,19 @@ pub enum SpotBlockCommandExecutionV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpotBlockExecutionV2 {
-    pub command_results: Vec<SpotBlockCommandExecutionV2>,
+pub struct SpotBlockExecutionV3 {
+    pub command_results: Vec<SpotBlockCommandExecutionV3>,
 }
 
-impl ReplayableEntityChanges for SpotBlockExecutionV2 {
+impl ReplayableEntityChanges for SpotBlockExecutionV3 {
     fn replayable_events(&self) -> Vec<&common_entity::ReplayableDomainEvent> {
         self.command_results
             .iter()
             .flat_map(|item| match item {
-                SpotBlockCommandExecutionV2::Place {
+                SpotBlockCommandExecutionV3::Place {
                     result: Ok(result), ..
                 } => result.state_changed.replayable_events(),
-                SpotBlockCommandExecutionV2::Cancel {
+                SpotBlockCommandExecutionV3::Cancel {
                     result: Ok(result), ..
                 } => result.state_changed.replayable_events(),
                 _ => Vec::new(),
@@ -69,42 +71,35 @@ impl ReplayableEntityChanges for SpotBlockExecutionV2 {
     }
 }
 
-pub fn execute_spot_block_v2(
-    command: &SpotBlockCmdV2,
+pub fn execute_spot_block_v3(
+    cmds: &[LogEntry<SpotBlockCommandV2>],
     state: &mut State4BuildBlock,
-) -> Result<SpotBlockExecutionV2, SpotBlockErrorV2> {
-    command.validate()?;
-    let mut command_results = Vec::with_capacity(command.items.len());
-    for item in &command.items {
+) -> Result<SpotBlockExecutionV3, SpotBlockErrorV2> {
+    SpotBlockCmdV2::validate_entries(cmds)?;
+    let mut command_results = Vec::with_capacity(cmds.len());
+    for item in cmds {
         match item.payload().clone() {
             SpotBlockCommandV2::Place(payload) => {
                 let command = LogEntrySequencer::derive(item, payload);
-                let mut next = state.clone();
-                let result = execute_place_spot_order_v3(&command, &mut next);
+                let mut candidate = state.clone();
+                let result = execute_place_spot_order_v3(&command, &mut candidate);
                 if result.is_ok() {
-                    *state = next;
+                    *state = candidate;
                 }
-                command_results.push(SpotBlockCommandExecutionV2::Place { command, result });
+                command_results.push(SpotBlockCommandExecutionV3::Place { command, result });
             }
             SpotBlockCommandV2::Cancel(payload) => {
                 let command = LogEntrySequencer::derive(item, payload);
-                let mut next = state.clone();
-                let result = execute_cancel_spot_order_v3_in_build_block(&command, &mut next);
+                let mut candidate = state.clone();
+                let result = execute_cancel_spot_order_v3_in_build_block(&command, &mut candidate);
                 if result.is_ok() {
-                    *state = next;
+                    *state = candidate;
                 }
-                command_results.push(SpotBlockCommandExecutionV2::Cancel { command, result });
+                command_results.push(SpotBlockCommandExecutionV3::Cancel { command, result });
             }
         }
     }
-    Ok(SpotBlockExecutionV2 { command_results })
+    Ok(SpotBlockExecutionV3 { command_results })
 }
 
-pub fn execute_spot_block_v3(
-    cmds: Vec<LogEntry<SpotBlockCommandV2>>,
-
-    state: &mut State4BuildBlock,
-) -> Result<SpotBlockExecutionV2, SpotBlockErrorV2> {
-
-    todo!()
-}
+///todo 增加函数 比如 State4BuildBlock 前后 生成diff, 找出create/update的entity, 写入rocks_db

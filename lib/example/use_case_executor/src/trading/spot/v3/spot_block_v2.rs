@@ -1,9 +1,8 @@
 use common_entity::{LogAttr, LogEntry, PresequencedCommand, ReplayableDomainEvent, Shard};
 use example_core_entity::PlaceSpotOrderPipelineV2Cmd;
+use example_core_use_case::CancelSpotOrderFsmV3Cmd;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-use super::CancelSpotOrderFsmV3Cmd;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpotBlockCmdV2 {
@@ -12,8 +11,14 @@ pub struct SpotBlockCmdV2 {
 
 impl SpotBlockCmdV2 {
     pub fn validate(&self) -> Result<(), SpotBlockErrorV2> {
-        let first = self.items.first().ok_or(SpotBlockErrorV2::EmptyCommands)?;
-        for pair in self.items.windows(2) {
+        Self::validate_entries(&self.items)
+    }
+
+    pub fn validate_entries(
+        items: &[LogEntry<SpotBlockCommandV2>],
+    ) -> Result<(), SpotBlockErrorV2> {
+        let first = items.first().ok_or(SpotBlockErrorV2::EmptyCommands)?;
+        for pair in items.windows(2) {
             if pair[0].lsn() >= pair[1].lsn() {
                 return Err(SpotBlockErrorV2::NonIncreasingLsn);
             }
@@ -21,8 +26,7 @@ impl SpotBlockCmdV2 {
                 return Err(SpotBlockErrorV2::NonIncreasingLogicalTimestamp);
             }
         }
-        if self
-            .items
+        if items
             .iter()
             .any(|item| item.topic() != first.topic() || item.partition() != first.partition())
         {
@@ -159,5 +163,26 @@ mod tests {
             .validate(),
             Ok(())
         );
+    }
+
+    #[test]
+    fn slice_validation_matches_wire_command_validation() {
+        let cases = [
+            vec![],
+            vec![entry(1, 2, 1, 10), entry(1, 2, 1, 11)],
+            vec![entry(1, 2, 1, 10), entry(1, 2, 2, 10)],
+            vec![entry(1, 2, 1, 10), entry(1, 3, 2, 11)],
+            vec![entry(1, 2, 1, 10), entry(1, 2, 2, 11)],
+        ];
+
+        for items in cases {
+            assert_eq!(
+                SpotBlockCmdV2::validate_entries(&items),
+                SpotBlockCmdV2 {
+                    items: items.clone()
+                }
+                .validate()
+            );
+        }
     }
 }
