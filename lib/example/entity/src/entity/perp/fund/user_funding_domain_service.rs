@@ -1,8 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use common_entity::fsm_v2::Fsm as FsmV2;
-use common_entity::LogEntrySequencer;
-use common_entity::{Fsm, Shard, UpdatedEntityPair, stable_string_entity_id};
+use common_entity::{Fsm, LogEntrySequencer, Shard, UpdatedEntityPair, stable_string_entity_id};
 use rust_decimal::Decimal;
 use thiserror::Error;
 

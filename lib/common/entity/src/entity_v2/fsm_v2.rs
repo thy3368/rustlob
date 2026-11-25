@@ -12,10 +12,7 @@ pub trait Fsm: TrackDiff + Sized {
     ///
     /// 实现不得修改当前实体、发布事件或产生外部副作用。
     #[doc(hidden)]
-    fn derive_transition(
-        &self,
-        command: LogEntry<Self::Command>,
-    ) -> Result<Self, Self::Error>;
+    fn derive_transition(&self, command: LogEntry<Self::Command>) -> Result<Self, Self::Error>;
 
     /// 返回 command 对应的稳定、非零业务事件码。
     fn event_type(command: &Self::Command) -> u8;
@@ -133,10 +130,7 @@ mod tests {
         type Command = u64;
         type Error = EntityError;
 
-        fn derive_transition(
-            &self,
-            command: LogEntry<Self::Command>,
-        ) -> Result<Self, Self::Error> {
+        fn derive_transition(&self, command: LogEntry<Self::Command>) -> Result<Self, Self::Error> {
             let mut after = self.clone();
             after.value = *command.payload();
             after.lsn = command.lsn();

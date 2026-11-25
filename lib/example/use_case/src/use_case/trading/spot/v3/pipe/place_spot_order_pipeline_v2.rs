@@ -6,7 +6,7 @@ use common_entity::{
     ReplayableEntityChanges,
 };
 use example_core_entity::{
-    BalanceV2, PlaceSpotOrderPipelineV2Cmd, OrderGroupRelation, OrderSide, OrderType, SpotOrderV7,
+    BalanceV2, OrderGroupRelation, OrderSide, OrderType, PlaceSpotOrderPipelineV2Cmd, SpotOrderV7,
 };
 
 use super::freeze_spot_order::{FreezeSpotOrderPipeChanges, freeze_spot_order_from};

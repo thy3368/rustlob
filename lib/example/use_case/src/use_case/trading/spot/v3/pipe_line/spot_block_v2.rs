@@ -155,7 +155,12 @@ impl UseCaseV3 for SpotBlockUseCaseV2 {
         state_given: &Self::StateGiven,
     ) -> Result<Self::StateChanged, Self::Error> {
         let mut working = Working::try_from(state_given.clone())?;
-        let command_results = cmd.items.iter().cloned().map(|i| working.apply(i)).collect();
+        let command_results = cmd
+            .items
+            .iter()
+            .cloned()
+            .map(|i| working.apply(i))
+            .collect();
         Ok(SpotBlockChangesV2 {
             command_results,
             block_result: working.s,

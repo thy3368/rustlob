@@ -6,8 +6,8 @@ use common_entity::{
 };
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{
-    BalanceV2, PlaceSpotOrderPipelineV2Cmd, OrderGroupRelation, OrderSide, OrderType, SpotOrderStatus,
-    SpotOrderV7,
+    BalanceV2, OrderGroupRelation, OrderSide, OrderType, PlaceSpotOrderPipelineV2Cmd,
+    SpotOrderStatus, SpotOrderV7,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};

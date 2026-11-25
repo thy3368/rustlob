@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use common_entity::fsm_v2::Fsm as FsmV2;
-use common_entity::LogEntrySequencer;
-use common_entity::{Entity, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents};
+use common_entity::{
+    Entity, LogEntrySequencer, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
+};
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3, SpotTradeV3Command};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderV7};
 use rust_decimal::Decimal;
@@ -381,7 +382,7 @@ fn transition_trades(
             SpotTradeV3Command::Settle,
         );
         let (after, event) = FsmV2::transition(trade, command)
-        .map_err(|cause| error(format!("trade transition failed: {cause}")))?;
+            .map_err(|cause| error(format!("trade transition failed: {cause}")))?;
         output.push(
             UpdatedEntityEvents::try_new(after, trade.lsn, trade.command_index, vec![event])
                 .map_err(|cause| error(format!("invalid trade event: {cause:?}")))?,
@@ -425,7 +426,7 @@ fn transition_balances(
             command,
         );
         let (after, event) = FsmV2::transition(&change.balance, command)
-                .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
+            .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
         output.push(
             UpdatedEntityEvents::try_new(
                 after,

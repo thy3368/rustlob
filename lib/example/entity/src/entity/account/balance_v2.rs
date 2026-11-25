@@ -167,10 +167,7 @@ impl BalanceV2 {
 impl Fsm for BalanceV2 {
     type Command = BalanceV2Command;
     type Error = BalanceV2Error;
-    fn derive_transition(
-        &self,
-        command: LogEntry<Self::Command>,
-    ) -> Result<Self, Self::Error> {
+    fn derive_transition(&self, command: LogEntry<Self::Command>) -> Result<Self, Self::Error> {
         let position = (command.lsn(), command.command_index());
         let logical_ts = command.logical_ts();
         let command = command.into_payload();
@@ -436,7 +433,14 @@ mod tests {
 
     fn sequenced(command: BalanceV2Command) -> LogEntry<BalanceV2Command> {
         LogEntrySequencer::from_metadata_with_topic(
-            0, 2, LSN, LOGICAL_TS, 0, 0, "1".to_owned(), command,
+            0,
+            2,
+            LSN,
+            LOGICAL_TS,
+            0,
+            0,
+            "1".to_owned(),
+            command,
         )
     }
 
@@ -539,10 +543,7 @@ mod tests {
             }
         );
         let command = sequenced(BalanceV2Command::Close);
-        assert_eq!(
-            (command.metadata.lsn, command.metadata.logical_ts),
-            (LSN, LOGICAL_TS)
-        );
+        assert_eq!((command.lsn(), command.logical_ts()), (LSN, LOGICAL_TS));
     }
 
     #[test]

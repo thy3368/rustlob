@@ -236,10 +236,7 @@ impl Fsm for SpotTradeV3 {
     }
 
     /// 使用 envelope 中的权威位置与逻辑时间纯计算结算后的成交事实。
-    fn derive_transition(
-        &self,
-        command: LogEntry<Self::Command>,
-    ) -> Result<Self, Self::Error> {
+    fn derive_transition(&self, command: LogEntry<Self::Command>) -> Result<Self, Self::Error> {
         let position = (command.lsn(), command.command_index());
         let logical_ts = command.logical_ts();
         let command = command.into_payload();

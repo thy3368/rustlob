@@ -36,7 +36,15 @@ pub fn cancel_spot_order(
 ) -> Result<CancelSpotOrderPipeChanges, EntityError> {
     let order_loaded_position = (order.lsn(), order.command_index());
     let order_command = LogEntrySequencer::from_metadata_with_topic_at(
-        topic, partition, lsn, 0, logical_ts, 0, 0, order.party_id(), SpotOrderV7Command::Cancel,
+        topic,
+        partition,
+        lsn,
+        0,
+        logical_ts,
+        0,
+        0,
+        order.party_id(),
+        SpotOrderV7Command::Cancel,
     );
     let (order_after, order_event) = FsmV2::transition(order, order_command)?;
     let release_requirement = order_after
@@ -74,8 +82,8 @@ pub fn cancel_spot_order(
                 payment_amount: Decimal::ZERO,
             },
         );
-        let (after, event) = FsmV2::transition(balance, balance_command)
-        .map_err(map_balance_error)?;
+        let (after, event) =
+            FsmV2::transition(balance, balance_command).map_err(map_balance_error)?;
         Some(
             UpdatedEntityEvents::try_new(after, loaded_position.0, loaded_position.1, vec![event])
                 .map_err(|error| {

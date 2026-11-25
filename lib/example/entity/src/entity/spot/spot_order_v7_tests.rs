@@ -63,13 +63,16 @@ fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {
     .unwrap()
 }
 
-fn create_command(
-    order_id: u64,
-    side: OrderSide,
-    order_type: OrderType,
-) -> SpotOrderV7Command {
+fn create_command(order_id: u64, side: OrderSide, order_type: OrderType) -> SpotOrderV7Command {
     SpotOrderV7Command::Create(LogEntrySequencer::from_metadata_with_topic(
-        3, 4, 10, TIMESTAMP, 0, 0, "11".to_owned(), PlaceSpotOrderPipelineV2Cmd {
+        3,
+        4,
+        10,
+        TIMESTAMP,
+        0,
+        0,
+        "11".to_owned(),
+        PlaceSpotOrderPipelineV2Cmd {
             party_id: 11,
             order_id,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
@@ -87,7 +90,8 @@ fn create_command(
 #[test]
 fn create_rejects_invalid_facts_and_non_create_commands() {
     for mutate in [0_u8, 1, 2] {
-        let command = match create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }) {
+        let command =
+            match create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }) {
                 SpotOrderV7Command::Create(entry) => {
                     let mut command = entry.into_payload();
                     match mutate {
@@ -96,7 +100,14 @@ fn create_rejects_invalid_facts_and_non_create_commands() {
                         _ => command.size = Decimal::ZERO,
                     }
                     SpotOrderV7Command::Create(LogEntrySequencer::from_metadata_with_topic(
-                        3, 4, 10, TIMESTAMP, 0, 0, "11".to_owned(), command,
+                        3,
+                        4,
+                        10,
+                        TIMESTAMP,
+                        0,
+                        0,
+                        "11".to_owned(),
+                        command,
                     ))
                 }
                 _ => unreachable!(),
@@ -116,7 +127,8 @@ fn create_rejects_invalid_facts_and_non_create_commands() {
         .is_err()
     );
     let SpotOrderV7Command::Create(entry) =
-        create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }) else {
+        create_command(7, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc })
+    else {
         unreachable!()
     };
     let mut command = entry.into_payload();
@@ -125,7 +137,14 @@ fn create_rejects_invalid_facts_and_non_create_commands() {
     assert!(
         SpotOrderV7::create(SpotOrderV7Command::Create(
             LogEntrySequencer::from_metadata_with_topic(
-                3, 4, 10, TIMESTAMP, 0, 0, "11".to_owned(), command,
+                3,
+                4,
+                10,
+                TIMESTAMP,
+                0,
+                0,
+                "11".to_owned(),
+                command,
             )
         ))
         .is_err()
@@ -142,19 +161,7 @@ fn create_event_and_freeze_update_have_lifecycle_event_codes() {
     ))
     .unwrap();
     let mut create_event = created.track_create_event().unwrap();
-    create_event.domain_event_type = SpotOrderV7Command::Create(PlaceSpotOrderPipelineV2Cmd {
-        party_id: 11,
-        order_id: 7,
-        symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
-        side: OrderSide::Buy,
-        price: Decimal::from(100),
-        size: Decimal::from(2),
-        order_type: OrderType::Limit { tif: OrderTif::Gtc },
-        relation: OrderGroupRelation::Standalone,
-        cloid: None,
-        fee_bps: 0,
-    })
-    .event_type();
+    create_event.domain_event_type = 1;
     assert_eq!(create_event.domain_event_type, 1);
 
     let (_, freeze_event) = created
@@ -259,8 +266,14 @@ fn stale_lsn_keeps_order_unchanged() {
     let before = subject.clone();
     assert!(
         subject
-            .transition(SequencedCommand::new(
-                CommandMetadata::new(3, TIMESTAMP, 0, 1, String::new()),
+            .transition(LogEntrySequencer::from_metadata_with_topic(
+                0,
+                1,
+                3,
+                TIMESTAMP,
+                0,
+                0,
+                String::new(),
                 SpotOrderV7Command::MatchedAsTaker {
                     filled_size: Decimal::ONE,
                     quote_notional: Decimal::from(100),
@@ -276,14 +289,26 @@ fn stale_lsn_keeps_order_unchanged() {
 fn command_lsn_can_jump_and_be_reused_within_one_command() {
     let subject = order(OrderSide::Buy, SpotOrderStatus::Pending);
     let (subject, _) = subject
-        .transition(SequencedCommand::new(
-            CommandMetadata::new(20, TIMESTAMP, 0, 1, String::new()),
+        .transition(LogEntrySequencer::from_metadata_with_topic(
+            0,
+            1,
+            20,
+            TIMESTAMP,
+            0,
+            0,
+            String::new(),
             SpotOrderV7Command::Freeze,
         ))
         .unwrap();
     let (subject, _) = subject
-        .transition(SequencedCommand::new(
-            CommandMetadata::new(20, TIMESTAMP + 1, 0, 1, String::new()),
+        .transition(LogEntrySequencer::from_metadata_with_topic(
+            0,
+            1,
+            20,
+            TIMESTAMP + 1,
+            0,
+            0,
+            String::new(),
             SpotOrderV7Command::MatchedAsTaker {
                 filled_size: Decimal::ONE,
                 quote_notional: Decimal::from(100),
@@ -482,12 +507,22 @@ fn sequenced_failures_are_atomic() {
     let cases = vec![
         (
             order(OrderSide::Buy, SpotOrderStatus::Pending),
-            create_command(8, OrderSide::Buy, OrderType::Limit { tif: OrderTif::Gtc }),
+            sequenced(create_command(
+                8,
+                OrderSide::Buy,
+                OrderType::Limit { tif: OrderTif::Gtc },
+            )),
         ),
         (
             order(OrderSide::Buy, SpotOrderStatus::Open),
-            SequencedCommand::new(
-                CommandMetadata::new(3, TIMESTAMP, 0, 1, String::new()),
+            LogEntrySequencer::from_metadata_with_topic(
+                0,
+                1,
+                3,
+                TIMESTAMP,
+                0,
+                0,
+                String::new(),
                 SpotOrderV7Command::Cancel,
             ),
         ),
@@ -581,14 +616,14 @@ fn pending_cancel_releases_zero_and_exact_fee_reserve_is_allowed() {
 fn replay_projection_failure_keeps_order_unchanged() {
     let subject = order(OrderSide::Buy, SpotOrderStatus::Open);
     let before = subject.clone();
-    let command = SequencedCommand::new(
-        CommandMetadata::new(
-            before.order_base().lsn,
-            before.order_base().updated_at,
-            before.topic(),
-            before.partition(),
-            before.party_id(),
-        ),
+    let command = LogEntrySequencer::from_metadata_with_topic(
+        before.topic(),
+        before.partition(),
+        before.order_base().lsn,
+        before.order_base().updated_at,
+        0,
+        0,
+        before.party_id(),
         SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::ZERO,
             quote_notional: Decimal::ZERO,

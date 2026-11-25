@@ -3,8 +3,9 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use common_entity::fsm_v2::Fsm as FsmV2;
-use common_entity::LogEntrySequencer;
-use common_entity::{Entity, Fsm, LogEntry, ReplayableDomainEvent, Shard, StateSink, StateSource};
+use common_entity::{
+    Entity, Fsm, LogEntry, LogEntrySequencer, ReplayableDomainEvent, Shard, StateSink, StateSource,
+};
 use example_core_use_case::{
     BalanceV2, BalanceV2Command, DueScheduledCancelSource, PerpOrderV3, PerpOrderV3Event,
     ScheduleHyperliquidCancelCmd, ScheduleHyperliquidCancelState, ScheduleHyperliquidCancelUseCase,
@@ -270,8 +271,7 @@ fn replay_events(
                 order.party_id(),
                 SpotOrderV7Command::Cancel,
             );
-            let (after, _) = FsmV2::transition(&*order, command)
-            .map_err(|error| {
+            let (after, _) = FsmV2::transition(&*order, command).map_err(|error| {
                 HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
             })?;
             *order = after;
@@ -361,7 +361,7 @@ fn replay_balance(
         },
     );
     let (after, _) = FsmV2::transition(&*balance, command)
-    .map_err(|error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()))?;
+        .map_err(|error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()))?;
     *balance = after;
     if balance.available() != available || balance.frozen() != frozen {
         return Err(HyperliquidScheduleCancelOutboundError::EventDecodeFailed);
@@ -429,11 +429,16 @@ mod tests {
             .expect("spot fixture should be valid");
         let release = {
             let command = LogEntrySequencer::from_metadata_with_topic(
-                spot.topic(), spot.partition(), 9, DUE_MS, 0, 0, spot.party_id(),
+                spot.topic(),
+                spot.partition(),
+                9,
+                DUE_MS,
+                0,
+                0,
+                spot.party_id(),
                 SpotOrderV7Command::Cancel,
             );
-            let (canceled, _) = FsmV2::transition(&spot, command)
-            .expect("fixture should cancel");
+            let (canceled, _) = FsmV2::transition(&spot, command).expect("fixture should cancel");
             canceled
                 .terminal_unfreeze_delta(&spot)
                 .expect("fixture should release")

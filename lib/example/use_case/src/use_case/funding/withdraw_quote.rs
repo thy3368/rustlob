@@ -91,8 +91,8 @@ impl UseCase for WithdrawQuoteUseCase {
                 amount: cmd.amount.into(),
             },
         );
-        let (quote_balance_after, _) = FsmV2::transition(&quote_balance_before, command)
-        .map_err(map_balance_error)?;
+        let (quote_balance_after, _) =
+            FsmV2::transition(&quote_balance_before, command).map_err(map_balance_error)?;
 
         Ok(WithdrawQuoteChanges {
             updated_quote_balance: UpdatedEntityPair {

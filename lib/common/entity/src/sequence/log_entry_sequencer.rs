@@ -76,9 +76,8 @@ impl LogEntrySequencer {
         user_id: String,
         payload: P,
     ) -> LogEntry<P> {
-        let mut entry = Self::from_metadata(
-            lsn, logical_ts, client_id, request_id, user_id, payload,
-        );
+        let mut entry =
+            Self::from_metadata(lsn, logical_ts, client_id, request_id, user_id, payload);
         entry.command_index = command_index;
         entry
     }
@@ -330,13 +329,24 @@ mod tests {
     #[test]
     fn explicit_command_index_and_derive_at_preserve_parent_metadata() {
         let parent = LogEntrySequencer::from_metadata_with_topic_at(
-            8, 6, 42, 3, 123, 4, 5, "alice".into(), "parent",
+            8,
+            6,
+            42,
+            3,
+            123,
+            4,
+            5,
+            "alice".into(),
+            "parent",
         );
         let child = LogEntrySequencer::derive_at(&parent, 9, "child");
         assert_eq!((parent.lsn(), parent.command_index()), (42, 3));
         assert_eq!((child.lsn(), child.command_index()), (42, 9));
         assert_eq!((child.topic(), child.partition()), (8, 6));
-        assert_eq!((child.logical_ts(), child.client_id(), child.request_id()), (123, 4, 5));
+        assert_eq!(
+            (child.logical_ts(), child.client_id(), child.request_id()),
+            (123, 4, 5)
+        );
         assert_eq!(child.user_id(), "alice");
     }
 
@@ -347,7 +357,15 @@ mod tests {
         assert_eq!(decoded.command_index(), 0);
 
         let entry = LogEntrySequencer::from_metadata_with_topic_at(
-            1, 2, 3, 7, 4, 5, 6, "alice".into(), "x".to_owned(),
+            1,
+            2,
+            3,
+            7,
+            4,
+            5,
+            6,
+            "alice".into(),
+            "x".to_owned(),
         );
         let round_trip: LogEntry<String> =
             serde_json::from_str(&serde_json::to_string(&entry).unwrap()).unwrap();

@@ -1,6 +1,5 @@
 use common_entity::fsm_v2::Fsm as FsmV2;
-use common_entity::LogEntrySequencer;
-use common_entity::{LogEntry, Shard, UseCase};
+use common_entity::{LogEntry, LogEntrySequencer, Shard, UseCase};
 use example_core_entity::entity::common::order_primitives::OrderSide;
 use example_core_entity::spot::spot_trade_v3::{
     SpotTradeSettlementError, SpotTradeSettlementStatus, SpotTradeV3, SpotTradeV3Command,
@@ -219,7 +218,7 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
             SpotTradeV3Command::Settle,
         );
         let (trade_after, _) = FsmV2::transition(&given_state.trade, trade_command)
-        .map_err(|_| UnFreezeSpotOrderV2Error::DuplicateSettlement)?;
+            .map_err(|_| UnFreezeSpotOrderV2Error::DuplicateSettlement)?;
         let mut buyer_base_balance_after = given_state.buyer_base_balance.clone();
         let mut buyer_quote_balance_after = given_state.buyer_quote_balance.clone();
         let mut seller_base_balance_after = given_state.seller_base_balance.clone();

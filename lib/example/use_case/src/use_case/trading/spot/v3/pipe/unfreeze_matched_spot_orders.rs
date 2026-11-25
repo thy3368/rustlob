@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 
 use common_entity::fsm_v2::Fsm as FsmV2;
-use common_entity::LogEntrySequencer;
-use common_entity::{Entity, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents};
+use common_entity::{
+    Entity, LogEntrySequencer, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
+};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderStatus, SpotOrderV7};
 use rust_decimal::Decimal;
 
@@ -324,7 +325,14 @@ mod tests {
     ) -> UpdatedEntityEvents<BalanceV2> {
         let before = BalanceV2::new(party_id, party_id, coin_idx, 10, 2, 1, 1);
         let command = LogEntrySequencer::from_metadata_with_topic_at(
-            4, 5, 2, command_index, 3, 0, 0, party_id.to_string(),
+            4,
+            5,
+            2,
+            command_index,
+            3,
+            0,
+            0,
+            party_id.to_string(),
             BalanceV2Command::UnfreezeAndPay {
                 unfreeze_amount: Decimal::ONE,
                 payment_amount: Decimal::ZERO,

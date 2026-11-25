@@ -1,10 +1,9 @@
 use std::collections::HashSet;
 
 use common_entity::fsm_v2::Fsm as FsmV2;
-use common_entity::LogEntrySequencer;
 use common_entity::{
-    EntityError, Fsm, LogEntry, ReplayableChanges, ReplayableDomainEvent, Shard, StateDiff,
-    UpdatedEntityPair, UseCase,
+    EntityError, Fsm, LogEntry, LogEntrySequencer, ReplayableChanges, ReplayableDomainEvent, Shard,
+    StateDiff, UpdatedEntityPair, UseCase,
 };
 use example_core_entity::spot::{SpotOrderV7, SpotOrderV7Command};
 use example_core_entity::{
@@ -291,8 +290,7 @@ mod tests {
                 spot.party_id(),
                 SpotOrderV7Command::Cancel,
             );
-            let (canceled, _) = FsmV2::transition(&spot, command)
-            .expect("fixture should cancel");
+            let (canceled, _) = FsmV2::transition(&spot, command).expect("fixture should cancel");
             canceled
                 .terminal_unfreeze_delta(&spot)
                 .expect("fixture should release")

@@ -83,8 +83,8 @@ pub fn freeze_spot_order_from(
             amount: requirement.amount(),
         },
     );
-    let (balance_after, balance_event) = FsmV2::transition(balance, balance_command)
-    .map_err(map_balance_error)?;
+    let (balance_after, balance_event) =
+        FsmV2::transition(balance, balance_command).map_err(map_balance_error)?;
     let balance_changes = UpdatedEntityEvents::try_new(
         balance_after,
         balance_loaded_position.0,
