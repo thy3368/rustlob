@@ -1,9 +1,10 @@
-use serde::{Deserialize, Deserializer};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Number, Value};
 
 use super::ExchangeV2Error;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExchangeRequestV2 {
     pub action: ExchangeActionV2,
@@ -15,7 +16,7 @@ pub struct ExchangeRequestV2 {
     pub expires_after: Option<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SignatureV2 {
     r: String,
@@ -54,7 +55,7 @@ fn hex_with_len(value: &str, len: usize) -> bool {
         .is_some_and(|hex| hex.len() == len && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExchangeActionV2 {
     AgentEnableDexAbstraction(EmptyPayload),
     AgentSendAsset(AgentSendAssetPayload),
@@ -92,6 +93,61 @@ pub enum ExchangeActionV2 {
     VaultTransfer(VaultTransferPayload),
     Withdraw3(WithdrawPayload),
     Unknown { type_: String },
+}
+
+impl Serialize for ExchangeActionV2 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        macro_rules! serialize_payload {
+            ($payload:expr) => {
+                $payload.serialize(serializer)
+            };
+        }
+        match self {
+            Self::AgentEnableDexAbstraction(value) => serialize_payload!(value),
+            Self::AgentSendAsset(value) => serialize_payload!(value),
+            Self::AgentSetAbstraction(value) => serialize_payload!(value),
+            Self::ApproveAgent(value) => serialize_payload!(value),
+            Self::ApproveBuilderFee(value) => serialize_payload!(value),
+            Self::AuthorizeAqav2Role(value) => serialize_payload!(value),
+            Self::BatchModify(value) => serialize_payload!(value),
+            Self::CDeposit(value) => serialize_payload!(value),
+            Self::CWithdraw(value) => serialize_payload!(value),
+            Self::Cancel(value) => serialize_payload!(value),
+            Self::CancelByCloid(value) => serialize_payload!(value),
+            Self::ClaimRewards(value) => serialize_payload!(value),
+            Self::Hip3LiquidatorTransfer(value) => serialize_payload!(value),
+            Self::Modify(value) => serialize_payload!(value),
+            Self::Noop(value) => serialize_payload!(value),
+            Self::Order(value) => serialize_payload!(value),
+            Self::ReserveRequestWeight(value) => serialize_payload!(value),
+            Self::ScheduleCancel(value) => serialize_payload!(value),
+            Self::SendAsset(value) => serialize_payload!(value),
+            Self::SendToEvmWithData(value) => serialize_payload!(value),
+            Self::SpotSend(value) => serialize_payload!(value),
+            Self::TokenDelegate(value) => serialize_payload!(value),
+            Self::TopUpIsolatedOnlyMargin(value) => serialize_payload!(value),
+            Self::TwapCancel(value) => serialize_payload!(value),
+            Self::TwapOrder(value) => serialize_payload!(value),
+            Self::UpdateIsolatedMargin(value) => serialize_payload!(value),
+            Self::UpdateLeverage(value) => serialize_payload!(value),
+            Self::UsdClassTransfer(value) => serialize_payload!(value),
+            Self::UsdSend(value) => serialize_payload!(value),
+            Self::UserDexAbstraction(value) => serialize_payload!(value),
+            Self::UserOutcome(value) => serialize_payload!(value),
+            Self::UserSetAbstraction(value) => serialize_payload!(value),
+            Self::ValidatorL1Stream(value) => serialize_payload!(value),
+            Self::VaultTransfer(value) => serialize_payload!(value),
+            Self::Withdraw3(value) => serialize_payload!(value),
+            Self::Unknown { type_ } => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("type", type_)?;
+                map.end()
+            }
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for ExchangeActionV2 {
@@ -156,7 +212,7 @@ impl<'de> Deserialize<'de> for ExchangeActionV2 {
 
 macro_rules! payload {
     ($name:ident { $($fields:tt)* }) => {
-        #[derive(Debug, Deserialize)]
+        #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         #[serde(deny_unknown_fields)]
         pub struct $name { #[serde(rename = "type")] _type: String, $($fields)* }
     };
@@ -227,14 +283,14 @@ payload!(ValidatorPayload {
     risk_free_rate: String,
 });
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CancelItem {
     pub a: u32,
     pub o: u64,
 }
 payload!(CancelPayload { pub cancels: Vec<CancelItem>, });
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CloidCancelItem {
     pub asset: u32,
@@ -242,7 +298,7 @@ pub struct CloidCancelItem {
 }
 payload!(CancelByCloidPayload { pub cancels: Vec<CloidCancelItem>, });
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OrderPayload {
     #[serde(rename = "type")]
@@ -251,7 +307,7 @@ pub struct OrderPayload {
     grouping: String,
     builder: Option<BuilderV2>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OrderV2 {
     a: u32,
@@ -262,18 +318,18 @@ pub struct OrderV2 {
     t: OrderTypeV2,
     c: Option<String>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OrderTypeV2 {
     limit: Option<LimitV2>,
     trigger: Option<TriggerV2>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LimitV2 {
     tif: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TriggerV2 {
     #[serde(rename = "isMarket")]
@@ -282,13 +338,13 @@ struct TriggerV2 {
     trigger_px: String,
     tpsl: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BuilderV2 {
     b: String,
     f: u64,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModifyV2 {
     oid: Value,
@@ -296,7 +352,7 @@ pub struct ModifyV2 {
 }
 payload!(ModifyPayload { oid: Value, order: OrderV2, #[serde(rename="a")] always_place: Option<bool>, });
 payload!(BatchModifyPayload { pub modifies: Vec<ModifyV2>, #[serde(rename="a")] always_place: Option<bool>, });
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TwapSpecV2 {
     a: u32,
