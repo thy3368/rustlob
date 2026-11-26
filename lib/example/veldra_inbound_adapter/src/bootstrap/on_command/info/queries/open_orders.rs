@@ -2,10 +2,8 @@ use common_entity::{ComputeView, QueryExecutionError, QueryExecutor};
 use example_core_use_case::{
     OpenSpotOrdersQuery, OpenSpotOrdersQueryUseCase, OrderSide, SpotOrderV7,
 };
-use example_outbound_adapter::state_source::ScheduleCancelSpotOrderSource;
 
 use crate::bootstrap::on_command::hyperliquid_ws::WsBasicOrder;
-use crate::bootstrap::on_command::info::common::validate::ensure_type;
 use crate::bootstrap::on_command::info::error::InfoHttpError;
 use crate::bootstrap::on_command::info::queries::InfoQueryDeps;
 
@@ -54,25 +52,7 @@ pub async fn handle(
     body: &[u8],
     _deps: &InfoQueryDeps,
 ) -> Result<reply::ResponseWire, InfoHttpError> {
-    let request: RequestWire = crate::common::parse::parse_json_request(body)?;
-    ensure_type(&request.type_, "openOrders")?;
-    let query = OpenSpotOrdersQuery {
-        user: request.user,
-        dex: request.dex,
-    };
-    let source =
-        ScheduleCancelSpotOrderSource::new(crate::bootstrap::runtime::schedule_cancel_outbound());
-
-    let orders = QueryExecutor
-        .execute(&query, &source, &OpenSpotOrdersQueryUseCase)
-        .map_err(|error| match error {
-            QueryExecutionError::Business(error) => InfoHttpError::validation(error.to_string()),
-            QueryExecutionError::LoadReadModel(error) => {
-                InfoHttpError::validation(format!("spot order store unavailable: {error}"))
-            }
-        })?;
-
-    Ok(OpenSpotOrdersView.compute_view(orders))
+    todo!()
 }
 
 #[cfg(test)]
