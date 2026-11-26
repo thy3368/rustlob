@@ -1,6 +1,6 @@
 use common_entity::{
-    ExecutionErrorV3, ExecutionResultV3, LogAttr, LogEntry, LogEntrySequencer, PresequencedCommand,
-    ReplayableDomainEvent, ReplayableEntityChanges, Shard,
+    ExecutionErrorV3, ExecutionResultV3, LogAttr, LogEntry, LogEntrySequencer,
+    ReplayableEntityChanges, Shard,
 };
 use example_core_entity::PlaceSpotOrderPipelineV2Cmd;
 use example_core_use_case::pipe::place_spot_order_pipeline_v2::{
@@ -74,21 +74,6 @@ impl LogAttr for SpotBlockCmdV2 {
 
     fn logical_ts(&self) -> u64 {
         self.items.last().map_or(0, LogEntry::logical_ts)
-    }
-}
-
-impl PresequencedCommand for SpotBlockCmdV2 {
-    fn contains_event_metadata(&self, event: &ReplayableDomainEvent) -> bool {
-        self.items.iter().any(|item| {
-            item.topic() == event.t
-                && item.partition() == event.p
-                && item.lsn() == event.lsn
-                && item.logical_ts() == event.logical_ts
-        })
-    }
-
-    fn allows_empty_events(&self) -> bool {
-        true
     }
 }
 

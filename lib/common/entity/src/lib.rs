@@ -33,7 +33,7 @@ pub use use_case::entity_changes_v3::{
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::executor::{
     DomainEventChanges, DomainEventExecutionResult, DomainEventSink, ExecutionError,
-    ExecutionResult, PresequencedCommand, StateSink, StateSource, UseCaseExecutor,
+    ExecutionResult, StateSink, StateSource, UseCaseExecutor,
 };
 pub use use_case::executor_v3::{
     ExecutionErrorV3, ExecutionOutcomeV3, ExecutionResultV3, StateSinkV3, StateSourceV3,
