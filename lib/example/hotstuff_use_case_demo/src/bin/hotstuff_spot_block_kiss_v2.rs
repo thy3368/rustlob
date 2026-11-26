@@ -408,7 +408,6 @@ fn project_result(
 struct CommitNotice {
     replica_index: usize,
     block_hash: CryptoHash,
-    data: Data,
     height: BlockHeight,
 }
 
@@ -447,32 +446,23 @@ fn observe_commit(
     confirmations: &mut HashMap<u64, Confirmation>,
 ) {
     let snapshot = cameras[notice.replica_index].snapshot();
-    let Ok(batch) = decode_batch(&notice.data) else {
-        return;
-    };
-    #[cfg(test)]
-    if !batch.commands.is_empty() {
-        eprintln!("captured command commit replica={} height={}", notice.replica_index, notice.height.int());
-    }
-    for brokered in batch.commands {
-        let key = result_key(brokered.request_id);
+    let pending_ids: Vec<_> = lock_or_recover(broker).pending.keys().copied().collect();
+    for request_id in pending_ids {
+        let key = result_key(request_id);
         let Some(bytes) = snapshot.committed_app_state(&key) else {
-            #[cfg(test)]
-            eprintln!("missing result replica={}", notice.replica_index);
             continue;
         };
         let Ok(result) = serde_json::from_slice::<StableExecutionResult>(&bytes) else {
             continue;
         };
-        let confirmation =
-            confirmations
-                .entry(brokered.request_id)
-                .or_insert_with(|| Confirmation {
-                    block_hash: notice.block_hash.clone(),
-                    height: notice.height,
-                    result: result.clone(),
-                    replicas: HashSet::new(),
-                });
+        let confirmation = confirmations
+            .entry(request_id)
+            .or_insert_with(|| Confirmation {
+                block_hash: notice.block_hash.clone(),
+                height: notice.height,
+                result: result.clone(),
+                replicas: HashSet::new(),
+            });
         if confirmation.block_hash != notice.block_hash
             || confirmation.height != notice.height
             || confirmation.result != result
@@ -481,8 +471,8 @@ fn observe_commit(
         }
         confirmation.replicas.insert(notice.replica_index);
         if confirmation.replicas.len() == REPLICA_COUNT {
-            lock_or_recover(broker).committed(brokered.request_id);
-            if let Some(reply) = lock_or_recover(replies).remove(&brokered.request_id) {
+            lock_or_recover(broker).committed(request_id);
+            if let Some(reply) = lock_or_recover(replies).remove(&request_id) {
                 let _ = reply.send(CommandExecutionReceipt {
                     request_id: result.request_id,
                     command: result.command,
@@ -494,7 +484,7 @@ fn observe_commit(
                     confirming_replicas: REPLICA_COUNT,
                 });
             }
-            confirmations.remove(&brokered.request_id);
+            confirmations.remove(&request_id);
         }
     }
 }
@@ -504,6 +494,7 @@ struct DemoCluster {
     shutdown: Sender<()>,
     coordinator: Option<JoinHandle<()>>,
     replicas: Vec<Replica<MemStore>>,
+    #[cfg(test)]
     cameras: Vec<BlockTreeCamera<MemStore>>,
 }
 
@@ -548,14 +539,10 @@ impl DemoCluster {
                     .configuration(configuration(signing_key))
                     .on_commit_block(move |event| {
                         let snapshot = commit_camera.snapshot();
-                        if let (Ok(Some(data)), Ok(Some(height))) = (
-                            snapshot.block_data(&event.block),
-                            snapshot.block_height(&event.block),
-                        ) {
+                        if let Ok(Some(height)) = snapshot.block_height(&event.block) {
                             let _ = commit_tx.send(CommitNotice {
                                 replica_index,
                                 block_hash: event.block.clone(),
-                                data,
                                 height,
                             });
                         }
@@ -583,6 +570,7 @@ impl DemoCluster {
             shutdown: shutdown_tx,
             coordinator: Some(coordinator),
             replicas,
+            #[cfg(test)]
             cameras,
         })
     }
@@ -595,6 +583,7 @@ impl DemoCluster {
             .map_err(|_| "timed out waiting for three matching commit confirmations".into())
     }
 
+    #[cfg(test)]
     fn committed_states(&self) -> DemoResult<Vec<State4BuildBlock>> {
         self.cameras
             .iter()
