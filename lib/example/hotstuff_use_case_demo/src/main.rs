@@ -7,8 +7,8 @@ use example_core_use_case::entity::account::coin::Coin;
 use example_core_use_case::entity::account::symbol::Symbol;
 use example_core_use_case::entity::common::identifiers::OrderId;
 use example_core_use_case::{
-    CancelSpotOrderV3Cmd, OrderSide, OrderTif, OrderType, PlaceSpotOrderV3Cmd,
-    PlaceSpotOrderV3OrderCmd, SpotBlockCommand,
+    CancelSpotOrderFsmV3Cmd, OrderGroupRelation, OrderSide, OrderTif, OrderType,
+    PlaceSpotOrderPipelineV2Cmd,
 };
 use hotstuff_rs::events::{CommitBlockEvent, InsertBlockEvent};
 use hotstuff_rs::replica::{Replica, ReplicaSpec};
@@ -19,6 +19,7 @@ use hotstuff_use_case_demo::node::demo_runtime::{
 };
 use hotstuff_use_case_demo::node::http_server::{DEFAULT_HTTP_ADDR, start_http_server};
 use rust_decimal::Decimal;
+use use_case_executor::trading::spot::v3::spot_block_v2::SpotBlockCommandV2;
 
 fn main() -> DemoResult<()> {
     println!("[hotstuff_use_case_demo] 启动 3 节点 HotStuff spot order use case demo");
@@ -37,7 +38,7 @@ fn main() -> DemoResult<()> {
     let network_stubs = mock_network(verifying_keys.iter().copied());
     let init_vs_state = demo_validator_set_state(&verifying_keys);
     let initial_app_state = SpotOrderApp::initial_app_state();
-    let request_queues: Vec<Arc<Mutex<Vec<SpotBlockCommand>>>> = (0..NODE_COUNT)
+    let request_queues: Vec<Arc<Mutex<Vec<SpotBlockCommandV2>>>> = (0..NODE_COUNT)
         .map(|_| Arc::new(Mutex::new(Vec::new())))
         .collect();
     let inserted_payload_blocks = Arc::new(Mutex::new(0usize));
@@ -98,7 +99,7 @@ fn main() -> DemoResult<()> {
         ),
     )?;
 
-    let place_command = PlaceSpotOrderV3Cmd::Single(PlaceSpotOrderV3OrderCmd {
+    let place_command = PlaceSpotOrderPipelineV2Cmd {
         party_id: common_entity::stable_string_entity_id("buyer"),
         order_id: 1,
         symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
@@ -106,9 +107,11 @@ fn main() -> DemoResult<()> {
         price: Decimal::from(100),
         size: Decimal::from(2),
         order_type: OrderType::Limit { tif: OrderTif::Gtc },
+        relation: OrderGroupRelation::Standalone,
         cloid: Some("demo-place-1".to_string()),
-    });
-    let cancel_command = CancelSpotOrderV3Cmd {
+        fee_bps: 10,
+    };
+    let cancel_command = CancelSpotOrderFsmV3Cmd {
         order_id: OrderId::Cloid("demo-place-1".to_string()),
     };
     request_queues
@@ -117,8 +120,8 @@ fn main() -> DemoResult<()> {
         .lock()
         .map_err(|_| "leader request queue poisoned")?
         .extend([
-            SpotBlockCommand::Place(place_command),
-            SpotBlockCommand::Cancel(cancel_command),
+            SpotBlockCommandV2::Place(place_command),
+            SpotBlockCommandV2::Cancel(cancel_command),
         ]);
     println!("[hotstuff_use_case_demo] 已向 leader 队列提交 V3 place/cancel");
 

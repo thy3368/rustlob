@@ -60,9 +60,9 @@ send_command() {
     local status
 
     now="$(date +%s)"
-    order_id="tcp-script-buy-${now}-${seq_no}"
+    order_id="$((now * 1000 + seq_no))"
     cloid="tcp-script-cloid-${now}-${seq_no}"
-    body="$(printf '{"PlaceMatch":{"Single":{"party_id":"buyer","asset":10001,"order_id":"%s","symbol":"BTCUSDT","is_buy":true,"price":"100","size":"2","order_type":{"Limit":{"tif":"ioc"}},"reduce_only":false,"cloid":"%s","base_asset_id":"BTC","quote_asset_id":"USDT","maker_fee_bps":5,"taker_fee_bps":10}}}' "$order_id" "$cloid")"
+    body="$(printf '{"Place":{"party_id":17761778988341252744,"order_id":%s,"symbol":{"id":1,"base":"BTC","quote":"USDT"},"side":"Buy","price":"100","size":"2","order_type":{"Limit":{"tif":"Gtc"}},"relation":"Standalone","cloid":"%s","fee_bps":10}}' "$order_id" "$cloid")"
 
     status="$(
         curl -sS -o /dev/null -w '%{http_code}' \

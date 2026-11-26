@@ -4,10 +4,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ed25519_dalek::SigningKey;
-use example_core_use_case::SpotBlockCommand;
 use hotstuff_rs::events::{CommitBlockEvent, InsertBlockEvent};
 use hotstuff_rs::replica::{Replica, ReplicaSpec};
 use hotstuff_rs::types::data_types::CryptoHash;
+use use_case_executor::trading::spot::v3::spot_block_v2::SpotBlockCommandV2;
 
 use crate::network::tcp_network::TcpNetwork;
 use crate::node::demo_runtime::{
@@ -60,7 +60,7 @@ pub fn run_tcp_node(config: TcpNodeConfig) -> DemoResult<()> {
         demo_validator_set_state(&verifying_keys),
     );
 
-    let request_queue = Arc::new(Mutex::new(Vec::<SpotBlockCommand>::new()));
+    let request_queue = Arc::new(Mutex::new(Vec::<SpotBlockCommandV2>::new()));
     let network = TcpNetwork::bind(my_verifying_key, my_tcp_addr, peer_map)?;
     let configuration = demo_replica_configuration(my_signing_key);
     let node_index = config.node_index;

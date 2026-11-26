@@ -5,7 +5,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
-use example_core_use_case::SpotBlockCommand;
+use use_case_executor::trading::spot::v3::spot_block_v2::SpotBlockCommandV2;
 
 use crate::node::demo_runtime::DemoResult;
 
@@ -13,20 +13,20 @@ pub const DEFAULT_HTTP_ADDR: &str = "127.0.0.1:39001";
 
 #[derive(Clone)]
 struct HttpCommandState {
-    leader_request_queue: Arc<Mutex<Vec<SpotBlockCommand>>>,
+    leader_request_queue: Arc<Mutex<Vec<SpotBlockCommandV2>>>,
 }
 
 async fn post_spot_block_command(
     State(state): State<HttpCommandState>,
-    Json(command): Json<SpotBlockCommand>,
+    Json(command): Json<SpotBlockCommandV2>,
 ) -> Result<StatusCode, (StatusCode, &'static str)> {
     enqueue_spot_block_command(&state.leader_request_queue, command)?;
     Ok(StatusCode::ACCEPTED)
 }
 
 pub fn enqueue_spot_block_command(
-    leader_request_queue: &Arc<Mutex<Vec<SpotBlockCommand>>>,
-    command: SpotBlockCommand,
+    leader_request_queue: &Arc<Mutex<Vec<SpotBlockCommandV2>>>,
+    command: SpotBlockCommandV2,
 ) -> Result<(), (StatusCode, &'static str)> {
     let mut queue = leader_request_queue.lock().map_err(|_| {
         (
@@ -40,7 +40,7 @@ pub fn enqueue_spot_block_command(
 
 pub fn start_http_server(
     addr: SocketAddr,
-    leader_request_queue: Arc<Mutex<Vec<SpotBlockCommand>>>,
+    leader_request_queue: Arc<Mutex<Vec<SpotBlockCommandV2>>>,
 ) -> DemoResult<std::thread::JoinHandle<()>> {
     let listener = TcpListener::bind(addr)?;
     listener.set_nonblocking(true)?;
@@ -87,14 +87,14 @@ mod tests {
     use example_core_use_case::entity::account::coin::Coin;
     use example_core_use_case::entity::account::symbol::Symbol;
     use example_core_use_case::{
-        OrderSide, OrderTif, OrderType, PlaceSpotOrderV3Cmd, PlaceSpotOrderV3OrderCmd,
+        OrderGroupRelation, OrderSide, OrderTif, OrderType, PlaceSpotOrderPipelineV2Cmd,
     };
     use rust_decimal::Decimal;
 
     use super::*;
 
-    fn place_match_command(order_id: u64, cloid: &str) -> SpotBlockCommand {
-        SpotBlockCommand::Place(PlaceSpotOrderV3Cmd::Single(PlaceSpotOrderV3OrderCmd {
+    fn place_match_command(order_id: u64, cloid: &str) -> SpotBlockCommandV2 {
+        SpotBlockCommandV2::Place(PlaceSpotOrderPipelineV2Cmd {
             party_id: common_entity::stable_string_entity_id("buyer"),
             order_id,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
@@ -102,8 +102,10 @@ mod tests {
             price: Decimal::from(100),
             size: Decimal::ONE,
             order_type: OrderType::Limit { tif: OrderTif::Gtc },
+            relation: OrderGroupRelation::Standalone,
             cloid: Some(cloid.to_string()),
-        }))
+            fee_bps: 10,
+        })
     }
 
     #[test]

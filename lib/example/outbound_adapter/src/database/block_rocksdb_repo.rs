@@ -101,6 +101,8 @@ pub enum BuildBlockRocksDbError {
     InvalidOrder { order_id: u64, message: String },
     #[error("failed to rebuild LOB for order {order_id}: {message}")]
     Lob { order_id: u64, message: String },
+    #[error("invalid build-block snapshot: {0}")]
+    InvalidSnapshot(String),
 }
 
 pub struct BlockRocksDbRepo {
@@ -189,82 +191,45 @@ impl BlockRocksDbRepo {
         if metadata.version != 1 {
             return Err(BuildBlockRocksDbError::UnsupportedVersion(metadata.version));
         }
-        let mut state = State4BuildBlock {
-            next_trade_id: metadata.next_trade_id,
-            maker_fee_bps: metadata.maker_fee_bps,
-            taker_fee_bps: metadata.taker_fee_bps,
-            spot_symbol_lob: BTreeMap::new(),
-            user_symbol_quote_balance: BTreeMap::new(),
-            user_symbol_base_balance: BTreeMap::new(),
-            user_symbol_trades: BTreeMap::new(),
-            user_symbol_orders: BTreeMap::new(),
-        };
-        let mut projected_orders: BTreeMap<(String, Symbol), Vec<(usize, SpotOrderV7)>> =
-            BTreeMap::new();
-        for id in metadata.order_ids {
+        let mut orders = BTreeMap::new();
+        let mut markets = BTreeSet::new();
+        for &id in &metadata.order_ids {
             let record: StoredOrder = self.load_entity(ORDER_NAMESPACE, id, "order")?;
-            let order = SpotOrderV7::from_record_at(record.order, record.command_index).map_err(
-                |error| BuildBlockRocksDbError::InvalidOrder {
-                    order_id: id,
-                    message: error.to_string(),
-                },
-            )?;
-            projected_orders
-                .entry((record.user_id, record.symbol))
-                .or_default()
-                .push((record.ordinal, order));
-        }
-        for orders in projected_orders.values_mut() {
-            orders.sort_by_key(|(ordinal, _)| *ordinal);
-        }
-        for (key, orders) in projected_orders {
-            state
-                .user_symbol_orders
-                .insert(key, orders.into_iter().map(|(_, order)| order).collect());
-        }
-        for orders in state.user_symbol_orders.values() {
-            for order in orders {
-                let symbol = order.order_base().symbol;
-                state
-                    .spot_symbol_lob
-                    .entry(symbol)
-                    .or_insert_with(|| LocalLobBtree::new(symbol))
-                    .insert_order(order.clone())
-                    .map_err(|error| BuildBlockRocksDbError::Lob {
-                        order_id: Entity::entity_id(order),
-                        message: error.to_string(),
-                    })?;
+            markets.insert(record.symbol);
+            if orders.insert(id, record).is_some() {
+                return Err(BuildBlockRocksDbError::DuplicateIdentity {
+                    entity: "order",
+                    id,
+                });
             }
         }
-        for id in metadata.balance_ids {
+        let mut balances = BTreeMap::new();
+        for &id in &metadata.balance_ids {
             let record: StoredBalance = self.load_entity(BALANCE_NAMESPACE, id, "balance")?;
-            let target = match record.kind {
-                BalanceKind::Base => &mut state.user_symbol_base_balance,
-                BalanceKind::Quote => &mut state.user_symbol_quote_balance,
-            };
-            target.insert((record.user_id, record.symbol), record.balance);
-        }
-        let mut projected_trades: BTreeMap<(String, Symbol), Vec<(usize, SpotTradeV3)>> =
-            BTreeMap::new();
-        for id in metadata.trade_ids {
-            let record: StoredTrade = self.load_entity(TRADE_NAMESPACE, id, "trade")?;
-            let trade = record.trade.into_entity();
-            for projection in record.projections {
-                projected_trades
-                    .entry((projection.user_id, projection.symbol))
-                    .or_default()
-                    .push((projection.ordinal, trade.clone()));
+            if balances.insert(id, record).is_some() {
+                return Err(BuildBlockRocksDbError::DuplicateIdentity {
+                    entity: "balance",
+                    id,
+                });
             }
         }
-        for trades in projected_trades.values_mut() {
-            trades.sort_by_key(|(ordinal, _)| *ordinal);
+        let mut trades = BTreeMap::new();
+        for &id in &metadata.trade_ids {
+            let record: StoredTrade = self.load_entity(TRADE_NAMESPACE, id, "trade")?;
+            if trades.insert(id, record).is_some() {
+                return Err(BuildBlockRocksDbError::DuplicateIdentity {
+                    entity: "trade",
+                    id,
+                });
+            }
         }
-        for (key, trades) in projected_trades {
-            state
-                .user_symbol_trades
-                .insert(key, trades.into_iter().map(|(_, trade)| trade).collect());
-        }
-        Ok(Some(state))
+        Ok(Some(rebuild_state(
+            metadata,
+            markets.into_iter().collect(),
+            orders,
+            balances,
+            trades,
+        )?))
     }
 
     fn load_entity<T: for<'de> Deserialize<'de>>(
@@ -279,6 +244,218 @@ impl BlockRocksDbRepo {
             .ok_or(BuildBlockRocksDbError::MissingEntity { entity, id })?;
         Ok(bincode::deserialize(&bytes)?)
     }
+}
+
+const CANONICAL_SNAPSHOT_VERSION: u8 = 1;
+
+#[derive(Serialize, Deserialize)]
+struct CanonicalSnapshot {
+    version: u8,
+    metadata: Metadata,
+    markets: Vec<Symbol>,
+    orders: BTreeMap<u64, StoredOrder>,
+    balances: BTreeMap<u64, StoredBalance>,
+    trades: BTreeMap<u64, StoredTrade>,
+}
+
+/// 将构块状态编码为与 map 插入顺序无关的版本化 canonical 快照。
+pub fn encode_build_block_state(
+    state: &State4BuildBlock,
+) -> Result<Vec<u8>, BuildBlockRocksDbError> {
+    let normalized = normalize(state)?;
+    bincode::serialize(&CanonicalSnapshot {
+        version: CANONICAL_SNAPSHOT_VERSION,
+        metadata: Metadata::from_normalized(state, &normalized),
+        markets: state.spot_symbol_lob.keys().copied().collect(),
+        orders: normalized.orders,
+        balances: normalized.balances,
+        trades: normalized.trades,
+    })
+    .map_err(Into::into)
+}
+
+/// 从 canonical 快照恢复完整订单、余额、成交投影和 LOB。
+pub fn decode_build_block_state(bytes: &[u8]) -> Result<State4BuildBlock, BuildBlockRocksDbError> {
+    let snapshot: CanonicalSnapshot = bincode::deserialize(bytes)?;
+    if snapshot.version != CANONICAL_SNAPSHOT_VERSION {
+        return Err(BuildBlockRocksDbError::UnsupportedVersion(snapshot.version));
+    }
+    validate_snapshot_ids(&snapshot)?;
+    rebuild_state(
+        snapshot.metadata,
+        snapshot.markets,
+        snapshot.orders,
+        snapshot.balances,
+        snapshot.trades,
+    )
+}
+
+fn validate_snapshot_ids(snapshot: &CanonicalSnapshot) -> Result<(), BuildBlockRocksDbError> {
+    let actual = [
+        snapshot.orders.keys().copied().collect::<Vec<_>>(),
+        snapshot.balances.keys().copied().collect::<Vec<_>>(),
+        snapshot.trades.keys().copied().collect::<Vec<_>>(),
+    ];
+    let expected = [
+        &snapshot.metadata.order_ids,
+        &snapshot.metadata.balance_ids,
+        &snapshot.metadata.trade_ids,
+    ];
+    for (entity, (expected, actual)) in ["order", "balance", "trade"]
+        .into_iter()
+        .zip(expected.into_iter().zip(actual))
+    {
+        if expected != &actual {
+            return Err(BuildBlockRocksDbError::InvalidSnapshot(format!(
+                "{entity} identity index does not match records"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn rebuild_state(
+    metadata: Metadata,
+    markets: Vec<Symbol>,
+    orders: BTreeMap<u64, StoredOrder>,
+    balances: BTreeMap<u64, StoredBalance>,
+    trades: BTreeMap<u64, StoredTrade>,
+) -> Result<State4BuildBlock, BuildBlockRocksDbError> {
+    if metadata.version != 1 {
+        return Err(BuildBlockRocksDbError::UnsupportedVersion(metadata.version));
+    }
+    let mut state = State4BuildBlock {
+        next_trade_id: metadata.next_trade_id,
+        maker_fee_bps: metadata.maker_fee_bps,
+        taker_fee_bps: metadata.taker_fee_bps,
+        spot_symbol_lob: BTreeMap::new(),
+        user_symbol_quote_balance: BTreeMap::new(),
+        user_symbol_base_balance: BTreeMap::new(),
+        user_symbol_trades: BTreeMap::new(),
+        user_symbol_orders: BTreeMap::new(),
+    };
+    for symbol in markets {
+        if state
+            .spot_symbol_lob
+            .insert(symbol, LocalLobBtree::new(symbol))
+            .is_some()
+        {
+            return Err(BuildBlockRocksDbError::InvalidSnapshot(
+                "duplicate market symbol".to_owned(),
+            ));
+        }
+    }
+    let mut projected_orders: BTreeMap<(String, Symbol), Vec<(usize, SpotOrderV7)>> =
+        BTreeMap::new();
+    for (id, record) in orders {
+        let order =
+            SpotOrderV7::from_record_at(record.order, record.command_index).map_err(|error| {
+                BuildBlockRocksDbError::InvalidOrder {
+                    order_id: id,
+                    message: error.to_string(),
+                }
+            })?;
+        if Entity::entity_id(&order) != id {
+            return Err(BuildBlockRocksDbError::InvalidSnapshot(format!(
+                "order record identity {id} does not match entity"
+            )));
+        }
+        projected_orders
+            .entry((record.user_id, record.symbol))
+            .or_default()
+            .push((record.ordinal, order));
+    }
+    for (key, mut values) in projected_orders {
+        values.sort_by_key(|(ordinal, _)| *ordinal);
+        ensure_contiguous_ordinals("order", values.iter().map(|(ordinal, _)| *ordinal))?;
+        state
+            .user_symbol_orders
+            .insert(key, values.into_iter().map(|(_, value)| value).collect());
+    }
+    for orders in state.user_symbol_orders.values() {
+        for order in orders {
+            let symbol = order.order_base().symbol;
+            state
+                .spot_symbol_lob
+                .get_mut(&symbol)
+                .ok_or_else(|| {
+                    BuildBlockRocksDbError::InvalidSnapshot(
+                        "order references an unknown market".to_owned(),
+                    )
+                })?
+                .insert_order(order.clone())
+                .map_err(|error| BuildBlockRocksDbError::Lob {
+                    order_id: Entity::entity_id(order),
+                    message: error.to_string(),
+                })?;
+        }
+    }
+    for (id, record) in balances {
+        if Entity::entity_id(&record.balance) != id {
+            return Err(BuildBlockRocksDbError::InvalidSnapshot(format!(
+                "balance record identity {id} does not match entity"
+            )));
+        }
+        let target = match record.kind {
+            BalanceKind::Base => &mut state.user_symbol_base_balance,
+            BalanceKind::Quote => &mut state.user_symbol_quote_balance,
+        };
+        if target
+            .insert((record.user_id, record.symbol), record.balance)
+            .is_some()
+        {
+            return Err(BuildBlockRocksDbError::InvalidSnapshot(
+                "duplicate balance projection".to_owned(),
+            ));
+        }
+    }
+    let mut projected_trades: BTreeMap<(String, Symbol), Vec<(usize, SpotTradeV3)>> =
+        BTreeMap::new();
+    for (id, record) in trades {
+        let trade = record.trade.into_entity();
+        if Entity::entity_id(&trade) != id {
+            return Err(BuildBlockRocksDbError::InvalidSnapshot(format!(
+                "trade record identity {id} does not match entity"
+            )));
+        }
+        let mut seen = BTreeSet::new();
+        for projection in record.projections {
+            if !seen.insert((
+                projection.user_id.clone(),
+                projection.symbol,
+                projection.ordinal,
+            )) {
+                return Err(BuildBlockRocksDbError::InconsistentTradeProjection { trade_id: id });
+            }
+            projected_trades
+                .entry((projection.user_id, projection.symbol))
+                .or_default()
+                .push((projection.ordinal, trade.clone()));
+        }
+    }
+    for (key, mut values) in projected_trades {
+        values.sort_by_key(|(ordinal, _)| *ordinal);
+        ensure_contiguous_ordinals("trade", values.iter().map(|(ordinal, _)| *ordinal))?;
+        state
+            .user_symbol_trades
+            .insert(key, values.into_iter().map(|(_, value)| value).collect());
+    }
+    Ok(state)
+}
+
+fn ensure_contiguous_ordinals(
+    entity: &'static str,
+    ordinals: impl Iterator<Item = usize>,
+) -> Result<(), BuildBlockRocksDbError> {
+    if ordinals
+        .enumerate()
+        .any(|(expected, actual)| expected != actual)
+    {
+        return Err(BuildBlockRocksDbError::InvalidSnapshot(format!(
+            "{entity} projection ordinals are not contiguous"
+        )));
+    }
+    Ok(())
 }
 
 pub fn diff_build_block_state(
@@ -731,6 +908,37 @@ mod tests {
         store.db.put(METADATA_KEY, b"invalid").unwrap();
         assert!(matches!(
             store.load_state(),
+            Err(BuildBlockRocksDbError::Codec(_))
+        ));
+    }
+
+    #[test]
+    fn canonical_snapshot_round_trips_empty_market_and_is_stable() {
+        let mut state = empty_state();
+        let symbol = Symbol::new(1, Coin::BTC, Coin::USDT);
+        state
+            .spot_symbol_lob
+            .insert(symbol, LocalLobBtree::new(symbol));
+
+        let first = encode_build_block_state(&state).unwrap();
+        let restored = decode_build_block_state(&first).unwrap();
+
+        assert_eq!(restored, state);
+        assert_eq!(encode_build_block_state(&restored).unwrap(), first);
+    }
+
+    #[test]
+    fn canonical_snapshot_rejects_unknown_version_and_corrupt_data() {
+        let bytes = encode_build_block_state(&empty_state()).unwrap();
+        let mut snapshot: CanonicalSnapshot = bincode::deserialize(&bytes).unwrap();
+        snapshot.version = 2;
+
+        assert!(matches!(
+            decode_build_block_state(&bincode::serialize(&snapshot).unwrap()),
+            Err(BuildBlockRocksDbError::UnsupportedVersion(2))
+        ));
+        assert!(matches!(
+            decode_build_block_state(b"invalid"),
             Err(BuildBlockRocksDbError::Codec(_))
         ));
     }
