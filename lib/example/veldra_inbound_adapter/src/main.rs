@@ -2,7 +2,6 @@ use std::io;
 
 use actix_web::{App, HttpServer};
 use example_outbound_adapter::InMemoryPlaceOrderOutbound;
-use example_veldra_inbound_adapter::bootstrap::on_command::exchange::http::build_exchange_scope;
 use example_veldra_inbound_adapter::bootstrap::on_command::exchange_v2::build_exchange_v2_scope;
 use example_veldra_inbound_adapter::bootstrap::on_command::info::http::build_info_scope;
 use example_veldra_inbound_adapter::bootstrap::on_event::spot::on_aeron_match_spot_order::run_match_spot_order_aeron;
@@ -49,7 +48,6 @@ async fn main() -> io::Result<()> {
     // 启动 HTTP API 服务。
     HttpServer::new(|| {
         App::new()
-            .service(build_exchange_scope())
             .service(build_exchange_v2_scope())
             .service(build_info_scope())
     })

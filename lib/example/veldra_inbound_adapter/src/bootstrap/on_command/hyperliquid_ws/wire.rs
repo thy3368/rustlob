@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
-use crate::bootstrap::on_command::exchange::ExchangeActionRequestWire;
+use crate::bootstrap::on_command::exchange_v2::ExchangeRequestV2;
 use crate::bootstrap::on_command::hyperliquid_ws::error::HyperliquidWsError;
 
 type ExtraFields = BTreeMap<String, JsonValue>;
@@ -110,7 +110,7 @@ pub enum WsPostRequestWire {
     #[serde(rename = "info")]
     Info(JsonValue),
     #[serde(rename = "action")]
-    Action(Box<ExchangeActionRequestWire>),
+    Action(Box<ExchangeRequestV2>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -812,25 +812,21 @@ mod tests {
             serde_json::to_value(WsClientMessageWire::Ping(PingWire)).expect("ping serializes");
         assert_eq!(ping, json!({ "method": "ping" }));
 
+        let request = serde_json::from_value(json!({
+            "action": { "type": "noop" },
+            "nonce": 1710000000000u64,
+            "signature": {
+                "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                "v": 27
+            },
+            "vaultAddress": null,
+            "expiresAfter": null
+        }))
+        .expect("v2 action parses");
         let action = serde_json::to_value(WsClientMessageWire::Post {
             id: 9,
-            request: Box::new(WsPostRequestWire::Action(Box::new(
-                ExchangeActionRequestWire {
-                    action: crate::bootstrap::on_command::exchange::ExchangeActionWire::Noop,
-                    common: crate::bootstrap::on_command::exchange::CommonExchangeFields {
-                        nonce: 1710000000000,
-                        signature: crate::bootstrap::on_command::exchange::SignatureWire {
-                            r: "0x1111111111111111111111111111111111111111111111111111111111111111"
-                                .to_string(),
-                            s: "0x2222222222222222222222222222222222222222222222222222222222222222"
-                                .to_string(),
-                            v: 27,
-                        },
-                        vault_address: None,
-                        expires_after: None,
-                    },
-                },
-            ))),
+            request: Box::new(WsPostRequestWire::Action(Box::new(request))),
         })
         .expect("action post serializes");
         assert_eq!(
@@ -852,6 +848,44 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn v2_actions_round_trip_through_websocket_post_wire() {
+        let actions = [
+            json!({"type": "noop"}),
+            json!({
+                "type": "order",
+                "orders": [{
+                    "a": 10000, "b": true, "p": "1", "s": "2", "r": false,
+                    "t": {"limit": {"tif": "Gtc"}, "trigger": null}, "c": null
+                }],
+                "grouping": "na",
+                "builder": null
+            }),
+            json!({"type": "futureAction"}),
+        ];
+
+        for action in actions {
+            let wire = json!({
+                "type": "action",
+                "payload": {
+                    "action": action,
+                    "nonce": 1710000000000u64,
+                    "signature": {
+                        "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                        "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+                        "v": 27
+                    }
+                }
+            });
+            let parsed: WsPostRequestWire =
+                serde_json::from_value(wire.clone()).expect("websocket v2 action parses");
+            assert_eq!(
+                serde_json::to_value(parsed).expect("websocket v2 action serializes"),
+                wire
+            );
+        }
     }
 
     #[test]

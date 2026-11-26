@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use example_core_use_case::BalanceV2;
 use example_outbound_adapter::database::{
-    decode_build_block_state, encode_build_block_state, State4BuildBlock,
+    State4BuildBlock, decode_build_block_state, encode_build_block_state,
 };
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 use openraft::storage::{LogFlushed, RaftLogStorage, RaftStateMachine};
@@ -19,7 +19,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::sync::Mutex;
 use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::build_block_spot_v3;
 
-use crate::model::{symbol, SpotRaftRequest, SpotRaftResponse, USER_ID};
+use crate::model::{SpotRaftRequest, SpotRaftResponse, USER_ID, symbol};
 
 openraft::declare_raft_types!(
     pub TypeConfig:
