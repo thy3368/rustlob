@@ -3018,21 +3018,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "example_inbound_adapter"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "anyhow",
- "axum 0.7.9",
- "entity",
- "example_core_use_case",
- "example_outbound_adapter",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "example_outbound_adapter"
 version = "0.1.0"
 dependencies = [

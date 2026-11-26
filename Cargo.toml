@@ -16,7 +16,6 @@ members = [
     # lib/example
     "lib/example/dex_inbound_adapter",
     "lib/example/entity",
-    "lib/example/inbound_adapter",
     "lib/example/outbound_adapter",
     "lib/example/veldra_inbound_adapter",
     "lib/example/hotstuff_use_case_demo",

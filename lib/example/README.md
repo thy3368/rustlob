@@ -1,16 +1,16 @@
-# clean_arch_commandusecase2 示例
+# `lib/example` 架构说明
 
-这个目录下放了 3 个 crate：
+核心链路由以下角色组成：
 
-- `core`
-- `inbound_adapter`
-- `outbound_adapter`
+- `entity` 与 `use_case`（core）
+- `veldra_inbound_adapter` 与 `dex_inbound_adapter`（adapter.inbound）
+- `outbound_adapter`（adapter.outbound）
 
 目标是演示你要的两条链路：
 
-- 调用链路：`inbound_adapter -> core -> outbound_adapter`
+- 调用链路：`veldra_inbound_adapter / dex_inbound_adapter -> core -> outbound_adapter`
 - 依赖链路：
-  - `inbound_adapter -> core`
+  - `veldra_inbound_adapter / dex_inbound_adapter -> core`
   - `outbound_adapter -> core`
   - `core` 不依赖任何 adapter
 
@@ -25,12 +25,9 @@
 
 ### inbound
 
-- `http.rs` 把 HTTP 风格请求 DTO 翻译成 `CommandEnvelope<SpotOrderV2CommandV3>`
-- `http.rs` 也持有 `POST /orders` 的 route / handler / error mapping
-- `cli.rs` 把 CLI 风格命令 DTO 翻译成 `CommandEnvelope<SpotOrderV2CommandV3>`
-- `cli.rs` 也持有参数解析和 usage 文案
-- 两个入口都调用 `CommandUseCaseExecutor2`
-- 两个入口各自用 reply mapper 把领域事件翻译成对外响应
+- `veldra_inbound_adapter` 接收交易命令、事件和定时任务，并完成入口编排
+- `dex_inbound_adapter` 接收 DEX 命令、事件和定时触发
+- 入站 adapter 负责把外围输入翻译为 core 可接受的 command/query，不承载核心业务规则
 
 ### outbound
 
@@ -50,12 +47,11 @@
 
 这里不再保留 `composition_root` crate。
 
-最外层机制只存在于 `example_inbound_adapter/examples/*`：
+最外层机制由现存 inbound adapter 的启动入口和 bootstrap 模块负责：
 
-- 组装具体 outbound 实现
-- 启动 HTTP runtime 和 worker loop
-- 通过 broker message 驱动后两个 use case
-- 提供 demo 级别的 `GET /snapshot`
+- `veldra_inbound_adapter/src/main.rs`
+- `veldra_inbound_adapter/src/bin/*`
+- `veldra_inbound_adapter/src/bootstrap/*`
 
 本例里的底层技术细节仍然藏在 `outbound_adapter` 内部：
 
@@ -77,14 +73,15 @@ adapter
   outbound_adapter
 
 infra
-  cargo examples / scripts
+  inbound bootstrap / runtime
   in-memory store, std::sync::Mutex
 ```
 
 ### source dependency view
 
 ```text
-inbound_adapter -> core
+veldra_inbound_adapter -> core
+dex_inbound_adapter -> core
 outbound_adapter -> core
 core -> common_entity
 ```
@@ -92,84 +89,14 @@ core -> common_entity
 ### call flow view
 
 ```text
-request
-  -> inbound_adapter
+request / event / timer
+  -> veldra_inbound_adapter / dex_inbound_adapter
   -> core.use_case
   -> outbound_adapter(use-case specific).load_state
   -> outbound_adapter(use-case specific).persist
   -> outbound_adapter(use-case specific).replay
   -> outbound_adapter(use-case specific).publish
-  -> inbound_adapter.http_reply_mapper / cli_reply_mapper
   -> response
 
 ```
 
-## Supported Inbound Styles
-
-- HTTP: `handle_place_order_http(...)`
-- HTTP: `handle_deposit_quote_http(...)`
-- CLI: `run_place_order_cli(...)`
-- CLI: `run_deposit_quote_cli(...)`
-
-这些入口都只做输入翻译和输出翻译，不直接 new outbound。
-HTTP 入口目前同时支持：
-
-- `axum`
-- `actix-web`
-
-## Demo Binaries
-
-可以直接运行 demo examples：
-
-```bash
-cargo run -p example_inbound_adapter --example http_demo
-cargo run -p example_inbound_adapter --example http_actix_demo
-cargo run -p example_inbound_adapter --example cli_demo -- trader-1 BTCUSDT 2 100
-cargo run -p example_inbound_adapter --example cli_deposit_demo -- trader-1 200
-```
-
-### `http_demo`
-
-- 启动真实 HTTP 服务，默认监听 `127.0.0.1:3001`
-- 提供四个路由：
-  - `POST /orders`
-  - `POST /deposits/quote`
-  - `POST /withdrawals/quote`
-  - `GET /snapshot`
-- `POST /orders` 先进入 `inbound_adapter.http`
-- 后续撮合和结算通过 worker 消费 broker message，再进入 `inbound_adapter.event`
-- 启动地址可用环境变量 `HTTP_DEMO_ADDR` 覆盖
-
-### `http_actix_demo`
-
-- 启动真实 HTTP 服务，默认监听 `127.0.0.1:3002`
-- 同样暴露：
-  - `POST /orders`
-  - `POST /deposits/quote`
-  - `POST /withdrawals/quote`
-  - `GET /snapshot`
-- `POST /orders` 仍然先走 `inbound_adapter.http`
-- 启动地址可用环境变量 `HTTP_ACTIX_DEMO_ADDR` 覆盖
-
-示例：
-
-```bash
-curl -sS -X POST http://127.0.0.1:3001/orders \
-  -H 'content-type: application/json' \
-  -d '{
-    "trace_id":"trace-http-demo",
-    "command_id":"cmd-http-demo",
-    "trader_id":"trader-1",
-    "symbol":"BTCUSDT",
-    "qty":3,
-    "price":100
-  }'
-
-curl -sS http://127.0.0.1:3001/snapshot
-```
-
-### `cli_demo`
-
-- 模拟一个 CLI 命令入口
-- 支持位置参数：`<trader_id> <symbol> <qty> <price>`
-- 不传参数时使用默认值：`trader-1 BTCUSDT 2 100`

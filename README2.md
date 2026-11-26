@@ -42,7 +42,6 @@ Command + GivenState -> Changes -> ReplayableEvents
 ### Adapter
 
 - [`lib/example/use_case_executor/`](lib/example/use_case_executor/)：将用例、状态访问和 outbound 调用组合成可复用的执行流程，当前重点覆盖现货订单及区块执行。
-- [`lib/example/inbound_adapter/`](lib/example/inbound_adapter/)：HTTP、CLI 入站适配，以及 API 描述生成。当前提供 Axum 和 Actix Web demo。
 - [`lib/example/outbound_adapter/`](lib/example/outbound_adapter/)：内存和 MySQL 状态访问、事件持久化与回放、事件发布、broker，以及现货交易 outbound。
 - [`lib/example/veldra_inbound_adapter/`](lib/example/veldra_inbound_adapter/)：面向交易命令、事件和定时任务的入口编排，包含交易和信息 API 的接入路径。
 - [`lib/example/dex_inbound_adapter/`](lib/example/dex_inbound_adapter/)：DEX 请求的入站示例。
@@ -57,9 +56,8 @@ Command + GivenState -> Changes -> ReplayableEvents
 以使用执行器的交易入口为代表，当前架构可以概括为：
 
 ```text
-inbound_adapter ─────────┐
-veldra_inbound_adapter ──┼──> use_case_executor ───> outbound_adapter
-dex_inbound_adapter ─────┘              │
+veldra_inbound_adapter ──┐
+dex_inbound_adapter ─────┴──> use_case_executor ───> outbound_adapter
                                        v
                               entity + use_case
 ```
@@ -69,65 +67,9 @@ dex_inbound_adapter ─────┘              │
 - `entity` 与 `use_case` 不依赖 inbound adapter；
 - `outbound_adapter` 实现 core 所需的状态、事件和外部调用端口；
 - 具体 demo 入口负责装配实现；
-- HTTP/CLI 示例为了保持简单，部分路径会直接绑定特定的 use case 和 outbound；这不改变 core 与 adapter 的边界；
 - outbound 不把数据库或 broker 规则反向塞入实体和用例。
 
 完整的目录级说明见 [`lib/example/README.md`](lib/example/README.md)。
-
-## 可运行示例
-
-以下命令均从仓库根目录执行。
-
-### HTTP
-
-```bash
-cargo run -p example_inbound_adapter --example http_demo
-```
-
-默认监听 `127.0.0.1:3001`，可通过 `HTTP_DEMO_ADDR` 覆盖。提供：
-
-- `POST /orders`
-- `POST /deposits/quote`
-- `POST /withdrawals/quote`
-- `GET /snapshot`
-
-Actix Web 版本：
-
-```bash
-cargo run -p example_inbound_adapter --example http_actix_demo
-```
-
-默认监听 `127.0.0.1:3002`，可通过 `HTTP_ACTIX_DEMO_ADDR` 覆盖。
-
-### CLI
-
-现货下单：
-
-```bash
-cargo run -p example_inbound_adapter --example cli_demo -- trader-1 BTCUSDT 2 100
-```
-
-入金报价：
-
-```bash
-cargo run -p example_inbound_adapter --example cli_deposit_demo -- trader-1 200
-```
-
-出金报价：
-
-```bash
-cargo run -p example_inbound_adapter --example cli_withdraw_demo -- trader-1 200
-```
-
-### API 描述
-
-`example_inbound_adapter` 还提供 API 描述生成示例：
-
-```bash
-```
-
-生成或维护的描述文件位于：
-
 
 ## 测试与质量门禁
 
@@ -147,7 +89,6 @@ cargo test -p example_core_use_case
 入站和事件入口测试：
 
 ```bash
-cargo test -p example_inbound_adapter
 cargo test -p example_veldra_inbound_adapter
 ```
 
@@ -168,7 +109,6 @@ rustlob/
 │   │   ├── entity/              # 领域实体与规则
 │   │   ├── use_case/            # StateMachineV2 业务用例
 │   │   ├── use_case_executor/   # 用例执行编排
-│   │   ├── inbound_adapter/     # HTTP、CLI 和 API 描述入口
 │   │   ├── outbound_adapter/    # 状态、事件、broker、MySQL 等 outbound
 │   │   ├── veldra_inbound_adapter/
 │   │   ├── dex_inbound_adapter/

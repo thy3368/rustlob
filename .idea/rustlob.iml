@@ -142,11 +142,8 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/core/l1/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/example/app/composition_root/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/example/core/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/example/inbound_adapter/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/example/outbound_adapter/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/common/entity/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/example/inbound_adapter/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/example/inbound_adapter/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/veldra/core/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/veldra/outbound_adapter/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/veldra/starter/src" isTestSource="false" />
