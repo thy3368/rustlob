@@ -141,7 +141,7 @@ impl ReplayableEntityChanges for SpotBlockExecutionV3 {
     }
 }
 
-pub fn execute_spot_block_v3(
+pub fn build_block_spot_v3(
     cmds: &[LogEntry<SpotBlockCommandV2>],
     state: &mut State4BuildBlock,
 ) -> Result<SpotBlockExecutionV3, SpotBlockErrorV2> {

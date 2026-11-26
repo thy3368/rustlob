@@ -29,7 +29,7 @@ use hotstuff_rs::types::validator_set::{ValidatorSet, ValidatorSetState};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 use rust_decimal::Decimal;
 use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::{
-    SpotBlockCmds, SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
+    SpotBlockCmds, SpotBlockCommandExecutionV3, SpotBlockCommandV2, build_block_spot_v3,
 };
 
 const COMMITTED_RESULT_KEY: &[u8] = b"kiss:spot-block:committed";
@@ -155,7 +155,7 @@ impl KissApp {
     fn execute(command: &SpotBlockCmds) -> Result<State4BuildBlock, String> {
         let mut state = initial_state();
         let execution =
-            execute_spot_block_v3(&command.items, &mut state).map_err(|error| error.to_string())?;
+            build_block_spot_v3(&command.items, &mut state).map_err(|error| error.to_string())?;
 
         let succeeded = matches!(
             execution.command_results.as_slice(),

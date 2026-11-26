@@ -35,7 +35,7 @@ use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::{
-    SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
+    SpotBlockCommandExecutionV3, SpotBlockCommandV2, build_block_spot_v3,
 };
 
 const REPLICA_COUNT: usize = 3;
@@ -299,7 +299,7 @@ impl SpotConsensusApp {
                 continue;
             }
             let execution =
-                execute_spot_block_v3(std::slice::from_ref(&brokered.entry), &mut state)
+                build_block_spot_v3(std::slice::from_ref(&brokered.entry), &mut state)
                     .map_err(|error| error.to_string())?;
             let result = project_result(brokered.request_id, &execution.command_results[0]);
             updates.insert(
@@ -425,7 +425,7 @@ fn coordinate(
     broker: Arc<Mutex<PendingBroker>>,
     replies: Arc<Mutex<HashMap<u64, Sender<CommandExecutionReceipt>>>>,
 ) {
-    let mut confirmations = HashMap::<u64, Confirmation>::new();
+    let mut confirmations = HashMap::<u64, Vec<Confirmation>>::new();
     loop {
         if shutdown_rx.try_recv().is_ok() {
             break;
@@ -443,7 +443,7 @@ fn observe_commit(
     cameras: &[BlockTreeCamera<MemStore>],
     broker: &Arc<Mutex<PendingBroker>>,
     replies: &Arc<Mutex<HashMap<u64, Sender<CommandExecutionReceipt>>>>,
-    confirmations: &mut HashMap<u64, Confirmation>,
+    confirmations: &mut HashMap<u64, Vec<Confirmation>>,
 ) {
     let snapshot = cameras[notice.replica_index].snapshot();
     let pending_ids: Vec<_> = lock_or_recover(broker).pending.keys().copied().collect();
@@ -455,20 +455,22 @@ fn observe_commit(
         let Ok(result) = serde_json::from_slice::<StableExecutionResult>(&bytes) else {
             continue;
         };
-        let confirmation = confirmations
-            .entry(request_id)
-            .or_insert_with(|| Confirmation {
+        let candidates = confirmations.entry(request_id).or_default();
+        let candidate_index = candidates.iter().position(|candidate| {
+            candidate.block_hash == notice.block_hash
+                && candidate.height == notice.height
+                && candidate.result == result
+        });
+        let candidate_index = candidate_index.unwrap_or_else(|| {
+            candidates.push(Confirmation {
                 block_hash: notice.block_hash.clone(),
                 height: notice.height,
                 result: result.clone(),
                 replicas: HashSet::new(),
             });
-        if confirmation.block_hash != notice.block_hash
-            || confirmation.height != notice.height
-            || confirmation.result != result
-        {
-            continue;
-        }
+            candidates.len().saturating_sub(1)
+        });
+        let confirmation = &mut candidates[candidate_index];
         confirmation.replicas.insert(notice.replica_index);
         if confirmation.replicas.len() == REPLICA_COUNT {
             lock_or_recover(broker).committed(request_id);
@@ -765,7 +767,7 @@ mod tests {
         let place = broker.enqueue(place_command()).unwrap();
         let rejected = broker.enqueue(cancel_command("missing")).unwrap();
         let execution =
-            execute_spot_block_v3(&[place.entry.clone(), rejected.entry.clone()], &mut state)
+            build_block_spot_v3(&[place.entry.clone(), rejected.entry.clone()], &mut state)
                 .unwrap();
 
         let applied = project_result(1, &execution.command_results[0]);

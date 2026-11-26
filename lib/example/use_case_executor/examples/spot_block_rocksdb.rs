@@ -13,7 +13,7 @@ use example_outbound_adapter::database::{
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 use rust_decimal::Decimal;
 use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::{
-    SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
+    SpotBlockCommandExecutionV3, SpotBlockCommandV2, build_block_spot_v3,
 };
 
 const USER_ID: &str = "demo-user";
@@ -79,7 +79,7 @@ fn run(path: &Path) -> Result<RunOutcome, Box<dyn Error>> {
         }),
     );
 
-    let execution = execute_spot_block_v3(&[command], &mut after)
+    let execution = build_block_spot_v3(&[command], &mut after)
         .map_err(|error| std::io::Error::other(error.to_string()))?;
     for result in execution.command_results {
         match result {
@@ -302,7 +302,7 @@ mod tests {
             }),
         );
 
-        let execution = execute_spot_block_v3(&[invalid], &mut candidate).unwrap();
+        let execution = build_block_spot_v3(&[invalid], &mut candidate).unwrap();
         assert!(matches!(
             &execution.command_results[0],
             SpotBlockCommandExecutionV3::Place { result: Err(_), .. }

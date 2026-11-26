@@ -22,7 +22,7 @@ use hotstuff_rs::types::update_sets::AppStateUpdates;
 use hotstuff_rs::types::validator_set::{ValidatorSet, ValidatorSetState};
 use serde::Serialize;
 use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::{
-    SpotBlockCmds, SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
+    SpotBlockCmds, SpotBlockCommandExecutionV3, SpotBlockCommandV2, build_block_spot_v3,
 };
 
 pub type DemoResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -143,7 +143,7 @@ impl SpotOrderApp {
             return Ok(None);
         }
         let mut state = decode_build_block_state(parent_state).map_err(|_| ())?;
-        let result = execute_spot_block_v3(&command.items, &mut state).map_err(|_| ())?;
+        let result = build_block_spot_v3(&command.items, &mut state).map_err(|_| ())?;
         let applied_count = result
             .command_results
             .iter()
