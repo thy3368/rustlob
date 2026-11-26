@@ -5,7 +5,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
-use use_case_executor::trading::spot::v3::spot_block_v3_executor::SpotBlockCommandV2;
+use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::SpotBlockCommandV2;
 
 use crate::node::demo_runtime::DemoResult;
 

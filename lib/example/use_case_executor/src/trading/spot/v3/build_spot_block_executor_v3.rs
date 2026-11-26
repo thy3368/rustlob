@@ -20,11 +20,11 @@ use super::cancel_spot_order_executor_v3::execute_cancel_spot_order_v3_in_build_
 use super::place_spot_order_executor_v3::execute_place_spot_order_v3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpotBlockCmdV2 {
+pub struct SpotBlockCmds {
     pub items: Vec<LogEntry<SpotBlockCommandV2>>,
 }
 
-impl SpotBlockCmdV2 {
+impl SpotBlockCmds {
     pub fn validate(&self) -> Result<(), SpotBlockErrorV2> {
         Self::validate_entries(&self.items)
     }
@@ -57,7 +57,7 @@ pub enum SpotBlockCommandV2 {
     Cancel(CancelSpotOrderFsmV3Cmd),
 }
 
-impl Shard for SpotBlockCmdV2 {
+impl Shard for SpotBlockCmds {
     fn topic(&self) -> u8 {
         self.items.last().map_or(0, LogEntry::topic)
     }
@@ -67,7 +67,7 @@ impl Shard for SpotBlockCmdV2 {
     }
 }
 
-impl LogAttr for SpotBlockCmdV2 {
+impl LogAttr for SpotBlockCmds {
     fn lsn(&self) -> u64 {
         self.items.last().map_or(0, LogEntry::lsn)
     }
@@ -145,7 +145,7 @@ pub fn execute_spot_block_v3(
     cmds: &[LogEntry<SpotBlockCommandV2>],
     state: &mut State4BuildBlock,
 ) -> Result<SpotBlockExecutionV3, SpotBlockErrorV2> {
-    SpotBlockCmdV2::validate_entries(cmds)?;
+    SpotBlockCmds::validate_entries(cmds)?;
     let mut command_results = Vec::with_capacity(cmds.len());
     for item in cmds {
         match item.payload().clone() {
@@ -203,46 +203,46 @@ mod tests {
     #[test]
     fn validates_block_sequence_and_shard() {
         assert_eq!(
-            SpotBlockCmdV2 { items: vec![] }.validate(),
+            SpotBlockCmds { items: vec![] }.validate(),
             Err(SpotBlockErrorV2::EmptyCommands)
         );
         assert_eq!(
-            SpotBlockCmdV2 {
+            SpotBlockCmds {
                 items: vec![entry(1, 2, 1, 10), entry(1, 2, 1, 11)],
             }
             .validate(),
             Err(SpotBlockErrorV2::NonIncreasingLsn)
         );
         assert_eq!(
-            SpotBlockCmdV2 {
+            SpotBlockCmds {
                 items: vec![entry(1, 2, 2, 10), entry(1, 2, 1, 11)],
             }
             .validate(),
             Err(SpotBlockErrorV2::NonIncreasingLsn)
         );
         assert_eq!(
-            SpotBlockCmdV2 {
+            SpotBlockCmds {
                 items: vec![entry(1, 2, 1, 10), entry(1, 2, 2, 10)],
             }
             .validate(),
             Err(SpotBlockErrorV2::NonIncreasingLogicalTimestamp)
         );
         assert_eq!(
-            SpotBlockCmdV2 {
+            SpotBlockCmds {
                 items: vec![entry(1, 2, 1, 11), entry(1, 2, 2, 10)],
             }
             .validate(),
             Err(SpotBlockErrorV2::NonIncreasingLogicalTimestamp)
         );
         assert_eq!(
-            SpotBlockCmdV2 {
+            SpotBlockCmds {
                 items: vec![entry(1, 2, 1, 10), entry(1, 3, 2, 11)],
             }
             .validate(),
             Err(SpotBlockErrorV2::MixedShard)
         );
         assert_eq!(
-            SpotBlockCmdV2 {
+            SpotBlockCmds {
                 items: vec![entry(1, 2, 1, 10), entry(1, 2, 2, 11)],
             }
             .validate(),
@@ -262,8 +262,8 @@ mod tests {
 
         for items in cases {
             assert_eq!(
-                SpotBlockCmdV2::validate_entries(&items),
-                SpotBlockCmdV2 {
+                SpotBlockCmds::validate_entries(&items),
+                SpotBlockCmds {
                     items: items.clone()
                 }
                 .validate()

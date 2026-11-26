@@ -21,8 +21,8 @@ use hotstuff_rs::types::data_types::{
 use hotstuff_rs::types::update_sets::AppStateUpdates;
 use hotstuff_rs::types::validator_set::{ValidatorSet, ValidatorSetState};
 use serde::Serialize;
-use use_case_executor::trading::spot::v3::spot_block_v3_executor::{
-    SpotBlockCmdV2, SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
+use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::{
+    SpotBlockCmds, SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
 };
 
 pub type DemoResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -136,7 +136,7 @@ impl SpotOrderApp {
     }
 
     fn execute(
-        command: &SpotBlockCmdV2,
+        command: &SpotBlockCmds,
         parent_state: &[u8],
     ) -> Result<Option<AppStateUpdates>, ()> {
         if command.items.is_empty() {
@@ -229,9 +229,9 @@ impl App<MemDB> for SpotOrderApp {
                 .and_then(|state| Self::execute(command, state).ok())
         });
         let command = if commands.is_empty() || execution.is_some() {
-            command.unwrap_or(SpotBlockCmdV2 { items: Vec::new() })
+            command.unwrap_or(SpotBlockCmds { items: Vec::new() })
         } else {
-            SpotBlockCmdV2 { items: Vec::new() }
+            SpotBlockCmds { items: Vec::new() }
         };
         if !command.items.is_empty() {
             if let Ok(mut queue) = self.request_queue.lock() {
@@ -284,7 +284,7 @@ impl App<MemDB> for SpotOrderApp {
 pub fn presequence_commands(
     block_sequence: u64,
     commands: &[SpotBlockCommandV2],
-) -> Result<SpotBlockCmdV2, &'static str> {
+) -> Result<SpotBlockCmds, &'static str> {
     if commands.len() > u32::MAX as usize || block_sequence > u32::MAX as u64 {
         return Err("spot block sequence or item count overflows deterministic LSN layout");
     }
@@ -305,15 +305,15 @@ pub fn presequence_commands(
             0, 0, lsn, lsn, 0, ordinal, user, command,
         ));
     }
-    Ok(SpotBlockCmdV2 { items })
+    Ok(SpotBlockCmds { items })
 }
 
-pub fn encode_requests(command: &SpotBlockCmdV2) -> Result<Data, serde_json::Error> {
+pub fn encode_requests(command: &SpotBlockCmds) -> Result<Data, serde_json::Error> {
     Ok(Data::new(vec![Datum::new(serde_json::to_vec(command)?)]))
 }
-pub fn decode_requests(data: &Data) -> Result<SpotBlockCmdV2, serde_json::Error> {
+pub fn decode_requests(data: &Data) -> Result<SpotBlockCmds, serde_json::Error> {
     let Some(datum) = data.vec().first() else {
-        return Ok(SpotBlockCmdV2 { items: Vec::new() });
+        return Ok(SpotBlockCmds { items: Vec::new() });
     };
     serde_json::from_slice(datum.bytes())
 }

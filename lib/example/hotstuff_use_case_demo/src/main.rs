@@ -19,7 +19,7 @@ use hotstuff_use_case_demo::node::demo_runtime::{
 };
 use hotstuff_use_case_demo::node::http_server::{DEFAULT_HTTP_ADDR, start_http_server};
 use rust_decimal::Decimal;
-use use_case_executor::trading::spot::v3::spot_block_v3_executor::SpotBlockCommandV2;
+use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::SpotBlockCommandV2;
 
 fn main() -> DemoResult<()> {
     println!("[hotstuff_use_case_demo] 启动 3 节点 HotStuff spot order use case demo");

@@ -12,7 +12,7 @@ use example_outbound_adapter::database::{
 };
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 use rust_decimal::Decimal;
-use use_case_executor::trading::spot::v3::spot_block_v3_executor::{
+use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::{
     SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
 };
 
