@@ -298,9 +298,8 @@ impl SpotConsensusApp {
             if state_get(&key).is_some() {
                 continue;
             }
-            let execution =
-                build_block_spot_v3(std::slice::from_ref(&brokered.entry), &mut state)
-                    .map_err(|error| error.to_string())?;
+            let execution = build_block_spot_v3(std::slice::from_ref(&brokered.entry), &mut state)
+                .map_err(|error| error.to_string())?;
             let result = project_result(brokered.request_id, &execution.command_results[0]);
             updates.insert(
                 key,
