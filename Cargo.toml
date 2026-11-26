@@ -20,6 +20,7 @@ members = [
     "lib/example/outbound_adapter",
     "lib/example/veldra_inbound_adapter",
     "lib/example/hotstuff_use_case_demo",
+    "lib/example/raft_use_case_demo",
     "lib/example/use_case",
     "lib/example/use_case_executor",
     # inbound_adapter

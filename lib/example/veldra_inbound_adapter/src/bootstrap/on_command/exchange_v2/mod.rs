@@ -1,5 +1,6 @@
 mod error;
 mod response;
+mod translator;
 mod wire;
 
 use std::fmt::Debug;
@@ -12,6 +13,7 @@ pub use response::{
     OrderStatusWire, RestingOrderStatusWire, RunningTwapStatusWire, TwapCancelResponseDataWire,
     TwapCancelStatusWire, TwapOrderResponseDataWire, TwapOrderStatusWire,
 };
+pub use translator::{SpotBlockTranslationError, translate_spot_block_execution};
 pub use wire::{ExchangeActionV2, ExchangeRequestV2};
 
 pub fn build_exchange_v2_scope() -> Scope {

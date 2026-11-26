@@ -8,9 +8,13 @@ mod spec_coverage;
 #[cfg(test)]
 mod test_support;
 
+pub mod translate;
+
 pub use actions::cancel::reply::CancelStatusWire;
 pub use actions::cancel::{CancelSpotOrderV2Lookup, CancelSpotOrderV2Request};
 pub use actions::order::PlaceSpotOrderV2Request;
 pub use actions::order::reply::{OrderStatusWire, RestingOrderStatusWire};
 pub use actions::{ExchangeActionRequestWire, ExchangeActionWire};
 pub use common::wire::{CommonExchangeFields, JsonObjectWire, SignatureWire};
+#[cfg(test)]
+pub(crate) use common::wire::{ok_default_response, ok_status_response, ok_statuses_response};

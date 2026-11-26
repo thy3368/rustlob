@@ -17,7 +17,6 @@ example_core_entity = { path = "../entity" }
 lob_repo_v2 = { path = "../../common/lob_repo_v2" }
 mysql = "24.0"
 thiserror = "1"
-openraft = { version = "0.9.21", default-features = false, features = ["serde", "storage-v2"] }
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
 rocksdb = "0.19"
