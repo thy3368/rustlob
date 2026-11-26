@@ -10,9 +10,9 @@ pub struct ExchangeRequestV2 {
     pub action: ExchangeActionV2,
     pub nonce: u64,
     pub signature: SignatureV2,
-    #[serde(rename = "vaultAddress")]
+    #[serde(rename = "vaultAddress", skip_serializing_if = "Option::is_none")]
     pub vault_address: Option<String>,
-    #[serde(rename = "expiresAfter")]
+    #[serde(rename = "expiresAfter", skip_serializing_if = "Option::is_none")]
     pub expires_after: Option<u64>,
 }
 
