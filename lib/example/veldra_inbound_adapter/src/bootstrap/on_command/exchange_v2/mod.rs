@@ -6,8 +6,12 @@ use std::fmt::Debug;
 
 use actix_web::{HttpResponse, Scope, web};
 pub use error::ExchangeV2Error;
-pub use response::ExchangeResponseWire;
-use response::{CancelStatusWire, OrderStatusWire, TwapCancelStatusWire, TwapOrderStatusWire};
+pub use response::{
+    CancelResponseDataWire, CancelStatusWire, ExchangeResponsePayloadWire, ExchangeResponseWire,
+    ExchangeStatusDataWire, ExchangeStatusesDataWire, FilledOrderStatusWire, OrderResponseDataWire,
+    OrderStatusWire, RestingOrderStatusWire, RunningTwapStatusWire, TwapCancelResponseDataWire,
+    TwapCancelStatusWire, TwapOrderResponseDataWire, TwapOrderStatusWire,
+};
 pub use wire::{ExchangeActionV2, ExchangeRequestV2};
 
 pub fn build_exchange_v2_scope() -> Scope {

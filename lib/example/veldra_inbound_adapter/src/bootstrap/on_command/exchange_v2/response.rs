@@ -1,45 +1,42 @@
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ExchangeResponseWire {
     pub status: &'static str,
     pub response: ExchangeResponsePayloadWire,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type")]
 pub enum ExchangeResponsePayloadWire {
     #[serde(rename = "default")]
     Default,
     #[serde(rename = "order")]
-    Order {
-        data: ExchangeStatusesWire<OrderStatusWire>,
-    },
+    Order { data: OrderResponseDataWire },
     #[serde(rename = "cancel")]
-    Cancel {
-        data: ExchangeStatusesWire<CancelStatusWire>,
-    },
+    Cancel { data: CancelResponseDataWire },
     #[serde(rename = "twapCancel")]
-    TwapCancel {
-        data: ExchangeStatusWire<TwapCancelStatusWire>,
-    },
+    TwapCancel { data: TwapCancelResponseDataWire },
     #[serde(rename = "twapOrder")]
-    TwapOrder {
-        data: ExchangeStatusWire<TwapOrderStatusWire>,
-    },
+    TwapOrder { data: TwapOrderResponseDataWire },
 }
 
-#[derive(Debug, Serialize)]
-pub struct ExchangeStatusesWire<TStatus> {
+pub type OrderResponseDataWire = ExchangeStatusesDataWire<OrderStatusWire>;
+pub type CancelResponseDataWire = ExchangeStatusesDataWire<CancelStatusWire>;
+pub type TwapCancelResponseDataWire = ExchangeStatusDataWire<TwapCancelStatusWire>;
+pub type TwapOrderResponseDataWire = ExchangeStatusDataWire<TwapOrderStatusWire>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExchangeStatusesDataWire<TStatus> {
     pub statuses: Vec<TStatus>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ExchangeStatusWire<TStatus> {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ExchangeStatusDataWire<TStatus> {
     pub status: TStatus,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum OrderStatusWire {
     Resting { resting: RestingOrderStatusWire },
@@ -47,12 +44,12 @@ pub enum OrderStatusWire {
     Error { error: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RestingOrderStatusWire {
     pub oid: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FilledOrderStatusWire {
     #[serde(rename = "totalSz")]
     pub total_sz: String,
@@ -61,28 +58,28 @@ pub struct FilledOrderStatusWire {
     pub oid: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum CancelStatusWire {
     Success(&'static str),
     Error { error: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum TwapCancelStatusWire {
     Success(&'static str),
     Error { error: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum TwapOrderStatusWire {
     Running { running: RunningTwapStatusWire },
     Error { error: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RunningTwapStatusWire {
     #[serde(rename = "twapId")]
     pub twap_id: u64,
@@ -95,25 +92,25 @@ impl ExchangeResponseWire {
 
     pub fn order(statuses: Vec<OrderStatusWire>) -> Self {
         Self::new(ExchangeResponsePayloadWire::Order {
-            data: ExchangeStatusesWire { statuses },
+            data: ExchangeStatusesDataWire { statuses },
         })
     }
 
     pub fn cancel(statuses: Vec<CancelStatusWire>) -> Self {
         Self::new(ExchangeResponsePayloadWire::Cancel {
-            data: ExchangeStatusesWire { statuses },
+            data: ExchangeStatusesDataWire { statuses },
         })
     }
 
     pub fn twap_cancel(status: TwapCancelStatusWire) -> Self {
         Self::new(ExchangeResponsePayloadWire::TwapCancel {
-            data: ExchangeStatusWire { status },
+            data: ExchangeStatusDataWire { status },
         })
     }
 
     pub fn twap_order(status: TwapOrderStatusWire) -> Self {
         Self::new(ExchangeResponsePayloadWire::TwapOrder {
-            data: ExchangeStatusWire { status },
+            data: ExchangeStatusDataWire { status },
         })
     }
 
@@ -237,10 +234,18 @@ mod tests {
     }
 
     #[test]
-    fn v2_statuses_match_exchange_action_reply_wire_shapes() {
+    fn v2_responses_match_v1_exchange_response_shapes() {
         use crate::bootstrap::on_command::exchange::actions::{
             cancel, order, twap_cancel, twap_order,
         };
+        use crate::bootstrap::on_command::exchange::{
+            ok_default_response, ok_status_response, ok_statuses_response,
+        };
+
+        assert_eq!(
+            serialized(ExchangeResponseWire::default()),
+            serialized(ok_default_response())
+        );
 
         let v2_order_statuses = vec![
             OrderStatusWire::Resting {
@@ -273,51 +278,74 @@ mod tests {
             },
         ];
         assert_eq!(
-            serialized(v2_order_statuses),
-            serialized(action_order_statuses)
+            serialized(ExchangeResponseWire::order(v2_order_statuses)),
+            serialized(ok_statuses_response("order", action_order_statuses))
         );
 
         assert_eq!(
-            serialized(vec![
+            serialized(ExchangeResponseWire::cancel(vec![
                 CancelStatusWire::Success("success"),
                 CancelStatusWire::Error {
                     error: "cancel failed".to_owned(),
                 },
-            ]),
-            serialized(vec![
-                cancel::reply::CancelStatusWire::Success("success"),
-                cancel::reply::CancelStatusWire::Error {
-                    error: "cancel failed".to_owned(),
+            ])),
+            serialized(ok_statuses_response(
+                "cancel",
+                vec![
+                    cancel::reply::CancelStatusWire::Success("success"),
+                    cancel::reply::CancelStatusWire::Error {
+                        error: "cancel failed".to_owned(),
+                    },
+                ],
+            ))
+        );
+        assert_eq!(
+            serialized(ExchangeResponseWire::twap_cancel(
+                TwapCancelStatusWire::Success("success"),
+            )),
+            serialized(ok_status_response(
+                "twapCancel",
+                twap_cancel::reply::TwapCancelStatusWire::Success("success"),
+            ))
+        );
+        assert_eq!(
+            serialized(ExchangeResponseWire::twap_cancel(
+                TwapCancelStatusWire::Error {
+                    error: "twap cancel failed".to_owned(),
                 },
-            ])
+            )),
+            serialized(ok_status_response(
+                "twapCancel",
+                twap_cancel::reply::TwapCancelStatusWire::Error {
+                    error: "twap cancel failed".to_owned(),
+                },
+            ))
         );
         assert_eq!(
-            serialized(TwapCancelStatusWire::Success("success")),
-            serialized(twap_cancel::reply::TwapCancelStatusWire::Success("success"))
+            serialized(ExchangeResponseWire::twap_order(
+                TwapOrderStatusWire::Running {
+                    running: RunningTwapStatusWire { twap_id: 9 },
+                },
+            )),
+            serialized(ok_status_response(
+                "twapOrder",
+                twap_order::reply::TwapOrderStatusWire::Running {
+                    running: twap_order::reply::TwapRunningStatusWire { twap_id: 9 },
+                },
+            ))
         );
         assert_eq!(
-            serialized(TwapCancelStatusWire::Error {
-                error: "twap cancel failed".to_owned(),
-            }),
-            serialized(twap_cancel::reply::TwapCancelStatusWire::Error {
-                error: "twap cancel failed".to_owned(),
-            })
-        );
-        assert_eq!(
-            serialized(TwapOrderStatusWire::Running {
-                running: RunningTwapStatusWire { twap_id: 9 },
-            }),
-            serialized(twap_order::reply::TwapOrderStatusWire::Running {
-                running: twap_order::reply::TwapRunningStatusWire { twap_id: 9 },
-            })
-        );
-        assert_eq!(
-            serialized(TwapOrderStatusWire::Error {
-                error: "twap order failed".to_owned(),
-            }),
-            serialized(twap_order::reply::TwapOrderStatusWire::Error {
-                error: "twap order failed".to_owned(),
-            })
+            serialized(ExchangeResponseWire::twap_order(
+                TwapOrderStatusWire::Error {
+                    error: "twap order failed".to_owned(),
+                },
+            )),
+            serialized(ok_status_response(
+                "twapOrder",
+                twap_order::reply::TwapOrderStatusWire::Error {
+                    error: "twap order failed".to_owned(),
+                },
+            ))
         );
     }
 }
