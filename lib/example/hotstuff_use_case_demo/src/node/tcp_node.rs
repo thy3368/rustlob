@@ -7,7 +7,7 @@ use ed25519_dalek::SigningKey;
 use hotstuff_rs::events::{CommitBlockEvent, InsertBlockEvent};
 use hotstuff_rs::replica::{Replica, ReplicaSpec};
 use hotstuff_rs::types::data_types::CryptoHash;
-use use_case_executor::trading::spot::v3::spot_block_v2::SpotBlockCommandV2;
+use use_case_executor::trading::spot::v3::spot_block_v3_executor::SpotBlockCommandV2;
 
 use crate::network::tcp_network::TcpNetwork;
 use crate::node::demo_runtime::{

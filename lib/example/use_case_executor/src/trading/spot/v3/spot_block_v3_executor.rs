@@ -1,5 +1,6 @@
 use common_entity::{
-    ExecutionErrorV3, ExecutionResultV3, LogEntry, LogEntrySequencer, ReplayableEntityChanges,
+    ExecutionErrorV3, ExecutionResultV3, LogAttr, LogEntry, LogEntrySequencer, PresequencedCommand,
+    ReplayableDomainEvent, ReplayableEntityChanges, Shard,
 };
 use example_core_entity::PlaceSpotOrderPipelineV2Cmd;
 use example_core_use_case::pipe::place_spot_order_pipeline_v2::{
@@ -12,12 +13,96 @@ use example_outbound_adapter::database::{
     CancelSpotOrderBuildBlockSinkError, CancelSpotOrderBuildBlockSourceError,
     PlaceSpotOrderBuildBlockSinkError, PlaceSpotOrderBuildBlockSourceError, State4BuildBlock,
 };
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::cancel_spot_order_executor_v3::execute_cancel_spot_order_v3_in_build_block;
 use super::place_spot_order_executor_v3::execute_place_spot_order_v3;
-use crate::trading::spot::v3::spot_block_v2::{
-    SpotBlockCmdV2, SpotBlockCommandV2, SpotBlockErrorV2,
-};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpotBlockCmdV2 {
+    pub items: Vec<LogEntry<SpotBlockCommandV2>>,
+}
+
+impl SpotBlockCmdV2 {
+    pub fn validate(&self) -> Result<(), SpotBlockErrorV2> {
+        Self::validate_entries(&self.items)
+    }
+
+    pub fn validate_entries(
+        items: &[LogEntry<SpotBlockCommandV2>],
+    ) -> Result<(), SpotBlockErrorV2> {
+        let first = items.first().ok_or(SpotBlockErrorV2::EmptyCommands)?;
+        for pair in items.windows(2) {
+            if pair[0].lsn() >= pair[1].lsn() {
+                return Err(SpotBlockErrorV2::NonIncreasingLsn);
+            }
+            if pair[0].logical_ts() >= pair[1].logical_ts() {
+                return Err(SpotBlockErrorV2::NonIncreasingLogicalTimestamp);
+            }
+        }
+        if items
+            .iter()
+            .any(|item| item.topic() != first.topic() || item.partition() != first.partition())
+        {
+            return Err(SpotBlockErrorV2::MixedShard);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpotBlockCommandV2 {
+    Place(PlaceSpotOrderPipelineV2Cmd),
+    Cancel(CancelSpotOrderFsmV3Cmd),
+}
+
+impl Shard for SpotBlockCmdV2 {
+    fn topic(&self) -> u8 {
+        self.items.last().map_or(0, LogEntry::topic)
+    }
+
+    fn partition(&self) -> u8 {
+        self.items.last().map_or(0, LogEntry::partition)
+    }
+}
+
+impl LogAttr for SpotBlockCmdV2 {
+    fn lsn(&self) -> u64 {
+        self.items.last().map_or(0, LogEntry::lsn)
+    }
+
+    fn logical_ts(&self) -> u64 {
+        self.items.last().map_or(0, LogEntry::logical_ts)
+    }
+}
+
+impl PresequencedCommand for SpotBlockCmdV2 {
+    fn contains_event_metadata(&self, event: &ReplayableDomainEvent) -> bool {
+        self.items.iter().any(|item| {
+            item.topic() == event.t
+                && item.partition() == event.p
+                && item.lsn() == event.lsn
+                && item.logical_ts() == event.logical_ts
+        })
+    }
+
+    fn allows_empty_events(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum SpotBlockErrorV2 {
+    #[error("spot block must contain at least one command")]
+    EmptyCommands,
+    #[error("command LSNs must be strictly increasing")]
+    NonIncreasingLsn,
+    #[error("command logical timestamps must be strictly increasing")]
+    NonIncreasingLogicalTimestamp,
+    #[error("all commands must use the same topic and partition")]
+    MixedShard,
+}
 
 pub type PlaceSpotBlockExecutionResult = Result<
     ExecutionResultV3<PlaceSpotOrderPipelineV2Changes>,
@@ -103,3 +188,101 @@ pub fn execute_spot_block_v3(
 }
 
 // RocksDB 持久化由调用方在执行完成后通过 outbound adapter 显式完成第二阶段。
+
+#[cfg(test)]
+mod tests {
+    use common_entity::LogEntrySequencer;
+    use example_core_entity::common::identifiers::OrderId;
+
+    use super::*;
+
+    fn cancel(order_id: u64) -> SpotBlockCommandV2 {
+        SpotBlockCommandV2::Cancel(CancelSpotOrderFsmV3Cmd {
+            order_id: OrderId::Oid(order_id),
+        })
+    }
+
+    fn entry(topic: u8, partition: u8, lsn: u64, logical_ts: u64) -> LogEntry<SpotBlockCommandV2> {
+        LogEntrySequencer::from_metadata_with_topic(
+            topic,
+            partition,
+            lsn,
+            logical_ts,
+            7,
+            9,
+            "user-1".to_owned(),
+            cancel(lsn),
+        )
+    }
+
+    #[test]
+    fn validates_block_sequence_and_shard() {
+        assert_eq!(
+            SpotBlockCmdV2 { items: vec![] }.validate(),
+            Err(SpotBlockErrorV2::EmptyCommands)
+        );
+        assert_eq!(
+            SpotBlockCmdV2 {
+                items: vec![entry(1, 2, 1, 10), entry(1, 2, 1, 11)],
+            }
+            .validate(),
+            Err(SpotBlockErrorV2::NonIncreasingLsn)
+        );
+        assert_eq!(
+            SpotBlockCmdV2 {
+                items: vec![entry(1, 2, 2, 10), entry(1, 2, 1, 11)],
+            }
+            .validate(),
+            Err(SpotBlockErrorV2::NonIncreasingLsn)
+        );
+        assert_eq!(
+            SpotBlockCmdV2 {
+                items: vec![entry(1, 2, 1, 10), entry(1, 2, 2, 10)],
+            }
+            .validate(),
+            Err(SpotBlockErrorV2::NonIncreasingLogicalTimestamp)
+        );
+        assert_eq!(
+            SpotBlockCmdV2 {
+                items: vec![entry(1, 2, 1, 11), entry(1, 2, 2, 10)],
+            }
+            .validate(),
+            Err(SpotBlockErrorV2::NonIncreasingLogicalTimestamp)
+        );
+        assert_eq!(
+            SpotBlockCmdV2 {
+                items: vec![entry(1, 2, 1, 10), entry(1, 3, 2, 11)],
+            }
+            .validate(),
+            Err(SpotBlockErrorV2::MixedShard)
+        );
+        assert_eq!(
+            SpotBlockCmdV2 {
+                items: vec![entry(1, 2, 1, 10), entry(1, 2, 2, 11)],
+            }
+            .validate(),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn slice_validation_matches_wire_command_validation() {
+        let cases = [
+            vec![],
+            vec![entry(1, 2, 1, 10), entry(1, 2, 1, 11)],
+            vec![entry(1, 2, 1, 10), entry(1, 2, 2, 10)],
+            vec![entry(1, 2, 1, 10), entry(1, 3, 2, 11)],
+            vec![entry(1, 2, 1, 10), entry(1, 2, 2, 11)],
+        ];
+
+        for items in cases {
+            assert_eq!(
+                SpotBlockCmdV2::validate_entries(&items),
+                SpotBlockCmdV2 {
+                    items: items.clone()
+                }
+                .validate()
+            );
+        }
+    }
+}

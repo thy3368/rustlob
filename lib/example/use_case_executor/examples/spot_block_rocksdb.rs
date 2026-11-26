@@ -12,9 +12,8 @@ use example_outbound_adapter::database::{
 };
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 use rust_decimal::Decimal;
-use use_case_executor::trading::spot::v3::spot_block_v2::SpotBlockCommandV2;
 use use_case_executor::trading::spot::v3::spot_block_v3_executor::{
-    SpotBlockCommandExecutionV3, execute_spot_block_v3,
+    SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
 };
 
 const USER_ID: &str = "demo-user";

@@ -21,9 +21,8 @@ use hotstuff_rs::types::data_types::{
 use hotstuff_rs::types::update_sets::AppStateUpdates;
 use hotstuff_rs::types::validator_set::{ValidatorSet, ValidatorSetState};
 use serde::Serialize;
-use use_case_executor::trading::spot::v3::spot_block_v2::{SpotBlockCmdV2, SpotBlockCommandV2};
 use use_case_executor::trading::spot::v3::spot_block_v3_executor::{
-    SpotBlockCommandExecutionV3, execute_spot_block_v3,
+    SpotBlockCmdV2, SpotBlockCommandExecutionV3, SpotBlockCommandV2, execute_spot_block_v3,
 };
 
 pub type DemoResult<T> = Result<T, Box<dyn std::error::Error>>;
