@@ -634,23 +634,6 @@ impl Entity for SpotOrderV7 {
     }
 }
 
-impl common_entity::PositionedEntity for SpotOrderV7 {
-    fn entity_id(&self) -> u64 {
-        <Self as Entity>::entity_id(self)
-    }
-
-    fn entity_type(&self) -> u8 {
-        <Self as Entity>::entity_type()
-    }
-
-    fn lsn(&self) -> u64 {
-        self.order_base.lsn
-    }
-
-    fn command_index(&self) -> u32 {
-        self.command_index
-    }
-}
 impl Shard for SpotOrderV7 {
     fn partition(&self) -> u8 {
         self.order_base.symbol.base.index() as u8

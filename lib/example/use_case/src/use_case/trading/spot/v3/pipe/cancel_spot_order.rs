@@ -1,7 +1,7 @@
 use common_entity::fsm_v2::Fsm as FsmV2;
 use common_entity::{
-    EntityError, LogEntrySequencer, PositionedEntity, ReplayableDomainEvent,
-    ReplayableEntityChanges, Shard, UpdatedEntityEvents,
+    Entity, EntityError, LogEntrySequencer, ReplayableDomainEvent, ReplayableEntityChanges, Shard,
+    UpdatedEntityEvents,
 };
 use example_core_entity::{
     BalanceV2, BalanceV2Command, BalanceV2Error, SpotOrderV7, SpotOrderV7Command,

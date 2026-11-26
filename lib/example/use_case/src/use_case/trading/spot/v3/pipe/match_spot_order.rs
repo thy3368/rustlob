@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use common_entity::fsm_v2::Fsm as FsmV2;
 use common_entity::{
-    CreatedEntityEvent, EntityError, LogEntrySequencer, PositionedEntity, ReplayableDomainEvent,
+    CreatedEntityEvent, Entity, EntityError, LogEntrySequencer, ReplayableDomainEvent,
     ReplayableEntityChanges, Shard, TrackDiff, UpdatedEntityEvents,
 };
 use example_core_entity::entity::common::common_trade::TradeBase;

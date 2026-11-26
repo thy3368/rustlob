@@ -160,21 +160,6 @@ impl Shard for SpotTradeV3 {
     }
 }
 
-impl common_entity::PositionedEntity for SpotTradeV3 {
-    fn entity_id(&self) -> u64 {
-        <Self as Entity>::entity_id(self)
-    }
-    fn entity_type(&self) -> u8 {
-        <Self as Entity>::entity_type()
-    }
-    fn lsn(&self) -> u64 {
-        self.lsn
-    }
-    fn command_index(&self) -> u32 {
-        self.command_index
-    }
-}
-
 impl SpotTradeV3 {
     /// 派生本笔成交的买方支付、卖方所得和 base 交付金额。
     ///

@@ -1,12 +1,4 @@
-use crate::ReplayableDomainEvent;
-
-/// 为逐实体变更提供稳定 identity 与最终 replay 位置。
-pub trait PositionedEntity {
-    fn entity_id(&self) -> u64;
-    fn entity_type(&self) -> u8;
-    fn lsn(&self) -> u64;
-    fn command_index(&self) -> u32;
-}
+use crate::{Entity, ReplayableDomainEvent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdatedEntityEventsError {
@@ -51,12 +43,12 @@ pub struct CreatedEntityEvent<E> {
     event: ReplayableDomainEvent,
 }
 
-impl<E: PositionedEntity> CreatedEntityEvent<E> {
+impl<E: Entity> CreatedEntityEvent<E> {
     pub fn try_new(
         after: E,
         event: ReplayableDomainEvent,
     ) -> Result<Self, CreatedEntityEventError> {
-        if event.entity_id != after.entity_id() || event.entity_type != after.entity_type() {
+        if event.entity_id != after.entity_id() || event.entity_type != E::entity_type() {
             return Err(CreatedEntityEventError::EntityIdentityMismatch);
         }
         if (event.previous_lsn, event.previous_command_index) != (0, 0) {
@@ -109,7 +101,7 @@ pub struct UpdatedEntityEvents<E> {
     events: NonEmptyReplayEvents,
 }
 
-impl<E: PositionedEntity> UpdatedEntityEvents<E> {
+impl<E: Entity> UpdatedEntityEvents<E> {
     pub fn try_new(
         after: E,
         loaded_lsn: u64,
@@ -119,7 +111,7 @@ impl<E: PositionedEntity> UpdatedEntityEvents<E> {
         let events = NonEmptyReplayEvents::try_new(events)?;
         let mut expected_previous = (loaded_lsn, loaded_command_index);
         for (event_index, event) in events.as_slice().iter().enumerate() {
-            if event.entity_id != after.entity_id() || event.entity_type != after.entity_type() {
+            if event.entity_id != after.entity_id() || event.entity_type != E::entity_type() {
                 return Err(UpdatedEntityEventsError::EntityIdentityMismatch { event_index });
             }
             if (event.previous_lsn, event.previous_command_index) != expected_previous {
@@ -160,23 +152,51 @@ mod tests {
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct Entity {
         id: u64,
-        kind: u8,
         lsn: u64,
         command_index: u32,
     }
 
-    impl PositionedEntity for Entity {
+    impl crate::Shard for Entity {
+        fn partition(&self) -> u8 {
+            0
+        }
+    }
+
+    impl crate::Entity for Entity {
         fn entity_id(&self) -> u64 {
             self.id
         }
-        fn entity_type(&self) -> u8 {
-            self.kind
+
+        fn owner_id(&self) -> String {
+            String::new()
         }
+
+        fn op_id(&self) -> String {
+            String::new()
+        }
+
         fn lsn(&self) -> u64 {
             self.lsn
         }
+
         fn command_index(&self) -> u32 {
             self.command_index
+        }
+
+        fn created_at(&self) -> u64 {
+            0
+        }
+
+        fn updated_at(&self) -> u64 {
+            0
+        }
+
+        fn is_derived() -> bool {
+            false
+        }
+
+        fn entity_type() -> u8 {
+            2
         }
     }
 
@@ -196,7 +216,6 @@ mod tests {
         let changed = UpdatedEntityEvents::try_new(
             Entity {
                 id: 7,
-                kind: 2,
                 lsn: 10,
                 command_index: 1,
             },
@@ -219,7 +238,6 @@ mod tests {
     fn rejects_broken_chain_and_after_position_mismatch() {
         let after = Entity {
             id: 7,
-            kind: 2,
             lsn: 10,
             command_index: 1,
         };
@@ -237,7 +255,6 @@ mod tests {
     fn create_requires_zero_predecessor() {
         let after = Entity {
             id: 7,
-            kind: 2,
             lsn: 10,
             command_index: 1,
         };
