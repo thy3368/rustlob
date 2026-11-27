@@ -5,9 +5,8 @@ use example_core_use_case::pipe_line::cancel_spot_order::{
     CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3Cmd, CancelSpotOrderFsmV3Error,
     CancelSpotOrderFsmV3UseCase,
 };
-use example_outbound_adapter::database::{
-    CancelSpotOrderBuildBlockSinkError, CancelSpotOrderBuildBlockSourceError, State4BuildBlock,
-};
+use example_outbound_adapter::database::build_block_cancel_spot_order::CancelSpotOrderBuildBlockSinkError;
+use example_outbound_adapter::database::{CancelSpotOrderBuildBlockSourceError, State4BuildBlock};
 
 /// 使用共享 V3 runtime 执行 Cancel Spot Order，并复用 outbound 完成状态读写与事件副作用。
 pub fn execute_cancel_spot_order_v3_with_outbound<OB>(
