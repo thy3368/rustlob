@@ -4,8 +4,8 @@ RustLOB 是一个用 Rust 编写的交易系统与 Clean Architecture 实践仓�
 
 当前 workspace 以源码和 Cargo metadata 为准：
 
-- 37 个 workspace member
-- 29 个 default member
+- 28 个 workspace member
+- 28 个 default member
 - 当前最完整、最主要的交易业务实现位于 [`lib/example/`](lib/example/)
 
 `example` 是历史目录名称。它现在承载了仓库的主要核心业务链路，不应理解为只有玩具代码的临时目录。
