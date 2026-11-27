@@ -11,6 +11,7 @@ use example_core_entity::{OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7, Spo
 use rust_decimal::Decimal;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///todo 似乎可以换成log_entry with command
 pub struct MatchSpotOrderInput {
     pub lsn: u64,
     pub logical_ts: u64,

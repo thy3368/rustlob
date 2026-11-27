@@ -9,18 +9,18 @@ use example_core_entity::{
     BalanceV2, OrderGroupRelation, OrderSide, OrderType, PlaceSpotOrderPipelineV2Cmd, SpotOrderV7,
 };
 
-use super::freeze_spot_order::{FreezeSpotOrderPipeChanges, freeze_spot_order_from};
-use super::match_spot_order::{
-    MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order_from,
+use crate::pipe::freeze_spot_order::{freeze_spot_order_from, FreezeSpotOrderPipeChanges};
+use crate::pipe::match_spot_order::{
+    match_spot_order_from, MatchSpotOrderInput, MatchSpotOrderPipeChanges,
 };
-use super::place_spot_order::{PlaceSpotOrderPipeChanges, place_spot_order};
-use super::settle_matched_spot_trades::{
-    SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput, SettleTradesPipeChanges,
-    SpotOrderSettlementBalances, settle_matched_spot_trades_from,
+use crate::pipe::place_spot_order::{place_spot_order, PlaceSpotOrderPipeChanges};
+use crate::pipe::settle_matched_spot_trades::{
+    settle_matched_spot_trades_from, SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput,
+    SettleTradesPipeChanges, SpotOrderSettlementBalances,
 };
-use super::unfreeze_matched_spot_orders::{
-    SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, UnfreezeMatchedSpotOrdersPipeChanges,
-    unfreeze_matched_spot_orders,
+use crate::pipe::unfreeze_matched_spot_orders::{
+    unfreeze_matched_spot_orders, SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError,
+    UnfreezeMatchedSpotOrdersPipeChanges,
 };
 
 /// 独立现货下单 pipe_line 的分支化业务事实。
@@ -123,6 +123,7 @@ impl ReplayableEntityChanges for PlaceSpotOrderPipelineV2Changes {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// 这样设计好象也合理
 pub enum PlaceSpotOrderPipelineV2Error {
     InvalidInput(String),
     Place(EntityError),

@@ -6,7 +6,7 @@ use common_entity::{
 use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::{BalanceV2, PlaceSpotOrderPipelineV2Cmd, SpotOrderV7};
 use example_core_use_case::pipe::match_spot_order::MatchSpotOrderPipeChanges;
-use example_core_use_case::pipe::place_spot_order_pipeline_v2::PlaceSpotOrderPipelineV2Changes;
+use example_core_use_case::pipe::line::place_spot_order_pipeline_v2::PlaceSpotOrderPipelineV2Changes;
 use example_core_use_case::pipe::settle_matched_spot_trades::{
     SettleTradesPipeChanges, SpotOrderSettlementBalances,
 };

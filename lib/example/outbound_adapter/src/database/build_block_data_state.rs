@@ -14,6 +14,9 @@ use thiserror::Error;
 
 /// 独立use case通过source/sink影响了共享状态
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// todo 数据组织可能还有更好的方式，比如balance可能被复用的情况现在可能有问题，
+/// 每个容器都需要balance的所有权
+/// 通过order找balance: 通过order的party_id 到balance的数组里面去找
 pub struct State4BuildBlock {
     /// 下一笔成交使用的全局成交 ID。
     pub next_trade_id: u64,
@@ -36,6 +39,7 @@ pub struct State4BuildBlock {
     /// 可能不对
     pub user_symbol_trades: BTreeMap<(String, Symbol), Vec<SpotTradeV3>>,
 
+    // pub symbol_trades: BTreeMap<Symbol, Vec<SpotTradeV3>>,
     /// 每个用户每个symbol
     pub user_symbol_orders: BTreeMap<(String, Symbol), Vec<SpotOrderV7>>,
 }

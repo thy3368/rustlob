@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use common_entity::{LogEntry, UseCaseV3};
 use example_core_entity::{PlaceSpotOrderPipelineV2Cmd, SpotOrderV7};
 
-use crate::use_case::trading::spot::v3::pipe::place_spot_order_pipeline_v2::{
+use crate::use_case::trading::spot::v3::pipe::line::place_spot_order_pipeline_v2::{
     PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error, place_spot_order_pipeline_v2,
     validate_place_spot_order_pipeline_v2_command, validate_place_spot_order_pipeline_v2_state,
 };

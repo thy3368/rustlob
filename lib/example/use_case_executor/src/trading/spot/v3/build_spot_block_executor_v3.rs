@@ -3,7 +3,7 @@ use common_entity::{
     ReplayableEntityChanges, Shard,
 };
 use example_core_entity::PlaceSpotOrderPipelineV2Cmd;
-use example_core_use_case::pipe::place_spot_order_pipeline_v2::{
+use example_core_use_case::pipe::line::place_spot_order_pipeline_v2::{
     PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error,
 };
 use example_core_use_case::pipe_line::cancel_spot_order::{

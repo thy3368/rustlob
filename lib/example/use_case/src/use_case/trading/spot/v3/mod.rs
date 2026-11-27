@@ -4,7 +4,7 @@ pub use pipe::match_spot_order::{
     MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order, match_spot_order_from,
 };
 pub use pipe::place_spot_order::{PlaceSpotOrderPipeChanges, place_spot_order};
-pub use pipe::place_spot_order_pipeline_v2::{
+pub use pipe::line::place_spot_order_pipeline_v2::{
     PlaceSpotOrderPipelineV2Changes, PlaceSpotOrderPipelineV2Error, place_spot_order_pipeline_v2,
 };
 pub use pipe::settle_matched_spot_trades::{
