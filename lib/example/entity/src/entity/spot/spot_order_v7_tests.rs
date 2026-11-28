@@ -164,9 +164,10 @@ fn create_event_and_freeze_update_have_lifecycle_event_codes() {
     create_event.domain_event_type = 1;
     assert_eq!(create_event.domain_event_type, 1);
 
-    let (_, freeze_event) = created
-        .transition(sequenced(SpotOrderV7Command::Freeze))
+    let frozen = created
+        .transition_v2(sequenced(SpotOrderV7Command::Freeze))
         .unwrap();
+    let freeze_event = frozen.replay_events().last().unwrap();
     assert_eq!(freeze_event.domain_event_type, 2);
 }
 
@@ -205,8 +206,8 @@ fn admission_rejects_non_matchable_statuses_and_market_maker() {
 #[test]
 fn buy_match_pays_from_fee_reserve_and_sell_match_does_not() {
     let buyer = order(OrderSide::Buy, SpotOrderStatus::Open);
-    let (buyer, _) = buyer
-        .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+    let buyer = buyer
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(100),
             quote_fee: Decimal::from(2),
@@ -218,8 +219,8 @@ fn buy_match_pays_from_fee_reserve_and_sell_match_does_not() {
     );
 
     let seller = order(OrderSide::Sell, SpotOrderStatus::Open);
-    let (seller, _) = seller
-        .transition(sequenced(SpotOrderV7Command::MatchedAsMaker {
+    let seller = seller
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsMaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(100),
             quote_fee: Decimal::from(2),
@@ -237,7 +238,7 @@ fn match_failure_keeps_order_unchanged() {
     let before = subject.clone();
     assert!(
         subject
-            .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+            .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
                 filled_size: Decimal::ONE,
                 quote_notional: Decimal::from(100),
                 quote_fee: Decimal::from(4),
@@ -250,7 +251,7 @@ fn match_failure_keeps_order_unchanged() {
     let before = subject.clone();
     assert!(
         subject
-            .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+            .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
                 filled_size: Decimal::ZERO,
                 quote_notional: Decimal::ZERO,
                 quote_fee: Decimal::ONE,
@@ -266,7 +267,7 @@ fn stale_lsn_keeps_order_unchanged() {
     let before = subject.clone();
     assert!(
         subject
-            .transition(LogEntrySequencer::from_metadata_with_topic(
+            .transition_v2(LogEntrySequencer::from_metadata_with_topic(
                 0,
                 1,
                 3,
@@ -288,8 +289,8 @@ fn stale_lsn_keeps_order_unchanged() {
 #[test]
 fn command_lsn_can_jump_and_be_reused_within_one_command() {
     let subject = order(OrderSide::Buy, SpotOrderStatus::Pending);
-    let (subject, _) = subject
-        .transition(LogEntrySequencer::from_metadata_with_topic(
+    let subject = subject
+        .transition_v2(LogEntrySequencer::from_metadata_with_topic(
             0,
             1,
             20,
@@ -300,8 +301,8 @@ fn command_lsn_can_jump_and_be_reused_within_one_command() {
             SpotOrderV7Command::Freeze,
         ))
         .unwrap();
-    let (subject, _) = subject
-        .transition(LogEntrySequencer::from_metadata_with_topic(
+    let subject = subject
+        .transition_v2(LogEntrySequencer::from_metadata_with_topic(
             0,
             1,
             20,
@@ -323,8 +324,8 @@ fn command_lsn_can_jump_and_be_reused_within_one_command() {
 #[test]
 fn taker_tif_controls_final_state() {
     let gtc = order(OrderSide::Buy, SpotOrderStatus::Open);
-    let (gtc, _) = gtc
-        .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+    let gtc = gtc
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(100),
             quote_fee: Decimal::ZERO,
@@ -337,9 +338,9 @@ fn taker_tif_controls_final_state() {
         .clone();
     ioc_record.tif = OrderTif::Ioc;
     let ioc_before = SpotOrderV7::from_record(ioc_record).unwrap();
-    let (ioc, _) = ioc_before
+    let ioc = ioc_before
         .clone()
-        .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(100),
             quote_fee: Decimal::ZERO,
@@ -356,9 +357,9 @@ fn taker_tif_controls_final_state() {
         .clone();
     alo_record.tif = OrderTif::Alo;
     let alo_before = SpotOrderV7::from_record(alo_record).unwrap();
-    let (alo, _) = alo_before
+    let alo = alo_before
         .clone()
-        .transition(sequenced(SpotOrderV7Command::RejectedAsTaker))
+        .transition_v2(sequenced(SpotOrderV7Command::RejectedAsTaker))
         .unwrap();
     assert_eq!(alo.status(), SpotOrderStatus::Rejected);
     assert_eq!(
@@ -370,9 +371,9 @@ fn taker_tif_controls_final_state() {
 #[test]
 fn filled_sell_taker_returns_zero_base_release_requirement() {
     let seller_before = order(OrderSide::Sell, SpotOrderStatus::Open);
-    let (seller, _) = seller_before
+    let seller = seller_before
         .clone()
-        .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::from(2),
             quote_notional: Decimal::from(200),
             quote_fee: Decimal::ZERO,
@@ -444,7 +445,8 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
 
     for (subject, command, event_type) in cases {
         let before = subject.clone();
-        let (after, replay) = subject.transition(sequenced(command)).unwrap();
+        let after = subject.transition_v2(sequenced(command)).unwrap();
+        let replay = after.replay_events().last().unwrap();
         assert_eq!(subject, before);
         assert_eq!(replay.t, after.topic());
         assert_eq!(replay.p, after.partition());
@@ -461,14 +463,15 @@ fn sequenced_commands_emit_stable_event_codes_with_replay_metadata() {
 #[test]
 fn modify_and_buy_match_replay_all_business_field_changes() {
     let modified = order(OrderSide::Buy, SpotOrderStatus::Open);
-    let (_, event) = modified
-        .transition(sequenced(SpotOrderV7Command::Modify {
+    let modified = modified
+        .transition_v2(sequenced(SpotOrderV7Command::Modify {
             price: Decimal::from(110),
             size: Decimal::from(3),
             tif: Some(OrderTif::Ioc),
             cloid: Some("next-cloid".to_owned()),
         }))
         .unwrap();
+    let event = modified.replay_events().last().unwrap();
     let fields = field_names(&event);
     for expected in [
         "limit_px",
@@ -482,13 +485,14 @@ fn modify_and_buy_match_replay_all_business_field_changes() {
     }
 
     let matched = order(OrderSide::Buy, SpotOrderStatus::Open);
-    let (_, event) = matched
-        .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+    let matched = matched
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(100),
             quote_fee: Decimal::ONE,
         }))
         .unwrap();
+    let event = matched.replay_events().last().unwrap();
     let fields = field_names(&event);
     for expected in [
         "size",
@@ -581,7 +585,7 @@ fn sequenced_failures_are_atomic() {
     ];
     for (subject, command) in cases {
         let before = subject.clone();
-        assert!(subject.transition(command).is_err());
+        assert!(subject.transition_v2(command).is_err());
         assert_eq!(subject, before);
     }
 }
@@ -589,9 +593,9 @@ fn sequenced_failures_are_atomic() {
 #[test]
 fn pending_cancel_releases_zero_and_exact_fee_reserve_is_allowed() {
     let pending = order(OrderSide::Sell, SpotOrderStatus::Pending);
-    let (canceled, _) = pending
+    let canceled = pending
         .clone()
-        .transition(sequenced(SpotOrderV7Command::Cancel))
+        .transition_v2(sequenced(SpotOrderV7Command::Cancel))
         .unwrap();
     assert_eq!(
         canceled.terminal_unfreeze_delta(&pending).unwrap().amount(),
@@ -599,8 +603,8 @@ fn pending_cancel_releases_zero_and_exact_fee_reserve_is_allowed() {
     );
 
     let buyer = order(OrderSide::Buy, SpotOrderStatus::Open);
-    let (buyer, _) = buyer
-        .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+    let buyer = buyer
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(100),
             quote_fee: Decimal::from(3),
@@ -630,24 +634,25 @@ fn replay_projection_failure_keeps_order_unchanged() {
             quote_fee: Decimal::ZERO,
         },
     );
-    assert!(subject.transition(command).is_err());
+    assert!(subject.transition_v2(command).is_err());
     assert_eq!(subject, before);
 }
 
 #[test]
 fn freeze_and_modify_classify_buy_principal_adjustments() {
     let pending = order(OrderSide::Buy, SpotOrderStatus::Pending);
-    let (open, event) = pending
-        .transition(sequenced(SpotOrderV7Command::Freeze))
+    let open = pending
+        .transition_v2(sequenced(SpotOrderV7Command::Freeze))
         .unwrap();
+    let event = open.replay_events().last().unwrap();
     assert_eq!(
         open.order_base().buy_quote_principal_frozen,
         Decimal::from(200)
     );
     assert!(field_names(&event).contains(&"buy_quote_principal_frozen"));
 
-    let (increased, _) = open
-        .transition(sequenced(SpotOrderV7Command::Modify {
+    let increased = open
+        .transition_v2(sequenced(SpotOrderV7Command::Modify {
             price: Decimal::from(100),
             size: Decimal::from(3),
             tif: None,
@@ -659,14 +664,15 @@ fn freeze_and_modify_classify_buy_principal_adjustments() {
         Decimal::from(300)
     );
 
-    let (decreased, event) = increased
-        .transition(sequenced(SpotOrderV7Command::Modify {
+    let decreased = increased
+        .transition_v2(sequenced(SpotOrderV7Command::Modify {
             price: Decimal::from(90),
             size: Decimal::from(2),
             tif: None,
             cloid: None,
         }))
         .unwrap();
+    let event = decreased.replay_events().last().unwrap();
     assert_eq!(
         decreased.order_base().buy_quote_principal_unfrozen,
         Decimal::from(120)
@@ -681,7 +687,7 @@ fn pending_modify_is_rejected_without_mutating_order() {
 
     assert!(
         pending
-            .transition(sequenced(SpotOrderV7Command::Modify {
+            .transition_v2(sequenced(SpotOrderV7Command::Modify {
                 price: Decimal::from(110),
                 size: Decimal::ONE,
                 tif: None,
@@ -701,8 +707,8 @@ fn buy_modify_adjusts_principal_and_fee_from_cumulative_holds() {
     record.buy_quote_fee_reserve_frozen = Decimal::ONE;
     let open = SpotOrderV7::from_record(record).unwrap();
 
-    let (increased, _) = open
-        .transition(sequenced(SpotOrderV7Command::Modify {
+    let increased = open
+        .transition_v2(sequenced(SpotOrderV7Command::Modify {
             price: Decimal::from(100),
             size: Decimal::from(3),
             tif: None,
@@ -722,8 +728,8 @@ fn buy_modify_adjusts_principal_and_fee_from_cumulative_holds() {
         Decimal::new(1005, 1)
     );
 
-    let (decreased, _) = increased
-        .transition(sequenced(SpotOrderV7Command::Modify {
+    let decreased = increased
+        .transition_v2(sequenced(SpotOrderV7Command::Modify {
             price: Decimal::from(100),
             size: Decimal::ONE,
             tif: None,
@@ -756,8 +762,8 @@ fn partially_filled_modify_does_not_deduct_paid_fee_from_remaining_target() {
     record.buy_quote_fee_reserve_paid = Decimal::ONE;
     let partially_filled = SpotOrderV7::from_record(record).unwrap();
 
-    let (unchanged_hold, _) = partially_filled
-        .transition(sequenced(SpotOrderV7Command::Modify {
+    let unchanged_hold = partially_filled
+        .transition_v2(sequenced(SpotOrderV7Command::Modify {
             price: Decimal::from(100),
             size: Decimal::ONE,
             tif: None,
@@ -776,8 +782,8 @@ fn partially_filled_modify_does_not_deduct_paid_fee_from_remaining_target() {
         Decimal::ZERO
     );
 
-    let (reduced, _) = unchanged_hold
-        .transition(sequenced(SpotOrderV7Command::Modify {
+    let reduced = unchanged_hold
+        .transition_v2(sequenced(SpotOrderV7Command::Modify {
             price: Decimal::from(100),
             size: Decimal::new(5, 1),
             tif: None,
@@ -809,8 +815,8 @@ fn buy_modify_rounds_fee_target_up_and_is_atomic_on_overflow() {
     record.buy_quote_fee_reserve_bps = 1;
     record.buy_quote_fee_reserve_frozen = Decimal::ZERO;
     let precise = SpotOrderV7::from_record(record).unwrap();
-    let (rounded, _) = precise
-        .transition(sequenced(SpotOrderV7Command::Modify {
+    let rounded = precise
+        .transition_v2(sequenced(SpotOrderV7Command::Modify {
             price: Decimal::ONE,
             size: Decimal::new(1, 6),
             tif: None,
@@ -825,7 +831,7 @@ fn buy_modify_rounds_fee_target_up_and_is_atomic_on_overflow() {
     let before = rounded.clone();
     assert!(
         rounded
-            .transition(sequenced(SpotOrderV7Command::Modify {
+            .transition_v2(sequenced(SpotOrderV7Command::Modify {
                 price: Decimal::MAX,
                 size: Decimal::from(2),
                 tif: None,
@@ -839,13 +845,14 @@ fn buy_modify_rounds_fee_target_up_and_is_atomic_on_overflow() {
 #[test]
 fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
     let buyer = order(OrderSide::Buy, SpotOrderStatus::Open);
-    let (buyer, first_event) = buyer
-        .transition(sequenced(SpotOrderV7Command::MatchedAsMaker {
+    let buyer = buyer
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsMaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(90),
             quote_fee: Decimal::ONE,
         }))
         .unwrap();
+    let first_event = buyer.replay_events().last().unwrap();
     assert_eq!(
         buyer.order_base().buy_quote_principal_paid,
         Decimal::from(90)
@@ -859,14 +866,15 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
     assert!(!fields.contains(&"buy_quote_principal_unfrozen"));
 
     let buyer_before_terminal = buyer;
-    let (buyer, event) = buyer_before_terminal
+    let buyer = buyer_before_terminal
         .clone()
-        .transition(sequenced(SpotOrderV7Command::MatchedAsMaker {
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsMaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(80),
             quote_fee: Decimal::ONE,
         }))
         .unwrap();
+    let event = buyer.replay_events().last().unwrap();
     assert_eq!(
         buyer
             .terminal_unfreeze_delta(&buyer_before_terminal)
@@ -893,13 +901,14 @@ fn multi_price_buy_fill_classifies_paid_improvement_and_terminal_fee_release() {
 #[test]
 fn sell_match_accumulates_only_sell_fee() {
     let seller = order(OrderSide::Sell, SpotOrderStatus::Open);
-    let (seller, event) = seller
-        .transition(sequenced(SpotOrderV7Command::MatchedAsMaker {
+    let seller = seller
+        .transition_v2(sequenced(SpotOrderV7Command::MatchedAsMaker {
             filled_size: Decimal::ONE,
             quote_notional: Decimal::from(120),
             quote_fee: Decimal::from(2),
         }))
         .unwrap();
+    let event = seller.replay_events().last().unwrap();
     let order = seller.order_base();
     assert_eq!(order.sell_quote_fee_paid, Decimal::from(2));
     assert_eq!(order.buy_quote_principal_paid, Decimal::ZERO);
@@ -915,7 +924,7 @@ fn invalid_buy_notional_and_counter_overflow_are_atomic() {
     let before = buyer.clone();
     assert!(
         buyer
-            .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+            .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
                 filled_size: Decimal::ONE,
                 quote_notional: Decimal::from(101),
                 quote_fee: Decimal::ZERO,
@@ -929,7 +938,7 @@ fn invalid_buy_notional_and_counter_overflow_are_atomic() {
         let original = buyer.clone();
         assert!(
             buyer
-                .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+                .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
                     filled_size: Decimal::ONE,
                     quote_notional,
                     quote_fee: Decimal::ZERO,
@@ -945,7 +954,7 @@ fn invalid_buy_notional_and_counter_overflow_are_atomic() {
     let before = buyer.clone();
     assert!(
         buyer
-            .transition(sequenced(SpotOrderV7Command::MatchedAsTaker {
+            .transition_v2(sequenced(SpotOrderV7Command::MatchedAsTaker {
                 filled_size: Decimal::ONE,
                 quote_notional: Decimal::ONE,
                 quote_fee: Decimal::ZERO,
