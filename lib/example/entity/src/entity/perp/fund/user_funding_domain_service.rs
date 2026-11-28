@@ -374,7 +374,7 @@ mod settle_user_funding_batch_tests {
     fn funding(id: u64, amount: Decimal) -> UserFunding {
         UserFunding::new(
             id,
-            PARTY_ID,
+            PartyId::from(PARTY_ID.to_string()),
             symbol(),
             amount,
             Decimal::ONE,
@@ -392,7 +392,7 @@ mod settle_user_funding_batch_tests {
     ) -> PerpPositionV3 {
         PerpPositionV3::new(
             2,
-            PartyId(PARTY_ID),
+            PartyId::from(PARTY_ID.to_string()),
             Coin::BTC,
             Decimal::ONE,
             Decimal::from(100),
@@ -413,7 +413,7 @@ mod settle_user_funding_batch_tests {
 
     fn balance(available: Decimal, version: u64) -> BalanceV2 {
         BalanceV2::new(
-            PARTY_ID,
+            PartyId::from(PARTY_ID.to_string()),
             ACCOUNT_ID,
             u64::from(Coin::USDC.index()),
             available,

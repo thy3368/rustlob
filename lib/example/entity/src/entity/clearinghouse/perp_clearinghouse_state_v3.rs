@@ -207,6 +207,7 @@ mod tests {
     use rust_decimal::Decimal;
 
     use super::*;
+    use crate::PartyId;
     use crate::entity::perp::trade::position_v4::{
         FillSource, Leverage, MarginMode, PositionEvent, PositionFill,
     };
@@ -214,7 +215,7 @@ mod tests {
     const ACCOUNT: u64 = 7;
     fn balance(available: Decimal, frozen: Decimal, time: u64) -> BalanceV2 {
         BalanceV2::new(
-            1,
+            PartyId::from("1"),
             ACCOUNT,
             u64::from(Coin::USDC.index()),
             available,
@@ -364,7 +365,15 @@ mod tests {
 
     #[test]
     fn rejects_invalid_balance_price_rate_and_time() {
-        let wrong_coin = BalanceV2::new(1, ACCOUNT, u64::from(Coin::USDT.index()), 1, 0, 1, 1);
+        let wrong_coin = BalanceV2::new(
+            PartyId::from("1"),
+            ACCOUNT,
+            u64::from(Coin::USDT.index()),
+            1,
+            0,
+            1,
+            1,
+        );
         assert_eq!(
             PerpClearinghouseStateV3::build(wrong_coin, vec![], 1).unwrap_err(),
             BuildClearinghouseStateError::BalanceMustBeUsdc

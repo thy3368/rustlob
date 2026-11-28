@@ -331,19 +331,20 @@ fn storage_error(error: impl std::fmt::Display) -> StorageError<u64> {
 fn initial_state() -> State4BuildBlock {
     let symbol = symbol();
     let buyer = common_entity::stable_string_entity_id(USER_ID);
+    let party_id = example_core_use_case::PartyId::from(USER_ID);
     State4BuildBlock {
         next_trade_id: 1,
         maker_fee_bps: 5,
         taker_fee_bps: 10,
         spot_symbol_lob: [(symbol, LocalLobBtree::new(symbol))].into(),
         user_symbol_quote_balance: [(
-            (USER_ID.to_owned(), symbol),
-            BalanceV2::new(buyer, buyer, 2, 100_000, 0, 0, 0),
+            (party_id.clone(), symbol),
+            BalanceV2::new(party_id.clone(), buyer, 2, 100_000, 0, 0, 0),
         )]
         .into(),
         user_symbol_base_balance: [(
-            (USER_ID.to_owned(), symbol),
-            BalanceV2::new(buyer, buyer, 0, 10, 0, 0, 0),
+            (party_id.clone(), symbol),
+            BalanceV2::new(party_id, buyer, 0, 10, 0, 0, 0),
         )]
         .into(),
         user_symbol_trades: Default::default(),

@@ -130,7 +130,7 @@ fn entry(lsn: u64, command: SpotBlockCommandV2) -> common_entity::LogEntry<SpotB
 
 fn place_command() -> SpotBlockCommandV2 {
     SpotBlockCommandV2::Place(PlaceSpotOrderPipelineV2Cmd {
-        party_id: common_entity::stable_string_entity_id(USER_ID),
+        party_id: example_core_use_case::PartyId::from(USER_ID),
         order_id: 1,
         symbol: symbol(),
         side: OrderSide::Buy,

@@ -73,7 +73,7 @@ fn create_command(order_id: u64, side: OrderSide, order_type: OrderType) -> Spot
         0,
         "11".to_owned(),
         PlaceSpotOrderPipelineV2Cmd {
-            party_id: 11,
+            party_id: PartyId::from("11"),
             order_id,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
             side,

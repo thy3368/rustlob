@@ -43,3 +43,26 @@ impl Default for OrderId {
         Self::Oid(0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::PartyId;
+
+    #[test]
+    fn party_id_is_a_string_value_object() {
+        let alice = PartyId::from("alice");
+        let bob = PartyId::from(String::from("bob"));
+
+        assert_eq!(alice.as_ref(), "alice");
+        assert_eq!(alice.to_string(), "alice");
+        assert!(alice < bob);
+        assert!(HashSet::from([alice.clone()]).contains(&alice));
+        assert_eq!(serde_json::to_string(&alice).unwrap(), r#""alice""#);
+        assert_eq!(
+            serde_json::from_str::<PartyId>(r#""alice""#).unwrap(),
+            alice
+        );
+    }
+}

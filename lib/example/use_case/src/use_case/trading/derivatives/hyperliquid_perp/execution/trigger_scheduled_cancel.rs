@@ -228,7 +228,9 @@ mod tests {
 
     use super::*;
 
-    const USER: PartyId = PartyId("7".to_owned());
+    fn user() -> PartyId {
+        PartyId::from("7")
+    }
     const NOW_MS: u64 = 1_700_000_010_000;
     const LOGICAL_TS: u64 = 1_700_000_010_000;
 
@@ -240,14 +242,14 @@ mod tests {
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd {
-                party_id: USER,
+                party_id: user(),
                 now_ms: NOW_MS,
             },
         )
     }
 
     fn armed_schedule() -> ScheduledCancel {
-        let mut schedule = ScheduledCancel::new(USER.0);
+        let mut schedule = ScheduledCancel::new(user());
         schedule
             .replace(Some(NOW_MS), NOW_MS - 5_000)
             .expect("fixture should arm");
@@ -261,7 +263,7 @@ mod tests {
             Decimal::ZERO
         };
         OrderBase {
-            owner: USER,
+            owner: user(),
             order_id: id,
             symbol: Symbol::new(3, Coin::BTC, Coin::USDC),
             side,
@@ -296,7 +298,7 @@ mod tests {
                 .expect("fixture should release")
         };
         let balance = BalanceV2::new(
-            USER.0,
+            user(),
             70,
             u64::from(release.currency().index()),
             Decimal::ZERO,

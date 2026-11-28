@@ -238,7 +238,7 @@ mod tests {
                 .unwrap(),
             ],
             margin_balances: vec![BalanceV2::new(
-                7,
+                PartyId::from("7"),
                 11,
                 u64::from(Coin::USDC.index()),
                 Decimal::TEN,

@@ -12,7 +12,7 @@ const NOW: u64 = 20;
 
 fn order(id: u64, side: OrderSide, size: Decimal, status: SpotOrderStatus) -> PerpOrderV3 {
     let mut base = crate::entity::common::common_order::OrderBase::default();
-    base.owner = PartyId(id + 100);
+    base.owner = PartyId::from((id + 100).to_string());
     base.order_id = id;
     base.side = side;
     base.limit_px = dec!(100);

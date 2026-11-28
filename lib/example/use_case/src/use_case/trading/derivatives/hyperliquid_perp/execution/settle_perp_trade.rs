@@ -280,7 +280,7 @@ mod tests {
     fn position(id: u64, user: u64, size: i64, price: i64) -> PerpPositionV3 {
         PerpPositionV3::new(
             id,
-            PartyId(user),
+            PartyId::from(user.to_string()),
             Coin::BTC,
             Decimal::from(size),
             if size == 0 {
@@ -349,7 +349,7 @@ mod tests {
             positions: vec![position(101, 1, 2, 100), position(102, 2, -2, 100)],
             margin_balances: vec![
                 BalanceV2::new(
-                    1,
+                    PartyId::from("1"),
                     1,
                     u64::from(Coin::USDC.index()),
                     Decimal::from(100),
@@ -358,7 +358,7 @@ mod tests {
                     0,
                 ),
                 BalanceV2::new(
-                    2,
+                    PartyId::from("2"),
                     2,
                     u64::from(Coin::USDC.index()),
                     Decimal::from(100),

@@ -141,12 +141,12 @@ mod tests {
 
     fn state() -> ScheduleHyperliquidCancelState {
         ScheduleHyperliquidCancelState {
-            scheduled_cancel: ScheduledCancel::new(7),
+            scheduled_cancel: ScheduledCancel::new(PartyId::from("7")),
         }
     }
 
     fn state_at_daily_limit() -> ScheduleHyperliquidCancelState {
-        let mut scheduled_cancel = ScheduledCancel::new(7);
+        let mut scheduled_cancel = ScheduledCancel::new(PartyId::from("7"));
         for _ in 0..10 {
             scheduled_cancel
                 .replace(Some(NOW_MS), NOW_MS)
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn replacing_schedule_reports_previous_deadline() {
-        let mut existing = ScheduledCancel::new(7);
+        let mut existing = ScheduledCancel::new(PartyId::from("7"));
         existing
             .replace(Some(NOW_MS + 10_000), NOW_MS - 1_000)
             .expect("fixture schedule should be valid");

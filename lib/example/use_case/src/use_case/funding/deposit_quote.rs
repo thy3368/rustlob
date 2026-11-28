@@ -127,6 +127,8 @@ fn map_balance_error(error: BalanceV2Error) -> DepositQuoteError {
 
 #[cfg(test)]
 mod tests {
+    use example_core_entity::PartyId;
+
     use super::*;
     use crate::use_case::support::field_as_u64;
 
@@ -145,7 +147,7 @@ mod tests {
     fn sample_state() -> DepositQuoteState {
         DepositQuoteState {
             quote_balance: BalanceV2::new(
-                common_entity::stable_string_entity_id("trader-1"),
+                PartyId::from("trader-1"),
                 common_entity::stable_string_entity_id("trader-1"),
                 common_entity::stable_string_entity_id("USDT"),
                 1_000_u64,

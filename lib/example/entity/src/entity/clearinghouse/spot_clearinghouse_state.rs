@@ -55,9 +55,10 @@ impl SpotClearinghouseState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PartyId;
 
     fn balance(asset_id: u64, available: u64, frozen: u64) -> BalanceV2 {
-        BalanceV2::new(1, 7, asset_id, available, frozen, 1, 0)
+        BalanceV2::new(PartyId::from("1"), 7, asset_id, available, frozen, 1, 0)
     }
 
     #[test]

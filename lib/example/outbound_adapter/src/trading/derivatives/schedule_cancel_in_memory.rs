@@ -415,13 +415,15 @@ mod tests {
 
     use super::*;
 
-    const USER: PartyId = PartyId("7".to_owned());
+    fn user() -> PartyId {
+        PartyId::from("7")
+    }
     const NOW_MS: u64 = 1_700_000_000_000;
     const DUE_MS: u64 = NOW_MS + 5_000;
 
     fn order_base(order_id: u64, side: OrderSide) -> OrderBase {
         OrderBase {
-            owner: USER,
+            owner: user(),
             order_id,
             symbol: Symbol::new(3, Coin::BTC, Coin::USDC),
             side,
@@ -461,7 +463,7 @@ mod tests {
             .expect("spot seed should succeed");
         outbound
             .seed_balance(BalanceV2::new(
-                USER.0,
+                user(),
                 70,
                 u64::from(release.currency().index()),
                 Decimal::ZERO,
@@ -485,7 +487,7 @@ mod tests {
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
             ScheduleHyperliquidCancelCmd {
-                party_id: USER,
+                party_id: user(),
                 cancel_at_ms: Some(DUE_MS),
                 now_ms: NOW_MS,
             },
@@ -506,17 +508,17 @@ mod tests {
         );
         assert_eq!(
             outbound.due_user_ids(DUE_MS, 10).expect("scan should work"),
-            vec![USER]
+            vec![user()]
         );
 
         let trigger = LogEntrySequencer::from_metadata(
             2,
             DUE_MS,
             0,
-            USER.0,
+            1,
             common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd {
-                party_id: USER,
+                party_id: user(),
                 now_ms: DUE_MS,
             },
         );

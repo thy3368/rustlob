@@ -322,7 +322,7 @@ mod tests {
     fn account(status: AccountStatus, version: u64) -> SpotAccount {
         SpotAccount {
             account_id: 1001,
-            party_id: 513,
+            party_id: crate::entity::common::PartyId::from("513"),
             status,
             created_at: 10,
             updated_at: 20,
@@ -342,9 +342,9 @@ mod tests {
 
     #[test]
     fn constructor_preserves_status_and_queries() {
-        let active = SpotAccount::new(1001, 513, AccountStatus::Active, 3);
-        let frozen = SpotAccount::new(1001, 513, AccountStatus::Frozen, 4);
-        let closed = SpotAccount::new(1001, 513, AccountStatus::Closed, 5);
+        let active = SpotAccount::new(1001, "513".into(), AccountStatus::Active, 3);
+        let frozen = SpotAccount::new(1001, "513".into(), AccountStatus::Frozen, 4);
+        let closed = SpotAccount::new(1001, "513".into(), AccountStatus::Closed, 5);
 
         assert!(active.is_active());
         assert!(active.allows_trading_and_funding());
@@ -382,7 +382,11 @@ mod tests {
     #[test]
     fn freeze_for_risk_transitions_active_account_atomically() {
         let mut account = account(AccountStatus::Active, 7);
-        let identity_before = (account.account_id, account.party_id, account.created_at);
+        let identity_before = (
+            account.account_id,
+            account.party_id.clone(),
+            account.created_at,
+        );
 
         assert_eq!(
             account
@@ -406,7 +410,11 @@ mod tests {
     #[test]
     fn unfreeze_from_risk_transitions_frozen_account_atomically() {
         let mut account = account(AccountStatus::Frozen, 9);
-        let identity_before = (account.account_id, account.party_id, account.created_at);
+        let identity_before = (
+            account.account_id,
+            account.party_id.clone(),
+            account.created_at,
+        );
 
         assert_eq!(
             account

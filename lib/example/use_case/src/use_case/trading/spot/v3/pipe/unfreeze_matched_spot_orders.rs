@@ -310,7 +310,7 @@ fn error(message: impl Into<String>) -> UnfreezeMatchedSpotOrdersError {
 mod tests {
     use common_entity::fsm_v2::Fsm as FsmV2;
     use common_entity::{Entity, LogEntrySequencer, ReplayableEntityChanges, UpdatedEntityEvents};
-    use example_core_entity::{BalanceV2, BalanceV2Command};
+    use example_core_entity::{BalanceV2, BalanceV2Command, PartyId};
     use rust_decimal::Decimal;
 
     use super::UnfreezeMatchedSpotOrdersPipeChanges;
@@ -320,7 +320,15 @@ mod tests {
         coin_idx: u64,
         command_index: u32,
     ) -> UpdatedEntityEvents<BalanceV2> {
-        let before = BalanceV2::new(party_id, party_id, coin_idx, 10, 2, 1, 1);
+        let before = BalanceV2::new(
+            PartyId::from(party_id.to_string()),
+            party_id,
+            coin_idx,
+            10,
+            2,
+            1,
+            1,
+        );
         let command = LogEntrySequencer::from_metadata_with_topic_at(
             4,
             5,

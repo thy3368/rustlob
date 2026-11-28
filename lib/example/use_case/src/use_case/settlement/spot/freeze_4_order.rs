@@ -127,7 +127,7 @@ mod tests {
 
     fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {
         SpotOrderV7::from_record(OrderBase {
-            owner: PartyId(OWNER_ID),
+            owner: PartyId::from(OWNER_ID.to_string()),
             order_id: ORDER_ID,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
             side,
@@ -143,7 +143,7 @@ mod tests {
 
     fn balance(party_id: u64, coin: Coin, available: i64) -> BalanceV2 {
         BalanceV2::new(
-            party_id,
+            PartyId::from(party_id.to_string()),
             party_id,
             u64::from(coin.index()),
             Decimal::from(available),

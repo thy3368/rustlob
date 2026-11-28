@@ -237,7 +237,7 @@ mod tests {
     #[test]
     fn version_overflow_is_rejected_without_mutation() {
         let mut schedule = ScheduledCancel {
-            party_id: 7,
+            party_id: PartyId::from("7"),
             cancel_at_ms: Some(10_000),
             trigger_day_utc: None,
             trigger_count: 0,
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn trigger_clears_deadline_and_increments_same_utc_day_count() {
         let day_start = 20 * UTC_DAY_MS;
-        let mut schedule = ScheduledCancel::new(7);
+        let mut schedule = ScheduledCancel::new(PartyId::from("7"));
         schedule
             .replace(Some(day_start + 5_000), day_start)
             .expect("arming should succeed");
@@ -269,10 +269,10 @@ mod tests {
 
     #[test]
     fn trigger_rejects_unarmed_and_not_yet_due_without_mutation() {
-        let mut unarmed = ScheduledCancel::new(7);
+        let mut unarmed = ScheduledCancel::new(PartyId::from("7"));
         assert_eq!(unarmed.trigger(1_000), Err(ScheduledCancelError::NotArmed));
 
-        let mut armed = ScheduledCancel::new(7);
+        let mut armed = ScheduledCancel::new(PartyId::from("7"));
         armed
             .replace(Some(10_000), 1_000)
             .expect("arming should succeed");
@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn trigger_count_resets_at_utc_day_boundary() {
-        let mut schedule = ScheduledCancel::new(7);
+        let mut schedule = ScheduledCancel::new(PartyId::from("7"));
         for count in 1..=MAX_DAILY_TRIGGERS {
             schedule
                 .replace(Some(5_000), 0)

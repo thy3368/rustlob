@@ -322,4 +322,27 @@ mod tests {
         ));
         fs::remove_file(path).unwrap();
     }
+
+    #[test]
+    fn version_three_record_is_rejected() {
+        let bytes = bincode::serialize(&StoredRecord {
+            version: 3,
+            lsn: 1,
+            logical_ts: 2,
+            client_id: 3,
+            request_id: 4,
+            t: 0,
+            p: 0,
+            party_id: "alice".to_owned(),
+            payload: "payload".to_owned(),
+        })
+        .unwrap();
+
+        assert!(matches!(
+            decode_record::<String>(&bytes),
+            Err(RewalLogEntryRepoError::CorruptRecord(
+                "unsupported record version"
+            ))
+        ));
+    }
 }

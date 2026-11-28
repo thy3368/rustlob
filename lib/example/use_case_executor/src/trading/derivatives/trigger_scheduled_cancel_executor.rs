@@ -37,7 +37,9 @@ mod tests {
 
     use super::*;
 
-    const USER: PartyId = PartyId("7".to_owned());
+    fn user() -> PartyId {
+        PartyId::from("7")
+    }
     const NOW_MS: u64 = 1_700_000_010_000;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -79,7 +81,7 @@ mod tests {
 
     impl FakeOutbound {
         fn due() -> Self {
-            let mut schedule = ScheduledCancel::new(USER.0);
+            let mut schedule = ScheduledCancel::new(user());
             schedule
                 .replace(Some(NOW_MS), NOW_MS - 5_000)
                 .expect("fixture should arm");
@@ -112,7 +114,7 @@ mod tests {
             2,
             common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd {
-                party_id: USER,
+                party_id: user(),
                 now_ms: NOW_MS,
             },
         );

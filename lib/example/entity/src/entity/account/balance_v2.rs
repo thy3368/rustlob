@@ -401,7 +401,7 @@ mod tests {
     use common_entity::{LogEntry, LogEntrySequencer};
     use rust_decimal::Decimal;
 
-    use super::{BalanceV2, BalanceV2Command, BalanceV2Error, BalanceV2Status};
+    use super::{BalanceV2, BalanceV2Command, BalanceV2Error, BalanceV2Status, PartyId};
 
     const LOGICAL_TS: u64 = 42;
     const LSN: u64 = 4;
@@ -411,7 +411,15 @@ mod tests {
     }
 
     fn balance(available: i64, frozen: i64, version: u64) -> BalanceV2 {
-        BalanceV2::new(1, 2, 3, decimal(available), decimal(frozen), version, 7)
+        BalanceV2::new(
+            PartyId::from("party-1"),
+            2,
+            3,
+            decimal(available),
+            decimal(frozen),
+            version,
+            7,
+        )
     }
 
     fn sequenced(command: BalanceV2Command) -> LogEntry<BalanceV2Command> {
