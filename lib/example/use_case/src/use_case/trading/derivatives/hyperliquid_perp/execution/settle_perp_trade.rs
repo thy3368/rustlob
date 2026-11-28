@@ -137,13 +137,13 @@ fn derive_changes(
     cmd: &LogEntry<SettleHyperliquidPerpTradeCmd>,
     state: &SettleHyperliquidPerpTradeState,
 ) -> Result<SettleHyperliquidPerpTradeChanges, SettleHyperliquidPerpTradeError> {
-    let mut positions: BTreeMap<(u64, u32), PerpPositionV3> = state
+    let mut positions: BTreeMap<(PartyId, u32), PerpPositionV3> = state
         .positions
         .iter()
         .cloned()
-        .map(|position| ((position.party_id().0, position.coin().index()), position))
+        .map(|position| ((position.party_id().clone(), position.coin().index()), position))
         .collect();
-    let mut balance_deltas: BTreeMap<u64, Decimal> = BTreeMap::new();
+    let mut balance_deltas: BTreeMap<PartyId, Decimal> = BTreeMap::new();
     let mut changed_positions = Vec::with_capacity(state.trades.len() * 2);
     let mut changed_trades = Vec::with_capacity(state.trades.len());
 
@@ -151,13 +151,13 @@ fn derive_changes(
         let mut start_positions = [Decimal::ZERO; 2];
         let mut closed_pnls = [Decimal::ZERO; 2];
         for (index, (user, fee)) in [
-            (trade.trade_base.taker_party, trade.trade_base.taker_fee),
-            (trade.trade_base.maker_party, trade.trade_base.maker_fee),
+            (trade.trade_base.taker_party.clone(), trade.trade_base.taker_fee),
+            (trade.trade_base.maker_party.clone(), trade.trade_base.maker_fee),
         ]
         .into_iter()
         .enumerate()
         {
-            let key = (user.0, trade.trade_base.symbol.base.index());
+            let key = (user.clone(), trade.trade_base.symbol.base.index());
             let before = positions
                 .get(&key)
                 .cloned()
@@ -182,7 +182,7 @@ fn derive_changes(
             let delta = closed_pnl
                 .checked_sub(fee)
                 .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
-            let total = balance_deltas.entry(user.0).or_default();
+            let total = balance_deltas.entry(user).or_default();
             *total = total
                 .checked_add(delta)
                 .ok_or(SettleHyperliquidPerpTradeError::ArithmeticOverflow)?;
@@ -206,14 +206,14 @@ fn derive_changes(
     }
 
     let mut changed_margin_balances = Vec::with_capacity(balance_deltas.len());
-    for (account_id, delta) in balance_deltas {
+    for (party_id, delta) in balance_deltas {
         if delta.is_zero() {
             continue;
         }
         let before = state
             .margin_balances
             .iter()
-            .find(|balance| balance.account_id() == account_id)
+            .find(|balance| balance.party_id() == &party_id)
             .cloned()
             .ok_or(SettleHyperliquidPerpTradeError::MarginBalanceNotFound)?;
         let event = if delta.is_sign_positive() {
