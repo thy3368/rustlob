@@ -40,6 +40,7 @@ pub enum CreatedEntityEventError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreatedEntityEvent<E> {
     after: E,
+    /// todo events可以去掉了
     event: ReplayableDomainEvent,
 }
 
@@ -98,6 +99,7 @@ impl NonEmptyReplayEvents {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdatedEntityEvents<E> {
     after: E,
+    /// todo events可以去掉了
     events: NonEmptyReplayEvents,
 }
 
@@ -154,6 +156,7 @@ mod tests {
         id: u64,
         lsn: u64,
         command_index: u32,
+        replay_events: Vec<crate::ReplayableDomainEvent>,
     }
 
     impl crate::Shard for Entity {
@@ -163,6 +166,14 @@ mod tests {
     }
 
     impl crate::Entity for Entity {
+        fn append_event(&mut self, event: crate::ReplayableDomainEvent) {
+            self.replay_events.push(event);
+        }
+
+        fn replay_events(&self) -> &[crate::ReplayableDomainEvent] {
+            &self.replay_events
+        }
+
         fn entity_id(&self) -> u64 {
             self.id
         }
@@ -218,6 +229,7 @@ mod tests {
                 id: 7,
                 lsn: 10,
                 command_index: 1,
+                replay_events: Vec::new(),
             },
             9,
             3,
@@ -240,6 +252,7 @@ mod tests {
             id: 7,
             lsn: 10,
             command_index: 1,
+            replay_events: Vec::new(),
         };
         assert!(matches!(
             UpdatedEntityEvents::try_new(after.clone(), 9, 0, vec![event(7, 2, (0, 0), (10, 1))]),
@@ -257,6 +270,7 @@ mod tests {
             id: 7,
             lsn: 10,
             command_index: 1,
+            replay_events: Vec::new(),
         };
         assert!(CreatedEntityEvent::try_new(after.clone(), event(7, 2, (0, 0), (10, 1))).is_ok());
         assert!(matches!(

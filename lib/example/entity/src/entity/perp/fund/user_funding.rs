@@ -15,6 +15,8 @@ const USER_FUNDING_ENTITY_TYPE: u8 = 14;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UserFunding {
+    #[serde(default, skip)]
+    replay_events: Vec<ReplayableDomainEvent>,
     /// 本次用户资金费事实的稳定标识
     funding_id: u64,
     /// 用户
@@ -130,6 +132,7 @@ impl UserFunding {
     ) -> Self {
         let funding_rate = funding_rate.value();
         Self {
+            replay_events: Vec::new(),
             funding_id,
             party_id,
             coin,
@@ -158,6 +161,7 @@ impl UserFunding {
         version: u64,
     ) -> Self {
         Self {
+            replay_events: Vec::new(),
             funding_id,
             party_id,
             coin,
@@ -312,6 +316,12 @@ impl Shard for UserFunding {
 }
 
 impl Entity for UserFunding {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.funding_id
     }

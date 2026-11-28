@@ -317,6 +317,7 @@ fn create_trade(
 ) -> Result<CreatedEntityEvent<SpotTradeV3>, EntityError> {
     let taker_facts = taker.after().order_base();
     let trade = SpotTradeV3 {
+        replay_events: Vec::new(),
         comon_trade: TradeBase {
             trade_id: fill.trade_id,
             symbol: taker_facts.symbol,

@@ -1,5 +1,7 @@
 use common_entity::fsm_v2::Fsm;
-use common_entity::{Entity, EntityError, EntityFieldChange, LogEntry, Shard, TrackDiff};
+use common_entity::{
+    Entity, EntityError, EntityFieldChange, LogEntry, ReplayableDomainEvent, Shard, TrackDiff,
+};
 use lob_repo_v2::lob::LobOrder;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -72,6 +74,7 @@ impl SpotOrderV7Command {
 pub struct SpotOrderV7 {
     order_base: OrderBase,
     command_index: u32,
+    replay_events: Vec<ReplayableDomainEvent>,
 }
 
 impl SpotOrderV7 {
@@ -151,6 +154,7 @@ impl SpotOrderV7 {
         Self {
             order_base: order,
             command_index: 0,
+            replay_events: Vec::new(),
         }
     }
 
@@ -168,6 +172,7 @@ impl SpotOrderV7 {
                 Self {
                     order_base: child,
                     command_index: 0,
+                    replay_events: Vec::new(),
                 }
             })
             .collect();
@@ -183,6 +188,7 @@ impl SpotOrderV7 {
         Ok(Self {
             order_base: order,
             command_index,
+            replay_events: Vec::new(),
         })
     }
     pub fn order_base(&self) -> &OrderBase {
@@ -379,6 +385,7 @@ impl Fsm for SpotOrderV7 {
         Ok(Self {
             order_base: next,
             command_index,
+            replay_events: self.replay_events.clone(),
         })
     }
 }
@@ -585,6 +592,12 @@ impl TrackDiff for SpotOrderV7 {
 }
 
 impl Entity for SpotOrderV7 {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.order_base.order_id
     }

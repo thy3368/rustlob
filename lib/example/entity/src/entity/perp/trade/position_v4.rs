@@ -177,6 +177,8 @@ pub enum PositionError {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// 永续仓位；`version` 是最近应用的全局 command LSN，可跳号或被同一 command 复用。
 pub struct PositionV4 {
+    #[serde(default, skip)]
+    replay_events: Vec<ReplayableDomainEvent>,
     position_id: u64,
     account_id: u64,
     coin: Coin,
@@ -192,6 +194,7 @@ pub struct PositionV4 {
 impl PositionV4 {
     pub fn empty(position_id: u64, account_id: u64, coin: Coin) -> Self {
         Self {
+            replay_events: Vec::new(),
             position_id,
             account_id,
             coin,
@@ -580,6 +583,12 @@ impl Shard for PositionV4 {
     }
 }
 impl Entity for PositionV4 {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.position_id
     }

@@ -115,6 +115,7 @@ pub enum SpotAccountError {
 /// `Account` 属于 `Party/Place/Thing`，表达用户与账户生命周期，不承载某个币种的余额。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpotAccount {
+    replay_events: Vec<ReplayableDomainEvent>,
     /// 账户 ID。
     pub account_id: u64,
     /// 用户 ID 或业务主体 ID。
@@ -140,6 +141,7 @@ impl SpotAccount {
         version: u64,
     ) -> Self {
         Self {
+            replay_events: Vec::new(),
             account_id,
             party_id,
             status,
@@ -259,6 +261,12 @@ impl common_entity::Shard for SpotAccount {
 }
 
 impl Entity for SpotAccount {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.account_id
     }
@@ -321,6 +329,7 @@ mod tests {
 
     fn account(status: AccountStatus, version: u64) -> SpotAccount {
         SpotAccount {
+            replay_events: Vec::new(),
             account_id: 1001,
             party_id: crate::entity::common::PartyId::from("513"),
             status,

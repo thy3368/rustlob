@@ -1,5 +1,6 @@
 use common_entity::{
-    AggregateRole, Entity, EntityFieldChange, FourColorArchetype, Shard, TrackDiff,
+    AggregateRole, Entity, EntityFieldChange, FourColorArchetype, ReplayableDomainEvent, Shard,
+    TrackDiff,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -19,6 +20,8 @@ pub struct ScheduledCancel {
     trigger_count: u8,
     version: u64,
     updated_at_ms: u64,
+    #[serde(default, skip)]
+    replay_events: Vec<ReplayableDomainEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -38,6 +41,7 @@ pub enum ScheduledCancelError {
 impl ScheduledCancel {
     pub fn new(party_id: PartyId) -> Self {
         Self {
+            replay_events: Vec::new(),
             party_id,
             cancel_at_ms: None,
             trigger_day_utc: None,
@@ -178,6 +182,12 @@ impl Shard for ScheduledCancel {
 }
 
 impl Entity for ScheduledCancel {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(self.party_id.as_ref())
     }
@@ -237,6 +247,7 @@ mod tests {
     #[test]
     fn version_overflow_is_rejected_without_mutation() {
         let mut schedule = ScheduledCancel {
+            replay_events: Vec::new(),
             party_id: PartyId::from("7"),
             cancel_at_ms: Some(10_000),
             trigger_day_utc: None,

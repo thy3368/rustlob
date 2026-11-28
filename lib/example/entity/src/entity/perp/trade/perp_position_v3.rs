@@ -185,6 +185,8 @@ pub enum PerpPositionV3Output {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PerpPositionV3 {
+    #[serde(default, skip)]
+    replay_events: Vec<ReplayableDomainEvent>,
     /// 仓位的唯一标识。
     position_id: u64,
     /// 持有该仓位的账户标识。
@@ -240,6 +242,7 @@ impl PerpPositionV3 {
         }
         validate_margin(leverage, margin_mode, isolated_margin)?;
         Ok(Self {
+            replay_events: Vec::new(),
             position_id: position_key,
             party_id,
             coin,
@@ -258,6 +261,7 @@ impl PerpPositionV3 {
     }
     pub fn empty(position_id: u64, party_id: PartyId, coin: Coin) -> Self {
         Self {
+            replay_events: Vec::new(),
             position_id,
             party_id,
             coin,
@@ -425,6 +429,12 @@ impl Shard for PerpPositionV3 {
 }
 
 impl Entity for PerpPositionV3 {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.position_id
     }
@@ -615,6 +625,7 @@ mod tests {
 
     fn trade(side: OrderSide, price: i64, size: i64, fee: Decimal) -> PerpTradeV3 {
         PerpTradeV3 {
+            replay_events: Vec::new(),
             trade_base: TradeBase {
                 trade_id: 8,
                 symbol: Symbol::new(1, Coin::BTC, Coin::USDC),

@@ -93,6 +93,7 @@ pub enum PerpTradeV3Error {
 /// 永续成交；结算版本直接采用 command LSN，而不是成交本地版本加一。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpTradeV3 {
+    pub replay_events: Vec<ReplayableDomainEvent>,
     pub trade_base: TradeBase,
 
     pub state: PerpTradeV3State,
@@ -230,6 +231,12 @@ impl Shard for PerpTradeV3 {
 }
 
 impl Entity for PerpTradeV3 {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.trade_base.trade_id
     }
@@ -314,6 +321,7 @@ mod tests {
 
     fn trade() -> PerpTradeV3 {
         PerpTradeV3 {
+            replay_events: Vec::new(),
             trade_base: TradeBase {
                 trade_id: 7,
                 symbol: Symbol::new(1, Coin::BTC, Coin::USDC),

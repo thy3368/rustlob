@@ -1,6 +1,6 @@
 use common_entity::{
     AggregateRole, Entity, EntityFieldChange, FinancialClassification, FourColorArchetype,
-    TrackDiff,
+    ReplayableDomainEvent, TrackDiff,
 };
 use thiserror::Error;
 
@@ -281,6 +281,7 @@ pub enum CexOptionOrderBehaviorError {
 /// 下单资金占用需求，不修改余额、仓位、订单簿，也不处理到期行权结算。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CexOptionOrder {
+    replay_events: Vec<ReplayableDomainEvent>,
     /// 本系统生成的稳定订单 ID。
     pub order_id: String,
     /// 订单所属账户 ID。
@@ -322,6 +323,7 @@ impl CexOptionOrder {
         client_order_id: Option<String>,
     ) -> Self {
         Self {
+            replay_events: Vec::new(),
             order_id,
             account_id,
             instrument_id,
@@ -608,6 +610,12 @@ impl common_entity::Shard for CexOptionOrder {
 }
 
 impl Entity for CexOptionOrder {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.order_id)
     }

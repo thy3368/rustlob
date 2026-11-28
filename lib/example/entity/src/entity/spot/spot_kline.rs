@@ -1,6 +1,7 @@
 use base_types_v2::Symbol;
 use common_entity::{
-    Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, TrackDiff,
+    Entity, EntityFieldChange, EntityMutationModel, FourColorArchetype, ReplayableDomainEvent,
+    TrackDiff,
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,8 @@ pub struct SpotKline {
     pub trade_count: u64,
     pub first_trade_id: u64,
     pub last_trade_id: u64,
+    #[serde(default, skip)]
+    replay_events: Vec<ReplayableDomainEvent>,
 }
 
 impl SpotKline {
@@ -56,6 +59,7 @@ impl SpotKline {
             ],
         );
         Self {
+            replay_events: Vec::new(),
             id,
             symbol,
             interval_ns,
@@ -98,6 +102,12 @@ impl TrackDiff for SpotKline {
 }
 
 impl Entity for SpotKline {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.id
     }

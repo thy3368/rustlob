@@ -92,6 +92,7 @@ pub enum BalanceLedgerV3Error {
 /// 同一 command 修改余额并生成 ledger 时二者共享同一 LSN。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BalanceLedgerV3 {
+    replay_events: Vec<ReplayableDomainEvent>,
     pub entry_id: u64,
     pub party_id: PartyId,
     pub account_id: u64,
@@ -117,6 +118,7 @@ impl BalanceLedgerV3 {
             return Err(BalanceLedgerV3Error::InvalidAmount);
         }
         Ok(Self {
+            replay_events: Vec::new(),
             entry_id,
             party_id: balance.party_id().clone(),
             account_id: balance.account_id(),
@@ -276,6 +278,12 @@ impl common_entity::Shard for BalanceLedgerV3 {
 }
 
 impl Entity for BalanceLedgerV3 {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.entry_id
     }

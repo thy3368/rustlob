@@ -301,6 +301,7 @@ mod tests {
 
     fn trade(kind: PerpTradeKind) -> PerpTradeV3 {
         PerpTradeV3 {
+            replay_events: Vec::new(),
             trade_base: TradeBase {
                 trade_id: 42,
                 symbol: Symbol::new(1, Coin::BTC, Coin::USDC),

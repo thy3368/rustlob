@@ -198,6 +198,7 @@ pub enum HyperliquidPerpOrderBehaviorError {
 /// 构造器假设输入来自已校验命令或事件回放，不重复执行业务拒绝规则。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpOrder {
+    replay_events: Vec<ReplayableDomainEvent>,
     /// 本系统生成的稳定订单 ID。
     pub order_id: u64,
     /// Hyperliquid 返回的 numeric `oid`；尚未确认时可以为空。//todo delete
@@ -256,6 +257,7 @@ impl HyperliquidPerpOrder {
         client_order_id: Option<String>,
     ) -> Self {
         Self {
+            replay_events: Vec::new(),
             order_id,
             exchange_oid,
             asset,
@@ -537,6 +539,12 @@ impl common_entity::Shard for HyperliquidPerpOrder {
 }
 
 impl Entity for HyperliquidPerpOrder {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.order_id
     }

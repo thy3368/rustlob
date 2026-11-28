@@ -1,4 +1,4 @@
-use common_entity::{Entity, EntityFieldChange, Fsm, TrackDiff};
+use common_entity::{Entity, EntityFieldChange, Fsm, ReplayableDomainEvent, TrackDiff};
 use rust_decimal::Decimal;
 use thiserror::Error;
 
@@ -25,6 +25,7 @@ pub enum HyperliquidPerpTradeError {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperliquidPerpTrade {
+    replay_events: Vec<ReplayableDomainEvent>,
     pub trade_id: String,
     pub match_id: String,
     pub asset: u32,
@@ -62,6 +63,7 @@ impl HyperliquidPerpTrade {
         executed_at_ms: u64,
     ) -> Self {
         Self {
+            replay_events: Vec::new(),
             trade_id,
             match_id,
             asset,
@@ -131,6 +133,7 @@ impl HyperliquidPerpTrade {
         ms: Decimal,
     ) -> Result<PerpTradeV3, HyperliquidPerpTradeError> {
         Ok(PerpTradeV3 {
+            replay_events: Vec::new(),
             trade_base: TradeBase {
                 trade_id: self
                     .trade_id
@@ -195,6 +198,12 @@ impl common_entity::Shard for HyperliquidPerpTrade {
     }
 }
 impl Entity for HyperliquidPerpTrade {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.trade_id)
     }

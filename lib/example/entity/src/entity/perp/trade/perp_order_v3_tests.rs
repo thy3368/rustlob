@@ -22,6 +22,7 @@ fn order(id: u64, side: OrderSide, size: Decimal, status: SpotOrderStatus) -> Pe
     base.created_at = 10;
     base.updated_at = 10;
     PerpOrderV3 {
+        replay_events: Vec::new(),
         comon_order: base,
         reduce_only: false,
         is_liquidation: false,

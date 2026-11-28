@@ -474,6 +474,7 @@ mod tests {
             .expect("balance seed should succeed");
         outbound
             .seed_perp_order(PerpOrderV3 {
+                replay_events: Vec::new(),
                 comon_order: order_base(12, OrderSide::Sell),
                 reduce_only: false,
                 is_liquidation: false,

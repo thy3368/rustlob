@@ -307,6 +307,7 @@ mod tests {
             LOGICAL_TS - 10,
         );
         let perp = PerpOrderV3 {
+            replay_events: Vec::new(),
             comon_order: order_base(12, OrderSide::Sell),
             reduce_only: false,
             is_liquidation: false,

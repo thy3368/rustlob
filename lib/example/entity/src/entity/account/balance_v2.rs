@@ -1,5 +1,7 @@
 use common_entity::fsm_v2::Fsm;
-use common_entity::{Entity, EntityError, EntityFieldChange, LogEntry, TrackDiff};
+use common_entity::{
+    Entity, EntityError, EntityFieldChange, LogEntry, ReplayableDomainEvent, TrackDiff,
+};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -70,6 +72,7 @@ pub enum BalanceV2Command {
 /// 可变余额实体，同时承载稳定身份、生命周期和 replay 字段。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BalanceV2 {
+    replay_events: Vec<ReplayableDomainEvent>,
     party_id: PartyId,
     account_id: u64,
     coin_idx: u64,
@@ -151,6 +154,7 @@ impl BalanceV2 {
         F: Into<Decimal>,
     {
         Self {
+            replay_events: Vec::new(),
             party_id,
             account_id,
             coin_idx,
@@ -249,6 +253,7 @@ impl Fsm for BalanceV2 {
             }
         };
         let after = Self {
+            replay_events: self.replay_events.clone(),
             party_id: self.party_id.clone(),
             account_id: self.account_id,
             coin_idx: self.coin_idx,
@@ -355,6 +360,12 @@ impl common_entity::Shard for BalanceV2 {
     }
 }
 impl Entity for BalanceV2 {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.business_entity_id())
     }

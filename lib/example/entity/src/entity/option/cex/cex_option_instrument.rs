@@ -1,4 +1,6 @@
-use common_entity::{Entity, EntityFieldChange, FourColorArchetype, TrackDiff};
+use common_entity::{
+    Entity, EntityFieldChange, FourColorArchetype, ReplayableDomainEvent, TrackDiff,
+};
 
 const CEX_OPTION_INSTRUMENT_ENTITY_TYPE: u8 = 40;
 
@@ -54,6 +56,7 @@ impl CexOptionInstrumentStatus {
 /// Call/Put 类型。订单只引用 `instrument_id`，不复制行权价。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CexOptionInstrument {
+    replay_events: Vec<ReplayableDomainEvent>,
     /// 交易所风格合约 ID，例如 `BTC-20260828-100000-PUT`。
     pub instrument_id: String,
     /// 标的资产，例如 `BTC`。
@@ -88,6 +91,7 @@ impl CexOptionInstrument {
         status: CexOptionInstrumentStatus,
     ) -> Self {
         Self {
+            replay_events: Vec::new(),
             instrument_id,
             underlying_asset,
             quote_asset,
@@ -175,6 +179,12 @@ impl common_entity::Shard for CexOptionInstrument {
 }
 
 impl Entity for CexOptionInstrument {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         common_entity::stable_string_entity_id(&self.instrument_id)
     }

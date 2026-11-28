@@ -158,6 +158,7 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
             PlaceHyperliquidPerpOrderExecution::Market { .. } => (PriceType::Market, OrderTif::Ioc),
         };
         let created_order = PerpOrderV3 {
+            replay_events: Vec::new(),
             comon_order: OrderBase {
                 owner: cmd.party_id.clone(),
                 order_id: state.next_order_sequence,

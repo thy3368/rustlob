@@ -264,6 +264,7 @@ mod tests {
 
     fn trade(id: u64, created_at: u64, price: Decimal, size: Decimal) -> SpotTradeV3 {
         SpotTradeV3 {
+            replay_events: Vec::new(),
             comon_trade: TradeBase {
                 trade_id: id,
                 symbol: symbol(),

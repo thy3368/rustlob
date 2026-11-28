@@ -148,6 +148,12 @@ impl AggregateRole {
 
 /// Enhanced entity contract for generating compact replayable entity events.
 pub trait Entity: Shard + Clone + Debug + Send + Sync + 'static {
+    /// 将已成功投影的 replay event 追加到实体运行时事件历史。
+    fn append_event(&mut self, event: ReplayableDomainEvent);
+
+    /// 返回实体按追加顺序保存的 replay event 历史。
+    fn replay_events(&self) -> &[ReplayableDomainEvent];
+
     fn entity_id(&self) -> u64;
 
     ///记录owner

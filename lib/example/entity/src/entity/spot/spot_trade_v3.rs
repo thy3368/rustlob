@@ -1,7 +1,7 @@
 use common_entity::fsm_v2::Fsm;
 use common_entity::{
     AggregateRole, Entity, EntityError, EntityFieldChange, EntityMutationModel, FourColorArchetype,
-    LogEntry, Shard, TrackDiff,
+    LogEntry, ReplayableDomainEvent, Shard, TrackDiff,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -61,6 +61,7 @@ pub struct SpotTradeV3 {
     pub settlement_status: SpotTradeSettlementStatus,
     pub lsn: u64,
     pub command_index: u32,
+    pub replay_events: Vec<ReplayableDomainEvent>,
 }
 
 impl TrackDiff for SpotTradeV3 {
@@ -105,6 +106,12 @@ impl TrackDiff for SpotTradeV3 {
 }
 
 impl Entity for SpotTradeV3 {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.comon_trade.trade_id
     }

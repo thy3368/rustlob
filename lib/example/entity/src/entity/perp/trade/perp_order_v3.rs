@@ -187,6 +187,7 @@ pub enum PerpOrderV3Error {
 /// 订单 LSN 来自全局 command；一次撮合中的 taker、maker 与多次内部推进共享事件 LSN。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerpOrderV3 {
+    pub replay_events: Vec<ReplayableDomainEvent>,
     pub comon_order: OrderBase,
     /// 是否仅允许减少既有敞口。实体保存意图，不在订单内模拟仓位。
     pub reduce_only: bool,
@@ -346,6 +347,7 @@ fn compute_match(
             .and_then(|base| base.checked_add(ordinal))
             .ok_or(PerpOrderV3Error::ArithmeticOverflow)?;
         trades.push(PerpTradeV3 {
+            replay_events: Vec::new(),
             trade_base: TradeBase {
                 trade_id,
                 symbol: taker.comon_order.symbol,
@@ -577,6 +579,12 @@ impl Shard for PerpOrderV3 {
 }
 
 impl Entity for PerpOrderV3 {
+    fn append_event(&mut self, event: ReplayableDomainEvent) {
+        self.replay_events.push(event);
+    }
+    fn replay_events(&self) -> &[ReplayableDomainEvent] {
+        &self.replay_events
+    }
     fn entity_id(&self) -> u64 {
         self.comon_order.order_id
     }

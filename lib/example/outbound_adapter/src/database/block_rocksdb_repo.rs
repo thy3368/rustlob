@@ -541,6 +541,7 @@ impl TradeDto {
 
     fn into_entity(self) -> SpotTradeV3 {
         SpotTradeV3 {
+            replay_events: Vec::new(),
             comon_trade: self.trade,
             settlement_status: if self.settled {
                 SpotTradeSettlementStatus::Settled
@@ -821,6 +822,7 @@ mod tests {
 
     fn trade(id: u64, price: i64) -> SpotTradeV3 {
         SpotTradeV3 {
+            replay_events: Vec::new(),
             comon_trade: TradeBase {
                 trade_id: id,
                 symbol: EntitySymbol::new(1, Coin::BTC, Coin::USDT),

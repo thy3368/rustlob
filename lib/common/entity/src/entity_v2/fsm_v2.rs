@@ -60,7 +60,7 @@ pub trait Fsm: TrackDiff + Sized {
         let command_index = command.command_index();
         let topic = command.topic();
         let partition = command.partition();
-        let after = self.derive_transition(command)?;
+        let mut after = self.derive_transition(command)?;
         let mut replay_event = after.track_update_event_from_at(
             self,
             self.lsn(),
@@ -75,7 +75,7 @@ pub trait Fsm: TrackDiff + Sized {
 
         after.append_event(replay_event);
 
-        Ok((after))
+        Ok(after)
     }
 }
 
@@ -90,6 +90,7 @@ mod tests {
         lsn: u64,
         command_index: u32,
         logical_ts: u64,
+        replay_events: Vec<ReplayableDomainEvent>,
     }
 
     impl Shard for TestEntity {
@@ -107,6 +108,14 @@ mod tests {
     }
 
     impl Entity for TestEntity {
+        fn append_event(&mut self, event: ReplayableDomainEvent) {
+            self.replay_events.push(event);
+        }
+
+        fn replay_events(&self) -> &[ReplayableDomainEvent] {
+            &self.replay_events
+        }
+
         fn entity_id(&self) -> u64 {
             11
         }
@@ -160,6 +169,9 @@ mod tests {
         type Error = EntityError;
 
         fn derive_transition(&self, command: LogEntry<Self::Command>) -> Result<Self, Self::Error> {
+            if *command.payload() == u64::MAX {
+                return Err(EntityError::Custom("derive transition failed".into()));
+            }
             let mut after = self.clone();
             after.value = *command.payload();
             after.lsn = command.lsn();
@@ -168,30 +180,39 @@ mod tests {
             Ok(after)
         }
 
-        fn event_type(_command: &Self::Command) -> u8 {
-            9
+        fn event_type(command: &Self::Command) -> u8 {
+            if *command == 0 { 0 } else { 9 }
         }
+    }
+
+    fn entity(value: u64, lsn: u64, command_index: u32, logical_ts: u64) -> TestEntity {
+        TestEntity {
+            value,
+            lsn,
+            command_index,
+            logical_ts,
+            replay_events: Vec::new(),
+        }
+    }
+
+    fn command(value: u64, lsn: u64, command_index: u32, logical_ts: u64) -> LogEntry<u64> {
+        LogEntrySequencer::from_metadata_with_topic_at(
+            8,
+            6,
+            lsn,
+            command_index,
+            logical_ts,
+            0,
+            0,
+            "command-party".to_owned(),
+            value,
+        )
     }
 
     #[test]
     fn transition_uses_command_routing_and_preserves_replay_metadata() {
-        let before = TestEntity {
-            value: 5,
-            lsn: 20,
-            command_index: 4,
-            logical_ts: 30,
-        };
-        let command = LogEntrySequencer::from_metadata_with_topic_at(
-            8,
-            6,
-            21,
-            7,
-            31,
-            0,
-            0,
-            "command-party".to_owned(),
-            6,
-        );
+        let before = entity(5, 20, 4, 30);
+        let command = command(6, 21, 7, 31);
 
         let (after, event) = before
             .transition(command)
@@ -203,5 +224,60 @@ mod tests {
         assert_eq!((event.previous_lsn, event.previous_command_index), (20, 4));
         assert_eq!(event.logical_ts, 31);
         assert_eq!(event.domain_event_type, 9);
+        assert!(after.replay_events().is_empty());
+        assert!(before.replay_events().is_empty());
+    }
+
+    #[test]
+    fn transition_v2_appends_complete_event_without_changing_original() {
+        let before = entity(5, 20, 4, 30);
+
+        let after = before
+            .transition_v2(command(6, 21, 7, 31))
+            .expect("FSM transition should succeed");
+
+        assert_eq!(after.value, 6);
+        assert!(before.replay_events().is_empty());
+        let [event] = after.replay_events() else {
+            panic!("transition_v2 should append exactly one event");
+        };
+        assert_eq!((event.t, event.p), (8, 6));
+        assert_eq!((event.lsn, event.command_index), (21, 7));
+        assert_eq!((event.previous_lsn, event.previous_command_index), (20, 4));
+        assert_eq!(event.logical_ts, 31);
+        assert_eq!(event.domain_event_type, 9);
+        assert_eq!(event.field_changes.len(), 1);
+        assert_eq!(event.field_changes[0].field_name_as_str().unwrap(), "value");
+        assert_eq!(event.field_changes[0].old_value_bytes(), b"5");
+        assert_eq!(event.field_changes[0].new_value_bytes(), b"6");
+    }
+
+    #[test]
+    fn transition_v2_appends_events_in_transition_order() {
+        let first = entity(5, 20, 4, 30)
+            .transition_v2(command(6, 21, 7, 31))
+            .expect("first transition should succeed");
+        let second = first
+            .transition_v2(command(7, 22, 8, 32))
+            .expect("second transition should succeed");
+
+        assert_eq!(second.replay_events().len(), 2);
+        assert_eq!(second.replay_events()[0].lsn, 21);
+        assert_eq!(second.replay_events()[1].lsn, 22);
+    }
+
+    #[test]
+    fn transition_v2_failures_do_not_append_events() {
+        let before = entity(5, 20, 4, 30);
+
+        assert!(before.clone().transition_v2(command(0, 21, 7, 31)).is_err());
+        assert!(
+            before
+                .clone()
+                .transition_v2(command(u64::MAX, 21, 7, 31))
+                .is_err()
+        );
+        assert!(before.clone().transition_v2(command(5, 21, 7, 31)).is_err());
+        assert!(before.replay_events().is_empty());
     }
 }
