@@ -1,26 +1,28 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
 use common_entity::{
     Entity, EntityError, LogEntry, LogEntrySequencer, ReplayableDomainEvent,
     ReplayableEntityChanges,
 };
+use example_core_entity::account::symbol::Symbol;
 use example_core_entity::{
-    BalanceV2, OrderGroupRelation, OrderSide, OrderType, PlaceSpotOrderPipelineV2Cmd, SpotOrderV7,
+    BalanceV2, OrderGroupRelation, OrderSide, OrderType, PartyId, PlaceSpotOrderPipelineV2Cmd,
+    SpotOrderV7,
 };
 
-use crate::pipe::freeze_spot_order::{freeze_spot_order_from, FreezeSpotOrderPipeChanges};
+use crate::pipe::freeze_spot_order::{FreezeSpotOrderPipeChanges, freeze_spot_order_from};
 use crate::pipe::match_spot_order::{
-    match_spot_order_from, MatchSpotOrderInput, MatchSpotOrderPipeChanges,
+    MatchSpotOrderInput, MatchSpotOrderPipeChanges, match_spot_order_from,
 };
-use crate::pipe::place_spot_order::{place_spot_order, PlaceSpotOrderPipeChanges};
+use crate::pipe::place_spot_order::{PlaceSpotOrderPipeChanges, place_spot_order};
 use crate::pipe::settle_matched_spot_trades::{
-    settle_matched_spot_trades_from, SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput,
-    SettleTradesPipeChanges, SpotOrderSettlementBalances,
+    SettleMatchedSpotTradesError, SettleMatchedSpotTradesInput, SettleTradesPipeChanges,
+    settle_matched_spot_trades_from,
 };
 use crate::pipe::unfreeze_matched_spot_orders::{
-    unfreeze_matched_spot_orders, SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError,
-    UnfreezeMatchedSpotOrdersPipeChanges,
+    SpotOrderHeldBalance, UnfreezeMatchedSpotOrdersError, UnfreezeMatchedSpotOrdersPipeChanges,
+    unfreeze_matched_spot_orders,
 };
 
 /// 独立现货下单 pipe_line 的分支化业务事实。
@@ -153,7 +155,8 @@ impl std::error::Error for PlaceSpotOrderPipelineV2Error {}
 pub fn place_spot_order_pipeline_v2(
     command: LogEntry<PlaceSpotOrderPipelineV2Cmd>,
     maker_orders: &[SpotOrderV7],
-    balances_by_order_id: &HashMap<u64, SpotOrderSettlementBalances>,
+    base_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
+    quote_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
     trade_id_start: u64,
     maker_fee_bps: u64,
     taker_fee_bps: u64,
@@ -165,7 +168,8 @@ pub fn place_spot_order_pipeline_v2(
     validate_inputs(
         command.payload(),
         maker_orders,
-        balances_by_order_id,
+        base_balances,
+        quote_balances,
         trade_id_start,
         lsn,
     )?;
@@ -175,10 +179,7 @@ pub fn place_spot_order_pipeline_v2(
         command.payload().clone(),
     ))
     .map_err(PlaceSpotOrderPipelineV2Error::Place)?;
-    let pair = balances_by_order_id
-        .get(&command.order_id)
-        .ok_or_else(|| invalid(format!("missing balances for order {}", command.order_id)))?;
-    let held = held_balance(created_order.after(), pair);
+    let held = held_balance(created_order.after(), base_balances, quote_balances)?;
     let frozen = freeze_spot_order_from(
         created_order.after(),
         held,
@@ -190,8 +191,13 @@ pub fn place_spot_order_pipeline_v2(
     )
     .map_err(PlaceSpotOrderPipelineV2Error::Freeze)?;
 
-    let mut working_balances = balances_by_order_id.clone();
-    replace_balance_snapshot(&mut working_balances, frozen.balance.after())?;
+    let mut working_base_balances = base_balances.clone();
+    let mut working_quote_balances = quote_balances.clone();
+    replace_balance_snapshot(
+        &mut working_base_balances,
+        &mut working_quote_balances,
+        frozen.balance.after(),
+    )?;
     let match_start = 3;
     let matched = match_spot_order_from(
         frozen.order.after(),
@@ -211,7 +217,8 @@ pub fn place_spot_order_pipeline_v2(
     let settle_start = next_command_index(match_start, &matched)?;
     let settled = settle_matched_spot_trades_from(
         &matched,
-        &working_balances,
+        &working_quote_balances,
+        &working_base_balances,
         SettleMatchedSpotTradesInput {
             lsn,
             logical_ts,
@@ -222,13 +229,21 @@ pub fn place_spot_order_pipeline_v2(
     )
     .map_err(PlaceSpotOrderPipelineV2Error::Settle)?;
     for balance in &settled.updated_balances {
-        replace_balance_snapshot(&mut working_balances, balance.after())?;
+        replace_balance_snapshot(
+            &mut working_base_balances,
+            &mut working_quote_balances,
+            balance.after(),
+        )?;
     }
     let unfreeze_previous = last_position(&settled)
         .or_else(|| last_position(&matched))
         .unwrap_or((lsn, settle_start.saturating_sub(1)));
-    let held_by_order_id =
-        build_held_balances(frozen.order.after(), maker_orders, &working_balances)?;
+    let held_by_order_id = build_held_balances(
+        frozen.order.after(),
+        maker_orders,
+        &working_base_balances,
+        &working_quote_balances,
+    )?;
     let unfrozen = unfreeze_matched_spot_orders(
         frozen.order.after(),
         maker_orders,
@@ -284,12 +299,20 @@ pub fn place_spot_order_pipeline_v2(
 fn validate_inputs(
     command: &PlaceSpotOrderPipelineV2Cmd,
     makers: &[SpotOrderV7],
-    balances: &HashMap<u64, SpotOrderSettlementBalances>,
+    base_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
+    quote_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
     trade_id_start: u64,
     lsn: u64,
 ) -> Result<(), PlaceSpotOrderPipelineV2Error> {
     validate_place_spot_order_pipeline_v2_command(command)?;
-    validate_place_spot_order_pipeline_v2_state(command, makers, balances, trade_id_start, lsn)
+    validate_place_spot_order_pipeline_v2_state(
+        command,
+        makers,
+        base_balances,
+        quote_balances,
+        trade_id_start,
+        lsn,
+    )
 }
 
 pub(crate) fn validate_place_spot_order_pipeline_v2_command(
@@ -304,8 +327,8 @@ pub(crate) fn validate_place_spot_order_pipeline_v2_command(
     if command.order_id == 0 {
         return Err(invalid("order id must be greater than zero"));
     }
-    if command.party_id == 0 {
-        return Err(invalid("party id must be greater than zero"));
+    if command.party_id.as_ref().is_empty() {
+        return Err(invalid("party id must not be empty"));
     }
     if command.price <= rust_decimal::Decimal::ZERO {
         return Err(invalid("price must be greater than zero"));
@@ -319,21 +342,20 @@ pub(crate) fn validate_place_spot_order_pipeline_v2_command(
 pub(crate) fn validate_place_spot_order_pipeline_v2_state(
     command: &PlaceSpotOrderPipelineV2Cmd,
     makers: &[SpotOrderV7],
-    balances: &HashMap<u64, SpotOrderSettlementBalances>,
+    base_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
+    quote_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
     trade_id_start: u64,
     lsn: u64,
 ) -> Result<(), PlaceSpotOrderPipelineV2Error> {
     let first_position = (lsn, 0);
     let mut order_ids = HashSet::with_capacity(makers.len() + 1);
     order_ids.insert(command.order_id);
-    let taker_pair = balances
-        .get(&command.order_id)
-        .ok_or_else(|| invalid(format!("missing balances for order {}", command.order_id)))?;
     validate_balance_binding(
         command.order_id,
-        command.party_id,
+        &command.party_id,
         command.symbol,
-        taker_pair,
+        base_balances,
+        quote_balances,
     )?;
     for maker in makers {
         let id = maker.order_base().order_id;
@@ -343,14 +365,12 @@ pub(crate) fn validate_place_spot_order_pipeline_v2_state(
         if (maker.lsn(), maker.command_index()) >= first_position {
             return Err(invalid(format!("stale pipe_line position for order {id}")));
         }
-        let pair = balances
-            .get(&id)
-            .ok_or_else(|| invalid(format!("missing balances for order {id}")))?;
         validate_balance_binding(
             id,
-            maker.order_base().owner.0,
+            &maker.order_base().owner,
             maker.order_base().symbol,
-            pair,
+            base_balances,
+            quote_balances,
         )?;
     }
     if !makers.is_empty() {
@@ -361,21 +381,19 @@ pub(crate) fn validate_place_spot_order_pipeline_v2_state(
             .ok_or_else(|| invalid("trade id range overflow"))?;
     }
     let mut snapshots = HashMap::<u64, &BalanceV2>::new();
-    for (order_id, pair) in balances {
-        for balance in [&pair.base, &pair.quote] {
-            if (balance.lsn(), balance.command_index()) >= first_position {
+    for balance in base_balances.values().chain(quote_balances.values()) {
+        if (balance.lsn(), balance.command_index()) >= first_position {
+            return Err(invalid(format!(
+                "stale pipe_line position for balance {}",
+                balance.entity_id()
+            )));
+        }
+        if let Some(existing) = snapshots.insert(balance.entity_id(), balance) {
+            if existing != balance {
                 return Err(invalid(format!(
-                    "stale pipe_line position for balance {}",
+                    "conflicting snapshots for balance {}",
                     balance.entity_id()
                 )));
-            }
-            if let Some(existing) = snapshots.insert(balance.entity_id(), balance) {
-                if existing != balance {
-                    return Err(invalid(format!(
-                        "conflicting snapshots for balance {} referenced by order {order_id}",
-                        balance.entity_id()
-                    )));
-                }
             }
         }
     }
@@ -384,17 +402,23 @@ pub(crate) fn validate_place_spot_order_pipeline_v2_state(
 
 fn validate_balance_binding(
     order_id: u64,
-    party_id: u64,
-    symbol: example_core_entity::account::symbol::Symbol,
-    pair: &SpotOrderSettlementBalances,
+    party_id: &PartyId,
+    symbol: Symbol,
+    base_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
+    quote_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
 ) -> Result<(), PlaceSpotOrderPipelineV2Error> {
-    if pair.base.party_id() != party_id
-        || pair.quote.party_id() != party_id
-        || pair.base.account_id() != party_id
-        || pair.quote.account_id() != party_id
-        || pair.base.coin_idx() != u64::from(symbol.base.index())
-        || pair.quote.coin_idx() != u64::from(symbol.quote.index())
-        || pair.base.entity_id() == pair.quote.entity_id()
+    let key = (party_id.clone(), symbol);
+    let base = base_balances
+        .get(&key)
+        .ok_or_else(|| invalid(format!("missing base balance for order {order_id}")))?;
+    let quote = quote_balances
+        .get(&key)
+        .ok_or_else(|| invalid(format!("missing quote balance for order {order_id}")))?;
+    if base.party_id() != party_id
+        || quote.party_id() != party_id
+        || base.coin_idx() != u64::from(symbol.base.index())
+        || quote.coin_idx() != u64::from(symbol.quote.index())
+        || base.entity_id() == quote.entity_id()
     {
         return Err(invalid(format!(
             "balance owner, account, or coin mismatch for order {order_id}"
@@ -403,25 +427,34 @@ fn validate_balance_binding(
     Ok(())
 }
 
-fn held_balance<'a>(order: &SpotOrderV7, pair: &'a SpotOrderSettlementBalances) -> &'a BalanceV2 {
+fn held_balance<'a>(
+    order: &SpotOrderV7,
+    base_balances: &'a BTreeMap<(PartyId, Symbol), BalanceV2>,
+    quote_balances: &'a BTreeMap<(PartyId, Symbol), BalanceV2>,
+) -> Result<&'a BalanceV2, PlaceSpotOrderPipelineV2Error> {
+    let facts = order.order_base();
+    let key = (facts.owner.clone(), facts.symbol);
     match order.order_base().side {
-        OrderSide::Buy => &pair.quote,
-        OrderSide::Sell => &pair.base,
+        OrderSide::Buy => quote_balances.get(&key),
+        OrderSide::Sell => base_balances.get(&key),
     }
+    .ok_or_else(|| invalid(format!("missing held balance for order {}", facts.order_id)))
 }
 
 fn replace_balance_snapshot(
-    balances: &mut HashMap<u64, SpotOrderSettlementBalances>,
+    base_balances: &mut BTreeMap<(PartyId, Symbol), BalanceV2>,
+    quote_balances: &mut BTreeMap<(PartyId, Symbol), BalanceV2>,
     after: &BalanceV2,
 ) -> Result<(), PlaceSpotOrderPipelineV2Error> {
     let target_id = after.entity_id();
     let mut replaced = false;
-    for pair in balances.values_mut() {
-        for balance in [&mut pair.base, &mut pair.quote] {
-            if balance.entity_id() == target_id {
-                *balance = after.clone();
-                replaced = true;
-            }
+    for balance in base_balances
+        .values_mut()
+        .chain(quote_balances.values_mut())
+    {
+        if balance.entity_id() == target_id {
+            *balance = after.clone();
+            replaced = true;
         }
     }
     if !replaced {
@@ -433,17 +466,16 @@ fn replace_balance_snapshot(
 fn build_held_balances(
     taker: &SpotOrderV7,
     makers: &[SpotOrderV7],
-    balances: &HashMap<u64, SpotOrderSettlementBalances>,
+    base_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
+    quote_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
 ) -> Result<HashMap<u64, SpotOrderHeldBalance>, PlaceSpotOrderPipelineV2Error> {
     let mut output = HashMap::with_capacity(makers.len() + 1);
     for order in std::iter::once(taker).chain(makers) {
         let id = order.order_base().order_id;
-        let pair = balances
-            .get(&id)
-            .ok_or_else(|| invalid(format!("missing balances for order {id}")))?;
+        let balance = held_balance(order, base_balances, quote_balances)?;
         let held = match order.order_base().side {
-            OrderSide::Buy => SpotOrderHeldBalance::Quote(pair.quote.clone()),
-            OrderSide::Sell => SpotOrderHeldBalance::Base(pair.base.clone()),
+            OrderSide::Buy => SpotOrderHeldBalance::Quote(balance.clone()),
+            OrderSide::Sell => SpotOrderHeldBalance::Base(balance.clone()),
         };
         output.insert(id, held);
     }

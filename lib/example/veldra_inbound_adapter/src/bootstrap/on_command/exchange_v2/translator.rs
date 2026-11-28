@@ -1,6 +1,6 @@
 use common_entity::ExecutionErrorV3;
-use example_core_use_case::pipe::match_spot_order::MatchSpotOrderPipeChanges;
 use example_core_use_case::pipe::line::place_spot_order_pipeline_v2::PlaceSpotOrderPipelineV2Changes;
+use example_core_use_case::pipe::match_spot_order::MatchSpotOrderPipeChanges;
 use rust_decimal::Decimal;
 use use_case_executor::trading::spot::v3::build_spot_block_executor_v3::{
     SpotBlockCommandExecutionV3, SpotBlockExecutionV3,

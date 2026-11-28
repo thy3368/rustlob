@@ -32,7 +32,7 @@ pub fn freeze_spot_order_from(
     topic: u8,
     partition: u8,
 ) -> Result<FreezeSpotOrderPipeChanges, EntityError> {
-    if balance.party_id() != order.order_base().owner.0 {
+    if balance.party_id() != &order.order_base().owner {
         return Err(EntityError::Custom(
             "balance owner does not match the order owner".to_owned(),
         ));
