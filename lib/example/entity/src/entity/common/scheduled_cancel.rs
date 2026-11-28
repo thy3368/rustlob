@@ -4,6 +4,8 @@ use common_entity::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::PartyId;
+
 const SCHEDULED_CANCEL_ENTITY_TYPE: u8 = 19;
 const UTC_DAY_MS: u64 = 86_400_000;
 const MAX_DAILY_TRIGGERS: u8 = 10;
@@ -11,7 +13,7 @@ const MAX_DAILY_TRIGGERS: u8 = 10;
 /// 账户级“死人开关”设置；到期执行撤单由独立用例消费。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledCancel {
-    user_id: u64,
+    party_id: PartyId,
     cancel_at_ms: Option<u64>,
     trigger_day_utc: Option<u64>,
     trigger_count: u8,
@@ -34,9 +36,9 @@ pub enum ScheduledCancelError {
 }
 
 impl ScheduledCancel {
-    pub const fn new(user_id: u64) -> Self {
+    pub fn new(party_id: PartyId) -> Self {
         Self {
-            user_id,
+            party_id,
             cancel_at_ms: None,
             trigger_day_utc: None,
             trigger_count: 0,
@@ -45,8 +47,8 @@ impl ScheduledCancel {
         }
     }
 
-    pub const fn user_id(&self) -> u64 {
-        self.user_id
+    pub fn party_id(&self) -> &PartyId {
+        &self.party_id
     }
 
     pub const fn cancel_at_ms(&self) -> Option<u64> {
@@ -127,7 +129,7 @@ impl ScheduledCancel {
 impl TrackDiff for ScheduledCancel {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            EntityFieldChange::new("user_id", "", self.user_id.to_string()),
+            EntityFieldChange::new("party_id", "", self.party_id.to_string()),
             EntityFieldChange::new("cancel_at_ms", "", optional_ms(self.cancel_at_ms)),
             EntityFieldChange::new("trigger_day_utc", "", optional_ms(self.trigger_day_utc)),
             EntityFieldChange::new("trigger_count", "", self.trigger_count.to_string()),
@@ -171,13 +173,13 @@ fn optional_ms(value: Option<u64>) -> String {
 
 impl Shard for ScheduledCancel {
     fn partition(&self) -> u8 {
-        (self.user_id % 256) as u8
+        (common_entity::stable_string_entity_id(self.party_id.as_ref()) % 256) as u8
     }
 }
 
 impl Entity for ScheduledCancel {
     fn entity_id(&self) -> u64 {
-        self.user_id
+        common_entity::stable_string_entity_id(self.party_id.as_ref())
     }
 
     fn owner_id(&self) -> String {
@@ -235,7 +237,7 @@ mod tests {
     #[test]
     fn version_overflow_is_rejected_without_mutation() {
         let mut schedule = ScheduledCancel {
-            user_id: 7,
+            party_id: 7,
             cancel_at_ms: Some(10_000),
             trigger_day_utc: None,
             trigger_count: 0,

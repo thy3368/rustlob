@@ -56,9 +56,9 @@ impl UserRouter {
         }
     }
 
-    async fn select_partition(&self, user_id: &str) -> usize {
+    async fn select_partition(&self, party_id: &str) -> usize {
         let mut hasher = DefaultHasher::new();
-        user_id.hash(&mut hasher);
+        party_id.hash(&mut hasher);
         let hash = hasher.finish();
 
         let config = self.config.read().await;
@@ -67,16 +67,16 @@ impl UserRouter {
     }
 
     /// 根据用户ID选择后端服务器（轮询负载均衡）
-    pub async fn select_backend(&self, user_id: &str) -> HttpPeer {
+    pub async fn select_backend(&self, party_id: &str) -> HttpPeer {
         let config = self.config.read().await;
 
-        let partition = self.select_partition(user_id).await;
+        let partition = self.select_partition(party_id).await;
 
         match config.partition_ips.get(&partition) {
             Some(backends) if !backends.is_empty() => {
                 // 获取或初始化轮询索引
                 let mut indices = self.round_robin_index.write().await;
-                let index = indices.entry(user_id.to_string()).or_insert(0);
+                let index = indices.entry(party_id.to_string()).or_insert(0);
 
                 // 选择后端（轮询）
                 let backend = &backends[*index % backends.len()];
@@ -104,10 +104,10 @@ impl UserRouter {
 pub struct UserIdExtractor;
 
 impl UserIdExtractor {
-    /// 从 JSON 请求体中提取 user_id 或 trader_id
+    /// 从 JSON 请求体中提取 party_id 或 trader_id
     ///
     /// 支持的字段名：
-    /// - user_id
+    /// - party_id
     /// - userId
     /// - trader_id
     /// - traderId
@@ -116,7 +116,7 @@ impl UserIdExtractor {
         if let Ok(json) = serde_json::from_slice::<serde_json::Value>(body) {
             // 尝试多个可能的字段名
             let possible_fields = [
-                "user_id",
+                "party_id",
                 "userId",
                 "trader_id",
                 "traderId",
@@ -126,10 +126,10 @@ impl UserIdExtractor {
             ];
 
             for field in &possible_fields {
-                if let Some(user_id) = json.get(field) {
-                    if let Some(user_id_str) = user_id.as_str() {
+                if let Some(party_id) = json.get(field) {
+                    if let Some(user_id_str) = party_id.as_str() {
                         return Some(user_id_str.to_string());
-                    } else if let Some(user_id_num) = user_id.as_u64() {
+                    } else if let Some(user_id_num) = party_id.as_u64() {
                         return Some(user_id_num.to_string());
                     }
                 }
@@ -157,13 +157,13 @@ impl UserIdExtractor {
     }
 
     /// 从 URL 查询参数中提取用户ID
-    /// 例如：/api/spot/v2/?user_id=alice
+    /// 例如：/api/spot/v2/?party_id=alice
     pub fn extract_from_query(url: &str) -> Option<String> {
         if let Some(query_start) = url.find('?') {
             let query = &url[query_start + 1..];
             for param in query.split('&') {
                 if let Some((key, value)) = param.split_once('=') {
-                    if key == "user_id" || key == "userId" || key == "trader_id" {
+                    if key == "party_id" || key == "userId" || key == "trader_id" {
                         return Some(value.to_string());
                     }
                 }
@@ -206,17 +206,17 @@ mod tests {
         };
         let router = UserRouter::new(config);
 
-        let mut user_id = None;
+        let mut party_id = None;
         for i in 0..100 {
             let candidate = format!("user_{i}");
             if router.select_partition(&candidate).await != 1 {
-                user_id = Some(candidate);
+                party_id = Some(candidate);
                 break;
             }
         }
-        let user_id = user_id.expect("应能找到映射到未配置分区的用户ID");
+        let party_id = party_id.expect("应能找到映射到未配置分区的用户ID");
 
-        let peer_default = router.select_backend(&user_id).await;
+        let peer_default = router.select_backend(&party_id).await;
         assert!(peer_default.address().to_string().contains("3999"));
     }
 
@@ -246,9 +246,9 @@ mod tests {
 
     #[test]
     fn test_extract_user_id_from_json() {
-        let json_body = r#"{"user_id": "alice", "price": 50000}"#;
-        let user_id = UserIdExtractor::extract_from_json(json_body.as_bytes());
-        assert_eq!(user_id, Some("alice".to_string()));
+        let json_body = r#"{"party_id": "alice", "price": 50000}"#;
+        let party_id = UserIdExtractor::extract_from_json(json_body.as_bytes());
+        assert_eq!(party_id, Some("alice".to_string()));
 
         let json_body2 = r#"{"trader_id": "bob", "quantity": 10}"#;
         let user_id2 = UserIdExtractor::extract_from_json(json_body2.as_bytes());
@@ -262,14 +262,14 @@ mod tests {
     #[test]
     fn test_extract_user_id_from_headers() {
         let headers = "Content-Type: application/json\nX-User-Id: alice\nAccept: */*";
-        let user_id = UserIdExtractor::extract_from_headers(headers);
-        assert_eq!(user_id, Some("alice".to_string()));
+        let party_id = UserIdExtractor::extract_from_headers(headers);
+        assert_eq!(party_id, Some("alice".to_string()));
     }
 
     #[test]
     fn test_extract_user_id_from_query() {
-        let url = "/api/spot/v2/?user_id=alice&symbol=BTCUSDT";
-        let user_id = UserIdExtractor::extract_from_query(url);
-        assert_eq!(user_id, Some("alice".to_string()));
+        let url = "/api/spot/v2/?party_id=alice&symbol=BTCUSDT";
+        let party_id = UserIdExtractor::extract_from_query(url);
+        assert_eq!(party_id, Some("alice".to_string()));
     }
 }

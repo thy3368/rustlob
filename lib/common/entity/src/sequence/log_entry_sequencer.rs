@@ -59,10 +59,10 @@ impl LogEntrySequencer {
         logical_ts: u64,
         client_id: u64,
         request_id: u64,
-        user_id: String,
+        party_id: String,
         payload: P,
     ) -> LogEntry<P> {
-        LogEntry::new(lsn, logical_ts, client_id, request_id, user_id, payload)
+        LogEntry::new(lsn, logical_ts, client_id, request_id, party_id, payload)
     }
 
     /// 使用已有权威元数据及同一 LSN 内序号创建日志。
@@ -73,11 +73,11 @@ impl LogEntrySequencer {
         logical_ts: u64,
         client_id: u64,
         request_id: u64,
-        user_id: String,
+        party_id: String,
         payload: P,
     ) -> LogEntry<P> {
         let mut entry =
-            Self::from_metadata(lsn, logical_ts, client_id, request_id, user_id, payload);
+            Self::from_metadata(lsn, logical_ts, client_id, request_id, party_id, payload);
         entry.command_index = command_index;
         entry
     }
@@ -90,11 +90,11 @@ impl LogEntrySequencer {
         logical_ts: u64,
         client_id: u64,
         request_id: u64,
-        user_id: String,
+        party_id: String,
         payload: P,
     ) -> LogEntry<P> {
         LogEntry::new_with_topic(
-            t, p, lsn, logical_ts, client_id, request_id, user_id, payload,
+            t, p, lsn, logical_ts, client_id, request_id, party_id, payload,
         )
     }
 
@@ -108,11 +108,11 @@ impl LogEntrySequencer {
         logical_ts: u64,
         client_id: u64,
         request_id: u64,
-        user_id: String,
+        party_id: String,
         payload: P,
     ) -> LogEntry<P> {
         let mut entry = Self::from_metadata_with_topic(
-            t, p, lsn, logical_ts, client_id, request_id, user_id, payload,
+            t, p, lsn, logical_ts, client_id, request_id, party_id, payload,
         );
         entry.command_index = command_index;
         entry
@@ -127,7 +127,7 @@ impl LogEntrySequencer {
             parent.logical_ts(),
             parent.client_id(),
             parent.request_id(),
-            parent.user_id().to_owned(),
+            parent.party_id().to_owned(),
             payload,
         )
     }
@@ -142,7 +142,7 @@ impl LogEntrySequencer {
             parent.logical_ts(),
             parent.client_id(),
             parent.request_id(),
-            parent.user_id().to_owned(),
+            parent.party_id().to_owned(),
             payload,
         )
     }
@@ -182,10 +182,10 @@ impl LogEntrySequencer {
         &mut self,
         client_id: u64,
         request_id: u64,
-        user_id: String,
+        party_id: String,
         payload: P,
     ) -> Result<LogEntry<P>, LogEntrySequenceError> {
-        self.sequence_at(SystemTime::now(), client_id, request_id, user_id, payload)
+        self.sequence_at(SystemTime::now(), client_id, request_id, party_id, payload)
     }
 
     fn sequence_at<P>(
@@ -193,7 +193,7 @@ impl LogEntrySequencer {
         now: SystemTime,
         client_id: u64,
         request_id: u64,
-        user_id: String,
+        party_id: String,
         payload: P,
     ) -> Result<LogEntry<P>, LogEntrySequenceError> {
         let unix_nanos = now
@@ -215,7 +215,7 @@ impl LogEntrySequencer {
         self.next_lsn = lsn;
         self.last_logical_ts = logical_ts;
         Ok(Self::from_metadata(
-            lsn, logical_ts, client_id, request_id, user_id, payload,
+            lsn, logical_ts, client_id, request_id, party_id, payload,
         ))
     }
 }
@@ -322,7 +322,7 @@ mod tests {
             (42, 123, 3, 4)
         );
         assert_eq!(child.into_payload(), "child");
-        assert_eq!(parent.user_id(), "alice");
+        assert_eq!(parent.party_id(), "alice");
         assert_eq!(sequencer.last_committed(), Some((7, 20)));
     }
 
@@ -347,7 +347,7 @@ mod tests {
             (child.logical_ts(), child.client_id(), child.request_id()),
             (123, 4, 5)
         );
-        assert_eq!(child.user_id(), "alice");
+        assert_eq!(child.party_id(), "alice");
     }
 
     #[test]

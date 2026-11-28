@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 #[derive(Debug)]
 pub struct ConnectionInfo {
     /// 用户ID（可选，未认证用户可能没有）
-    pub user_id: Option<String>,
+    pub party_id: Option<String>,
     /// 客户端IP地址
     pub client_addr: SocketAddr,
     /// 订阅主题列表
@@ -34,7 +34,7 @@ pub struct ConnectionInfo {
 impl Clone for ConnectionInfo {
     fn clone(&self) -> Self {
         Self {
-            user_id: self.user_id.clone(),
+            party_id: self.party_id.clone(),
             client_addr: self.client_addr,
             subscription: self.subscription.clone(),
             connected_at: self.connected_at,
@@ -64,7 +64,7 @@ impl Clone for ConnectionInfo {
 #[derive(Debug, Clone, Default)]
 #[immutable]
 pub struct ConnectionRepo {
-    /// 用户连接映射：user_id -> Vec<ConnectionInfo>
+    /// 用户连接映射：party_id -> Vec<ConnectionInfo>
     /// 用于快速查找某个用户的所有连接
     user_connections: Arc<RwLock<HashMap<String, Vec<ConnectionInfo>>>>,
 
@@ -76,7 +76,7 @@ pub struct ConnectionRepo {
     /// 用于快速向特定连接发送消息
     connection_senders: Arc<RwLock<HashMap<SocketAddr, mpsc::UnboundedSender<Message>>>>,
 
-    /// 用户发送器映射：user_id -> Vec<Sender>
+    /// 用户发送器映射：party_id -> Vec<Sender>
     /// 用于快速向某个用户的所有连接发送消息
     user_senders: Arc<RwLock<HashMap<String, Vec<mpsc::UnboundedSender<Message>>>>>,
 }
@@ -158,11 +158,11 @@ impl ConnectionRepo {
         }
 
         // 如果有用户ID，添加到用户相关映射
-        if let Some(user_id) = &conn_info.user_id {
+        if let Some(party_id) = &conn_info.party_id {
             {
                 let mut user_conns = self.user_connections.write();
                 user_conns
-                    .entry(user_id.clone())
+                    .entry(party_id.clone())
                     .or_default()
                     .push(conn_info.clone());
             }
@@ -170,7 +170,7 @@ impl ConnectionRepo {
             {
                 let mut user_senders = self.user_senders.write();
                 user_senders
-                    .entry(user_id.clone())
+                    .entry(party_id.clone())
                     .or_default()
                     .push(conn_info.sender.clone());
             }
@@ -178,7 +178,7 @@ impl ConnectionRepo {
 
         tracing::info!(
             client_addr = %client_addr,
-            user_id = ?conn_info.user_id,
+            party_id = ?conn_info.party_id,
             subscriptions = ?conn_info.subscription,
             "Connection added"
         );
@@ -203,47 +203,47 @@ impl ConnectionRepo {
             }
 
             // 如果有用户ID，从用户相关映射中移除
-            if let Some(user_id) = &conn.user_id {
+            if let Some(party_id) = &conn.party_id {
                 {
                     let mut user_conns = self.user_connections.write();
-                    if let Some(conns) = user_conns.get_mut(user_id) {
+                    if let Some(conns) = user_conns.get_mut(party_id) {
                         conns.retain(|c| c.client_addr != client_addr);
                         if conns.is_empty() {
-                            user_conns.remove(user_id);
+                            user_conns.remove(party_id);
                         }
                     }
                 }
 
                 {
                     let mut user_senders = self.user_senders.write();
-                    if let Some(senders) = user_senders.get_mut(user_id) {
+                    if let Some(senders) = user_senders.get_mut(party_id) {
                         // 注意：由于 Sender 没有实现 PartialEq，我们无法精确移除
                         // 这里简单地保留所有发送器，依赖 mpsc 的自动清理机制
                         // 当接收端关闭时，发送操作会失败
                         senders.clear();
-                        user_senders.remove(user_id);
+                        user_senders.remove(party_id);
                     }
                 }
             }
 
             tracing::info!(
                 client_addr = %client_addr,
-                user_id = ?conn.user_id,
+                party_id = ?conn.party_id,
                 "Connection removed"
             );
         }
     }
 
     /// 根据用户ID获取所有连接信息
-    pub fn get_connections_by_user(&self, user_id: &str) -> Vec<ConnectionInfo> {
+    pub fn get_connections_by_user(&self, party_id: &str) -> Vec<ConnectionInfo> {
         let user_conns = self.user_connections.read();
-        user_conns.get(user_id).cloned().unwrap_or_default()
+        user_conns.get(party_id).cloned().unwrap_or_default()
     }
 
     /// 根据用户ID获取所有发送器
-    pub fn get_senders_by_user(&self, user_id: &str) -> Vec<mpsc::UnboundedSender<Message>> {
+    pub fn get_senders_by_user(&self, party_id: &str) -> Vec<mpsc::UnboundedSender<Message>> {
         let user_senders = self.user_senders.read();
-        user_senders.get(user_id).cloned().unwrap_or_default()
+        user_senders.get(party_id).cloned().unwrap_or_default()
     }
 
     /// 根据客户端地址获取发送器
@@ -268,9 +268,9 @@ impl ConnectionRepo {
     }
 
     /// 获取用户连接数量
-    pub fn get_user_connection_count(&self, user_id: &str) -> usize {
+    pub fn get_user_connection_count(&self, party_id: &str) -> usize {
         let user_conns = self.user_connections.read();
-        user_conns.get(user_id).map(|v| v.len()).unwrap_or(0)
+        user_conns.get(party_id).map(|v| v.len()).unwrap_or(0)
     }
 
     /// 获取总连接数量
@@ -289,16 +289,16 @@ impl ConnectionRepo {
             let mut all_conns = self.all_connections.write();
             if let Some(conn) = all_conns.get_mut(&client_addr) {
                 conn.last_active_at = now;
-                conn.user_id.clone()
+                conn.party_id.clone()
             } else {
                 None
             }
         };
 
         // 同步更新用户连接映射中的时间戳
-        if let Some(user_id) = user_id_opt {
+        if let Some(party_id) = user_id_opt {
             let mut user_conns = self.user_connections.write();
-            if let Some(conns) = user_conns.get_mut(&user_id) {
+            if let Some(conns) = user_conns.get_mut(&party_id) {
                 if let Some(user_conn) = conns.iter_mut().find(|c| c.client_addr == client_addr) {
                     user_conn.last_active_at = now;
                 }
@@ -315,7 +315,7 @@ impl ConnectionRepo {
         let mut all_conns = self.all_connections.write();
 
         if let Some(conn) = all_conns.get_mut(&client_addr) {
-            let old_user_id = conn.user_id.clone();
+            let old_user_id = conn.party_id.clone();
 
             // 从旧用户ID的映射中移除
             if let Some(old_id) = &old_user_id {
@@ -342,7 +342,7 @@ impl ConnectionRepo {
 
             // 更新连接的用户ID
             if let Some(conn) = all_conns.get_mut(&client_addr) {
-                conn.user_id = Some(new_user_id.clone());
+                conn.party_id = Some(new_user_id.clone());
                 let conn_clone = conn.clone();
 
                 drop(all_conns); // 释放锁

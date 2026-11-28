@@ -8,15 +8,15 @@ use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::entity::{
-    BalanceV2, BalanceV2Command, BalanceV2Error, PerpPositionV3, PerpPositionV3Error,
+    BalanceV2, BalanceV2Command, BalanceV2Error, PartyId, PerpPositionV3, PerpPositionV3Error,
     PerpPositionV3Event, PerpPositionV3Output, PerpTradeV3, PerpTradeV3Error, PerpTradeV3Event,
-    PerpTradeV3Output, PerpTradeV3State, UserId,
+    PerpTradeV3Output, PerpTradeV3State,
 };
 use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpTradeCmd {
-    pub operator: UserId,
+    pub operator: PartyId,
     pub settlement_batch_id: u64,
     pub trade_ids: Vec<u64>,
 }
@@ -141,7 +141,7 @@ fn derive_changes(
         .positions
         .iter()
         .cloned()
-        .map(|position| ((position.user_id().0, position.coin().index()), position))
+        .map(|position| ((position.party_id().0, position.coin().index()), position))
         .collect();
     let mut balance_deltas: BTreeMap<u64, Decimal> = BTreeMap::new();
     let mut changed_positions = Vec::with_capacity(state.trades.len() * 2);
@@ -151,8 +151,8 @@ fn derive_changes(
         let mut start_positions = [Decimal::ZERO; 2];
         let mut closed_pnls = [Decimal::ZERO; 2];
         for (index, (user, fee)) in [
-            (trade.trade_base.taker_user, trade.trade_base.taker_fee),
-            (trade.trade_base.maker_user, trade.trade_base.maker_fee),
+            (trade.trade_base.taker_party, trade.trade_base.taker_fee),
+            (trade.trade_base.maker_party, trade.trade_base.maker_fee),
         ]
         .into_iter()
         .enumerate()
@@ -269,7 +269,7 @@ mod tests {
     fn position(id: u64, user: u64, size: i64, price: i64) -> PerpPositionV3 {
         PerpPositionV3::new(
             id,
-            UserId(user),
+            PartyId(user),
             Coin::BTC,
             Decimal::from(size),
             if size == 0 {
@@ -293,8 +293,8 @@ mod tests {
             trade_base: TradeBase {
                 trade_id: 42,
                 symbol: Symbol::new(1, Coin::BTC, Coin::USDC),
-                taker_user: UserId(1),
-                maker_user: UserId(2),
+                taker_party: PartyId("1".to_owned()),
+                maker_party: PartyId("2".to_owned()),
                 taker_order_id: 10,
                 maker_order_id: 11,
                 taker_side: OrderSide::Sell,
@@ -325,7 +325,7 @@ mod tests {
             6,
             common_entity::SYSTEM_USER_ID.to_owned(),
             SettleHyperliquidPerpTradeCmd {
-                operator: UserId(99),
+                operator: PartyId("99".to_owned()),
                 settlement_batch_id: 1,
                 trade_ids: vec![42],
             },

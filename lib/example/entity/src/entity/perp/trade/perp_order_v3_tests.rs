@@ -5,14 +5,14 @@ use rust_decimal_macros::dec;
 use super::{
     MatchPerpOrderV3Input, MatchPerpOrderV3Output, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
 };
-use crate::entity::common::UserId;
+use crate::entity::common::PartyId;
 use crate::entity::{OrderSide, OrderTif, PerpTradeKind, SpotOrderStatus};
 
 const NOW: u64 = 20;
 
 fn order(id: u64, side: OrderSide, size: Decimal, status: SpotOrderStatus) -> PerpOrderV3 {
     let mut base = crate::entity::common::common_order::OrderBase::default();
-    base.owner = UserId(id + 100);
+    base.owner = PartyId(id + 100);
     base.order_id = id;
     base.side = side;
     base.limit_px = dec!(100);

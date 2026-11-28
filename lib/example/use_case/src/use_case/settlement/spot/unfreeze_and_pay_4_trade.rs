@@ -161,14 +161,14 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
         if cmd.trade_id != trade.trade_id {
             return Err(UnFreezeSpotOrderV2Error::TradeIdMismatch);
         }
-        if trade.taker_user == trade.maker_user {
+        if trade.taker_party == trade.maker_party {
             return Err(UnFreezeSpotOrderV2Error::SameParticipant);
         }
         let base_asset = u64::from(trade.symbol.base.index());
         let quote_asset = u64::from(trade.symbol.quote.index());
         let (buyer_party, seller_party) = match trade.taker_side {
-            OrderSide::Buy => (trade.taker_user.0, trade.maker_user.0),
-            OrderSide::Sell => (trade.maker_user.0, trade.taker_user.0),
+            OrderSide::Buy => (trade.taker_party.0, trade.maker_party.0),
+            OrderSide::Sell => (trade.maker_party.0, trade.taker_party.0),
         };
         let balances = [
             (&given_state.buyer_base_balance, buyer_party, base_asset),
@@ -177,7 +177,7 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
             (&given_state.seller_quote_balance, seller_party, quote_asset),
         ];
         for (balance, party, asset) in balances {
-            if balance.party_id() != party || balance.coin_idx() != asset {
+            if balance.party_id() != &party || balance.coin_idx() != asset {
                 return Err(UnFreezeSpotOrderV2Error::BalanceIdentityMismatch);
             }
         }

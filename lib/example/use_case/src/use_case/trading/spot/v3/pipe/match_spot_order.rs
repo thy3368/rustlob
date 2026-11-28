@@ -320,8 +320,8 @@ fn create_trade(
         comon_trade: TradeBase {
             trade_id: fill.trade_id,
             symbol: taker_facts.symbol,
-            taker_user: taker_facts.owner,
-            maker_user: maker.order_base().owner,
+            taker_party: taker_facts.owner.clone(),
+            maker_party: maker.order_base().owner.clone(),
             taker_order_id: taker_facts.order_id,
             maker_order_id: maker.order_base().order_id,
             taker_side: taker_facts.side,

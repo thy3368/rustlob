@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::account::symbol::Symbol;
-use crate::entity::common::UserId;
+use crate::entity::common::PartyId;
 use crate::{OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus};
 
 /// 从订单 Decimal 金额转换为整数资产最小单位时的错误。
@@ -39,7 +39,7 @@ pub enum OrderTrigger {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderBase {
-    pub owner: UserId,
+    pub owner: PartyId,
 
     /// Hyperliquid 原生现货订单 `oid`。
     ///
@@ -117,7 +117,7 @@ pub struct OrderBase {
 impl Default for OrderBase {
     fn default() -> Self {
         Self {
-            owner: UserId(0),
+            owner: PartyId("0".to_owned()),
             order_id: 0,
             symbol: Symbol::new(
                 0,

@@ -233,7 +233,7 @@ mod tests {
     use common_entity::{LogEntrySequencer, ReplayableChanges};
     use example_core_entity::account::coin::Coin;
     use example_core_entity::spot::SpotTradeSettlementStatus;
-    use example_core_entity::{OrderSide, UserId};
+    use example_core_entity::{OrderSide, PartyId};
 
     use super::*;
 
@@ -267,8 +267,8 @@ mod tests {
             comon_trade: TradeBase {
                 trade_id: id,
                 symbol: symbol(),
-                taker_user: UserId(1),
-                maker_user: UserId(2),
+                taker_party: PartyId("1".to_owned()),
+                maker_party: PartyId("2".to_owned()),
                 taker_order_id: id + 100,
                 maker_order_id: id + 200,
                 taker_side: OrderSide::Buy,

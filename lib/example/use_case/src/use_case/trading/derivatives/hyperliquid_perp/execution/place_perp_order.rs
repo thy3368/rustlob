@@ -8,8 +8,8 @@ use thiserror::Error;
 use crate::entity::account::symbol::Symbol;
 use crate::entity::common::{OrderBase, OrderTrigger, PriceType};
 use crate::entity::{
-    BalanceV2, BalanceV2Command, BalanceV2Error, OrderGroupRelation, OrderSide, OrderTif,
-    PerpOrderV3, PerpPositionV3, SpotOrderStatus, UserId,
+    BalanceV2, BalanceV2Command, BalanceV2Error, OrderGroupRelation, OrderSide, OrderTif, PartyId,
+    PerpOrderV3, PerpPositionV3, SpotOrderStatus,
 };
 use crate::support::transition_balance;
 
@@ -35,7 +35,7 @@ impl PlaceHyperliquidPerpOrderExecution {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceHyperliquidPerpOrderCmd {
-    pub user_id: UserId,
+    pub party_id: PartyId,
     pub symbol: Symbol,
     pub side: OrderSide,
     pub size: Decimal,
@@ -124,9 +124,9 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
             return Err(PlaceHyperliquidPerpOrderError::SizeBelowMin);
         }
         if state.market_symbol != cmd.symbol
-            || state.position.user_id() != cmd.user_id
+            || state.position.party_id() != &cmd.party_id
             || state.position.coin() != cmd.symbol.base
-            || state.margin_balance.account_id() != cmd.user_id.0
+            || state.margin_balance.party_id() != &cmd.party_id
             || state.margin_balance.coin_idx() != u64::from(cmd.symbol.quote.index())
         {
             return Err(PlaceHyperliquidPerpOrderError::StateMismatch);
@@ -159,7 +159,7 @@ impl UseCase for PlaceHyperliquidPerpOrderUseCase {
         };
         let created_order = PerpOrderV3 {
             comon_order: OrderBase {
-                owner: cmd.user_id,
+                owner: cmd.party_id.clone(),
                 order_id: state.next_order_sequence,
                 symbol: cmd.symbol,
                 side: cmd.side,

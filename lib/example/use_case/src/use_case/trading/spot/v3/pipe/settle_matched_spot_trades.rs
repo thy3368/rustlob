@@ -4,10 +4,11 @@ use common_entity::fsm_v2::Fsm as FsmV2;
 use common_entity::{
     Entity, LogEntrySequencer, ReplayableDomainEvent, ReplayableEntityChanges, UpdatedEntityEvents,
 };
-use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3, SpotTradeV3Command};
-use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderV7};
-use rust_decimal::Decimal;
 use example_core_entity::account::symbol::Symbol;
+use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3, SpotTradeV3Command};
+use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, PartyId, SpotOrderV7};
+use rust_decimal::Decimal;
+
 use super::match_spot_order::MatchSpotOrderPipeChanges;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,12 +17,6 @@ pub struct SettleMatchedSpotTradesInput {
     pub logical_ts: u64,
     pub topic: u8,
     pub partition: u8,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpotOrderSettlementBalances {
-    pub base: BalanceV2,
-    pub quote: BalanceV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,23 +60,18 @@ struct AggregatedBalanceChange {
 /// 函数在执行任何 FSM 前完成全部输入、金额、余额和位置校验；返回错误时不会暴露部分结果。
 pub fn settle_matched_spot_trades(
     matched: &MatchSpotOrderPipeChanges,
-
-
-     user_quote_balance: BTreeMap<String, BalanceV2>,
-
-     user_base_balance: BTreeMap<String, BalanceV2>,
-
-
-    balances_by_order_id: &HashMap<u64, SpotOrderSettlementBalances>,
+    quote_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
+    base_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
     input: SettleMatchedSpotTradesInput,
 ) -> Result<SettleTradesPipeChanges, SettleMatchedSpotTradesError> {
-    settle_matched_spot_trades_from(matched, balances_by_order_id, input, 0)
+    settle_matched_spot_trades_from(matched, quote_balances, base_balances, input, 0)
 }
 
 /// 从指定 `command_index` 起结算撮合结果。
 pub fn settle_matched_spot_trades_from(
     matched: &MatchSpotOrderPipeChanges,
-    balances_by_order_id: &HashMap<u64, SpotOrderSettlementBalances>,
+    quote_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
+    base_balances: &BTreeMap<(PartyId, Symbol), BalanceV2>,
     input: SettleMatchedSpotTradesInput,
     command_index_start: u32,
 ) -> Result<SettleTradesPipeChanges, SettleMatchedSpotTradesError> {
@@ -154,10 +144,20 @@ pub fn settle_matched_spot_trades_from(
                 facts.trade_id
             )));
         }
-        let buyer_balances =
-            validated_balances(buyer, balances_by_order_id, input.lsn, command_index_start)?;
-        let seller_balances =
-            validated_balances(seller, balances_by_order_id, input.lsn, command_index_start)?;
+        let (buyer_base, buyer_quote) = validated_balances(
+            buyer,
+            quote_balances,
+            base_balances,
+            input.lsn,
+            command_index_start,
+        )?;
+        let (seller_base, seller_quote) = validated_balances(
+            seller,
+            quote_balances,
+            base_balances,
+            input.lsn,
+            command_index_start,
+        )?;
         let amounts = trade.settlement_amounts().map_err(|cause| {
             error(format!(
                 "invalid settlement amounts for trade {}: {cause}",
@@ -167,26 +167,26 @@ pub fn settle_matched_spot_trades_from(
 
         aggregate(
             &mut balance_changes,
-            &buyer_balances.quote,
+            buyer_quote,
             BalanceOperation::DebitFrozen,
             amounts.buyer_quote_payment,
         )?;
         aggregate(
             &mut balance_changes,
-            &buyer_balances.base,
+            buyer_base,
             BalanceOperation::CreditAvailable,
             amounts.base_amount,
         )?;
         aggregate(
             &mut balance_changes,
-            &seller_balances.base,
+            seller_base,
             BalanceOperation::DebitFrozen,
             amounts.base_amount,
         )?;
         if amounts.seller_quote_receipt > Decimal::ZERO {
             aggregate(
                 &mut balance_changes,
-                &seller_balances.quote,
+                seller_quote,
                 BalanceOperation::CreditAvailable,
                 amounts.seller_quote_receipt,
             )?;
@@ -268,8 +268,8 @@ fn validate_trade<'a>(
         .ok_or_else(|| error(format!("missing maker order {}", facts.maker_order_id)))?;
     let taker_facts = taker.order_base();
     let maker_facts = maker.order_base();
-    if taker_facts.owner != facts.taker_user
-        || maker_facts.owner != facts.maker_user
+    if taker_facts.owner != facts.taker_party
+        || maker_facts.owner != facts.maker_party
         || taker_facts.symbol != facts.symbol
         || maker_facts.symbol != facts.symbol
         || taker_facts.side != facts.taker_side
@@ -282,51 +282,51 @@ fn validate_trade<'a>(
 
 fn validated_balances<'a>(
     order: &SpotOrderV7,
-    balances: &'a HashMap<u64, SpotOrderSettlementBalances>,
+    quote_balances: &'a BTreeMap<(PartyId, Symbol), BalanceV2>,
+    base_balances: &'a BTreeMap<(PartyId, Symbol), BalanceV2>,
     settlement_lsn: u64,
     settlement_command_index: u32,
-) -> Result<&'a SpotOrderSettlementBalances, SettleMatchedSpotTradesError> {
+) -> Result<(&'a BalanceV2, &'a BalanceV2), SettleMatchedSpotTradesError> {
     let facts = order.order_base();
-    let pair = balances
-        .get(&facts.order_id)
-        .ok_or_else(|| error(format!("missing balances for order {}", facts.order_id)))?;
-    let owner = facts.owner.0;
-    if pair.base.party_id() != owner || pair.quote.party_id() != owner {
+    let key = (facts.owner.clone(), facts.symbol);
+    let base = base_balances
+        .get(&key)
+        .ok_or_else(|| error(format!("missing base balance for order {}", facts.order_id)))?;
+    let quote = quote_balances.get(&key).ok_or_else(|| {
+        error(format!(
+            "missing quote balance for order {}",
+            facts.order_id
+        ))
+    })?;
+    if base.party_id() != &facts.owner || quote.party_id() != &facts.owner {
         return Err(error(format!(
             "balance party mismatch for order {}",
             facts.order_id
         )));
     }
-    if pair.base.account_id() != pair.quote.account_id() || pair.base.account_id() != owner {
-        return Err(error(format!(
-            "balance account mismatch for order {}",
-            facts.order_id
-        )));
-    }
-    if pair.base.coin_idx() != u64::from(facts.symbol.base.index())
-        || pair.quote.coin_idx() != u64::from(facts.symbol.quote.index())
+    if base.coin_idx() != u64::from(facts.symbol.base.index())
+        || quote.coin_idx() != u64::from(facts.symbol.quote.index())
     {
         return Err(error(format!(
             "balance coin mismatch for order {}",
             facts.order_id
         )));
     }
-    if pair.base.entity_id() == pair.quote.entity_id() {
+    if base.entity_id() == quote.entity_id() {
         return Err(error(format!(
             "duplicate balance identity for order {}",
             facts.order_id
         )));
     }
-    if (pair.base.lsn(), pair.base.command_index()) >= (settlement_lsn, settlement_command_index)
-        || (pair.quote.lsn(), pair.quote.command_index())
-            >= (settlement_lsn, settlement_command_index)
+    if (base.lsn(), base.command_index()) >= (settlement_lsn, settlement_command_index)
+        || (quote.lsn(), quote.command_index()) >= (settlement_lsn, settlement_command_index)
     {
         return Err(error(format!(
             "stale settlement lsn for order {}",
             facts.order_id
         )));
     }
-    Ok(pair)
+    Ok((base, quote))
 }
 
 fn aggregate(
@@ -385,7 +385,7 @@ fn transition_trades(
             input.logical_ts,
             0,
             0,
-            trade.comon_trade.taker_user.0.to_string(),
+            trade.comon_trade.taker_party.0.to_string(),
             SpotTradeV3Command::Settle,
         );
         let (after, event) = FsmV2::transition(trade, command)

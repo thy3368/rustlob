@@ -5,8 +5,8 @@
 use std::fmt;
 
 use crate::base_types::{
-    AssetId, Decimal, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId,
-    TradingPair, UserId,
+    AssetId, Decimal, OrderId, OrderSide, PartyId, PositionId, Price, Quantity, Timestamp, TradeId,
+    TradingPair,
 };
 
 // ============================================================================
@@ -77,7 +77,7 @@ impl Default for PositionSide {
 #[entity(id = "position_id")]
 pub struct PrepPosition {
     /// 所属用户ID
-    pub user_id: UserId,
+    pub party_id: PartyId,
     /// 持仓ID
     pub position_id: PositionId,
 
@@ -133,7 +133,7 @@ impl PrepPosition {
     /// 创建空持仓
     pub fn empty(trading_pair: TradingPair, position_side: PositionSide) -> Self {
         Self {
-            user_id: UserId(0),
+            party_id: PartyId("0".to_owned()),
             position_id: PositionId::generate(),
             trading_pair,
             position_side,

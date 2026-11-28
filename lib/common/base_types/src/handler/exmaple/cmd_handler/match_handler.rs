@@ -52,7 +52,7 @@ pub struct TradeCreated {
 }
 
 pub struct BalanceChanged {
-    pub user_id: String,
+    pub party_id: String,
     pub change: i64,
 }
 

@@ -1,7 +1,7 @@
 //! CommandHandler 示例共享类型。
 
 pub struct AccountBalance {
-    pub user_id: String,
+    pub party_id: String,
     pub asset: String,
     pub free: i64,
     pub locked: i64,
@@ -30,7 +30,7 @@ pub enum OrderStatus {
 }
 
 pub struct BalanceChange {
-    pub user_id: String,
+    pub party_id: String,
     pub asset: String,
     pub change: i64,
 }
@@ -49,7 +49,7 @@ pub struct HandlerError(pub String);
 impl Default for AccountBalance {
     fn default() -> Self {
         Self {
-            user_id: String::new(),
+            party_id: String::new(),
             asset: String::new(),
             free: 0,
             locked: 0,

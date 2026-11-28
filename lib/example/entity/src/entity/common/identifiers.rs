@@ -1,13 +1,31 @@
 use serde::{Deserialize, Serialize};
 
-/// Example entity context 的用户标识。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+/// Example entity context 的业务参与方标识。
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 #[repr(transparent)]
-pub struct UserId(pub u64);
+pub struct PartyId(pub String);
 
-impl From<u64> for UserId {
-    fn from(value: u64) -> Self {
+impl From<String> for PartyId {
+    fn from(value: String) -> Self {
         Self(value)
+    }
+}
+
+impl From<&str> for PartyId {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+impl AsRef<str> for PartyId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for PartyId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
     }
 }
 

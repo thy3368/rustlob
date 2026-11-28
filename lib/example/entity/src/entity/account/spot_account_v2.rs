@@ -118,7 +118,7 @@ pub struct SpotAccount {
     /// 账户 ID。
     pub account_id: u64,
     /// 用户 ID 或业务主体 ID。
-    pub party_id: u64,
+    pub party_id: crate::entity::common::PartyId,
     /// 账户生命周期状态。
     pub status: AccountStatus,
     /// 账户创建时间，单位为 Unix 纳秒。
@@ -133,7 +133,12 @@ impl SpotAccount {
     /// 从已经校验过的业务事实或回放事件装配账户主档。
     ///
     /// 该构造器只装配事实，不承担业务校验；风控冻结/解冻应通过 FSM 事件完成。
-    pub fn new(account_id: u64, party_id: u64, status: AccountStatus, version: u64) -> Self {
+    pub fn new(
+        account_id: u64,
+        party_id: crate::entity::common::PartyId,
+        status: AccountStatus,
+        version: u64,
+    ) -> Self {
         Self {
             account_id,
             party_id,
@@ -249,7 +254,7 @@ impl TrackDiff for SpotAccount {
 
 impl common_entity::Shard for SpotAccount {
     fn partition(&self) -> u8 {
-        (self.party_id % 256) as u8
+        (common_entity::stable_string_entity_id(self.party_id.as_ref()) % 256) as u8
     }
 }
 

@@ -1,6 +1,6 @@
 use entity_derive::immutable;
 
-use crate::{Timestamp, UserId};
+use crate::{PartyId, Timestamp};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -84,7 +84,7 @@ pub type Nonce = u64;
 
 pub struct Cmd<C> {
     /// 角色
-    pub user_id: UserId,
+    pub party_id: PartyId,
     /// 客户端生成的唯一标识（同一 nonce 只处理一次）
     pub nonce: Nonce,
     /// 命令时间戳（Unix毫秒，用于过期检查）
@@ -95,9 +95,9 @@ pub struct Cmd<C> {
 
 impl<C> Cmd<C> {
     /// 创建新命令
-    pub fn new(user_id: UserId, nonce: Nonce, payload: C) -> Self {
+    pub fn new(party_id: PartyId, nonce: Nonce, payload: C) -> Self {
         Self {
-            user_id,
+            party_id,
             nonce,
             timestamp_ms: 0, // 由调用方设置
             payload,
@@ -105,9 +105,9 @@ impl<C> Cmd<C> {
     }
 
     /// 创建带时间戳的命令
-    pub fn with_timestamp(user_id: UserId, nonce: Nonce, timestamp_ms: u64, payload: C) -> Self {
+    pub fn with_timestamp(party_id: PartyId, nonce: Nonce, timestamp_ms: u64, payload: C) -> Self {
         Self {
-            user_id,
+            party_id,
             nonce,
             timestamp_ms,
             payload,

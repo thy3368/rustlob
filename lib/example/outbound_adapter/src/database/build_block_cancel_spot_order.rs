@@ -2,10 +2,10 @@ use base_types_v2::Symbol;
 use common_entity::{Entity, LogEntry, ReplayableDomainEvent, StateSinkV3, StateSourceV3};
 use example_core_entity::common::identifiers::OrderId;
 use example_core_entity::{OrderSide, SpotOrderV7};
+use example_core_use_case::CancelSpotOrderFsmV3Changes;
 use example_core_use_case::pipe_line::cancel_spot_order::{
     CancelSpotOrderFsmV3Cmd, CancelSpotOrderFsmV3State, CancelSpotOrderFsmV3UseCase,
 };
-use example_core_use_case::CancelSpotOrderFsmV3Changes;
 use thiserror::Error;
 
 use super::State4BuildBlock;
@@ -32,7 +32,7 @@ impl StateSourceV3<CancelSpotOrderFsmV3UseCase> for State4BuildBlock {
         let mut matches = self
             .user_symbol_orders
             .iter()
-            .filter(|((user_id, _), _)| user_id == command.user_id())
+            .filter(|((party_id, _), _)| party_id == command.party_id())
             .flat_map(|(_, orders)| orders)
             .filter(|order| matches_order(order, &command.payload().order_id));
         let order = matches
@@ -45,7 +45,7 @@ impl StateSourceV3<CancelSpotOrderFsmV3UseCase> for State4BuildBlock {
         if !self.spot_symbol_lob.contains_key(&symbol) {
             return Err(CancelSpotOrderBuildBlockSourceError::LobNotFound);
         }
-        let key = (command.user_id().to_owned(), symbol);
+        let key = (command.party_id().to_owned(), symbol);
         let balances = match order.order_base().side {
             OrderSide::Buy => &self.user_symbol_quote_balance,
             OrderSide::Sell => &self.user_symbol_base_balance,

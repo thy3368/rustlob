@@ -70,7 +70,7 @@ impl UseCase for Freeze4SpotOrderV2UseCase {
         if given_state.order.status() != SpotOrderStatus::Pending {
             return Err(FreezeSpotOrderV2Error::OrderNotPending);
         }
-        if given_state.balance.party_id() != order.owner.0 {
+        if given_state.balance.party_id() != &order.owner {
             return Err(FreezeSpotOrderV2Error::PartyMismatch);
         }
         let requirement = given_state.order.taker_freeze_amount()?;
@@ -104,7 +104,7 @@ mod tests {
     use example_core_entity::OrderSide;
     use example_core_entity::account::coin::Coin;
     use example_core_entity::account::symbol::Symbol;
-    use example_core_entity::entity::common::{OrderBase, UserId};
+    use example_core_entity::entity::common::{OrderBase, PartyId};
     use rstest::rstest;
     use rust_decimal::Decimal;
 
@@ -127,7 +127,7 @@ mod tests {
 
     fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {
         SpotOrderV7::from_record(OrderBase {
-            owner: UserId(OWNER_ID),
+            owner: PartyId(OWNER_ID),
             order_id: ORDER_ID,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
             side,

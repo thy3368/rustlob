@@ -11,7 +11,7 @@ pub fn build_first_place_order_event() -> Result<PlaceOrderAcceptedEvent, EventH
     let place_order_handler = PlaceOrderHandler::new();
     let cmd = PlaceOrderCmd {
         cmd_id: "1".into(),
-        user_id: "u1".into(),
+        party_id: "u1".into(),
         symbol: "BTCUSDT".into(),
         side: OrderSide::Buy,
         order_type: OrderType::Limit,

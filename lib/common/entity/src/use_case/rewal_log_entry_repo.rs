@@ -12,7 +12,7 @@ use super::log_entry::LogEntry;
 use super::log_entry_repo::LogEntryRepo;
 use crate::LogEntrySequencer;
 
-const RECORD_VERSION: u8 = 3;
+const RECORD_VERSION: u8 = 4;
 const FRAME_HEADER_LEN: usize = 24;
 
 #[derive(Debug, Error)]
@@ -46,7 +46,7 @@ struct StoredRecord<P> {
     request_id: u64,
     t: u8,
     p: u8,
-    user_id: String,
+    party_id: String,
     payload: P,
 }
 
@@ -130,7 +130,7 @@ impl<P: Serialize + DeserializeOwned> LogEntryRepo<P> for RewalLogEntryRepo<P> {
                 request_id: entry.request_id(),
                 t: entry.topic(),
                 p: entry.partition(),
-                user_id: entry.user_id().to_owned(),
+                party_id: entry.party_id().to_owned(),
                 payload: entry.into_payload(),
             };
             batch.add(bincode::serialize(&record)?);
@@ -178,7 +178,7 @@ impl<P: Serialize + DeserializeOwned> LogEntryRepo<P> for RewalLogEntryRepo<P> {
                 record.logical_ts,
                 record.client_id,
                 record.request_id,
-                record.user_id,
+                record.party_id,
                 record.payload,
             ));
         }

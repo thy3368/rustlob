@@ -84,15 +84,15 @@ impl HttpProxyApp {
                         let path = parts[1].to_string();
 
                         // 尝试从查询参数提取用户ID
-                        let mut user_id = UserIdExtractor::extract_from_query(&path);
+                        let mut party_id = UserIdExtractor::extract_from_query(&path);
 
                         // 尝试从请求头提取用户ID
-                        if user_id.is_none() {
-                            user_id = UserIdExtractor::extract_from_headers(&header_str);
+                        if party_id.is_none() {
+                            party_id = UserIdExtractor::extract_from_headers(&header_str);
                         }
 
                         // 如果是 POST 请求，尝试从请求体提取用户ID
-                        if user_id.is_none() && parts[0] == "POST" {
+                        if party_id.is_none() && parts[0] == "POST" {
                             // 检查 Content-Length
                             if let Some(content_length) = Self::extract_content_length(&header_str)
                             {
@@ -111,12 +111,12 @@ impl HttpProxyApp {
                                 // 提取请求体
                                 if buffer.len() >= header_size {
                                     let body = &buffer[header_size..];
-                                    user_id = UserIdExtractor::extract_from_json(body);
+                                    party_id = UserIdExtractor::extract_from_json(body);
                                 }
                             }
                         }
 
-                        return Some((path, user_id, buffer));
+                        return Some((path, party_id, buffer));
                     }
 
                     // 防止无限读取
@@ -204,12 +204,12 @@ impl ServerApp for HttpProxyApp {
 
         // 根据路径决定是否使用用户路由
         let target_peer = if Self::needs_user_routing(&path) {
-            if let Some(user_id) = user_id_opt.as_ref() {
-                info!("🔀 User routing: {} -> user_id={}", path, user_id);
-                self.user_router.select_backend(user_id).await
+            if let Some(party_id) = user_id_opt.as_ref() {
+                info!("🔀 User routing: {} -> party_id={}", path, party_id);
+                self.user_router.select_backend(party_id).await
             } else {
                 warn!(
-                    "⚠️  Path requires user routing but no user_id found: {}",
+                    "⚠️  Path requires user routing but no party_id found: {}",
                     path
                 );
                 info!("Using default backend for: {}", path);
@@ -304,9 +304,9 @@ impl HttpProxyServer {
         info!("  - POST /api/spot/user/data (JSON) [user routing]");
         info!("");
         info!("📝 User ID extraction from:");
-        info!("   1. JSON body (user_id, userId, trader_id, traderId, uid)");
+        info!("   1. JSON body (party_id, userId, trader_id, traderId, uid)");
         info!("   2. HTTP headers (X-User-Id, X-Trader-Id)");
-        info!("   3. Query parameters (?user_id=xxx)");
+        info!("   3. Query parameters (?party_id=xxx)");
 
         server.add_services(vec![Box::new(proxy_service)]);
         server.run_forever();

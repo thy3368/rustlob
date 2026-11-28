@@ -14,7 +14,7 @@ use crate::entity::common::order_primitives::{
 /// 创建现货订单所需的业务事实。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceSpotOrderPipelineV2Cmd {
-    pub party_id: u64,
+    pub party_id: crate::entity::common::PartyId,
     pub order_id: u64,
     pub symbol: crate::account::symbol::Symbol,
     pub side: OrderSide,
@@ -109,7 +109,7 @@ impl SpotOrderV7 {
             ),
         };
         let mut order = OrderBase {
-            owner: crate::entity::common::UserId(command.party_id),
+            owner: command.party_id,
             order_id: command.order_id,
             symbol: command.symbol,
             side: command.side,

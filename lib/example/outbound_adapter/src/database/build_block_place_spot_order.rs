@@ -5,8 +5,8 @@ use common_entity::{
 };
 use example_core_entity::spot::SpotTradeV3;
 use example_core_entity::{BalanceV2, PlaceSpotOrderPipelineV2Cmd, SpotOrderV7};
-use example_core_use_case::pipe::match_spot_order::MatchSpotOrderPipeChanges;
 use example_core_use_case::pipe::line::place_spot_order_pipeline_v2::PlaceSpotOrderPipelineV2Changes;
+use example_core_use_case::pipe::match_spot_order::MatchSpotOrderPipeChanges;
 use example_core_use_case::pipe::settle_matched_spot_trades::{
     SettleTradesPipeChanges, SpotOrderSettlementBalances,
 };
@@ -57,7 +57,7 @@ impl StateSourceV3<PlaceSpotOrderPipelineV2UseCase> for State4BuildBlock {
         if payload.cloid.as_ref().is_some_and(|cloid| {
             self.user_symbol_orders
                 .iter()
-                .filter(|((user_id, _), _)| user_id == command.user_id())
+                .filter(|((party_id, _), _)| party_id == command.party_id())
                 .flat_map(|(_, orders)| orders)
                 .any(|order| order.order_base().cloid.as_ref() == Some(cloid))
         }) {
@@ -80,7 +80,7 @@ impl StateSourceV3<PlaceSpotOrderPipelineV2UseCase> for State4BuildBlock {
         let mut balances_by_order_id = HashMap::with_capacity(maker_orders.len() + 1);
         balances_by_order_id.insert(
             payload.order_id,
-            balance_pair(self, command.user_id(), payload.symbol)?,
+            balance_pair(self, command.party_id(), payload.symbol)?,
         );
         for maker in &maker_orders {
             let (key, _) = unique_order_with_key(self, maker.order_base().order_id)?;
@@ -431,10 +431,10 @@ fn unique_order_with_key(
 
 fn balance_pair(
     state: &State4BuildBlock,
-    user_id: &str,
+    party_id: &str,
     symbol: base_types_v2::Symbol,
 ) -> Result<SpotOrderSettlementBalances, PlaceSpotOrderBuildBlockSourceError> {
-    let key = (user_id.to_owned(), symbol);
+    let key = (party_id.to_owned(), symbol);
     Ok(SpotOrderSettlementBalances {
         base: state
             .user_symbol_base_balance

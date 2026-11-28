@@ -361,7 +361,7 @@ fn rebuild_state(
             )));
         }
         projected_orders
-            .entry((record.user_id, record.symbol))
+            .entry((record.party_id, record.symbol))
             .or_default()
             .push((record.ordinal, order));
     }
@@ -401,7 +401,7 @@ fn rebuild_state(
             BalanceKind::Quote => &mut state.user_symbol_quote_balance,
         };
         if target
-            .insert((record.user_id, record.symbol), record.balance)
+            .insert((record.party_id, record.symbol), record.balance)
             .is_some()
         {
             return Err(BuildBlockRocksDbError::InvalidSnapshot(
@@ -421,14 +421,14 @@ fn rebuild_state(
         let mut seen = BTreeSet::new();
         for projection in record.projections {
             if !seen.insert((
-                projection.user_id.clone(),
+                projection.party_id.clone(),
                 projection.symbol,
                 projection.ordinal,
             )) {
                 return Err(BuildBlockRocksDbError::InconsistentTradeProjection { trade_id: id });
             }
             projected_trades
-                .entry((projection.user_id, projection.symbol))
+                .entry((projection.party_id, projection.symbol))
                 .or_default()
                 .push((projection.ordinal, trade.clone()));
         }
@@ -500,7 +500,7 @@ impl Metadata {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct StoredOrder {
-    user_id: String,
+    party_id: String,
     symbol: Symbol,
     ordinal: usize,
     order: example_core_entity::common::OrderBase,
@@ -515,7 +515,7 @@ enum BalanceKind {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct StoredBalance {
-    user_id: String,
+    party_id: String,
     symbol: Symbol,
     kind: BalanceKind,
     balance: BalanceV2,
@@ -555,7 +555,7 @@ impl TradeDto {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TradeProjection {
-    user_id: String,
+    party_id: String,
     symbol: Symbol,
     ordinal: usize,
 }
@@ -586,11 +586,11 @@ fn normalize(state: &State4BuildBlock) -> Result<Normalized, BuildBlockRocksDbEr
         balance_positions: BTreeMap::new(),
         trade_positions: BTreeMap::new(),
     };
-    for ((user_id, symbol), orders) in &state.user_symbol_orders {
+    for ((party_id, symbol), orders) in &state.user_symbol_orders {
         for (ordinal, order) in orders.iter().enumerate() {
             let id = Entity::entity_id(order);
             let record = StoredOrder {
-                user_id: user_id.clone(),
+                party_id: party_id.clone(),
                 symbol: *symbol,
                 ordinal,
                 order: order.order_base().clone(),
@@ -605,17 +605,17 @@ fn normalize(state: &State4BuildBlock) -> Result<Normalized, BuildBlockRocksDbEr
             normalized.order_entities.insert(id, order.clone());
             normalized
                 .order_positions
-                .insert((user_id.clone(), *symbol, ordinal), id);
+                .insert((party_id.clone(), *symbol, ordinal), id);
         }
     }
     for (kind, balances) in [
         (BalanceKind::Base, &state.user_symbol_base_balance),
         (BalanceKind::Quote, &state.user_symbol_quote_balance),
     ] {
-        for ((user_id, symbol), balance) in balances {
+        for ((party_id, symbol), balance) in balances {
             let id = Entity::entity_id(balance);
             let record = StoredBalance {
-                user_id: user_id.clone(),
+                party_id: party_id.clone(),
                 symbol: *symbol,
                 kind,
                 balance: balance.clone(),
@@ -628,15 +628,15 @@ fn normalize(state: &State4BuildBlock) -> Result<Normalized, BuildBlockRocksDbEr
             }
             normalized
                 .balance_positions
-                .insert((kind, user_id.clone(), *symbol), id);
+                .insert((kind, party_id.clone(), *symbol), id);
         }
     }
-    for ((user_id, symbol), trades) in &state.user_symbol_trades {
+    for ((party_id, symbol), trades) in &state.user_symbol_trades {
         for (ordinal, trade) in trades.iter().enumerate() {
             let id = Entity::entity_id(trade);
             let dto = TradeDto::from_entity(trade);
             let projection = TradeProjection {
-                user_id: user_id.clone(),
+                party_id: party_id.clone(),
                 symbol: *symbol,
                 ordinal,
             };
@@ -659,7 +659,7 @@ fn normalize(state: &State4BuildBlock) -> Result<Normalized, BuildBlockRocksDbEr
             }
             normalized
                 .trade_positions
-                .insert((user_id.clone(), *symbol, ordinal), id);
+                .insert((party_id.clone(), *symbol, ordinal), id);
         }
     }
     Ok(normalized)
@@ -799,7 +799,7 @@ fn entity_key(namespace: u8, id: u64) -> Vec<u8> {
 mod tests {
     use base_types_v2::Coin;
     use example_core_entity::account::symbol::Symbol as EntitySymbol;
-    use example_core_entity::common::UserId;
+    use example_core_entity::common::PartyId;
     use example_core_entity::{OrderSide, TradeBase};
     use rust_decimal::Decimal;
     use tempfile::TempDir;
@@ -824,8 +824,8 @@ mod tests {
             comon_trade: TradeBase {
                 trade_id: id,
                 symbol: EntitySymbol::new(1, Coin::BTC, Coin::USDT),
-                taker_user: UserId(10),
-                maker_user: UserId(20),
+                taker_party: PartyId("10".to_owned()),
+                maker_party: PartyId("20".to_owned()),
                 taker_order_id: 100,
                 maker_order_id: 200,
                 taker_side: OrderSide::Buy,

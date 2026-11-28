@@ -5,8 +5,8 @@ use example_core_use_case::entity::account::coin::Coin;
 use example_core_use_case::entity::account::symbol::Symbol;
 use example_core_use_case::entity::common::common_order::{OrderBase, OrderTrigger, PriceType};
 use example_core_use_case::{
-    BalanceV2, MarketRules, OrderGroupRelation, OrderSide, OrderTif, SpotOrderStatus, SpotOrderV7,
-    UserId,
+    BalanceV2, MarketRules, OrderGroupRelation, OrderSide, OrderTif, PartyId, SpotOrderStatus,
+    SpotOrderV7,
 };
 use mysql::prelude::Queryable;
 use rust_decimal::Decimal;
@@ -249,7 +249,7 @@ impl MySqlStore {
                         return None;
                     }
                     let order = SpotOrderV7::from_record(OrderBase {
-                        owner: UserId(stable_string_entity_id(&account_id)),
+                        owner: PartyId(stable_string_entity_id(&account_id)),
                         order_id,
                         symbol: Symbol::new(asset, Coin::BTC, Coin::USDT),
                         side,

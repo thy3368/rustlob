@@ -25,7 +25,7 @@
 //! ## 3. 输入约束
 //! CmdHandler 的输入建议至少包含以下语义：
 //! - on_command payload: 表达业务意图
-//! - user_id / actor: 标识命令发起方
+//! - party_id / actor: 标识命令发起方
 //! - nonce / command_id: 用于幂等判断
 //! - timestamp_ms / recv_window: 用于时效性控制
 //! - aggregate_id / reference_id: 用于定位主实体或聚合根

@@ -4,6 +4,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::entity::common::PartyId;
 use crate::support::concat3;
 
 const BALANCE_V2_ENTITY_TYPE: u8 = 12;
@@ -69,7 +70,7 @@ pub enum BalanceV2Command {
 /// 可变余额实体，同时承载稳定身份、生命周期和 replay 字段。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BalanceV2 {
-    party_id: u64,
+    party_id: PartyId,
     account_id: u64,
     coin_idx: u64,
     available: Decimal,
@@ -103,8 +104,8 @@ impl BalanceV2 {
     pub fn total(&self) -> Option<Decimal> {
         self.available.checked_add(self.frozen)
     }
-    pub fn party_id(&self) -> u64 {
-        self.party_id
+    pub fn party_id(&self) -> &PartyId {
+        &self.party_id
     }
     pub fn account_id(&self) -> u64 {
         self.account_id
@@ -137,7 +138,7 @@ impl BalanceV2 {
 
 impl BalanceV2 {
     pub fn new<A, F>(
-        party_id: u64,
+        party_id: PartyId,
         account_id: u64,
         coin_idx: u64,
         available: A,
@@ -248,7 +249,7 @@ impl Fsm for BalanceV2 {
             }
         };
         let after = Self {
-            party_id: self.party_id,
+            party_id: self.party_id.clone(),
             account_id: self.account_id,
             coin_idx: self.coin_idx,
             available,
@@ -290,7 +291,7 @@ fn checked_sub(a: Decimal, b: Decimal) -> Result<Decimal, BalanceV2Error> {
 impl TrackDiff for BalanceV2 {
     fn created_field_changes(&self) -> Vec<EntityFieldChange> {
         vec![
-            change("party_id", "", self.party_id),
+            EntityFieldChange::new("party_id", "", self.party_id.to_string()),
             change("account_id", "", self.account_id),
             change("coin_idx", "", self.coin_idx),
             EntityFieldChange::new("available", "", self.available.to_string()),

@@ -1,11 +1,11 @@
-use crate::{Timestamp, UserId};
+use crate::{PartyId, Timestamp};
 
 /// 交易账户
 #[derive(Debug, Clone)]
 #[repr(align(64))]
 pub struct User {
     /// 所属用户ID
-    pub user_id: UserId,
+    pub party_id: PartyId,
 
     // /// 账户状态
     // pub status: AccountStatus,

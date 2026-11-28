@@ -2,7 +2,7 @@ use common_entity::{
     EntityError, LogEntry, ReplayableChanges, ReplayableDomainEvent, StateDiff, TrackDiff,
     UpdatedEntityPair, UseCase,
 };
-use example_core_entity::{ScheduledCancel, ScheduledCancelError, UserId};
+use example_core_entity::{PartyId, ScheduledCancel, ScheduledCancelError};
 use thiserror::Error;
 
 const MIN_SCHEDULE_AHEAD_MS: u64 = 5_000;
@@ -10,7 +10,7 @@ const MAX_DAILY_TRIGGERS: u8 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScheduleHyperliquidCancelCmd {
-    pub user_id: UserId,
+    pub party_id: PartyId,
     /// `None` 清除当前计划，`Some` 设置或替换计划。
     pub cancel_at_ms: Option<u64>,
     pub now_ms: u64,
@@ -78,7 +78,7 @@ impl UseCase for ScheduleHyperliquidCancelUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        if state.scheduled_cancel.user_id() != cmd.user_id.0 {
+        if state.scheduled_cancel.party_id() != &cmd.party_id {
             return Err(ScheduleHyperliquidCancelError::UserMismatch);
         }
         if cmd.cancel_at_ms.is_some()
@@ -132,7 +132,7 @@ mod tests {
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
             ScheduleHyperliquidCancelCmd {
-                user_id: UserId(7),
+                party_id: PartyId("7".to_owned()),
                 cancel_at_ms,
                 now_ms: NOW_MS,
             },

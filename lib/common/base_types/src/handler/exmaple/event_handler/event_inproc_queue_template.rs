@@ -58,7 +58,7 @@ pub fn run_full_event_chain_via_inproc_queue() -> Result<SettlementResult, Event
 
     let cmd = PlaceOrderCmd {
         cmd_id: "1".into(),
-        user_id: "u1".into(),
+        party_id: "u1".into(),
         symbol: "BTCUSDT".into(),
         side: OrderSide::Buy,
         order_type: OrderType::Limit,

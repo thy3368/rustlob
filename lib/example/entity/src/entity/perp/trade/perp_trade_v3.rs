@@ -199,8 +199,8 @@ fn trade_values(trade: &PerpTradeV3) -> Vec<(&'static str, String)> {
     let base = &trade.trade_base;
     vec![
         ("symbol", base.symbol.id().to_string()),
-        ("taker_user", base.taker_user.0.to_string()),
-        ("maker_user", base.maker_user.0.to_string()),
+        ("taker_party", base.taker_party.0.to_string()),
+        ("maker_party", base.maker_party.0.to_string()),
         ("price", base.price.to_string()),
         ("size", base.size.to_string()),
         ("taker_fee", base.taker_fee.to_string()),
@@ -310,15 +310,15 @@ mod tests {
     use crate::OrderSide;
     use crate::account::coin::Coin;
     use crate::account::symbol::Symbol;
-    use crate::entity::common::UserId;
+    use crate::entity::common::PartyId;
 
     fn trade() -> PerpTradeV3 {
         PerpTradeV3 {
             trade_base: TradeBase {
                 trade_id: 7,
                 symbol: Symbol::new(1, Coin::BTC, Coin::USDC),
-                taker_user: UserId(10),
-                maker_user: UserId(11),
+                taker_party: PartyId("10".to_owned()),
+                maker_party: PartyId("11".to_owned()),
                 taker_order_id: 20,
                 maker_order_id: 21,
                 taker_side: OrderSide::Buy,

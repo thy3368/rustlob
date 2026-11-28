@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::account::symbol::Symbol;
-use crate::entity::common::FundingRate;
+use crate::entity::common::{FundingRate, PartyId};
 
 /// 资金费结算明细
 const USER_FUNDING_ENTITY_TYPE: u8 = 14;
@@ -18,7 +18,7 @@ pub struct UserFunding {
     /// 本次用户资金费事实的稳定标识
     funding_id: u64,
     /// 用户
-    party_id: u64,
+    party_id: PartyId,
 
     /// 交易对（BTC/ETH…）
     coin: Symbol,
@@ -57,7 +57,7 @@ impl UserFundingState {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UserFundingEvent {
     Settle { settled_at: u64, lsn: u64 },
 }
@@ -92,10 +92,10 @@ impl LogAttr for UserFundingEvent {
         *settled_at
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UserFundingOutput {
     BalanceImpact {
-        party_id: u64,
+        party_id: PartyId,
         quote_coin_idx: u64,
         signed_usdc_delta: Decimal,
     },
@@ -119,7 +119,7 @@ impl UserFunding {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         funding_id: u64,
-        party_id: u64,
+        party_id: PartyId,
         coin: Symbol,
         usdc: Decimal,
         szi: Decimal,
@@ -147,7 +147,7 @@ impl UserFunding {
     #[allow(clippy::too_many_arguments)]
     pub fn restore_settled(
         funding_id: u64,
-        party_id: u64,
+        party_id: PartyId,
         coin: Symbol,
         usdc: Decimal,
         szi: Decimal,
@@ -179,8 +179,8 @@ impl UserFunding {
     pub fn coin(&self) -> Symbol {
         self.coin
     }
-    pub fn party_id(&self) -> u64 {
-        self.party_id
+    pub fn party_id(&self) -> &PartyId {
+        &self.party_id
     }
     pub fn state(&self) -> UserFundingState {
         self.state
@@ -235,7 +235,7 @@ impl Fsm for UserFunding {
             return Err(UserFundingError::InvalidSettlementTime);
         }
         let output = UserFundingOutput::BalanceImpact {
-            party_id: self.party_id,
+            party_id: self.party_id.clone(),
             quote_coin_idx: u64::from(self.coin.quote.index()),
             signed_usdc_delta: self.usdc,
         };

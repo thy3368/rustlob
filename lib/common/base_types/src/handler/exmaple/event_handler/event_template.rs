@@ -106,7 +106,7 @@ impl EventHandler<TradeCreatedEvent, SettlementResult, EventHandlerError> for Tr
                     .iter()
                     .map(|change| {
                         crate::handler::exmaple::cmd_handler::example_types::BalanceChange {
-                            user_id: change.user_id.clone(),
+                            party_id: change.party_id.clone(),
                             asset: change.asset.clone(),
                             change: change.change,
                         }
@@ -205,7 +205,7 @@ mod tests {
         let trade_event_handler = TradeEventHandler::new(SettlementHandler::new());
         let cmd = PlaceOrderCmd {
             cmd_id: "1".into(),
-            user_id: "u1".into(),
+            party_id: "u1".into(),
             symbol: "BTCUSDT".into(),
             side: OrderSide::Buy,
             order_type: OrderType::Limit,

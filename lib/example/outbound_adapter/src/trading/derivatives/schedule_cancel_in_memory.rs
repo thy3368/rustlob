@@ -7,10 +7,10 @@ use common_entity::{
     Entity, Fsm, LogEntry, LogEntrySequencer, ReplayableDomainEvent, Shard, StateSink, StateSource,
 };
 use example_core_use_case::{
-    BalanceV2, BalanceV2Command, DueScheduledCancelSource, PerpOrderV3, PerpOrderV3Event,
+    BalanceV2, BalanceV2Command, DueScheduledCancelSource, PartyId, PerpOrderV3, PerpOrderV3Event,
     ScheduleHyperliquidCancelCmd, ScheduleHyperliquidCancelState, ScheduleHyperliquidCancelUseCase,
     ScheduledCancel, SpotOrderStatus, SpotOrderV7, SpotOrderV7Command, TriggerScheduledCancelCmd,
-    TriggerScheduledCancelState, TriggerScheduledCancelUseCase, UserId,
+    TriggerScheduledCancelState, TriggerScheduledCancelUseCase,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -134,7 +134,7 @@ impl HyperliquidScheduleCancelInMemoryOutbound {
 impl DueScheduledCancelSource for HyperliquidScheduleCancelInMemoryOutbound {
     type Error = HyperliquidScheduleCancelOutboundError;
 
-    fn due_user_ids(&self, now_ms: u64, limit: usize) -> Result<Vec<UserId>, Self::Error> {
+    fn due_user_ids(&self, now_ms: u64, limit: usize) -> Result<Vec<PartyId>, Self::Error> {
         let state = self.lock()?;
         let mut due = state
             .schedules
@@ -143,12 +143,12 @@ impl DueScheduledCancelSource for HyperliquidScheduleCancelInMemoryOutbound {
                 schedule
                     .cancel_at_ms()
                     .filter(|deadline| *deadline <= now_ms)
-                    .map(|deadline| (deadline, UserId(schedule.user_id())))
+                    .map(|deadline| (deadline, PartyId(schedule.party_id())))
             })
             .collect::<Vec<_>>();
-        due.sort_unstable_by_key(|(deadline, user_id)| (*deadline, user_id.0));
+        due.sort_unstable_by_key(|(deadline, party_id)| (*deadline, party_id.0));
         due.truncate(limit);
-        Ok(due.into_iter().map(|(_, user_id)| user_id).collect())
+        Ok(due.into_iter().map(|(_, party_id)| party_id).collect())
     }
 }
 
@@ -163,9 +163,9 @@ impl StateSource<ScheduleHyperliquidCancelUseCase> for HyperliquidScheduleCancel
         Ok(ScheduleHyperliquidCancelState {
             scheduled_cancel: state
                 .schedules
-                .get(&cmd.user_id.0)
+                .get(&cmd.party_id.0)
                 .cloned()
-                .unwrap_or_else(|| ScheduledCancel::new(cmd.user_id.0)),
+                .unwrap_or_else(|| ScheduledCancel::new(cmd.party_id.0)),
         })
     }
 }
@@ -180,7 +180,7 @@ impl StateSource<TriggerScheduledCancelUseCase> for HyperliquidScheduleCancelInM
         let state = self.lock()?;
         let scheduled_cancel = state
             .schedules
-            .get(&cmd.user_id.0)
+            .get(&cmd.party_id.0)
             .cloned()
             .ok_or(HyperliquidScheduleCancelOutboundError::ScheduleNotFound)?;
         Ok(TriggerScheduledCancelState {
@@ -189,21 +189,22 @@ impl StateSource<TriggerScheduledCancelUseCase> for HyperliquidScheduleCancelInM
                 .spot_orders
                 .values()
                 .filter(|order| {
-                    order.order_base().owner == cmd.user_id && !is_terminal(order.status())
+                    order.order_base().owner == cmd.party_id && !is_terminal(order.status())
                 })
                 .cloned()
                 .collect(),
             spot_balances: state
                 .balances
                 .values()
-                .filter(|balance| balance.party_id() == cmd.user_id.0)
+                .filter(|balance| balance.party_id() == cmd.party_id.0)
                 .cloned()
                 .collect(),
             perp_orders: state
                 .perp_orders
                 .values()
                 .filter(|order| {
-                    order.comon_order.owner == cmd.user_id && !is_terminal(order.comon_order.status)
+                    order.comon_order.owner == cmd.party_id
+                        && !is_terminal(order.comon_order.status)
                 })
                 .cloned()
                 .collect(),
@@ -402,7 +403,7 @@ mod tests {
 
     use super::*;
 
-    const USER: UserId = UserId(7);
+    const USER: PartyId = PartyId("7".to_owned());
     const NOW_MS: u64 = 1_700_000_000_000;
     const DUE_MS: u64 = NOW_MS + 5_000;
 
@@ -472,7 +473,7 @@ mod tests {
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
             ScheduleHyperliquidCancelCmd {
-                user_id: USER,
+                party_id: USER,
                 cancel_at_ms: Some(DUE_MS),
                 now_ms: NOW_MS,
             },
@@ -503,7 +504,7 @@ mod tests {
             USER.0,
             common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd {
-                user_id: USER,
+                party_id: USER,
                 now_ms: DUE_MS,
             },
         );

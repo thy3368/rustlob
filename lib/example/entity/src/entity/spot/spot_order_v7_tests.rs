@@ -6,7 +6,7 @@ use super::{PlaceSpotOrderPipelineV2Cmd, SpotOrderV7, SpotOrderV7Command};
 use crate::account::coin::Coin;
 use crate::account::symbol::Symbol;
 use crate::common::PriceType;
-use crate::entity::common::UserId;
+use crate::entity::common::PartyId;
 use crate::entity::common::common_order::OrderBase;
 use crate::entity::common::order_primitives::{
     OrderGroupRelation, OrderSide, OrderTif, OrderTriggerRole, OrderType, SpotOrderStatus,
@@ -45,7 +45,7 @@ fn order(side: OrderSide, status: SpotOrderStatus) -> SpotOrderV7 {
         Decimal::ZERO
     };
     SpotOrderV7::from_record(OrderBase {
-        owner: UserId(11),
+        owner: PartyId("11".to_owned()),
         order_id: 7,
         symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
         side,

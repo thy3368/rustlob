@@ -1,6 +1,6 @@
 //! 账户实体定义
 
-use crate::{AccountId, Timestamp, UserId};
+use crate::{AccountId, PartyId, Timestamp};
 
 /// 交易账户
 #[derive(Debug, Clone)]
@@ -10,7 +10,7 @@ pub struct Account {
     /// 账户ID
     pub id: AccountId,
     /// 所属用户ID
-    pub user_id: UserId,
+    pub party_id: PartyId,
     /// 账户类型
     pub account_type: AccountType,
     /// 账户状态
@@ -23,10 +23,15 @@ pub struct Account {
 
 impl Account {
     /// 创建新账户
-    pub fn new(id: AccountId, user_id: UserId, account_type: AccountType, now: Timestamp) -> Self {
+    pub fn new(
+        id: AccountId,
+        party_id: PartyId,
+        account_type: AccountType,
+        now: Timestamp,
+    ) -> Self {
         Self {
             id,
-            user_id,
+            party_id,
             account_type,
             status: AccountStatus::Active,
             created_at: now,

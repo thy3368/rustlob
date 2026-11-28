@@ -7,7 +7,7 @@ use crate::handler::handler_update::{ApplyCommandChanges, ChangeSet, CmdHandlerF
 
 pub struct PlaceOrderCmd {
     pub cmd_id: String,
-    pub user_id: String,
+    pub party_id: String,
     pub symbol: String,
     pub side: OrderSide,
     pub order_type: OrderType,
@@ -61,7 +61,7 @@ pub struct OrderCreated {
 }
 
 pub struct BalanceFrozen {
-    pub user_id: String,
+    pub party_id: String,
     pub amount: i64,
 }
 
@@ -92,7 +92,7 @@ impl
             order_id: order_id.clone(),
             status: OrderStatus::Open,
             balance_change: Some(BalanceChange {
-                user_id: cmd.user_id.clone(),
+                party_id: cmd.party_id.clone(),
                 asset: "USDT".into(),
                 change: -(cmd.price.unwrap_or(0) * cmd.quantity),
             }),
@@ -168,7 +168,7 @@ mod tests {
         let handler = PlaceOrderHandler::new();
         let cmd = PlaceOrderCmd {
             cmd_id: "1".into(),
-            user_id: "u1".into(),
+            party_id: "u1".into(),
             symbol: "BTCUSDT".into(),
             side: OrderSide::Buy,
             order_type: OrderType::Limit,

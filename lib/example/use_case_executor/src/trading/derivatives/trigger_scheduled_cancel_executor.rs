@@ -33,11 +33,11 @@ mod tests {
     use std::sync::Mutex;
 
     use common_entity::{LogEntrySequencer, ReplayableDomainEvent};
-    use example_core_use_case::{ScheduledCancel, TriggerScheduledCancelState, UserId};
+    use example_core_use_case::{PartyId, ScheduledCancel, TriggerScheduledCancelState};
 
     use super::*;
 
-    const USER: UserId = UserId(7);
+    const USER: PartyId = PartyId("7".to_owned());
     const NOW_MS: u64 = 1_700_000_010_000;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -112,7 +112,7 @@ mod tests {
             2,
             common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd {
-                user_id: USER,
+                party_id: USER,
                 now_ms: NOW_MS,
             },
         );

@@ -136,12 +136,12 @@ mod tests {
     use super::*;
     use crate::account::coin::Coin;
     use crate::account::symbol::Symbol;
-    use crate::entity::common::UserId;
+    use crate::entity::common::PartyId;
     use crate::entity::common::common_order::OrderBase;
 
     fn order(side: OrderSide) -> SpotOrderV7 {
         SpotOrderV7::from_record(OrderBase {
-            owner: UserId(11),
+            owner: PartyId("11".to_owned()),
             order_id: 7,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
             side,

@@ -87,7 +87,7 @@ fn validate_state(
     state: &CancelSpotOrderFsmV3State,
 ) -> Result<(), CancelSpotOrderFsmV3Error> {
     let order = state.order.order_base();
-    if order.owner.0 != common_entity::stable_string_entity_id(cmd.user_id()) {
+    if order.owner.as_ref() != cmd.party_id() {
         return Err(CancelSpotOrderFsmV3Error::OwnerMismatch);
     }
     match &cmd.payload().order_id {
@@ -112,7 +112,7 @@ fn validate_state(
     if cmd.lsn() <= order.lsn {
         return Err(CancelSpotOrderFsmV3Error::StaleOrder);
     }
-    if state.balance.party_id() != order.owner.0 {
+    if state.balance.party_id() != &order.owner {
         return Err(CancelSpotOrderFsmV3Error::PartyMismatch);
     }
     let held_coin = match order.side {

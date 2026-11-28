@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::account::coin::Coin;
-use crate::entity::common::{FundingRate, UserId};
+use crate::entity::common::{FundingRate, PartyId};
 use crate::perp::fund::user_funding::UserFunding;
 use crate::perp::trade::perp_trade_v3::PerpTradeV3;
 
@@ -90,7 +90,7 @@ pub enum PerpPositionV3Event {
         lsn: u64,
     },
     FundingAmountSettled {
-        user_id: UserId,
+        party_id: PartyId,
         coin: Coin,
         signed_amount: Decimal,
         logical_ts: u64,
@@ -188,7 +188,7 @@ pub struct PerpPositionV3 {
     /// 仓位的唯一标识。
     position_id: u64,
     /// 持有该仓位的账户标识。
-    user_id: UserId,
+    party_id: PartyId,
     /// 仓位对应的币种或合约名称。
     coin: Coin,
     /// 带方向的仓位数量；正数表示多仓，负数表示空仓，零表示无仓位。
@@ -220,7 +220,7 @@ impl PerpPositionV3 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         position_key: u64,
-        user_id: UserId,
+        party_id: PartyId,
         coin: Coin,
         signed_size: Decimal,
         entry_price: Decimal,
@@ -241,7 +241,7 @@ impl PerpPositionV3 {
         validate_margin(leverage, margin_mode, isolated_margin)?;
         Ok(Self {
             position_id: position_key,
-            user_id,
+            party_id,
             coin,
             szi: signed_size,
             entry_px: entry_price,
@@ -256,10 +256,10 @@ impl PerpPositionV3 {
             lsn: version,
         })
     }
-    pub fn empty(position_id: u64, user_id: UserId, coin: Coin) -> Self {
+    pub fn empty(position_id: u64, party_id: PartyId, coin: Coin) -> Self {
         Self {
             position_id,
-            user_id,
+            party_id,
             coin,
             szi: Decimal::ZERO,
             entry_px: Decimal::ZERO,
@@ -277,8 +277,8 @@ impl PerpPositionV3 {
     pub fn position_id(&self) -> u64 {
         self.position_id
     }
-    pub fn user_id(&self) -> UserId {
-        self.user_id
+    pub fn party_id(&self) -> &PartyId {
+        &self.party_id
     }
     pub fn coin(&self) -> Coin {
         self.coin
@@ -382,7 +382,7 @@ fn position_fields(position: &PerpPositionV3, before: &str) -> Vec<EntityFieldCh
 
 fn position_field_values(position: &PerpPositionV3) -> Vec<(&'static str, String)> {
     vec![
-        ("user_id", position.user_id.0.to_string()),
+        ("party_id", position.party_id.0.to_string()),
         ("coin", position.coin.to_string()),
         ("szi", position.szi.to_string()),
         ("entry_px", position.entry_px.to_string()),
@@ -416,11 +416,11 @@ fn position_field_values(position: &PerpPositionV3) -> Vec<(&'static str, String
 
 impl Shard for PerpPositionV3 {
     fn partition(&self) -> u8 {
-        (self.user_id.0 % 256) as u8
+        (common_entity::stable_string_entity_id(self.party_id.as_ref()) % 256) as u8
     }
 
     fn party_id(&self) -> String {
-        self.user_id.0.to_string()
+        self.party_id.0.to_string()
     }
 }
 
@@ -539,7 +539,7 @@ impl Fsm for PerpPositionV3 {
                 todo!()
             }
             PerpPositionV3Event::FundingAmountSettled {
-                user_id,
+                party_id,
                 coin,
                 signed_amount,
                 logical_ts,
@@ -551,7 +551,7 @@ impl Fsm for PerpPositionV3 {
                         current_lsn: self.lsn,
                     });
                 }
-                if user_id != self.user_id {
+                if party_id != self.party_id {
                     return Err(PerpPositionV3Error::FundingUserMismatch);
                 }
                 if coin != self.coin {
@@ -618,8 +618,8 @@ mod tests {
             trade_base: TradeBase {
                 trade_id: 8,
                 symbol: Symbol::new(1, Coin::BTC, Coin::USDC),
-                taker_user: UserId(7),
-                maker_user: UserId(9),
+                taker_party: PartyId("7".to_owned()),
+                maker_party: PartyId("9".to_owned()),
                 taker_order_id: 10,
                 maker_order_id: 11,
                 taker_side: side,
@@ -646,7 +646,7 @@ mod tests {
     fn trade_output_uses_position_truth_for_closed_pnl_and_tracks_fee() {
         let mut position = PerpPositionV3::new(
             1,
-            UserId(7),
+            PartyId("7".to_owned()),
             Coin::BTC,
             Decimal::from(2),
             Decimal::from(100),
@@ -684,7 +684,7 @@ mod tests {
     fn funding_amount_settlement_updates_all_accumulators_and_metadata() {
         let mut position = PerpPositionV3::new(
             1,
-            UserId(7),
+            PartyId("7".to_owned()),
             Coin::BTC,
             Decimal::ONE,
             Decimal::from(100),
@@ -704,7 +704,7 @@ mod tests {
 
         let transition = position
             .transition(PerpPositionV3Event::FundingAmountSettled {
-                user_id: UserId(7),
+                party_id: PartyId("7".to_owned()),
                 coin: Coin::BTC,
                 signed_amount: Decimal::from(-1),
                 logical_ts: 9,
@@ -737,7 +737,7 @@ mod tests {
     fn funding_amount_settlement_errors_leave_position_unchanged() {
         let base = PerpPositionV3::new(
             1,
-            UserId(7),
+            PartyId("7".to_owned()),
             Coin::BTC,
             Decimal::ONE,
             Decimal::from(100),
@@ -757,7 +757,7 @@ mod tests {
         let cases = [
             (
                 PerpPositionV3Event::FundingAmountSettled {
-                    user_id: UserId(8),
+                    party_id: PartyId("8".to_owned()),
                     coin: Coin::BTC,
                     signed_amount: Decimal::ONE,
                     logical_ts: 9,
@@ -767,7 +767,7 @@ mod tests {
             ),
             (
                 PerpPositionV3Event::FundingAmountSettled {
-                    user_id: UserId(7),
+                    party_id: PartyId("7".to_owned()),
                     coin: Coin::ETH,
                     signed_amount: Decimal::ONE,
                     logical_ts: 9,
@@ -777,7 +777,7 @@ mod tests {
             ),
             (
                 PerpPositionV3Event::FundingAmountSettled {
-                    user_id: UserId(7),
+                    party_id: PartyId("7".to_owned()),
                     coin: Coin::BTC,
                     signed_amount: Decimal::ONE,
                     logical_ts: 9,

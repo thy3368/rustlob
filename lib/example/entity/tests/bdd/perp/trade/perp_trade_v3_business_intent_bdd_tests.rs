@@ -1,7 +1,7 @@
 use example_core_entity::account::coin::Coin;
 use example_core_entity::account::symbol::Symbol;
 use example_core_entity::{
-    OrderSide, PerpTradeKind, PerpTradeV3, PerpTradeV3State, TradeBase, UserId,
+    OrderSide, PerpTradeKind, PerpTradeV3, PerpTradeV3State, TradeBase, PartyId,
 };
 use rust_decimal::{Decimal, dec};
 
@@ -9,8 +9,8 @@ fn trade_base(taker: u64, maker: u64, side: OrderSide, price: Decimal, size: Dec
     TradeBase {
         trade_id: 42,
         symbol: Symbol::new(7, Coin::BTC, Coin::USDT),
-        taker_user: UserId(taker),
-        maker_user: UserId(maker),
+        taker_party: PartyId(taker),
+        maker_party: PartyId(maker),
         taker_order_id: 1001,
         maker_order_id: 2001,
         taker_side: side,
@@ -85,8 +85,8 @@ fn normal_trade_preserves_market_execution_facts() {
     let trade = normal_trade();
     assert_eq!(trade.kind, PerpTradeKind::Normal);
     assert_eq!(trade.reference_id, None);
-    assert_eq!(trade.trade_base.taker_user, UserId(1));
-    assert_eq!(trade.trade_base.maker_user, UserId(2));
+    assert_eq!(trade.trade_base.taker_party, PartyId("1".to_owned()));
+    assert_eq!(trade.trade_base.maker_party, PartyId("2".to_owned()));
     assert_eq!(trade.trade_base.taker_side, OrderSide::Buy);
     assert_eq!(trade.trade_base.price, dec!(100));
     assert_eq!(trade.trade_base.size, dec!(2));
@@ -102,8 +102,8 @@ fn liquidation_trade_is_traceable_without_new_trade_type() {
     let trade = liquidation_trade();
     assert_eq!(trade.kind, PerpTradeKind::Liquidation);
     assert_eq!(trade.reference_id.as_deref(), Some("liq-001"));
-    assert_eq!(trade.trade_base.taker_user, UserId(3));
-    assert_eq!(trade.trade_base.maker_user, UserId(4));
+    assert_eq!(trade.trade_base.taker_party, PartyId("3".to_owned()));
+    assert_eq!(trade.trade_base.maker_party, PartyId("4".to_owned()));
     assert_eq!(trade.trade_base.price, dec!(95));
     assert_eq!(trade.trade_base.size, dec!(1));
     assert_eq!(trade.taker_closed_pnl, dec!(-5));
@@ -117,8 +117,8 @@ fn insurance_fund_transfer_is_a_zero_pnl_unit_price_fact() {
     let trade = insurance_fund_transfer();
     assert_eq!(trade.kind, PerpTradeKind::InsuranceFundTransfer);
     assert_eq!(trade.reference_id.as_deref(), Some("allocation-001"));
-    assert_eq!(trade.trade_base.taker_user, UserId(5));
-    assert_eq!(trade.trade_base.maker_user, UserId(6));
+    assert_eq!(trade.trade_base.taker_party, PartyId("5".to_owned()));
+    assert_eq!(trade.trade_base.maker_party, PartyId("6".to_owned()));
     assert_eq!(trade.trade_base.price, Decimal::ONE);
     assert_eq!(trade.trade_base.size, dec!(10));
     assert_eq!(trade.trade_base.taker_side, OrderSide::Sell);
@@ -133,8 +133,8 @@ fn adl_trade_is_traceable_and_keeps_pnl_semantics() {
     let trade = adl_trade();
     assert_eq!(trade.kind, PerpTradeKind::Adl);
     assert_eq!(trade.reference_id.as_deref(), Some("adl-001"));
-    assert_eq!(trade.trade_base.taker_user, UserId(7));
-    assert_eq!(trade.trade_base.maker_user, UserId(8));
+    assert_eq!(trade.trade_base.taker_party, PartyId("7".to_owned()));
+    assert_eq!(trade.trade_base.maker_party, PartyId("8".to_owned()));
     assert_eq!(trade.trade_base.taker_side, OrderSide::Buy);
     assert_eq!(trade.trade_base.price, dec!(110));
     assert_eq!(trade.trade_base.size, dec!(3));

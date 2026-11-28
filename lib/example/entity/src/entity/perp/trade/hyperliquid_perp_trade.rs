@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::account::coin::Coin;
 use crate::account::symbol::Symbol;
-use crate::common::UserId;
+use crate::common::PartyId;
 use crate::perp::trade::perp_position_v3::{
     PerpPositionV3, PerpPositionV3Error, PerpPositionV3Event, PerpPositionV3Output,
 };
@@ -87,8 +87,8 @@ impl HyperliquidPerpTrade {
         let tu = parse_user(&self.taker_account_id)?;
         let mu = parse_user(&self.maker_account_id)?;
         let base = parse_coin(&self.symbol)?;
-        if taker.user_id() != tu
-            || maker.user_id() != mu
+        if taker.party_id() != &tu
+            || maker.party_id() != &mu
             || taker.coin() != base
             || maker.coin() != base
         {
@@ -124,8 +124,8 @@ impl HyperliquidPerpTrade {
     }
     fn trade(
         &self,
-        tu: UserId,
-        mu: UserId,
+        tu: PartyId,
+        mu: PartyId,
         base: Coin,
         ts: Decimal,
         ms: Decimal,
@@ -137,8 +137,8 @@ impl HyperliquidPerpTrade {
                     .parse()
                     .map_err(|_| HyperliquidPerpTradeError::InvalidTrade)?,
                 symbol: Symbol::new(self.asset, base, Coin::USDC),
-                taker_user: tu,
-                maker_user: mu,
+                taker_party: tu,
+                maker_party: mu,
                 taker_order_id: self.taker_order_id,
                 maker_order_id: self.maker_order_id,
                 taker_side: self.taker_side,
@@ -161,9 +161,9 @@ impl HyperliquidPerpTrade {
         })
     }
 }
-fn parse_user(s: &str) -> Result<UserId, HyperliquidPerpTradeError> {
+fn parse_user(s: &str) -> Result<PartyId, HyperliquidPerpTradeError> {
     s.parse()
-        .map(UserId)
+        .map(PartyId)
         .map_err(|_| HyperliquidPerpTradeError::InvalidAccountId)
 }
 fn parse_coin(s: &str) -> Result<Coin, HyperliquidPerpTradeError> {

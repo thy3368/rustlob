@@ -1,5 +1,5 @@
 pub mod identifiers;
-pub use identifiers::UserId;
+pub use identifiers::PartyId;
 
 pub mod common_order;
 pub use common_order::{OrderBase, OrderTrigger, PriceType};

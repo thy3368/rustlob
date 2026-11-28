@@ -6,13 +6,13 @@ use rust_decimal::Decimal;
 use thiserror::Error;
 
 use crate::entity::{
-    MatchPerpOrderV3Input, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event, PerpTradeV3,
-    SpotOrderStatus, UserId,
+    MatchPerpOrderV3Input, PartyId, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event, PerpTradeV3,
+    SpotOrderStatus,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchHyperliquidPerpOrderCmd {
-    pub operator: UserId,
+    pub operator: PartyId,
     pub taker_order_id: u64,
     pub match_id: u64,
     pub executed_at: u64,

@@ -7,12 +7,12 @@ use thiserror::Error;
 
 use crate::entity::account::symbol::Symbol;
 use crate::entity::{
-    MarginModeV3, PerpPositionV3, PerpPositionV3Error, PerpPositionV3Event, UserId,
+    MarginModeV3, PartyId, PerpPositionV3, PerpPositionV3Error, PerpPositionV3Event,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateHyperliquidPerpLeverageCmd {
-    pub user_id: UserId,
+    pub party_id: PartyId,
     pub symbol: Symbol,
     pub margin_mode: MarginModeV3,
     pub leverage: Decimal,
@@ -73,7 +73,7 @@ impl UseCase for UpdateHyperliquidPerpLeverageUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        if state.position.user_id() != cmd.user_id || state.position.coin() != cmd.symbol.base {
+        if state.position.party_id() != &cmd.party_id || state.position.coin() != cmd.symbol.base {
             return Err(UpdateHyperliquidPerpLeverageError::PositionMismatch);
         }
         if state.position.margin_mode() != cmd.margin_mode {
@@ -144,7 +144,7 @@ mod tests {
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
             UpdateHyperliquidPerpLeverageCmd {
-                user_id: UserId(7),
+                party_id: PartyId("7".to_owned()),
                 symbol: Symbol::new(3, Coin::BTC, Coin::USDC),
                 margin_mode: MarginModeV3::Cross,
                 leverage,
@@ -156,7 +156,7 @@ mod tests {
     fn updates_position_and_projects_one_pair_event() {
         let use_case = UpdateHyperliquidPerpLeverageUseCase;
         let state = UpdateHyperliquidPerpLeverageState {
-            position: PerpPositionV3::empty(9, UserId(7), Coin::BTC),
+            position: PerpPositionV3::empty(9, PartyId("7".to_owned()), Coin::BTC),
         };
         let changes = use_case
             .compute_state_changed(&command(Decimal::from(5)), &state)

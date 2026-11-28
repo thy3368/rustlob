@@ -53,8 +53,8 @@ pub mod sys_error;
 
 // Re-export all types
 pub use base_types::{
-    AccountId, AssetId, OrderId, OrderSide, PositionId, Price, Quantity, Timestamp, TradeId,
-    TradingPair, UserId,
+    AccountId, AssetId, OrderId, OrderSide, PartyId, PositionId, Price, Quantity, Timestamp,
+    TradeId, TradingPair,
 };
 pub use exchange::prep::perp_types::{PositionSide, PrepPosition, PrepTrade};
 pub use exchange::prep::prep_order::{FutureOrderStatus, TimeInForce};

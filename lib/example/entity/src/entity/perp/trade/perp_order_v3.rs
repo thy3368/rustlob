@@ -349,8 +349,8 @@ fn compute_match(
             trade_base: TradeBase {
                 trade_id,
                 symbol: taker.comon_order.symbol,
-                taker_user: taker.comon_order.owner,
-                maker_user: maker.comon_order.owner,
+                taker_party: taker.comon_order.owner.clone(),
+                maker_party: maker.comon_order.owner.clone(),
                 taker_order_id: taker.comon_order.order_id,
                 maker_order_id: maker.comon_order.order_id,
                 taker_side: taker.comon_order.side,
@@ -568,7 +568,7 @@ fn values(order: &PerpOrderV3) -> Vec<(&'static str, String)> {
 
 impl Shard for PerpOrderV3 {
     fn partition(&self) -> u8 {
-        (self.comon_order.owner.0 % 256) as u8
+        (common_entity::stable_string_entity_id(self.comon_order.owner.as_ref()) % 256) as u8
     }
 
     fn party_id(&self) -> String {

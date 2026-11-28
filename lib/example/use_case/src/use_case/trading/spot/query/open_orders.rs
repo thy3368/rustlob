@@ -54,13 +54,13 @@ impl QueryUseCase<OpenSpotOrdersQuery, SpotOrderV7ReadModel> for OpenSpotOrdersQ
         query: &OpenSpotOrdersQuery,
         read_model: SpotOrderV7ReadModel,
     ) -> Result<Self::Output, Self::Error> {
-        let user_id = stable_string_entity_id(&query.user);
+        let party_id = stable_string_entity_id(&query.user);
         let mut orders = read_model
             .0
             .into_iter()
             .filter(|order| {
                 let base = order.order_base();
-                base.owner.0 == user_id && order.status().is_cancelable()
+                base.owner.0 == party_id && order.status().is_cancelable()
             })
             .collect::<Vec<_>>();
         orders.sort_unstable_by_key(|order| {

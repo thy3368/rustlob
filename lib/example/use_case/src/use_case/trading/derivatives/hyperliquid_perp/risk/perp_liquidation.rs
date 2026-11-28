@@ -94,7 +94,7 @@ impl UseCase for PerpLiquidation {
                     continue;
                 }
                 let child = PlaceHyperliquidPerpOrderCmd {
-                    user_id: position.user_id(),
+                    party_id: position.party_id().clone(),
                     symbol: state.market_symbol,
                     side: if position.is_short() {
                         crate::entity::OrderSide::Buy

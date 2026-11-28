@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::balance_v2::BalanceV2;
+use crate::entity::common::PartyId;
 
 const BALANCE_LEDGER_V3_ENTITY_TYPE: u8 = 8;
 
@@ -92,7 +93,7 @@ pub enum BalanceLedgerV3Error {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BalanceLedgerV3 {
     pub entry_id: u64,
-    pub party_id: u64,
+    pub party_id: PartyId,
     pub account_id: u64,
     pub coin_idx: u64,
     pub amount: Decimal,
@@ -117,7 +118,7 @@ impl BalanceLedgerV3 {
         }
         Ok(Self {
             entry_id,
-            party_id: balance.party_id(),
+            party_id: balance.party_id().clone(),
             account_id: balance.account_id(),
             coin_idx: balance.coin_idx(),
             amount,
@@ -180,8 +181,8 @@ impl Fsm for BalanceLedgerV3 {
         }
         let before = &balance_update.before;
         let after = &balance_update.after;
-        if before.party_id() != self.party_id
-            || after.party_id() != self.party_id
+        if before.party_id() != &self.party_id
+            || after.party_id() != &self.party_id
             || before.account_id() != self.account_id
             || after.account_id() != self.account_id
             || before.coin_idx() != self.coin_idx

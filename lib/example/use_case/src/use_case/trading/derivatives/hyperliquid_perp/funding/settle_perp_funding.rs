@@ -12,11 +12,11 @@ use crate::entity::perp::fund::user_funding::UserFunding;
 use crate::entity::perp::fund::user_funding_domain_service::{
     SettleHourError, SettleUserFundingBatchError, settle_hour, settle_user_funding_batch,
 };
-use crate::entity::{BalanceV2, FundingRate, MarginModeV3, PerpPositionV3, UserId};
+use crate::entity::{BalanceV2, FundingRate, MarginModeV3, PartyId, PerpPositionV3};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettleHyperliquidPerpFundingCmd {
-    pub operator: UserId,
+    pub operator: PartyId,
     pub funding_batch_id: u64,
     pub funding_time: u64,
     pub settled_at: u64,
@@ -206,7 +206,7 @@ mod tests {
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
             SettleHyperliquidPerpFundingCmd {
-                operator: UserId(99),
+                operator: PartyId("99".to_owned()),
                 funding_batch_id: 7,
                 funding_time: 100,
                 settled_at: 120,
@@ -223,7 +223,7 @@ mod tests {
             positions: vec![
                 PerpPositionV3::new(
                     2,
-                    UserId(7),
+                    PartyId("7".to_owned()),
                     Coin::BTC,
                     Decimal::ONE,
                     Decimal::from(100),
@@ -301,7 +301,7 @@ mod tests {
         let mut mismatched = state();
         mismatched.positions[0] = PerpPositionV3::new(
             3,
-            UserId(7),
+            PartyId("7".to_owned()),
             Coin::BTC,
             Decimal::ONE,
             Decimal::from(100),

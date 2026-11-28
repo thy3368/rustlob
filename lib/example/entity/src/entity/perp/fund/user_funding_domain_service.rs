@@ -11,8 +11,8 @@ use crate::perp::fund::user_funding::{
     UserFunding, UserFundingError, UserFundingEvent, UserFundingState,
 };
 use crate::{
-    BalanceV2, BalanceV2Command, BalanceV2Error, FundingRate, MarginModeV3, PerpPositionV3,
-    PerpPositionV3Error, PerpPositionV3Event,
+    BalanceV2, BalanceV2Command, BalanceV2Error, FundingRate, MarginModeV3, PartyId,
+    PerpPositionV3, PerpPositionV3Error, PerpPositionV3Event,
 };
 
 /// 按小时生成用户资金费事实时可能发生的错误。
@@ -78,7 +78,7 @@ pub fn settle_hour(
             let funding_key = format!("{funding_batch_id}:{}", position.position_id());
             UserFunding::new(
                 stable_string_entity_id(&funding_key),
-                position.user_id().0,
+                position.party_id().clone(),
                 symbol,
                 usdc,
                 position.signed_size(),
@@ -152,22 +152,25 @@ pub fn settle_user_funding_batch(
     lsn: u64,
 ) -> Result<SettleUserFundingBatchOutput, SettleUserFundingBatchError> {
     let mut funding_ids = HashSet::with_capacity(fundings.len());
-    let mut position_by_business_key: HashMap<(u64, u32), usize> =
+    let mut position_by_business_key: HashMap<(PartyId, u32), usize> =
         HashMap::with_capacity(positions.len());
     let mut duplicate_position_keys = HashSet::new();
-    let mut balance_by_business_key: HashMap<(u64, u64), usize> =
+    let mut balance_by_business_key: HashMap<(PartyId, u64), usize> =
         HashMap::with_capacity(balances.len());
     let mut duplicate_balance_keys = HashSet::new();
 
     for (index, position) in positions.iter().enumerate() {
-        let key = (position.user_id().0, position.coin().index());
-        if position_by_business_key.insert(key, index).is_some() {
+        let key = (position.party_id().clone(), position.coin().index());
+        if position_by_business_key
+            .insert(key.clone(), index)
+            .is_some()
+        {
             duplicate_position_keys.insert(key);
         }
     }
     for (index, balance) in balances.iter().enumerate() {
-        let key = (balance.party_id(), balance.coin_idx());
-        if balance_by_business_key.insert(key, index).is_some() {
+        let key = (balance.party_id().clone(), balance.coin_idx());
+        if balance_by_business_key.insert(key.clone(), index).is_some() {
             duplicate_balance_keys.insert(key);
         }
     }
@@ -189,7 +192,7 @@ pub fn settle_user_funding_batch(
             return Err(SettleUserFundingBatchError::InvalidSettlementTime { funding_id });
         }
 
-        let position_key = (funding.party_id(), funding.coin().base.index());
+        let position_key = (funding.party_id().clone(), funding.coin().base.index());
         if duplicate_position_keys.contains(&position_key) {
             return Err(SettleUserFundingBatchError::DuplicatePosition { funding_id });
         }
@@ -208,7 +211,7 @@ pub fn settle_user_funding_batch(
         }
 
         let quote_coin_idx = u64::from(funding.coin().quote.index());
-        let balance_key = (funding.party_id(), quote_coin_idx);
+        let balance_key = (funding.party_id().clone(), quote_coin_idx);
         if duplicate_balance_keys.contains(&balance_key) {
             return Err(SettleUserFundingBatchError::DuplicateBalance { funding_id });
         }
@@ -243,7 +246,7 @@ pub fn settle_user_funding_batch(
         let mut after = before.clone();
         after
             .apply(PerpPositionV3Event::FundingAmountSettled {
-                user_id: before.user_id(),
+                party_id: before.party_id().clone(),
                 coin: before.coin(),
                 signed_amount: delta,
                 logical_ts: settled_at,
@@ -356,7 +359,7 @@ mod settle_user_funding_batch_tests {
     use super::*;
     use crate::FundingAccumulatorV3;
     use crate::account::coin::Coin;
-    use crate::entity::common::UserId;
+    use crate::entity::common::PartyId;
 
     const PARTY_ID: u64 = 7;
     const ACCOUNT_ID: u64 = 11;
@@ -389,7 +392,7 @@ mod settle_user_funding_batch_tests {
     ) -> PerpPositionV3 {
         PerpPositionV3::new(
             2,
-            UserId(PARTY_ID),
+            PartyId(PARTY_ID),
             Coin::BTC,
             Decimal::ONE,
             Decimal::from(100),

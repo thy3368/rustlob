@@ -25,7 +25,7 @@ pub async fn user_data_websocket_handler(
         let timestamp: i64 = chrono::Utc::now().timestamp_millis();
         // 创建连接信息
         let conn_info = ConnectionInfo {
-            user_id: None, // 初始为 None，需要用户认证后设置
+            party_id: None, // 初始为 None，需要用户认证后设置
             client_addr,
             subscription: vec![],
             connected_at: timestamp,

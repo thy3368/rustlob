@@ -7,8 +7,8 @@ use common_entity::{
 };
 use example_core_entity::spot::{SpotOrderV7, SpotOrderV7Command};
 use example_core_entity::{
-    BalanceV2, BalanceV2Command, BalanceV2Error, PerpOrderV3, PerpOrderV3Error, PerpOrderV3Event,
-    ScheduledCancel, ScheduledCancelError, SpotAmountConversionError, UserId,
+    BalanceV2, BalanceV2Command, BalanceV2Error, PartyId, PerpOrderV3, PerpOrderV3Error,
+    PerpOrderV3Event, ScheduledCancel, ScheduledCancelError, SpotAmountConversionError,
 };
 use rust_decimal::Decimal;
 use thiserror::Error;
@@ -17,7 +17,7 @@ use crate::support::transition_balance;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TriggerScheduledCancelCmd {
-    pub user_id: UserId,
+    pub party_id: PartyId,
     pub now_ms: u64,
 }
 
@@ -33,7 +33,7 @@ pub struct TriggerScheduledCancelState {
 pub trait DueScheduledCancelSource {
     type Error;
 
-    fn due_user_ids(&self, now_ms: u64, limit: usize) -> Result<Vec<UserId>, Self::Error>;
+    fn due_user_ids(&self, now_ms: u64, limit: usize) -> Result<Vec<PartyId>, Self::Error>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,12 +106,12 @@ impl UseCase for TriggerScheduledCancelUseCase {
         cmd: &Self::Command,
         state: &Self::StateGiven,
     ) -> Result<(), Self::Error> {
-        if state.scheduled_cancel.user_id() != cmd.user_id.0 {
+        if state.scheduled_cancel.party_id() != &cmd.party_id {
             return Err(TriggerScheduledCancelError::UserMismatch);
         }
         let mut ids = HashSet::with_capacity(state.spot_orders.len() + state.perp_orders.len());
         for order in &state.spot_orders {
-            if order.order_base().owner != cmd.user_id {
+            if order.order_base().owner != cmd.party_id {
                 return Err(TriggerScheduledCancelError::OrderOwnerMismatch);
             }
             if !ids.insert(order.order_base().order_id) {
@@ -122,7 +122,7 @@ impl UseCase for TriggerScheduledCancelUseCase {
             }
         }
         for order in &state.perp_orders {
-            if order.comon_order.owner != cmd.user_id {
+            if order.comon_order.owner != cmd.party_id {
                 return Err(TriggerScheduledCancelError::OrderOwnerMismatch);
             }
             if !ids.insert(order.comon_order.order_id) {
@@ -158,7 +158,7 @@ impl UseCase for TriggerScheduledCancelUseCase {
             let release = after.terminal_unfreeze_delta(before)?;
             let coin_idx = u64::from(release.currency().index());
             let mut matching = balances_after.iter_mut().filter(|balance| {
-                balance.party_id() == cmd.user_id.0 && balance.coin_idx() == coin_idx
+                balance.party_id() == &cmd.party_id && balance.coin_idx() == coin_idx
             });
             let balance = matching
                 .next()
@@ -228,7 +228,7 @@ mod tests {
 
     use super::*;
 
-    const USER: UserId = UserId(7);
+    const USER: PartyId = PartyId("7".to_owned());
     const NOW_MS: u64 = 1_700_000_010_000;
     const LOGICAL_TS: u64 = 1_700_000_010_000;
 
@@ -240,7 +240,7 @@ mod tests {
             1,
             common_entity::SYSTEM_USER_ID.to_owned(),
             TriggerScheduledCancelCmd {
-                user_id: USER,
+                party_id: USER,
                 now_ms: NOW_MS,
             },
         )

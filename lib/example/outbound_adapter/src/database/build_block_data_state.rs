@@ -30,10 +30,10 @@ pub struct State4BuildBlock {
 
     /// todo 对于balance，use case的state_given有优化空间，可以减少转换过程
 
-    /// user_id+symbol,balance
+    /// party_id+symbol,balance
     pub user_symbol_quote_balance: BTreeMap<(String, Symbol), BalanceV2>,
 
-    /// user_id+symbol,balance
+    /// party_id+symbol,balance
     pub user_symbol_base_balance: BTreeMap<(String, Symbol), BalanceV2>,
 
     /// 可能不对
@@ -43,4 +43,3 @@ pub struct State4BuildBlock {
     /// 每个用户每个symbol
     pub user_symbol_orders: BTreeMap<(String, Symbol), Vec<SpotOrderV7>>,
 }
-

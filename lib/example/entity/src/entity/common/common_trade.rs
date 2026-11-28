@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::OrderSide;
 use crate::account::symbol::Symbol;
-use crate::entity::common::UserId;
+use crate::entity::common::PartyId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TradeBase {
@@ -13,8 +13,8 @@ pub struct TradeBase {
     /// 交易对，例如 `BTCUSDT`。
     pub symbol: Symbol,
 
-    pub taker_user: UserId,
-    pub maker_user: UserId,
+    pub taker_party: PartyId,
+    pub maker_party: PartyId,
 
     /// 主动吃单订单 Hyperliquid spot `oid`。
     pub taker_order_id: u64,

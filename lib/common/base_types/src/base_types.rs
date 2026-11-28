@@ -54,16 +54,33 @@ pub type OrderId = u64;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct _OrderId(pub u64);
 
-/// 用户ID
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+/// 业务参与方标识。
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct UserId(pub u64);
+pub struct PartyId(pub String);
 
-impl From<u64> for UserId {
-    #[inline]
-    fn from(id: u64) -> Self {
-        Self(id)
+impl From<String> for PartyId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for PartyId {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+impl AsRef<str> for PartyId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PartyId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
