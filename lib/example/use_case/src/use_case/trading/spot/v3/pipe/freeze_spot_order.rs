@@ -16,8 +16,14 @@ pub struct FreezeSpotOrderPipeChanges {
 
 impl ReplayableEntityChanges for FreezeSpotOrderPipeChanges {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
-        let mut events = self.order.replayable_events();
-        events.extend(self.balance.replayable_events());
+        let mut events: Vec<_> = self
+            .order
+            .after()
+            .replay_events()
+            .last()
+            .into_iter()
+            .collect();
+        events.extend(self.balance.after().replay_events().last());
         events
     }
 }
@@ -49,12 +55,11 @@ pub fn freeze_spot_order_from(
         order.party_id(),
         SpotOrderV7Command::Freeze,
     );
-    let (order_after, order_event) = FsmV2::transition(order, order_command)?;
+    let order_after = FsmV2::transition_v2(order, order_command)?;
     let order_changes = UpdatedEntityEvents::try_new(
         order_after,
         order_loaded_position.0,
         order_loaded_position.1,
-        vec![order_event],
     )
     .map_err(|error| EntityError::Custom(format!("invalid order event chain: {error:?}")))?;
     let requirement = order_changes
@@ -83,13 +88,12 @@ pub fn freeze_spot_order_from(
             amount: requirement.amount(),
         },
     );
-    let (balance_after, balance_event) =
-        FsmV2::transition(balance, balance_command).map_err(map_balance_error)?;
+    let balance_after =
+        FsmV2::transition_v2(balance, balance_command).map_err(map_balance_error)?;
     let balance_changes = UpdatedEntityEvents::try_new(
         balance_after,
         balance_loaded_position.0,
         balance_loaded_position.1,
-        vec![balance_event],
     )
     .map_err(|error| EntityError::Custom(format!("invalid balance event chain: {error:?}")))?;
 

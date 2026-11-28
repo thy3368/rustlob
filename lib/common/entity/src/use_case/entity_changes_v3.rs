@@ -78,29 +78,10 @@ impl<E: Entity> CreatedEntityEvent<E> {
     }
 }
 
-/// 至少包含一条 replay event 的集合。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NonEmptyReplayEvents(Vec<ReplayableDomainEvent>);
-
-impl NonEmptyReplayEvents {
-    pub fn try_new(events: Vec<ReplayableDomainEvent>) -> Result<Self, UpdatedEntityEventsError> {
-        if events.is_empty() {
-            return Err(UpdatedEntityEventsError::EmptyEvents);
-        }
-        Ok(Self(events))
-    }
-
-    pub fn as_slice(&self) -> &[ReplayableDomainEvent] {
-        &self.0
-    }
-}
-
-/// 一个实体在本次 use case 中的完整更新历史及最终 after truth。
+/// 一个实体在本次 use case 中的最终 after truth。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdatedEntityEvents<E> {
     after: E,
-    /// todo events可以去掉了
-    events: NonEmptyReplayEvents,
 }
 
 impl<E: Entity> UpdatedEntityEvents<E> {
@@ -108,11 +89,18 @@ impl<E: Entity> UpdatedEntityEvents<E> {
         after: E,
         loaded_lsn: u64,
         loaded_command_index: u32,
-        events: Vec<ReplayableDomainEvent>,
     ) -> Result<Self, UpdatedEntityEventsError> {
-        let events = NonEmptyReplayEvents::try_new(events)?;
+        let replay_events = after.replay_events();
+        let start = replay_events
+            .iter()
+            .position(|event| {
+                (event.previous_lsn, event.previous_command_index)
+                    == (loaded_lsn, loaded_command_index)
+            })
+            .ok_or(UpdatedEntityEventsError::EmptyEvents)?;
+        let events = &replay_events[start..];
         let mut expected_previous = (loaded_lsn, loaded_command_index);
-        for (event_index, event) in events.as_slice().iter().enumerate() {
+        for (event_index, event) in events.iter().enumerate() {
             if event.entity_id != after.entity_id() || event.entity_type != E::entity_type() {
                 return Err(UpdatedEntityEventsError::EntityIdentityMismatch { event_index });
             }
@@ -135,15 +123,11 @@ impl<E: Entity> UpdatedEntityEvents<E> {
                 actual_command_index: after.command_index(),
             });
         }
-        Ok(Self { after, events })
+        Ok(Self { after })
     }
 
     pub fn after(&self) -> &E {
         &self.after
-    }
-
-    pub fn events(&self) -> &[ReplayableDomainEvent] {
-        self.events.as_slice()
     }
 }
 
@@ -229,37 +213,89 @@ mod tests {
                 id: 7,
                 lsn: 10,
                 command_index: 1,
-                replay_events: Vec::new(),
+                replay_events: vec![
+                    event(7, 2, (0, 0), (9, 3)),
+                    event(7, 2, (9, 3), (10, 0)),
+                    event(7, 2, (10, 0), (10, 1)),
+                ],
             },
             9,
             3,
-            vec![event(7, 2, (9, 3), (10, 0)), event(7, 2, (10, 0), (10, 1))],
         )
         .unwrap();
         assert_eq!(
-            changed
-                .events()
+            crate::Entity::replay_events(changed.after())
                 .iter()
                 .map(|event| (event.lsn, event.command_index))
                 .collect::<Vec<_>>(),
-            vec![(10, 0), (10, 1)]
+            vec![(9, 3), (10, 0), (10, 1)]
         );
     }
 
     #[test]
-    fn rejects_broken_chain_and_after_position_mismatch() {
-        let after = Entity {
-            id: 7,
-            lsn: 10,
-            command_index: 1,
-            replay_events: Vec::new(),
-        };
+    fn rejects_empty_history() {
         assert!(matches!(
-            UpdatedEntityEvents::try_new(after.clone(), 9, 0, vec![event(7, 2, (0, 0), (10, 1))]),
-            Err(UpdatedEntityEventsError::BrokenVersionChain { event_index: 0, .. })
+            UpdatedEntityEvents::try_new(
+                Entity {
+                    id: 7,
+                    lsn: 9,
+                    command_index: 0,
+                    replay_events: Vec::new(),
+                },
+                9,
+                0,
+            ),
+            Err(UpdatedEntityEventsError::EmptyEvents)
         ));
+    }
+
+    #[test]
+    fn rejects_identity_mismatch() {
         assert!(matches!(
-            UpdatedEntityEvents::try_new(after, 9, 0, vec![event(7, 2, (9, 0), (10, 0))]),
+            UpdatedEntityEvents::try_new(
+                Entity {
+                    id: 7,
+                    lsn: 10,
+                    command_index: 1,
+                    replay_events: vec![event(8, 2, (9, 0), (10, 1))],
+                },
+                9,
+                0,
+            ),
+            Err(UpdatedEntityEventsError::EntityIdentityMismatch { event_index: 0 })
+        ));
+    }
+
+    #[test]
+    fn rejects_broken_chain() {
+        assert!(matches!(
+            UpdatedEntityEvents::try_new(
+                Entity {
+                    id: 7,
+                    lsn: 10,
+                    command_index: 1,
+                    replay_events: vec![event(7, 2, (9, 0), (10, 0)), event(7, 2, (8, 0), (10, 1)),],
+                },
+                9,
+                0,
+            ),
+            Err(UpdatedEntityEventsError::BrokenVersionChain { event_index: 1, .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_after_position_mismatch() {
+        assert!(matches!(
+            UpdatedEntityEvents::try_new(
+                Entity {
+                    id: 7,
+                    lsn: 10,
+                    command_index: 1,
+                    replay_events: vec![event(7, 2, (9, 0), (10, 0))],
+                },
+                9,
+                0,
+            ),
             Err(UpdatedEntityEventsError::AfterPositionMismatch { .. })
         ));
     }
@@ -283,12 +319,6 @@ mod tests {
 /// `StateChanged` 按确定业务顺序暴露本次 use case 的全部事件。
 pub trait ReplayableEntityChanges {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent>;
-}
-
-impl<E> ReplayableEntityChanges for UpdatedEntityEvents<E> {
-    fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
-        self.events.as_slice().iter().collect()
-    }
 }
 
 impl<E> ReplayableEntityChanges for CreatedEntityEvent<E> {

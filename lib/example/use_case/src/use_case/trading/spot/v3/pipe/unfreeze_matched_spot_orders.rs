@@ -30,7 +30,7 @@ impl ReplayableEntityChanges for UnfreezeMatchedSpotOrdersPipeChanges {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
         self.updated_balances
             .iter()
-            .flat_map(ReplayableEntityChanges::replayable_events)
+            .filter_map(|change| change.after().replay_events().last())
             .collect()
     }
 }
@@ -193,7 +193,7 @@ fn validate_changed_order(
         || before.order_base().owner != after.order_base().owner
         || before.order_base().symbol != after.order_base().symbol
         || before.order_base().side != after.order_base().side
-        || changed.events().first().is_none_or(|event| {
+        || changed.after().replay_events().last().is_none_or(|event| {
             (event.previous_lsn, event.previous_command_index)
                 != (before.lsn(), before.command_index())
         })
@@ -211,7 +211,7 @@ fn validate_match_event_metadata(
 ) -> Result<MatchEventMetadata, UnfreezeMatchedSpotOrdersError> {
     let first = changes
         .first()
-        .and_then(|change| change.events().first())
+        .and_then(|change| change.after().replay_events().last())
         .ok_or_else(|| error("matched order changes contain no event"))?;
     let mut metadata = MatchEventMetadata {
         lsn: first.lsn,
@@ -220,7 +220,10 @@ fn validate_match_event_metadata(
         topic: first.t,
         partition: first.p,
     };
-    for event in changes.iter().flat_map(|change| change.events()) {
+    for event in changes
+        .iter()
+        .filter_map(|change| change.after().replay_events().last())
+    {
         if event.lsn != first.lsn
             || event.logical_ts != first.logical_ts
             || event.t != first.t
@@ -287,14 +290,13 @@ fn transition_balances(
                 payment_amount: Decimal::ZERO,
             },
         );
-        let (after, event) = FsmV2::transition(&release.balance, command)
+        let after = FsmV2::transition_v2(&release.balance, command)
             .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
         output.push(
             UpdatedEntityEvents::try_new(
                 after,
                 release.balance.lsn(),
                 release.balance.command_index(),
-                vec![event],
             )
             .map_err(|cause| error(format!("invalid balance event: {cause:?}")))?,
         );
@@ -343,8 +345,8 @@ mod tests {
                 payment_amount: Decimal::ZERO,
             },
         );
-        let (after, event) = FsmV2::transition(&before, command).expect("余额解冻应成功");
-        UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index(), vec![event])
+        let after = FsmV2::transition_v2(&before, command).expect("余额解冻应成功");
+        UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index())
             .expect("余额事件链应有效")
     }
 

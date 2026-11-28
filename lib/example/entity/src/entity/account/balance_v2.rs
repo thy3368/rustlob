@@ -409,7 +409,7 @@ impl Entity for BalanceV2 {
 #[cfg(test)]
 mod tests {
     use common_entity::fsm_v2::Fsm as FsmV2;
-    use common_entity::{LogEntry, LogEntrySequencer};
+    use common_entity::{Entity, LogEntry, LogEntrySequencer};
     use rust_decimal::Decimal;
 
     use super::{BalanceV2, BalanceV2Command, BalanceV2Error, BalanceV2Status, PartyId};
@@ -453,7 +453,7 @@ mod tests {
     ) {
         let before = balance.clone();
         assert_eq!(
-            FsmV2::transition(&mut balance, sequenced(command)),
+            FsmV2::transition_v2(&mut balance, sequenced(command)),
             Err(expected)
         );
         assert_eq!(balance, before);
@@ -517,8 +517,12 @@ mod tests {
 
         for (balance, command, available, frozen, status, event_type) in cases {
             let before = balance.clone();
-            let (after, event) =
-                FsmV2::transition(&balance, sequenced(command)).expect("valid balance transition");
+            let after = FsmV2::transition_v2(&balance, sequenced(command))
+                .expect("valid balance transition");
+            let event = after
+                .replay_events()
+                .last()
+                .expect("valid transition should append an event");
 
             assert_eq!(balance, before);
             assert_eq!(
@@ -607,8 +611,8 @@ mod tests {
     #[test]
     fn rejects_closed_state_stale_lsn_and_overflow_atomically() {
         let open = balance(0, 0, 3);
-        let (closed, _) =
-            FsmV2::transition(&open, sequenced(BalanceV2Command::Close)).expect("close balance");
+        let closed =
+            FsmV2::transition_v2(&open, sequenced(BalanceV2Command::Close)).expect("close balance");
 
         assert_rejected_without_mutation(
             closed,
@@ -620,7 +624,7 @@ mod tests {
 
         let mut stale = balance(1, 0, 5);
         let before = stale.clone();
-        let result = FsmV2::transition(
+        let result = FsmV2::transition_v2(
             &mut stale,
             sequenced(BalanceV2Command::DebitAvailable {
                 amount: Decimal::ONE,

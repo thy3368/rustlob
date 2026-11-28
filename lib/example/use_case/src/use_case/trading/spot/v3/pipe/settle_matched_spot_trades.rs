@@ -29,11 +29,11 @@ impl ReplayableEntityChanges for SettleTradesPipeChanges {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
         self.settled_trades
             .iter()
-            .flat_map(ReplayableEntityChanges::replayable_events)
+            .filter_map(|change| change.after().replay_events().last())
             .chain(
                 self.updated_balances
                     .iter()
-                    .flat_map(ReplayableEntityChanges::replayable_events),
+                    .filter_map(|change| change.after().replay_events().last()),
             )
             .collect()
     }
@@ -388,10 +388,10 @@ fn transition_trades(
             trade.comon_trade.taker_party.0.to_string(),
             SpotTradeV3Command::Settle,
         );
-        let (after, event) = FsmV2::transition(trade, command)
+        let after = FsmV2::transition_v2(trade, command)
             .map_err(|cause| error(format!("trade transition failed: {cause}")))?;
         output.push(
-            UpdatedEntityEvents::try_new(after, trade.lsn, trade.command_index, vec![event])
+            UpdatedEntityEvents::try_new(after, trade.lsn, trade.command_index)
                 .map_err(|cause| error(format!("invalid trade event: {cause:?}")))?,
         );
     }
@@ -432,14 +432,13 @@ fn transition_balances(
             change.balance.party_id().to_string(),
             command,
         );
-        let (after, event) = FsmV2::transition(&change.balance, command)
+        let after = FsmV2::transition_v2(&change.balance, command)
             .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
         output.push(
             UpdatedEntityEvents::try_new(
                 after,
                 change.balance.lsn(),
                 change.balance.command_index(),
-                vec![event],
             )
             .map_err(|cause| error(format!("invalid balance event: {cause:?}")))?,
         );

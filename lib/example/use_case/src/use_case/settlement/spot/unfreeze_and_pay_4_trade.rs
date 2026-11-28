@@ -217,7 +217,7 @@ impl UseCase for UnFreeze4SpotOrderV2UseCase {
             given_state.trade.party_id(),
             SpotTradeV3Command::Settle,
         );
-        let (trade_after, _) = FsmV2::transition(&given_state.trade, trade_command)
+        let trade_after = FsmV2::transition_v2(&given_state.trade, trade_command)
             .map_err(|_| UnFreezeSpotOrderV2Error::DuplicateSettlement)?;
         let mut buyer_base_balance_after = given_state.buyer_base_balance.clone();
         let mut buyer_quote_balance_after = given_state.buyer_quote_balance.clone();

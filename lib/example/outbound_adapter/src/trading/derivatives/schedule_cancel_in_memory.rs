@@ -272,7 +272,7 @@ fn replay_events(
                 order.party_id(),
                 SpotOrderV7Command::Cancel,
             );
-            let (after, _) = FsmV2::transition(&*order, command).map_err(|error| {
+            let after = FsmV2::transition_v2(&*order, command).map_err(|error| {
                 HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string())
             })?;
             *order = after;
@@ -373,7 +373,7 @@ fn replay_balance(
             payment_amount: Decimal::ZERO,
         },
     );
-    let (after, _) = FsmV2::transition(&*balance, command)
+    let after = FsmV2::transition_v2(&*balance, command)
         .map_err(|error| HyperliquidScheduleCancelOutboundError::ReplayFailed(error.to_string()))?;
     *balance = after;
     if balance.available() != available || balance.frozen() != frozen {
@@ -453,7 +453,7 @@ mod tests {
                 spot.party_id(),
                 SpotOrderV7Command::Cancel,
             );
-            let (canceled, _) = FsmV2::transition(&spot, command).expect("fixture should cancel");
+            let canceled = FsmV2::transition_v2(&spot, command).expect("fixture should cancel");
             canceled
                 .terminal_unfreeze_delta(&spot)
                 .expect("fixture should release")

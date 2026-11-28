@@ -1,4 +1,4 @@
-use crate::{EntityError, LogEntry, ReplayableDomainEvent, TrackDiff};
+use crate::{EntityError, LogEntry, TrackDiff};
 
 /// FSM v2：只接受已定序 command envelope 的单一路径。
 ///
@@ -17,39 +17,10 @@ pub trait Fsm: TrackDiff + Sized {
     /// 返回 command 对应的稳定、非零业务事件码。
     fn event_type(command: &Self::Command) -> u8;
 
-    /// 先纯计算 after entity，再完成 replay 投影；原实体始终保持不变。
+    /// 先纯计算 after entity，再将 replay event 追加到实体历史；原实体始终保持不变。
     ///
     /// replay event 的 `topic` 和 `partition` 以已定序 command metadata 为权威来源，
     /// 不使用实体自身的 shard 覆盖日志路由。
-    fn transition(
-        &self,
-        command: LogEntry<Self::Command>,
-    ) -> Result<(Self, ReplayableDomainEvent), Self::Error> {
-        let event_type = Self::event_type(command.payload());
-        if event_type == 0 {
-            return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
-        }
-        let logical_ts = command.logical_ts();
-        let lsn = command.lsn();
-        let command_index = command.command_index();
-        let topic = command.topic();
-        let partition = command.partition();
-        let after = self.derive_transition(command)?;
-        let mut replay_event = after.track_update_event_from_at(
-            self,
-            self.lsn(),
-            self.command_index(),
-            lsn,
-            command_index,
-            logical_ts,
-        )?;
-        replay_event.t = topic;
-        replay_event.p = partition;
-        replay_event.domain_event_type = event_type;
-
-        Ok((after, replay_event))
-    }
-
     fn transition_v2(&self, command: LogEntry<Self::Command>) -> Result<Self, Self::Error> {
         let event_type = Self::event_type(command.payload());
         if event_type == 0 {
@@ -82,7 +53,7 @@ pub trait Fsm: TrackDiff + Sized {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Entity, EntityFieldChange, LogEntrySequencer, Shard};
+    use crate::{Entity, EntityFieldChange, LogEntrySequencer, ReplayableDomainEvent, Shard};
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct TestEntity {
@@ -207,25 +178,6 @@ mod tests {
             "command-party".to_owned(),
             value,
         )
-    }
-
-    #[test]
-    fn transition_uses_command_routing_and_preserves_replay_metadata() {
-        let before = entity(5, 20, 4, 30);
-        let command = command(6, 21, 7, 31);
-
-        let (after, event) = before
-            .transition(command)
-            .expect("FSM transition should succeed");
-
-        assert_eq!(after.value, 6);
-        assert_eq!((event.t, event.p), (8, 6));
-        assert_eq!((event.lsn, event.command_index), (21, 7));
-        assert_eq!((event.previous_lsn, event.previous_command_index), (20, 4));
-        assert_eq!(event.logical_ts, 31);
-        assert_eq!(event.domain_event_type, 9);
-        assert!(after.replay_events().is_empty());
-        assert!(before.replay_events().is_empty());
     }
 
     #[test]

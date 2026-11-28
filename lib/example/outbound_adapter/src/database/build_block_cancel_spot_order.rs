@@ -100,16 +100,23 @@ impl StateSinkV3<CancelSpotOrderFsmV3UseCase> for State4BuildBlock {
     }
 
     fn replay(&mut self, changes: &CancelSpotOrderFsmV3Changes) -> Result<(), Self::Error> {
-        let order_events = changes.order.events();
-        let balance_events = changes.balance.as_ref().map(|change| change.events());
-        if order_events.len() != 1 || balance_events.is_some_and(|events| events.len() != 1) {
+        let order_event = changes
+            .order
+            .after()
+            .replay_events()
+            .last()
+            .ok_or(CancelSpotOrderBuildBlockSinkError::UnexpectedChangeShape)?;
+        let balance_event = changes
+            .balance
+            .as_ref()
+            .and_then(|change| change.after().replay_events().last());
+        if changes.balance.is_some() && balance_event.is_none() {
             return Err(CancelSpotOrderBuildBlockSinkError::UnexpectedChangeShape);
         }
-        let order_event = &order_events[0];
         if order_event.entity_type != <SpotOrderV7 as Entity>::entity_type()
             || order_event.domain_event_type != 7
             || order_event.command_index != 0
-            || balance_events.is_some_and(|events| events[0].command_index != 1)
+            || balance_event.is_some_and(|event| event.command_index != 1)
         {
             return Err(CancelSpotOrderBuildBlockSinkError::UnexpectedChangeShape);
         }
@@ -158,7 +165,12 @@ impl State4BuildBlock {
         let current = orders
             .get(index)
             .ok_or(CancelSpotOrderBuildBlockSinkError::OrderNotFound)?;
-        let order_event = &changes.order.events()[0];
+        let order_event = changes
+            .order
+            .after()
+            .replay_events()
+            .last()
+            .ok_or(CancelSpotOrderBuildBlockSinkError::UnexpectedChangeShape)?;
         if (Entity::lsn(current), Entity::command_index(current))
             != (order_event.previous_lsn, order_event.previous_command_index)
         {
@@ -189,7 +201,11 @@ impl State4BuildBlock {
             let current_balance = balances
                 .get(&key)
                 .ok_or(CancelSpotOrderBuildBlockSinkError::BalanceNotFound)?;
-            let event = &balance_changes.events()[0];
+            let event = balance_changes
+                .after()
+                .replay_events()
+                .last()
+                .ok_or(CancelSpotOrderBuildBlockSinkError::UnexpectedChangeShape)?;
             if current_balance.position() != (event.previous_lsn, event.previous_command_index) {
                 return Err(CancelSpotOrderBuildBlockSinkError::StaleBalanceProjection);
             }

@@ -281,7 +281,7 @@ pub fn settle_user_funding_batch(
             before.party_id().to_string(),
             event,
         );
-        let (after, _) = FsmV2::transition(before, command)
+        let after = FsmV2::transition_v2(before, command)
             .map_err(|error| map_balance_error(error, before.account_id()))?;
         changed_balances.push(UpdatedEntityPair::new(before.clone(), after));
     }
@@ -627,7 +627,7 @@ mod settle_user_funding_batch_tests {
             before_close.party_id().to_string(),
             BalanceV2Command::Close,
         );
-        let (closed, _) = FsmV2::transition(&before_close, command).unwrap();
+        let closed = FsmV2::transition_v2(&before_close, command).unwrap();
         assert_eq!(
             settle_user_funding_batch(
                 &[funding(1, Decimal::ONE)],

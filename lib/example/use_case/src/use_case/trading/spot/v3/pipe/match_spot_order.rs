@@ -66,12 +66,14 @@ impl ReplayableEntityChanges for MatchSpotOrderPipeChanges {
                 trades,
                 ..
             } => (taker, makers.as_slice(), trades.as_slice()),
-            Self::Rejected { taker, .. } => return taker.replayable_events(),
+            Self::Rejected { taker, .. } => {
+                return taker.after().replay_events().last().into_iter().collect();
+            }
         };
         let mut events = Vec::with_capacity(1 + makers.len() + trades.len());
-        events.extend(taker.replayable_events());
+        events.extend(taker.after().replay_events().last());
         for maker in makers {
-            events.extend(maker.replayable_events());
+            events.extend(maker.after().replay_events().last());
         }
         for trade in trades {
             events.extend(trade.replayable_events());
@@ -302,8 +304,8 @@ fn transition_order(
         before.party_id(),
         command,
     );
-    let (after, event) = FsmV2::transition(before, command)?;
-    UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index(), vec![event])
+    let after = FsmV2::transition_v2(before, command)?;
+    UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index())
         .map_err(|error| match_error(&format!("invalid order event chain: {error:?}")))
 }
 

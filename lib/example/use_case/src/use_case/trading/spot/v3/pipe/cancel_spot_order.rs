@@ -17,9 +17,15 @@ pub struct CancelSpotOrderPipeChanges {
 
 impl ReplayableEntityChanges for CancelSpotOrderPipeChanges {
     fn replayable_events(&self) -> Vec<&ReplayableDomainEvent> {
-        let mut events = self.order.replayable_events();
+        let mut events: Vec<_> = self
+            .order
+            .after()
+            .replay_events()
+            .last()
+            .into_iter()
+            .collect();
         if let Some(balance) = &self.balance {
-            events.extend(balance.replayable_events());
+            events.extend(balance.after().replay_events().last());
         }
         events
     }
@@ -46,7 +52,7 @@ pub fn cancel_spot_order(
         order.party_id(),
         SpotOrderV7Command::Cancel,
     );
-    let (order_after, order_event) = FsmV2::transition(order, order_command)?;
+    let order_after = FsmV2::transition_v2(order, order_command)?;
     let release_requirement = order_after
         .terminal_unfreeze_delta(order)
         .map_err(|error| EntityError::Custom(error.to_string()))?;
@@ -54,7 +60,6 @@ pub fn cancel_spot_order(
         order_after,
         order_loaded_position.0,
         order_loaded_position.1,
-        vec![order_event],
     )
     .map_err(|error| EntityError::Custom(format!("invalid order event chain: {error:?}")))?;
 
@@ -82,13 +87,11 @@ pub fn cancel_spot_order(
                 payment_amount: Decimal::ZERO,
             },
         );
-        let (after, event) =
-            FsmV2::transition(balance, balance_command).map_err(map_balance_error)?;
+        let after = FsmV2::transition_v2(balance, balance_command).map_err(map_balance_error)?;
         Some(
-            UpdatedEntityEvents::try_new(after, loaded_position.0, loaded_position.1, vec![event])
-                .map_err(|error| {
-                    EntityError::Custom(format!("invalid balance event chain: {error:?}"))
-                })?,
+            UpdatedEntityEvents::try_new(after, loaded_position.0, loaded_position.1).map_err(
+                |error| EntityError::Custom(format!("invalid balance event chain: {error:?}")),
+            )?,
         )
     };
 

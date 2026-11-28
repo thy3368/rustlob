@@ -323,8 +323,8 @@ fn apply_settlement_changes(
     }
     for trade in &changes.settled_trades {
         let before_id = trade.after().comon_trade.trade_id;
-        let events = trade.events();
-        if events.len() != 1 || events[0].entity_id != before_id {
+        let event = trade.after().replay_events().last();
+        if event.is_none_or(|event| event.entity_id != before_id) {
             return Err(PlaceSpotOrderBuildBlockSinkError::UnexpectedChangeShape);
         }
         append_trade_to_parties(state, trade.after())?;
@@ -336,17 +336,18 @@ fn apply_order_update(
     state: &mut State4BuildBlock,
     changes: &UpdatedEntityEvents<SpotOrderV7>,
 ) -> Result<(), PlaceSpotOrderBuildBlockSinkError> {
-    let events = changes.events();
-    let first = events
-        .first()
+    let event = changes
+        .after()
+        .replay_events()
+        .last()
         .ok_or(PlaceSpotOrderBuildBlockSinkError::UnexpectedChangeShape)?;
     let id = changes.after().order_base().order_id;
-    if events.iter().any(|event| event.entity_id != id) {
+    if event.entity_id != id {
         return Err(PlaceSpotOrderBuildBlockSinkError::UnexpectedChangeShape);
     }
     let (key, index, current) = unique_order_position(state, id)?;
     if (current.lsn(), current.command_index())
-        != (first.previous_lsn, first.previous_command_index)
+        != (event.previous_lsn, event.previous_command_index)
     {
         return Err(PlaceSpotOrderBuildBlockSinkError::StaleOrderProjection);
     }
@@ -362,16 +363,17 @@ fn apply_balance_update(
     state: &mut State4BuildBlock,
     changes: &UpdatedEntityEvents<BalanceV2>,
 ) -> Result<(), PlaceSpotOrderBuildBlockSinkError> {
-    let first = changes
-        .events()
-        .first()
+    let event = changes
+        .after()
+        .replay_events()
+        .last()
         .ok_or(PlaceSpotOrderBuildBlockSinkError::UnexpectedChangeShape)?;
     let id = changes.after().entity_id();
-    if changes.events().iter().any(|event| event.entity_id != id) {
+    if event.entity_id != id {
         return Err(PlaceSpotOrderBuildBlockSinkError::UnexpectedChangeShape);
     }
     let (is_base, key, current) = unique_balance_position(state, id)?;
-    if current.position() != (first.previous_lsn, first.previous_command_index) {
+    if current.position() != (event.previous_lsn, event.previous_command_index) {
         return Err(PlaceSpotOrderBuildBlockSinkError::StaleBalanceProjection);
     }
     let balances = if is_base {
