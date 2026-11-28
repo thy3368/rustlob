@@ -7,7 +7,7 @@ use common_entity::{
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3, SpotTradeV3Command};
 use example_core_entity::{BalanceV2, BalanceV2Command, OrderSide, SpotOrderV7};
 use rust_decimal::Decimal;
-
+use example_core_entity::account::symbol::Symbol;
 use super::match_spot_order::MatchSpotOrderPipeChanges;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +65,13 @@ struct AggregatedBalanceChange {
 /// 函数在执行任何 FSM 前完成全部输入、金额、余额和位置校验；返回错误时不会暴露部分结果。
 pub fn settle_matched_spot_trades(
     matched: &MatchSpotOrderPipeChanges,
+
+
+     user_quote_balance: BTreeMap<String, BalanceV2>,
+
+     user_base_balance: BTreeMap<String, BalanceV2>,
+
+
     balances_by_order_id: &HashMap<u64, SpotOrderSettlementBalances>,
     input: SettleMatchedSpotTradesInput,
 ) -> Result<SettleTradesPipeChanges, SettleMatchedSpotTradesError> {
