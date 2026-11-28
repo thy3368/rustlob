@@ -219,7 +219,7 @@ mod tests {
         let state = decode_build_block_state(&first.canonical_state)?;
         let orders = state
             .user_symbol_orders
-            .get(&(USER_ID.to_owned(), symbol()))
+            .get(&(example_core_use_case::PartyId::from(USER_ID), symbol()))
             .ok_or("buyer orders are missing")?;
         let order = orders.first().ok_or("placed order is missing")?;
         assert_eq!(order.order_base().status, SpotOrderStatus::Canceled);

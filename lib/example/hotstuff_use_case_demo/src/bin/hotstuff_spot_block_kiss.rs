@@ -166,7 +166,7 @@ impl KissApp {
         );
         let canceled = state
             .user_symbol_orders
-            .get(&(USER_ID.to_owned(), symbol()))
+            .get(&(example_core_use_case::PartyId::from(USER_ID), symbol()))
             .and_then(|orders| orders.first())
             .is_some_and(|order| order.order_base().status == SpotOrderStatus::Canceled);
         if !succeeded || !canceled {
@@ -258,13 +258,29 @@ fn initial_state() -> State4BuildBlock {
         taker_fee_bps: 10,
         spot_symbol_lob: [(symbol, LocalLobBtree::new(symbol))].into(),
         user_symbol_quote_balance: [(
-            (USER_ID.to_owned(), symbol),
-            BalanceV2::new(buyer, buyer, 2, 100_000, 0, 0, 0),
+            (example_core_use_case::PartyId::from(USER_ID), symbol),
+            BalanceV2::new(
+                example_core_use_case::PartyId::from(USER_ID),
+                buyer,
+                2,
+                100_000,
+                0,
+                0,
+                0,
+            ),
         )]
         .into(),
         user_symbol_base_balance: [(
-            (USER_ID.to_owned(), symbol),
-            BalanceV2::new(buyer, buyer, 0, 10, 0, 0, 0),
+            (example_core_use_case::PartyId::from(USER_ID), symbol),
+            BalanceV2::new(
+                example_core_use_case::PartyId::from(USER_ID),
+                buyer,
+                0,
+                10,
+                0,
+                0,
+                0,
+            ),
         )]
         .into(),
         user_symbol_trades: Default::default(),
@@ -274,7 +290,7 @@ fn initial_state() -> State4BuildBlock {
 
 fn fixed_command() -> SpotBlockCmds {
     let place = SpotBlockCommandV2::Place(PlaceSpotOrderPipelineV2Cmd {
-        party_id: common_entity::stable_string_entity_id(USER_ID),
+        party_id: example_core_use_case::PartyId::from(USER_ID),
         order_id: 1,
         symbol: symbol(),
         side: OrderSide::Buy,
@@ -431,7 +447,8 @@ mod tests {
     fn place_and_cancel_succeed_in_one_block() {
         let command = fixed_command();
         let state = KissApp::execute(&command).expect("place and cancel should succeed");
-        let orders = &state.user_symbol_orders[&(USER_ID.to_owned(), symbol())];
+        let orders =
+            &state.user_symbol_orders[&(example_core_use_case::PartyId::from(USER_ID), symbol())];
 
         assert_eq!(command.items.len(), 2);
         assert_eq!(orders.len(), 1);

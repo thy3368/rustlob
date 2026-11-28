@@ -397,7 +397,7 @@ mod tests {
             .expect("initial canonical state");
         let symbol = Symbol::new(1, Coin::BTC, Coin::USDT);
         let place = SpotBlockCommandV2::Place(PlaceSpotOrderPipelineV2Cmd {
-            party_id: common_entity::stable_string_entity_id("buyer"),
+            party_id: example_core_use_case::PartyId::from("buyer"),
             order_id: 1,
             symbol,
             side: OrderSide::Buy,
@@ -417,7 +417,8 @@ mod tests {
             .expect("placed canonical state");
         let placed = decode_build_block_state(placed_bytes).unwrap();
         assert_eq!(
-            placed.user_symbol_orders[&("buyer".to_owned(), symbol)].len(),
+            placed.user_symbol_orders[&(example_core_use_case::PartyId::from("buyer"), symbol)]
+                .len(),
             1
         );
 
@@ -435,9 +436,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            cancelled.user_symbol_orders[&("buyer".to_owned(), symbol)][0]
-                .order_base()
-                .status,
+            cancelled.user_symbol_orders[&(example_core_use_case::PartyId::from("buyer"), symbol)]
+                [0]
+            .order_base()
+            .status,
             SpotOrderStatus::Canceled
         );
         assert!(

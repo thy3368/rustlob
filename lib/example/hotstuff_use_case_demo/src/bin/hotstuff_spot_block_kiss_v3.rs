@@ -855,13 +855,29 @@ fn initial_state() -> State4BuildBlock {
         taker_fee_bps: 10,
         spot_symbol_lob: [(symbol, LocalLobBtree::new(symbol))].into(),
         user_symbol_quote_balance: [(
-            (USER_ID.to_owned(), symbol),
-            BalanceV2::new(buyer, buyer, 2, 100_000, 0, 0, 0),
+            (example_core_use_case::PartyId::from(USER_ID), symbol),
+            BalanceV2::new(
+                example_core_use_case::PartyId::from(USER_ID),
+                buyer,
+                2,
+                100_000,
+                0,
+                0,
+                0,
+            ),
         )]
         .into(),
         user_symbol_base_balance: [(
-            (USER_ID.to_owned(), symbol),
-            BalanceV2::new(buyer, buyer, 0, 10, 0, 0, 0),
+            (example_core_use_case::PartyId::from(USER_ID), symbol),
+            BalanceV2::new(
+                example_core_use_case::PartyId::from(USER_ID),
+                buyer,
+                0,
+                10,
+                0,
+                0,
+                0,
+            ),
         )]
         .into(),
         user_symbol_trades: Default::default(),
@@ -871,7 +887,7 @@ fn initial_state() -> State4BuildBlock {
 
 fn place_command() -> SpotBlockCommandV2 {
     SpotBlockCommandV2::Place(PlaceSpotOrderPipelineV2Cmd {
-        party_id: common_entity::stable_string_entity_id(USER_ID),
+        party_id: example_core_use_case::PartyId::from(USER_ID),
         order_id: 1,
         symbol: symbol(),
         side: OrderSide::Buy,
@@ -1063,7 +1079,8 @@ mod tests {
             .collect();
         assert!(encoded.windows(2).all(|pair| pair[0] == pair[1]));
         assert_eq!(
-            states[0].user_symbol_orders[&(USER_ID.to_owned(), symbol())][0]
+            states[0].user_symbol_orders
+                [&(example_core_use_case::PartyId::from(USER_ID), symbol())][0]
                 .order_base()
                 .status,
             SpotOrderStatus::Canceled

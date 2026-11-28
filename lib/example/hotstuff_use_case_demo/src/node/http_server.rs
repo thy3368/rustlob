@@ -95,7 +95,7 @@ mod tests {
 
     fn place_match_command(order_id: u64, cloid: &str) -> SpotBlockCommandV2 {
         SpotBlockCommandV2::Place(PlaceSpotOrderPipelineV2Cmd {
-            party_id: common_entity::stable_string_entity_id("buyer"),
+            party_id: example_core_use_case::PartyId::from("buyer"),
             order_id,
             symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
             side: OrderSide::Buy,

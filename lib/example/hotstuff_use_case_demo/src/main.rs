@@ -100,7 +100,7 @@ fn main() -> DemoResult<()> {
     )?;
 
     let place_command = PlaceSpotOrderPipelineV2Cmd {
-        party_id: common_entity::stable_string_entity_id("buyer"),
+        party_id: example_core_use_case::PartyId::from("buyer"),
         order_id: 1,
         symbol: Symbol::new(1, Coin::BTC, Coin::USDT),
         side: OrderSide::Buy,

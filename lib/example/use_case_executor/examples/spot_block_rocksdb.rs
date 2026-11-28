@@ -66,7 +66,7 @@ fn run(path: &Path) -> Result<RunOutcome, Box<dyn Error>> {
         order_id,
         USER_ID.to_owned(),
         SpotBlockCommandV2::Place(PlaceSpotOrderPipelineV2Cmd {
-            party_id: stable_string_entity_id(USER_ID),
+            party_id: example_core_use_case::PartyId::from(USER_ID),
             order_id,
             symbol: spot_symbol(),
             side: OrderSide::Buy,
@@ -136,15 +136,15 @@ fn ensure_demo_state(state: &mut State4BuildBlock) {
         .spot_symbol_lob
         .entry(symbol)
         .or_insert_with(|| LocalLobBtree::new(symbol));
-    let key = (USER_ID.to_owned(), symbol);
-    let party_id = stable_string_entity_id(USER_ID);
+    let key = (example_core_use_case::PartyId::from(USER_ID), symbol);
+    let account_id = stable_string_entity_id(USER_ID);
     state
         .user_symbol_base_balance
         .entry(key.clone())
         .or_insert_with(|| {
             BalanceV2::new(
-                party_id,
-                party_id,
+                key.0.clone(),
+                account_id,
                 u64::from(symbol.base.index()),
                 INITIAL_BALANCE,
                 0_u64,
@@ -154,11 +154,11 @@ fn ensure_demo_state(state: &mut State4BuildBlock) {
         });
     state
         .user_symbol_quote_balance
-        .entry(key)
+        .entry(key.clone())
         .or_insert_with(|| {
             BalanceV2::new(
-                party_id,
-                party_id,
+                key.0.clone(),
+                account_id,
                 u64::from(symbol.quote.index()),
                 INITIAL_BALANCE,
                 0_u64,
