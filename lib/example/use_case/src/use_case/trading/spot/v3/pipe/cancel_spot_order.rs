@@ -40,7 +40,6 @@ pub fn cancel_spot_order(
     topic: u8,
     partition: u8,
 ) -> Result<CancelSpotOrderPipeChanges, EntityError> {
-    let order_loaded_position = (order.lsn(), order.command_index());
     let order_command = LogEntrySequencer::from_metadata_with_topic_at(
         topic,
         partition,
@@ -56,12 +55,7 @@ pub fn cancel_spot_order(
     let release_requirement = order_after
         .terminal_unfreeze_delta(order)
         .map_err(|error| EntityError::Custom(error.to_string()))?;
-    let order = UpdatedEntityEvents::try_new(
-        order_after,
-        order_loaded_position.0,
-        order_loaded_position.1,
-    )
-    .map_err(|error| EntityError::Custom(format!("invalid order event chain: {error:?}")))?;
+    let order = UpdatedEntityEvents::new(order_after);
 
     let release_amount = release_requirement.amount();
     let balance = if release_amount == Decimal::ZERO {
@@ -72,7 +66,6 @@ pub fn cancel_spot_order(
                 "balance coin does not match the asset released by the order".to_owned(),
             ));
         }
-        let loaded_position = (balance.lsn(), balance.command_index());
         let balance_command = LogEntrySequencer::from_metadata_with_topic_at(
             topic,
             partition,
@@ -88,11 +81,7 @@ pub fn cancel_spot_order(
             },
         );
         let after = FsmV2::transition_v2(balance, balance_command).map_err(map_balance_error)?;
-        Some(
-            UpdatedEntityEvents::try_new(after, loaded_position.0, loaded_position.1).map_err(
-                |error| EntityError::Custom(format!("invalid balance event chain: {error:?}")),
-            )?,
-        )
+        Some(UpdatedEntityEvents::new(after))
     };
 
     Ok(CancelSpotOrderPipeChanges { order, balance })

@@ -1,6 +1,6 @@
 use common_entity::{
-    CreatedEntityEvent, EntityError, LogEntry, ReplayableDomainEvent, ReplayableEntityChanges,
-    TrackDiff,
+    CreatedEntityEvent, Entity, EntityError, LogEntry, ReplayableDomainEvent,
+    ReplayableEntityChanges, TrackDiff,
 };
 use example_core_entity::{PlaceSpotOrderPipelineV2Cmd, SpotOrderV7, SpotOrderV7Command};
 
@@ -31,13 +31,13 @@ pub fn place_spot_order(
     let logical_ts = command.logical_ts();
     let topic = command.topic();
     let partition = command.partition();
-    let order = SpotOrderV7::create(SpotOrderV7Command::Create(command))?;
+    let mut order = SpotOrderV7::create(SpotOrderV7Command::Create(command))?;
     let mut event = order.track_create_event_at(lsn, command_index, logical_ts)?;
     event.t = topic;
     event.p = partition;
     event.domain_event_type = 1;
 
-    let order = CreatedEntityEvent::try_new(order, event)
-        .map_err(|_| EntityError::Custom("invalid created spot order event chain".to_owned()))?;
+    order.append_event(event);
+    let order = CreatedEntityEvent::new(order);
     Ok(PlaceSpotOrderPipeChanges { order })
 }

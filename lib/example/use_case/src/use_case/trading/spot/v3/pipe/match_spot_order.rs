@@ -305,8 +305,7 @@ fn transition_order(
         command,
     );
     let after = FsmV2::transition_v2(before, command)?;
-    UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index())
-        .map_err(|error| match_error(&format!("invalid order event chain: {error:?}")))
+    Ok(UpdatedEntityEvents::new(after))
 }
 
 fn create_trade(
@@ -318,7 +317,7 @@ fn create_trade(
     input: MatchSpotOrderInput,
 ) -> Result<CreatedEntityEvent<SpotTradeV3>, EntityError> {
     let taker_facts = taker.after().order_base();
-    let trade = SpotTradeV3 {
+    let mut trade = SpotTradeV3 {
         replay_events: Vec::new(),
         comon_trade: TradeBase {
             trade_id: fill.trade_id,
@@ -344,8 +343,8 @@ fn create_trade(
     event.t = input.topic;
     event.p = input.partition;
     event.domain_event_type = 1;
-    CreatedEntityEvent::try_new(trade, event)
-        .map_err(|error| match_error(&format!("invalid trade event: {error:?}")))
+    trade.append_event(event);
+    Ok(CreatedEntityEvent::new(trade))
 }
 
 fn match_fee(notional: Decimal, bps: u64, scale: u32) -> Result<Decimal, EntityError> {

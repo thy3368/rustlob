@@ -121,8 +121,8 @@ pub fn settle_matched_spot_trades_from(
         }
         validate_trade(
             trade,
-            created.event().lsn,
-            created.event().command_index,
+            trade.lsn,
+            trade.command_index,
             &orders,
             input,
             command_index_start,
@@ -390,10 +390,7 @@ fn transition_trades(
         );
         let after = FsmV2::transition_v2(trade, command)
             .map_err(|cause| error(format!("trade transition failed: {cause}")))?;
-        output.push(
-            UpdatedEntityEvents::try_new(after, trade.lsn, trade.command_index)
-                .map_err(|cause| error(format!("invalid trade event: {cause:?}")))?,
-        );
+        output.push(UpdatedEntityEvents::new(after));
     }
     Ok(output)
 }
@@ -434,14 +431,7 @@ fn transition_balances(
         );
         let after = FsmV2::transition_v2(&change.balance, command)
             .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
-        output.push(
-            UpdatedEntityEvents::try_new(
-                after,
-                change.balance.lsn(),
-                change.balance.command_index(),
-            )
-            .map_err(|cause| error(format!("invalid balance event: {cause:?}")))?,
-        );
+        output.push(UpdatedEntityEvents::new(after));
     }
     Ok(output)
 }

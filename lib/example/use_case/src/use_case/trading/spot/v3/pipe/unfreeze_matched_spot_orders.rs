@@ -292,14 +292,7 @@ fn transition_balances(
         );
         let after = FsmV2::transition_v2(&release.balance, command)
             .map_err(|cause| error(format!("balance transition failed: {cause}")))?;
-        output.push(
-            UpdatedEntityEvents::try_new(
-                after,
-                release.balance.lsn(),
-                release.balance.command_index(),
-            )
-            .map_err(|cause| error(format!("invalid balance event: {cause:?}")))?,
-        );
+        output.push(UpdatedEntityEvents::new(after));
     }
     Ok(output)
 }
@@ -346,8 +339,7 @@ mod tests {
             },
         );
         let after = FsmV2::transition_v2(&before, command).expect("余额解冻应成功");
-        UpdatedEntityEvents::try_new(after, before.lsn(), before.command_index())
-            .expect("余额事件链应有效")
+        UpdatedEntityEvents::new(after)
     }
 
     #[test]

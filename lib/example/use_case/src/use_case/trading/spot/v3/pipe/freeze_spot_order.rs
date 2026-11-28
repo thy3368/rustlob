@@ -43,7 +43,6 @@ pub fn freeze_spot_order_from(
             "balance owner does not match the order owner".to_owned(),
         ));
     }
-    let order_loaded_position = (order.lsn(), order.command_index());
     let order_command = LogEntrySequencer::from_metadata_with_topic_at(
         topic,
         partition,
@@ -56,12 +55,7 @@ pub fn freeze_spot_order_from(
         SpotOrderV7Command::Freeze,
     );
     let order_after = FsmV2::transition_v2(order, order_command)?;
-    let order_changes = UpdatedEntityEvents::try_new(
-        order_after,
-        order_loaded_position.0,
-        order_loaded_position.1,
-    )
-    .map_err(|error| EntityError::Custom(format!("invalid order event chain: {error:?}")))?;
+    let order_changes = UpdatedEntityEvents::new(order_after);
     let requirement = order_changes
         .after()
         .taker_freeze_amount()
@@ -72,7 +66,6 @@ pub fn freeze_spot_order_from(
         ));
     }
 
-    let balance_loaded_position = (balance.lsn(), balance.command_index());
     let balance_command = LogEntrySequencer::from_metadata_with_topic_at(
         topic,
         partition,
@@ -90,12 +83,7 @@ pub fn freeze_spot_order_from(
     );
     let balance_after =
         FsmV2::transition_v2(balance, balance_command).map_err(map_balance_error)?;
-    let balance_changes = UpdatedEntityEvents::try_new(
-        balance_after,
-        balance_loaded_position.0,
-        balance_loaded_position.1,
-    )
-    .map_err(|error| EntityError::Custom(format!("invalid balance event chain: {error:?}")))?;
+    let balance_changes = UpdatedEntityEvents::new(balance_after);
 
     Ok(FreezeSpotOrderPipeChanges {
         order: order_changes,

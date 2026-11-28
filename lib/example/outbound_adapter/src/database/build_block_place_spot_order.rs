@@ -192,7 +192,10 @@ fn apply_pipeline_changes(
     };
 
     let taker = created.after();
-    if created.order.event().previous_lsn != 0
+    if taker
+        .replay_events()
+        .first()
+        .is_none_or(|event| event.previous_lsn != 0)
         || unique_order(state, taker.order_base().order_id).is_ok()
     {
         return Err(PlaceSpotOrderBuildBlockSinkError::UnexpectedChangeShape);
@@ -269,7 +272,10 @@ fn apply_match_changes(
                     .next_trade_id
                     .checked_add(offset)
                     .ok_or(PlaceSpotOrderBuildBlockSinkError::TradeIdOverflow)?;
-                if trade.event().previous_lsn != 0
+                if after
+                    .replay_events()
+                    .first()
+                    .is_none_or(|event| event.previous_lsn != 0)
                     || after.comon_trade.trade_id != expected_id
                     || !ids.insert(after.comon_trade.trade_id)
                     || trade_exists(state, after.comon_trade.trade_id)

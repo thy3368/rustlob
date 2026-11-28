@@ -27,8 +27,7 @@ pub use sequence::log_entry_sequencer::{LogEntrySequenceError, LogEntrySequencer
 pub use sequence::log_entry_sequencer_repo::LogEntrySequencerRepo;
 pub use sequence::single_thread_sequencer::{SequenceExhausted, SingleThreadSequencer};
 pub use use_case::entity_changes_v3::{
-    CreatedEntityEvent, CreatedEntityEventError, ReplayableEntityChanges, UpdatedEntityEvents,
-    UpdatedEntityEventsError,
+    CreatedEntityEvent, ReplayableEntityChanges, UpdatedEntityEvents,
 };
 pub use use_case::event_handler::EntityReplayableEventHandler;
 pub use use_case::executor::{
