@@ -19,7 +19,7 @@ use crate::shared::event_string_field;
 
 #[derive(Debug, Clone)]
 struct State {
-    schedules: HashMap<u64, ScheduledCancel>,
+    schedules: HashMap<PartyId, ScheduledCancel>,
     spot_orders: HashMap<u64, SpotOrderV7>,
     perp_orders: HashMap<u64, PerpOrderV3>,
     balances: HashMap<u64, BalanceV2>,
@@ -143,10 +143,10 @@ impl DueScheduledCancelSource for HyperliquidScheduleCancelInMemoryOutbound {
                 schedule
                     .cancel_at_ms()
                     .filter(|deadline| *deadline <= now_ms)
-                    .map(|deadline| (deadline, PartyId(schedule.party_id())))
+                    .map(|deadline| (deadline, schedule.party_id().clone()))
             })
             .collect::<Vec<_>>();
-        due.sort_unstable_by_key(|(deadline, party_id)| (*deadline, party_id.0));
+        due.sort_unstable_by(|left, right| left.cmp(right));
         due.truncate(limit);
         Ok(due.into_iter().map(|(_, party_id)| party_id).collect())
     }
@@ -163,9 +163,9 @@ impl StateSource<ScheduleHyperliquidCancelUseCase> for HyperliquidScheduleCancel
         Ok(ScheduleHyperliquidCancelState {
             scheduled_cancel: state
                 .schedules
-                .get(&cmd.party_id.0)
+                .get(&cmd.party_id)
                 .cloned()
-                .unwrap_or_else(|| ScheduledCancel::new(cmd.party_id.0)),
+                .unwrap_or_else(|| ScheduledCancel::new(cmd.party_id.clone())),
         })
     }
 }
@@ -180,7 +180,7 @@ impl StateSource<TriggerScheduledCancelUseCase> for HyperliquidScheduleCancelInM
         let state = self.lock()?;
         let scheduled_cancel = state
             .schedules
-            .get(&cmd.party_id.0)
+            .get(&cmd.party_id)
             .cloned()
             .ok_or(HyperliquidScheduleCancelOutboundError::ScheduleNotFound)?;
         Ok(TriggerScheduledCancelState {
@@ -196,7 +196,7 @@ impl StateSource<TriggerScheduledCancelUseCase> for HyperliquidScheduleCancelInM
             spot_balances: state
                 .balances
                 .values()
-                .filter(|balance| balance.party_id() == cmd.party_id.0)
+                .filter(|balance| balance.party_id() == &cmd.party_id)
                 .cloned()
                 .collect(),
             perp_orders: state
@@ -303,10 +303,22 @@ fn replay_schedule(
     state: &mut State,
     event: &ReplayableDomainEvent,
 ) -> Result<(), HyperliquidScheduleCancelOutboundError> {
+    let party_id = event_string_field(event, "party_id")
+        .map(PartyId::from)
+        .or_else(|| {
+            state
+                .schedules
+                .keys()
+                .find(|party_id| {
+                    common_entity::stable_string_entity_id(party_id.as_ref()) == event.entity_id
+                })
+                .cloned()
+        })
+        .ok_or(HyperliquidScheduleCancelOutboundError::EventDecodeFailed)?;
     let schedule = state
         .schedules
-        .entry(event.entity_id)
-        .or_insert_with(|| ScheduledCancel::new(event.entity_id));
+        .entry(party_id.clone())
+        .or_insert_with(|| ScheduledCancel::new(party_id));
     check_version(event, schedule.version())?;
     if event_string_field(event, "trigger_count").is_some() {
         schedule.trigger(event.logical_ts).map_err(|error| {

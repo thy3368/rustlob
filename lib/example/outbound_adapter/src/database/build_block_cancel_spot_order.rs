@@ -32,7 +32,7 @@ impl StateSourceV3<CancelSpotOrderFsmV3UseCase> for State4BuildBlock {
         let mut matches = self
             .user_symbol_orders
             .iter()
-            .filter(|((party_id, _), _)| party_id == command.party_id())
+            .filter(|((party_id, _), _)| party_id.as_ref() == command.party_id())
             .flat_map(|(_, orders)| orders)
             .filter(|order| matches_order(order, &command.payload().order_id));
         let order = matches
@@ -45,7 +45,10 @@ impl StateSourceV3<CancelSpotOrderFsmV3UseCase> for State4BuildBlock {
         if !self.spot_symbol_lob.contains_key(&symbol) {
             return Err(CancelSpotOrderBuildBlockSourceError::LobNotFound);
         }
-        let key = (command.party_id().to_owned(), symbol);
+        let key = (
+            example_core_entity::PartyId::from(command.party_id()),
+            symbol,
+        );
         let balances = match order.order_base().side {
             OrderSide::Buy => &self.user_symbol_quote_balance,
             OrderSide::Sell => &self.user_symbol_base_balance,

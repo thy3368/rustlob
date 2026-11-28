@@ -141,7 +141,12 @@ fn derive_changes(
         .positions
         .iter()
         .cloned()
-        .map(|position| ((position.party_id().clone(), position.coin().index()), position))
+        .map(|position| {
+            (
+                (position.party_id().clone(), position.coin().index()),
+                position,
+            )
+        })
         .collect();
     let mut balance_deltas: BTreeMap<PartyId, Decimal> = BTreeMap::new();
     let mut changed_positions = Vec::with_capacity(state.trades.len() * 2);
@@ -151,8 +156,14 @@ fn derive_changes(
         let mut start_positions = [Decimal::ZERO; 2];
         let mut closed_pnls = [Decimal::ZERO; 2];
         for (index, (user, fee)) in [
-            (trade.trade_base.taker_party.clone(), trade.trade_base.taker_fee),
-            (trade.trade_base.maker_party.clone(), trade.trade_base.maker_fee),
+            (
+                trade.trade_base.taker_party.clone(),
+                trade.trade_base.taker_fee,
+            ),
+            (
+                trade.trade_base.maker_party.clone(),
+                trade.trade_base.maker_fee,
+            ),
         ]
         .into_iter()
         .enumerate()

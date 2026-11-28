@@ -45,7 +45,7 @@ impl StateSource<DepositQuoteUseCase> for MySqlDepositQuoteOutbound {
 
         Ok(DepositQuoteState {
             quote_balance: BalanceV2::new(
-                stable_string_entity_id(account_id.as_str()),
+                account_id.as_str().into(),
                 stable_string_entity_id(account_id.as_str()),
                 stable_string_entity_id("USDT"),
                 available_quote,

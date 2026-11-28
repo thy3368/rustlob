@@ -252,8 +252,7 @@ fn validate_held_balance<'a>(
             )));
         }
     };
-    if balance.party_id() != &facts.owner || balance.coin_idx() != expected_coin
-    {
+    if balance.party_id() != &facts.owner || balance.coin_idx() != expected_coin {
         return Err(error(format!(
             "held balance owner or coin mismatch for order {}",
             facts.order_id

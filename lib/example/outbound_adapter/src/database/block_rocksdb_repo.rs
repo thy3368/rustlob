@@ -4,7 +4,7 @@ use std::path::Path;
 use base_types_v2::Symbol;
 use common_entity::Entity;
 use example_core_entity::spot::{SpotTradeSettlementStatus, SpotTradeV3};
-use example_core_entity::{BalanceV2, SpotOrderV7, TradeBase};
+use example_core_entity::{BalanceV2, PartyId, SpotOrderV7, TradeBase};
 use lob_repo_v2::imp::lob_btree::LocalLobBtree;
 use rocksdb::{DB, Options, WriteBatch};
 use serde::{Deserialize, Serialize};
@@ -345,7 +345,7 @@ fn rebuild_state(
             ));
         }
     }
-    let mut projected_orders: BTreeMap<(String, Symbol), Vec<(usize, SpotOrderV7)>> =
+    let mut projected_orders: BTreeMap<(PartyId, Symbol), Vec<(usize, SpotOrderV7)>> =
         BTreeMap::new();
     for (id, record) in orders {
         let order =
@@ -409,7 +409,7 @@ fn rebuild_state(
             ));
         }
     }
-    let mut projected_trades: BTreeMap<(String, Symbol), Vec<(usize, SpotTradeV3)>> =
+    let mut projected_trades: BTreeMap<(PartyId, Symbol), Vec<(usize, SpotTradeV3)>> =
         BTreeMap::new();
     for (id, record) in trades {
         let trade = record.trade.into_entity();
@@ -500,7 +500,7 @@ impl Metadata {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct StoredOrder {
-    party_id: String,
+    party_id: PartyId,
     symbol: Symbol,
     ordinal: usize,
     order: example_core_entity::common::OrderBase,
@@ -515,7 +515,7 @@ enum BalanceKind {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct StoredBalance {
-    party_id: String,
+    party_id: PartyId,
     symbol: Symbol,
     kind: BalanceKind,
     balance: BalanceV2,
@@ -555,7 +555,7 @@ impl TradeDto {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TradeProjection {
-    party_id: String,
+    party_id: PartyId,
     symbol: Symbol,
     ordinal: usize,
 }
@@ -571,9 +571,9 @@ struct Normalized {
     order_entities: BTreeMap<u64, SpotOrderV7>,
     balances: BTreeMap<u64, StoredBalance>,
     trades: BTreeMap<u64, StoredTrade>,
-    order_positions: BTreeMap<(String, Symbol, usize), u64>,
-    balance_positions: BTreeMap<(BalanceKind, String, Symbol), u64>,
-    trade_positions: BTreeMap<(String, Symbol, usize), u64>,
+    order_positions: BTreeMap<(PartyId, Symbol, usize), u64>,
+    balance_positions: BTreeMap<(BalanceKind, PartyId, Symbol), u64>,
+    trade_positions: BTreeMap<(PartyId, Symbol, usize), u64>,
 }
 
 fn normalize(state: &State4BuildBlock) -> Result<Normalized, BuildBlockRocksDbError> {

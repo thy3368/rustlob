@@ -4,7 +4,8 @@ use example_core_use_case::{
 };
 
 use crate::shared::{
-    InMemoryStore, WithdrawQuoteOutboundError, balance_key, event_identity_field, event_u64_field,
+    InMemoryStore, WithdrawQuoteOutboundError, balance_key, event_identity_field,
+    event_string_field, event_u64_field,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -54,9 +55,11 @@ impl StateSink<WithdrawQuoteUseCase> for InMemoryWithdrawQuoteOutbound {
                     .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?;
                 let coin_idx = event_identity_field(event, "coin_idx")
                     .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?;
+                let party_id = event_string_field(event, "party_id")
+                    .ok_or(WithdrawQuoteOutboundError::EventDecodeFailed)?;
                 let key = balance_key(account_id, coin_idx);
                 let balance = state.balances.entry(key).or_insert_with(|| {
-                    BalanceV2::new(account_id, account_id, coin_idx, 0, 0, 0, 0)
+                    BalanceV2::new(party_id.into(), account_id, coin_idx, 0, 0, 0, 0)
                 });
                 let available = event_u64_field(event, "available")
                     .map(rust_decimal::Decimal::from)
@@ -65,7 +68,7 @@ impl StateSink<WithdrawQuoteUseCase> for InMemoryWithdrawQuoteOutbound {
                     .map(rust_decimal::Decimal::from)
                     .unwrap_or_else(|| balance.frozen());
                 *balance = BalanceV2::new(
-                    balance.party_id(),
+                    balance.party_id().clone(),
                     balance.account_id(),
                     balance.coin_idx(),
                     available,

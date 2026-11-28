@@ -177,7 +177,7 @@ impl MySqlStore {
         let mut balances = HashMap::new();
         for (
             account_numeric_id,
-            _account_id,
+            account_id,
             available_base,
             frozen_base,
             available_quote,
@@ -189,7 +189,7 @@ impl MySqlStore {
                 balance_key(account_numeric_id, stable_string_entity_id("BTC")),
                 BalanceV2::new(
                     account_numeric_id,
-                    account_numeric_id,
+                    account_id.as_str().into(),
                     stable_string_entity_id("BTC"),
                     available_base,
                     frozen_base,
@@ -200,7 +200,7 @@ impl MySqlStore {
             balances.insert(
                 balance_key(account_numeric_id, stable_string_entity_id("USDT")),
                 BalanceV2::new(
-                    account_numeric_id,
+                    account_id.as_str().into(),
                     account_numeric_id,
                     stable_string_entity_id("USDT"),
                     available_quote,
@@ -249,7 +249,7 @@ impl MySqlStore {
                         return None;
                     }
                     let order = SpotOrderV7::from_record(OrderBase {
-                        owner: PartyId(stable_string_entity_id(&account_id)),
+                        owner: PartyId(account_id),
                         order_id,
                         symbol: Symbol::new(asset, Coin::BTC, Coin::USDT),
                         side,

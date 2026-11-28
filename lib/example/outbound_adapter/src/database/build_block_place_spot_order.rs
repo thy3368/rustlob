@@ -86,13 +86,7 @@ impl StateSourceV3<PlaceSpotOrderPipelineV2UseCase> for State4BuildBlock {
         )?;
         for maker in &maker_orders {
             let (key, _) = unique_order_with_key(self, maker.order_base().order_id)?;
-            insert_balance_pair(
-                self,
-                &key.0,
-                key.1,
-                &mut base_balances,
-                &mut quote_balances,
-            )?;
+            insert_balance_pair(self, &key.0, key.1, &mut base_balances, &mut quote_balances)?;
         }
 
         Ok(PlaceSpotOrderPipelineV2State {
@@ -420,7 +414,8 @@ fn unique_order(
 fn unique_order_with_key(
     state: &State4BuildBlock,
     order_id: u64,
-) -> Result<(&(PartyId, base_types_v2::Symbol), &SpotOrderV7), PlaceSpotOrderBuildBlockSourceError> {
+) -> Result<(&(PartyId, base_types_v2::Symbol), &SpotOrderV7), PlaceSpotOrderBuildBlockSourceError>
+{
     let mut found = state
         .user_symbol_orders
         .iter()
@@ -465,8 +460,10 @@ fn insert_balance_pair(
 fn unique_order_position(
     state: &State4BuildBlock,
     order_id: u64,
-) -> Result<((PartyId, base_types_v2::Symbol), usize, &SpotOrderV7), PlaceSpotOrderBuildBlockSinkError>
-{
+) -> Result<
+    ((PartyId, base_types_v2::Symbol), usize, &SpotOrderV7),
+    PlaceSpotOrderBuildBlockSinkError,
+> {
     let mut found = state
         .user_symbol_orders
         .iter()
