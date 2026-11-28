@@ -46,7 +46,36 @@ pub trait Fsm: TrackDiff + Sized {
         replay_event.t = topic;
         replay_event.p = partition;
         replay_event.domain_event_type = event_type;
+
         Ok((after, replay_event))
+    }
+
+    fn transition_v2(&self, command: LogEntry<Self::Command>) -> Result<Self, Self::Error> {
+        let event_type = Self::event_type(command.payload());
+        if event_type == 0 {
+            return Err(EntityError::Custom("FSM event type must be non-zero".into()).into());
+        }
+        let logical_ts = command.logical_ts();
+        let lsn = command.lsn();
+        let command_index = command.command_index();
+        let topic = command.topic();
+        let partition = command.partition();
+        let after = self.derive_transition(command)?;
+        let mut replay_event = after.track_update_event_from_at(
+            self,
+            self.lsn(),
+            self.command_index(),
+            lsn,
+            command_index,
+            logical_ts,
+        )?;
+        replay_event.t = topic;
+        replay_event.p = partition;
+        replay_event.domain_event_type = event_type;
+
+        after.append_event(replay_event);
+
+        Ok((after))
     }
 }
 
