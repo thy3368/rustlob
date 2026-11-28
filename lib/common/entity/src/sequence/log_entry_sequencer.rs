@@ -352,8 +352,8 @@ mod tests {
 
     #[test]
     fn serde_defaults_missing_command_index_and_round_trips_explicit_index() {
-        let legacy = r#"{"t":1,"p":2,"lsn":3,"logical_ts":4,"client_id":5,"request_id":6,"op_id":"alice","payload":"x"}"#;
-        let decoded: LogEntry<String> = serde_json::from_str(legacy).unwrap();
+        let without_command_index = r#"{"t":1,"p":2,"lsn":3,"logical_ts":4,"client_id":5,"request_id":6,"party_id":"alice","payload":"x"}"#;
+        let decoded: LogEntry<String> = serde_json::from_str(without_command_index).unwrap();
         assert_eq!(decoded.command_index(), 0);
 
         let entry = LogEntrySequencer::from_metadata_with_topic_at(

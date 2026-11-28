@@ -450,3 +450,65 @@ fn transition_balances(
 fn error(message: impl Into<String>) -> SettleMatchedSpotTradesError {
     SettleMatchedSpotTradesError(message.into())
 }
+
+#[cfg(test)]
+mod tests {
+    use common_entity::stable_string_entity_id;
+    use example_core_entity::account::coin::Coin;
+    use example_core_entity::common::{OrderBase, PriceType};
+    use example_core_entity::{OrderSide, OrderTif, SpotOrderStatus};
+
+    use super::*;
+
+    #[test]
+    fn settlement_accepts_account_id_independent_from_party_id_hash() {
+        let party_id = PartyId::from("buyer-alpha");
+        let account_id = 42;
+        assert_ne!(account_id, stable_string_entity_id(party_id.as_ref()));
+
+        let symbol = Symbol::new(1, Coin::BTC, Coin::USDT);
+        let order = SpotOrderV7::from_record(OrderBase {
+            owner: party_id.clone(),
+            order_id: 7,
+            symbol,
+            side: OrderSide::Buy,
+            limit_px: Decimal::from(100),
+            size: Decimal::ONE,
+            orig_size: Decimal::ONE,
+            execution: PriceType::Limit,
+            tif: OrderTif::Gtc,
+            status: SpotOrderStatus::Open,
+            lsn: 2,
+            ..OrderBase::default()
+        })
+        .expect("订单快照应有效");
+        let base = BalanceV2::new(
+            party_id.clone(),
+            account_id,
+            u64::from(Coin::BTC.index()),
+            0,
+            0,
+            1,
+            1,
+        );
+        let quote = BalanceV2::new(
+            party_id.clone(),
+            account_id,
+            u64::from(Coin::USDT.index()),
+            0,
+            100,
+            1,
+            1,
+        );
+        let key = (party_id, symbol);
+        let base_balances = BTreeMap::from([(key.clone(), base)]);
+        let quote_balances = BTreeMap::from([(key, quote)]);
+
+        let (resolved_base, resolved_quote) =
+            validated_balances(&order, &quote_balances, &base_balances, 3, 0)
+                .expect("账户数字 ID 不应与 party ID 哈希绑定");
+
+        assert_eq!(resolved_base.account_id(), account_id);
+        assert_eq!(resolved_quote.account_id(), account_id);
+    }
+}

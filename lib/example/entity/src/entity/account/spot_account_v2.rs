@@ -587,10 +587,13 @@ mod tests {
     }
 
     #[test]
-    fn entity_id_and_shard_follow_numeric_ids() {
+    fn entity_id_follows_account_id_and_shard_follows_party_id() {
         let account = account(AccountStatus::Active, 1);
         assert_eq!(account.entity_id(), 1001);
         assert_eq!(account.topic(), 0);
-        assert_eq!(account.partition(), 1);
+        assert_eq!(
+            account.partition(),
+            (common_entity::stable_string_entity_id(account.party_id.as_ref()) % 256) as u8
+        );
     }
 }
