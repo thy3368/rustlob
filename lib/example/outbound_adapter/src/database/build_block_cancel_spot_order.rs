@@ -144,7 +144,7 @@ impl StateSinkV3<CancelSpotOrderFsmV3UseCase> for State4BuildBlock {
 impl State4BuildBlock {
     fn apply_changes(
         &mut self,
-        key: (String, Symbol),
+        key: (example_core_entity::PartyId, Symbol),
         index: usize,
         changes: &CancelSpotOrderFsmV3Changes,
     ) -> Result<(), CancelSpotOrderBuildBlockSinkError> {

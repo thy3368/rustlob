@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use base_types_v2::Symbol;
 use common_entity::{Entity, ReplayableDomainEvent, StateSinkV3};
 use example_core_entity::spot::SpotTradeV3;
-use example_core_entity::{BalanceV2, OrderSide, SpotOrderV7};
+use example_core_entity::{BalanceV2, OrderSide, PartyId, SpotOrderV7};
 use example_core_use_case::pipe_line::cancel_spot_order::{
     CancelSpotOrderFsmV3Changes, CancelSpotOrderFsmV3UseCase,
 };
@@ -31,15 +31,15 @@ pub struct State4BuildBlock {
     /// todo 对于balance，use case的state_given有优化空间，可以减少转换过程
 
     /// party_id+symbol,balance
-    pub user_symbol_quote_balance: BTreeMap<(String, Symbol), BalanceV2>,
+    pub user_symbol_quote_balance: BTreeMap<(PartyId, Symbol), BalanceV2>,
 
     /// party_id+symbol,balance
-    pub user_symbol_base_balance: BTreeMap<(String, Symbol), BalanceV2>,
+    pub user_symbol_base_balance: BTreeMap<(PartyId, Symbol), BalanceV2>,
 
     /// 可能不对
-    pub user_symbol_trades: BTreeMap<(String, Symbol), Vec<SpotTradeV3>>,
+    pub user_symbol_trades: BTreeMap<(PartyId, Symbol), Vec<SpotTradeV3>>,
 
     // pub symbol_trades: BTreeMap<Symbol, Vec<SpotTradeV3>>,
     /// 每个用户每个symbol
-    pub user_symbol_orders: BTreeMap<(String, Symbol), Vec<SpotOrderV7>>,
+    pub user_symbol_orders: BTreeMap<(PartyId, Symbol), Vec<SpotOrderV7>>,
 }

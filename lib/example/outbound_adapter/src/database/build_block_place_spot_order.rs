@@ -1,15 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use common_entity::{
     Entity, LogEntry, ReplayableDomainEvent, StateSinkV3, StateSourceV3, UpdatedEntityEvents,
 };
 use example_core_entity::spot::SpotTradeV3;
-use example_core_entity::{BalanceV2, PlaceSpotOrderPipelineV2Cmd, SpotOrderV7};
+use example_core_entity::{BalanceV2, PartyId, PlaceSpotOrderPipelineV2Cmd, SpotOrderV7};
 use example_core_use_case::pipe::line::place_spot_order_pipeline_v2::PlaceSpotOrderPipelineV2Changes;
 use example_core_use_case::pipe::match_spot_order::MatchSpotOrderPipeChanges;
-use example_core_use_case::pipe::settle_matched_spot_trades::{
-    SettleTradesPipeChanges, SpotOrderSettlementBalances,
-};
+use example_core_use_case::pipe::settle_matched_spot_trades::SettleTradesPipeChanges;
 use example_core_use_case::pipe_line::place_spot_order_pipeline_v2::{
     PlaceSpotOrderPipelineV2State, PlaceSpotOrderPipelineV2UseCase,
 };
@@ -57,7 +55,7 @@ impl StateSourceV3<PlaceSpotOrderPipelineV2UseCase> for State4BuildBlock {
         if payload.cloid.as_ref().is_some_and(|cloid| {
             self.user_symbol_orders
                 .iter()
-                .filter(|((party_id, _), _)| party_id == command.party_id())
+                .filter(|((party_id, _), _)| party_id.as_ref() == command.party_id())
                 .flat_map(|(_, orders)| orders)
                 .any(|order| order.order_base().cloid.as_ref() == Some(cloid))
         }) {
@@ -77,22 +75,30 @@ impl StateSourceV3<PlaceSpotOrderPipelineV2UseCase> for State4BuildBlock {
             }
         }
 
-        let mut balances_by_order_id = HashMap::with_capacity(maker_orders.len() + 1);
-        balances_by_order_id.insert(
-            payload.order_id,
-            balance_pair(self, command.party_id(), payload.symbol)?,
-        );
+        let mut base_balances = BTreeMap::new();
+        let mut quote_balances = BTreeMap::new();
+        insert_balance_pair(
+            self,
+            &payload.party_id,
+            payload.symbol,
+            &mut base_balances,
+            &mut quote_balances,
+        )?;
         for maker in &maker_orders {
             let (key, _) = unique_order_with_key(self, maker.order_base().order_id)?;
-            balances_by_order_id.insert(
-                maker.order_base().order_id,
-                balance_pair(self, &key.0, key.1)?,
-            );
+            insert_balance_pair(
+                self,
+                &key.0,
+                key.1,
+                &mut base_balances,
+                &mut quote_balances,
+            )?;
         }
 
         Ok(PlaceSpotOrderPipelineV2State {
             maker_orders,
-            balances_by_order_id,
+            base_balances,
+            quote_balances,
             trade_id_start: self.next_trade_id,
             maker_fee_bps: self.maker_fee_bps,
             taker_fee_bps: self.taker_fee_bps,
@@ -414,7 +420,7 @@ fn unique_order(
 fn unique_order_with_key(
     state: &State4BuildBlock,
     order_id: u64,
-) -> Result<(&(String, base_types_v2::Symbol), &SpotOrderV7), PlaceSpotOrderBuildBlockSourceError> {
+) -> Result<(&(PartyId, base_types_v2::Symbol), &SpotOrderV7), PlaceSpotOrderBuildBlockSourceError> {
     let mut found = state
         .user_symbol_orders
         .iter()
@@ -429,30 +435,37 @@ fn unique_order_with_key(
     Ok(value)
 }
 
-fn balance_pair(
+fn insert_balance_pair(
     state: &State4BuildBlock,
-    party_id: &str,
+    party_id: &PartyId,
     symbol: base_types_v2::Symbol,
-) -> Result<SpotOrderSettlementBalances, PlaceSpotOrderBuildBlockSourceError> {
-    let key = (party_id.to_owned(), symbol);
-    Ok(SpotOrderSettlementBalances {
-        base: state
+    base_balances: &mut BTreeMap<(PartyId, base_types_v2::Symbol), BalanceV2>,
+    quote_balances: &mut BTreeMap<(PartyId, base_types_v2::Symbol), BalanceV2>,
+) -> Result<(), PlaceSpotOrderBuildBlockSourceError> {
+    let key = (party_id.clone(), symbol);
+    base_balances.insert(
+        key.clone(),
+        state
             .user_symbol_base_balance
             .get(&key)
             .cloned()
             .ok_or(PlaceSpotOrderBuildBlockSourceError::BalanceNotFound)?,
-        quote: state
+    );
+    quote_balances.insert(
+        key.clone(),
+        state
             .user_symbol_quote_balance
             .get(&key)
             .cloned()
             .ok_or(PlaceSpotOrderBuildBlockSourceError::BalanceNotFound)?,
-    })
+    );
+    Ok(())
 }
 
 fn unique_order_position(
     state: &State4BuildBlock,
     order_id: u64,
-) -> Result<((String, base_types_v2::Symbol), usize, &SpotOrderV7), PlaceSpotOrderBuildBlockSinkError>
+) -> Result<((PartyId, base_types_v2::Symbol), usize, &SpotOrderV7), PlaceSpotOrderBuildBlockSinkError>
 {
     let mut found = state
         .user_symbol_orders
@@ -476,7 +489,7 @@ fn unique_order_position(
 fn unique_balance_position(
     state: &State4BuildBlock,
     balance_id: u64,
-) -> Result<(bool, (String, base_types_v2::Symbol), &BalanceV2), PlaceSpotOrderBuildBlockSinkError>
+) -> Result<(bool, (PartyId, base_types_v2::Symbol), &BalanceV2), PlaceSpotOrderBuildBlockSinkError>
 {
     let mut found = state
         .user_symbol_base_balance
@@ -501,9 +514,9 @@ fn unique_balance_position(
 fn find_key_for_party(
     state: &State4BuildBlock,
     order: &SpotOrderV7,
-) -> Result<(String, base_types_v2::Symbol), PlaceSpotOrderBuildBlockSinkError> {
+) -> Result<(PartyId, base_types_v2::Symbol), PlaceSpotOrderBuildBlockSinkError> {
     let symbol = order.order_base().symbol;
-    let party = order.order_base().owner.0;
+    let party = &order.order_base().owner;
     let mut keys = state
         .user_symbol_base_balance
         .iter()
