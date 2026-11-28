@@ -188,8 +188,8 @@ impl MySqlStore {
             balances.insert(
                 balance_key(account_numeric_id, stable_string_entity_id("BTC")),
                 BalanceV2::new(
-                    account_numeric_id,
                     account_id.as_str().into(),
+                    account_numeric_id,
                     stable_string_entity_id("BTC"),
                     available_base,
                     frozen_base,
